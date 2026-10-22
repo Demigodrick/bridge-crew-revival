@@ -59,6 +59,14 @@ namespace StbcRevival
             {
                 quitAt = -1f;
                 Plugin.Log.LogInfo("Ubisoft save import: quitting the game");
+                // In Ubisoft mode the game's shutdown can stall (Ubisoft Connect sign-out), leaving it at the
+                // menu. Everything is saved by now, so end the process if the normal quit hasn't after 10 s.
+                new System.Threading.Thread(() =>
+                {
+                    System.Threading.Thread.Sleep(10000);
+                    Plugin.Log.LogInfo("Ubisoft save import: the game didn't close; ending it");
+                    System.Diagnostics.Process.GetCurrentProcess().Kill();
+                }) { IsBackground = true }.Start();
                 Application.Quit();
             }
         }
