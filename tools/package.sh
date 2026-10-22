@@ -21,8 +21,13 @@ Bridge Crew Revival $version - multiplayer for Star Trek: Bridge Crew (Steam, PC
 Website: https://demigodrick.github.io/bridge-crew-revival/
 
 Windows: double-click install.cmd.
-Linux:   run ./install.sh, then set the game's Steam launch options to
-         WINEDLLOVERRIDES="winhttp=n,b" %command%
+Linux:   run ./install.sh. (If the game has never been started under Proton, start it once and quit
+         first, or set its Steam launch options to WINEDLLOVERRIDES="winhttp=n,b" %command%.)
+
+Keeping your avatar and settings: the game only saved them on Ubisoft's servers. The installer offers
+to copy them once (Ubisoft Connect must be signed in). It starts the game. At the controller selection
+prompt, choose your controller: the game only connects to Ubisoft after that. Your save is then
+copied and the game closes by itself. Run it later with --import-save (Linux) / -ImportSave (Windows).
 
 Both find the game in your Steam libraries (or pass the game folder as an argument), install
 BepInEx 5.4.23.5 from its GitHub release, and copy the mod. Run again to update;

@@ -64,13 +64,36 @@ Windows (PowerShell):
 irm https://demigodrick.github.io/bridge-crew-revival/install.ps1 | iex
 ```
 
-Linux, then set the game's Steam launch options to `WINEDLLOVERRIDES="winhttp=n,b" %command%`:
+Linux:
 
 ```bash
 curl -fsSL https://demigodrick.github.io/bridge-crew-revival/install.sh | bash
 ```
 
+On Linux the installer switches BepInEx on in the game's Proton prefix, so no Steam launch option is
+needed. That needs the prefix to exist: if the game has never been started under Proton, start it once
+and quit, or set the launch options to `WINEDLLOVERRIDES="winhttp=n,b" %command%` instead.
+
 The installers live in `docs/` (the GitHub Pages site) and download the latest GitHub release.
+
+### Keeping your avatar and settings (Ubisoft save import)
+
+Bridge Crew only ever saved your avatar, options and progress flags on Ubisoft's servers. The mod keeps
+them in a local file (`BepInEx/config/stbc.revival.save.json`), and the installer offers to copy your
+Ubisoft save into it once, while Ubisoft's servers are still up:
+
+1. Make sure Ubisoft Connect is installed and signed in, then answer **y** when the installer asks
+   "Copy your avatar and settings from your Ubisoft save?" (or run it with `--import-save` on Linux,
+   `-ImportSave` on Windows).
+2. The installer starts the game through Steam. The game hands over to Ubisoft Connect, which restarts it.
+3. **At the controller selection prompt, choose your controller.** The game only connects to Ubisoft
+   after that, so the import waits for you here. Put your headset on if you're playing in VR.
+4. Your save is copied as soon as it arrives. The game shows a message and closes by itself, and on
+   Linux the installer also closes Ubisoft Connect. The installer prints how many settings were imported.
+
+It takes a minute or two after the controller prompt. If nothing has arrived after 7 minutes, the
+installer stops waiting and says so. Run it again later the same way. After the import, the game no
+longer uses Ubisoft at all.
 
 ### Releases and the zip
 
@@ -81,15 +104,16 @@ builds the zip: the plugin, `install.sh` (Linux), `install.cmd` / `install.ps1` 
 README. From the zip, players run:
 
 - **Windows:** double-click `install.cmd`.
-- **Linux:** `./install.sh`, then set the game's Steam launch options to
-  `WINEDLLOVERRIDES="winhttp=n,b" %command%` (the script prints this; it doesn't edit Steam's config).
+- **Linux:** `./install.sh`. It switches BepInEx on in the game's Proton prefix (backing up the
+  prefix's `user.reg` first) instead of needing a Steam launch option.
 
 Both scripts find the game through Steam's `libraryfolders.vdf` (on Linux: native, Flatpak and Snap
 Steam), or take the game folder as an argument. They download BepInEx 5.4.23.5 from its GitHub
 release and check its SHA-256, set the `Type = MonoBehaviour` entrypoint (step 4 below), and copy
-the plugin. They refuse to run while the game is running. Run again to update. `--uninstall`
-(Linux) or `-Uninstall` (Windows) removes the plugin and BepInEx's `winhttp.dll`/doorstop files,
-which disables BepInEx, and leaves `BepInEx/` and your config in place.
+the plugin. They refuse to run while the game is running. Run again to update. Then they offer the
+Ubisoft save import above (`--no-import` / `-NoImport` skips the question). `--uninstall`
+(Linux) or `-Uninstall` (Windows) removes the plugin and BepInEx's `winhttp.dll`/doorstop files
+(and, on Linux, the prefix setting), which disables BepInEx, and leaves `BepInEx/` and your config in place.
 
 ## Install by hand (Linux / Proton)
 

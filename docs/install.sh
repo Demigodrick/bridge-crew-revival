@@ -151,7 +151,7 @@ watch_log() { # log from-line -> prints new milestones, echoes the new line coun
       case "$line" in
         "Initialize engine version"*) say "  - game starting" >&2 ;;
         *"Bridge Crew Revival"*" loaded."*) say "  - mod loaded" >&2 ;;
-        *"Ubisoft save import: this run"*) say "  - waiting for Ubisoft to send your save (Ubisoft Connect may ask you to sign in)" >&2 ;;
+        *"Ubisoft save import: this run"*) say "  - waiting for your save: choose your controller in the game if it asks" >&2 ;;
         *"Ubisoft save import: quitting"*) say "  - closing the game" >&2 ;;
       esac
     done
@@ -178,7 +178,8 @@ import_save() { # game
   local waited=0 seen loaded=0
   say ""
   say "Importing your Ubisoft save: the game starts once, signs in to Ubisoft, copies your settings and"
-  say "quits by itself (usually within a couple of minutes). Ubisoft Connect must be installed and signed in."
+  say "quits by itself. Ubisoft Connect must be installed and signed in."
+  say "When the game asks you to choose a controller, choose it: it only connects to Ubisoft after that."
   if ! grep -qs '^"winhttp"="native,builtin"' "$(prefix_reg "$game")" && ! launch_option_set; then
     say "The mod won't load yet: start the game once from Steam and quit it, then run this again."
     return

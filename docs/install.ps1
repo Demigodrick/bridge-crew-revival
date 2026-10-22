@@ -78,7 +78,8 @@ function Import-UbisoftSave([string]$GameDir) {
     $result = Join-Path $GameDir "BepInEx\config\stbc.revival.import.txt"
     Write-Host ""
     Write-Host "Importing your Ubisoft save: the game starts once, signs in to Ubisoft, copies your settings and"
-    Write-Host "quits by itself. Ubisoft Connect must be installed and signed in; put your headset on if it asks."
+    Write-Host "quits by itself. Ubisoft Connect must be installed and signed in."
+    Write-Host "When the game asks you to choose a controller, choose it: it only connects to Ubisoft after that."
     Remove-Item -LiteralPath $result -ErrorAction SilentlyContinue
     Set-ImportFlag $GameDir $true
     Write-Host "Starting Star Trek: Bridge Crew..."
