@@ -145,7 +145,7 @@ async function refresh() {
       ? '<div class="empty">No public rooms right now.</div>'
       : rooms.map(r => `
         <div class="room">
-          <div><span class="code">${esc(r.code)}</span><button onclick="navigator.clipboard.writeText('${esc(r.code)}')">copy</button>
+          <div><span class="code">${esc(r.code)}</span><button class="copy" data-code="${esc(r.code)}">copy</button>
             <div class="meta">${esc(r.mode)} · ${esc(r.phase)} · ${esc(r.language)}${r.nextGeneration ? ' · TNG' : ''} · ${r.ageMinutes} min</div></div>
           <div class="seats ${r.open && r.players < r.maxPlayers ? 'open' : ''}">${r.players} / ${r.maxPlayers || '∞'}${r.open ? '' : ' · closed'}</div>
           <div class="players">${r.playerNames.map(esc).join(', ')}</div>
@@ -154,6 +154,11 @@ async function refresh() {
     document.getElementById('rooms').innerHTML = '<div class="empty">Server not reachable.</div>';
   }
 }
+// Room codes come from players: never put them in inline handlers, read them from data attributes.
+document.getElementById('rooms').addEventListener('click', e => {
+  const button = e.target.closest('button.copy');
+  if (button) navigator.clipboard.writeText(button.dataset.code);
+});
 refresh();
 setInterval(refresh, 5000);
 </script>
