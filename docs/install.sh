@@ -210,7 +210,9 @@ Pass the game folder:  bash install.sh \"/path/to/Star Trek Bridge Crew\""
   [ -f "$game/stbc.exe" ] || fail "\"$game\" isn't the Bridge Crew folder (no stbc.exe there)."
   say "Game folder: $game"
 
-  if pgrep -f 'stbc\.exe' >/dev/null 2>&1; then
+  # The game itself runs as "S:\...\stbc.exe"; Proton's launcher wrapper (".../stbc.exe") lingers while
+  # anything else, e.g. Ubisoft Connect, still runs in the game's prefix, so match the backslash.
+  if pgrep -f '\\stbc\.exe' >/dev/null 2>&1; then
     fail "the game is running. Quit it first."
   fi
 
