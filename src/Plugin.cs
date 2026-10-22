@@ -26,7 +26,7 @@ namespace StbcRevival
     {
         public const string Guid = "stbc.revival";
         public const string Name = "Bridge Crew Revival";
-        public const string Version = "0.6.2";
+        public const string Version = "0.6.3";
 
         internal static ManualLogSource Log;
 
@@ -41,6 +41,10 @@ namespace StbcRevival
         internal static ConfigEntry<string> MatchmakingTag;
         internal static ConfigEntry<bool> SkipUplay;
         internal static ConfigEntry<bool> SkipIntro;
+        internal static ConfigEntry<bool> ShuttleWasd;
+        internal static ConfigEntry<float> ShuttleSpeed;
+        internal static ConfigEntry<float> ShuttleTurnSpeed;
+        internal static Plugin Instance { get; private set; }
         internal static ConfigEntry<string> PlayerName;
         internal static ConfigEntry<string> ExtraDevConfig;
         internal static ConfigEntry<bool> Diagnostics;
@@ -53,6 +57,7 @@ namespace StbcRevival
         private void Awake()
         {
             Log = Logger;
+            Instance = this;
 
             Mode = Config.Bind("Photon", "Mode", PhotonMode.Steam,
                 "Steam = no server needed: play with anyone over Steam (rooms listed as Steam lobbies, friends join via Steam). " +
@@ -80,6 +85,10 @@ namespace StbcRevival
                 "Use the game's built-in no-platform login mode: no Uplay client, no Ubisoft account, no Ubisoft online services.");
             SkipIntro = Config.Bind("Startup", "SkipIntro", true,
                 "Skip the logo and movie screens at launch and go straight to the shuttle. Connection, controller and headset checks still run.");
+            ShuttleWasd = Config.Bind("Shuttle", "WasdControls", false,
+                "Experimental, doesn't work yet: fly the main-menu shuttle with the keyboard (W/S forward/back, A/D turn, Q/E down/up, Shift faster).");
+            ShuttleSpeed = Config.Bind("Shuttle", "Speed", 20f, "Shuttle keyboard speed (scene units per second).");
+            ShuttleTurnSpeed = Config.Bind("Shuttle", "TurnSpeed", 30f, "Shuttle keyboard turn speed (degrees per second).");
             PlayerName = Config.Bind("Login", "PlayerName", "",
                 "Name shown to other players. Empty = your Steam persona name (falls back to the OS user name).");
 
@@ -109,6 +118,7 @@ namespace StbcRevival
             harmony = new Harmony(Guid);
             Patches.Apply(harmony);
             SteamMode.Install(harmony);
+            ShuttleControls.Install();
 
             Log.LogInfo($"{Name} {Version} loaded. Photon mode: {Mode.Value}, skip Uplay: {SkipUplay.Value}");
         }

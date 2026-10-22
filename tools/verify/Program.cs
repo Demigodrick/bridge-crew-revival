@@ -129,5 +129,17 @@ Check("IntroSequence.GBDBONKGDOM() (next element) + _elements/_curNdx/_skipIsOn"
     && introSequence.GetField("_skipIsOn", Inst) is not null ? introSequence : null);
 Check("MovieIntroElement", game.GetType("MovieIntroElement"));
 
+var pauseMenu = game.GetType("UI.PauseMenuUI");
+Check("PauseMenuUI.NLDKOENAFNJ (pane switch) + _pauseMenuGlobal",
+    pauseMenu?.GetMethod("NLDKOENAFNJ", Inst) is not null && pauseMenu.GetField("_pauseMenuGlobal", Inst) is not null ? pauseMenu : null);
+var tmpText = game.GetType("TMPro.TMP_Text");
+Check("TMP_Text.SetLocalizedText(string) + key field EEHDAODMMFJ",
+    tmpText?.GetMethod("SetLocalizedText", new[] { mlc.CoreAssembly!.GetType("System.String")! }) is not null
+    && tmpText.GetField("EEHDAODMMFJ", Inst) is not null ? tmpText : null);
+
+Check("ShuttleDriver", game.GetType("ShuttleDriver"));
+var pathAnimator = game.GetType("CameraPathAnimator");
+Check("CameraPathAnimator.animationObject", pathAnimator?.GetField("animationObject"));
+
 Console.WriteLine(failures == 0 ? "\nAll targets resolved." : $"\n{failures} target(s) missing.");
 return failures == 0 ? 0 : 1;

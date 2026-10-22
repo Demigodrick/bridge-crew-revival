@@ -4,7 +4,7 @@
     <AssemblyName>StbcRevival</AssemblyName>
     <RootNamespace>StbcRevival</RootNamespace>
     <LangVersion>latest</LangVersion>
-    <Version>0.6.2</Version>
+    <Version>0.6.3</Version>
     <!-- Point this at your install, or pass -p:GameDir=... -->
     <GameDir Condition="'$(GameDir)' == ''">$(HOME)/.local/share/Steam/steamapps/common/Star Trek Bridge Crew</GameDir>
     <ManagedDir>$(GameDir)/stbc_Data/Managed</ManagedDir>
@@ -26,6 +26,7 @@
   <ItemGroup>
     <Reference Include="Assembly-CSharp" HintPath="$(ManagedDir)/Assembly-CSharp.dll" Private="false" />
     <Reference Include="UnityEngine" HintPath="$(ManagedDir)/UnityEngine.dll" Private="false" />
+    <Reference Include="UnityEngine.UI" HintPath="$(ManagedDir)/UnityEngine.UI.dll" Private="false" />
     <Reference Include="Photon3Unity3D" HintPath="$(ManagedDir)/Photon3Unity3D.dll" Private="false" />
   </ItemGroup>
 </Project>
