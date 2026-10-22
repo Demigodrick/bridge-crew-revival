@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bridge Crew Revival</title>
+<meta name="description" content="An unofficial mod that brings back online multiplayer for Star Trek: Bridge Crew on PC after the Ubisoft servers shut down. Play with friends over Steam.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --space: #12153a;
+    --panel: #1b2052;
+    --panel-edge: #2c3478;
+    --ink: #e7ecf6;
+    --muted: #9aa3c4;
+    --signal: #f2b544;
+    --signal-ink: #1a1404;
+    --ok: #7fd6b5;
+    --display: "Chakra Petch", "Segoe UI", sans-serif;
+    --body: "IBM Plex Sans", "Segoe UI", sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, monospace;
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--space); }
+  body {
+    margin: 0;
+    color: var(--ink);
+    font: 400 17px/1.6 var(--body);
+    background:
+      radial-gradient(1px 1px at 12% 18%, #ffffff55 50%, transparent 51%),
+      radial-gradient(1px 1px at 72% 9%, #ffffff44 50%, transparent 51%),
+      radial-gradient(1.5px 1.5px at 88% 34%, #ffffff3a 50%, transparent 51%),
+      radial-gradient(1px 1px at 32% 42%, #ffffff33 50%, transparent 51%),
+      radial-gradient(1px 1px at 55% 27%, #ffffff40 50%, transparent 51%),
+      radial-gradient(ellipse 90% 60% at 80% -10%, #2a2f7a 0%, transparent 60%),
+      var(--space);
+    background-repeat: no-repeat;
+  }
+  a { color: var(--signal); text-underline-offset: 3px; }
+  a:hover { text-decoration-thickness: 2px; }
+  :focus-visible { outline: 2px solid var(--signal); outline-offset: 3px; border-radius: 4px; }
+
+  .wrap { max-width: 760px; margin: 0 auto; padding: 0 20px; }
+
+  header.hero { padding: 72px 0 40px; }
+  .hero h1 {
+    font: 600 clamp(40px, 8vw, 72px)/1 var(--display);
+    letter-spacing: -0.01em;
+    margin: 0 0 18px;
+  }
+  .hero p.lede { font-size: 20px; color: var(--ink); max-width: 60ch; margin: 0 0 32px; }
+  .hero p.lede span { color: var(--muted); }
+
+  /* The install console: the one thing on the page that matters most. */
+  .console {
+    background: var(--panel);
+    border: 1px solid var(--panel-edge);
+    border-radius: 14px;
+    overflow: hidden;
+  }
+  .tabs { display: flex; border-bottom: 1px solid var(--panel-edge); }
+  .tabs button {
+    flex: 0 0 auto;
+    background: none; border: 0; color: var(--muted);
+    font: 500 15px var(--body);
+    padding: 12px 18px; cursor: pointer;
+    border-bottom: 2px solid transparent; margin-bottom: -1px;
+  }
+  .tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--signal); }
+  .pane { padding: 18px; }
+  .pane[hidden] { display: none; }
+  .pane p { margin: 0 0 12px; color: var(--muted); font-size: 15px; }
+  .cmd {
+    display: flex; gap: 10px; align-items: stretch;
+    background: #0f1236; border: 1px solid var(--panel-edge); border-radius: 10px;
+  }
+  .cmd code {
+    flex: 1; min-width: 0;
+    font: 500 15px/1.5 var(--mono); color: var(--ink);
+    padding: 14px 16px; white-space: pre-wrap; overflow-wrap: anywhere;
+  }
+  .cmd code::before { content: "$ "; color: var(--muted); }
+  .cmd.ps code::before { content: "PS> "; }
+  .copy {
+    flex: 0 0 auto;
+    background: var(--signal); color: var(--signal-ink);
+    border: 0; border-radius: 0 9px 9px 0;
+    font: 600 15px var(--body); padding: 0 18px; cursor: pointer;
+  }
+  .copy.done { background: var(--ok); }
+  .after { margin: 14px 0 0; font-size: 15px; color: var(--muted); }
+  .after code, p code, li code, dd code {
+    font: 400 0.9em var(--mono); color: var(--ink);
+    background: #0f1236; padding: 1px 6px; border-radius: 5px;
+    overflow-wrap: anywhere;
+  }
+
+  main section { padding: 44px 0 8px; }
+  h2 { font: 600 28px/1.2 var(--display); margin: 0 0 16px; }
+  h3 { font: 600 18px/1.3 var(--body); margin: 26px 0 6px; }
+  section p { max-width: 68ch; }
+
+  ol.steps { list-style: none; counter-reset: step; padding: 0; margin: 0; }
+  ol.steps li {
+    counter-increment: step;
+    position: relative; padding: 0 0 18px 48px;
+  }
+  ol.steps li::before {
+    content: counter(step);
+    position: absolute; left: 0; top: 0;
+    width: 32px; height: 32px; border-radius: 50%;
+    border: 1.5px solid var(--signal); color: var(--signal);
+    font: 600 16px/29px var(--display); text-align: center;
+  }
+
+  dl.modes { margin: 0; display: grid; grid-template-columns: 11em 1fr; gap: 10px 22px; }
+  dl.modes dt { font-weight: 600; }
+  dl.modes dd { margin: 0; color: var(--ink); }
+  @media (max-width: 600px) {
+    dl.modes { grid-template-columns: 1fr; gap: 2px; }
+    dl.modes dd { margin-bottom: 12px; }
+    .cmd { flex-direction: column; }
+    .copy { border-radius: 0 0 9px 9px; padding: 10px; }
+    header.hero { padding-top: 48px; }
+  }
+
+  details { border-top: 1px solid var(--panel-edge); padding: 14px 0; }
+  details:last-of-type { border-bottom: 1px solid var(--panel-edge); }
+  summary { cursor: pointer; font-weight: 600; }
+  details p { margin: 10px 0 0; color: var(--ink); }
+
+  footer { padding: 56px 0 48px; color: var(--muted); font-size: 14px; }
+  footer p { max-width: 70ch; }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .copy { transition: background-color 160ms ease; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="hero">
+    <h1>Bridge Crew Revival</h1>
+    <p class="lede">Online multiplayer for Star Trek: Bridge Crew on PC, back after Ubisoft's servers
+      shut down. <span>Crews meet over Steam: no account, no server to run.</span></p>
+
+    <div class="console">
+      <div class="tabs" role="tablist" aria-label="Your system">
+        <button role="tab" id="tab-win" aria-controls="pane-win" aria-selected="true">Windows</button>
+        <button role="tab" id="tab-linux" aria-controls="pane-linux" aria-selected="false" tabindex="-1">Linux (Proton)</button>
+      </div>
+      <div class="pane" id="pane-win" role="tabpanel" aria-labelledby="tab-win">
+        <p>Quit the game, then paste this into PowerShell:</p>
+        <div class="cmd ps"><code id="cmd-win">irm https://demigodrick.github.io/bridge-crew-revival/install.ps1 | iex</code><button class="copy" data-copy="cmd-win">Copy</button></div>
+        <p class="after">Then launch the game from Steam as usual.</p>
+      </div>
+      <div class="pane" id="pane-linux" role="tabpanel" aria-labelledby="tab-linux" hidden>
+        <p>Quit the game, then paste this into a terminal:</p>
+        <div class="cmd"><code id="cmd-linux">curl -fsSL https://demigodrick.github.io/bridge-crew-revival/install.sh | bash</code><button class="copy" data-copy="cmd-linux">Copy</button></div>
+        <p class="after">Then in Steam, set the game's launch options (Properties › General) to
+          <code>WINEDLLOVERRIDES="winhttp=n,b" %command%</code></p>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section id="install">
+      <h2>What the installer does</h2>
+      <ol class="steps">
+        <li>Finds Star Trek: Bridge Crew in your Steam libraries.</li>
+        <li>Downloads <a href="https://github.com/BepInEx/BepInEx">BepInEx</a> 5.4.23.5, the mod loader,
+          from its official release and checks the file before installing it.</li>
+        <li>Sets the one BepInEx option this game needs to start.</li>
+        <li>Downloads the latest Bridge Crew Revival release, checks it, and copies it into the game.</li>
+      </ol>
+      <p>Run the same command again to update. Prefer to read it first?
+        <a href="install.ps1">install.ps1</a> and <a href="install.sh">install.sh</a> are short.
+        There's also a zip with the same scripts on the
+        <a href="https://github.com/Demigodrick/bridge-crew-revival/releases/latest">releases page</a>.</p>
+    </section>
+
+    <section id="play">
+      <h2>Playing together</h2>
+      <p>Everyone in the crew needs the mod. Whoever starts the game hosts it on their own PC; the
+        others connect to them through Steam.</p>
+      <dl class="modes">
+        <dt>Quick match</dt>
+        <dd>Joins any public crew with a free seat, worldwide. If there isn't one, you host a public
+          crew that the next player finds.</dd>
+        <dt>Custom lobby</dt>
+        <dd>A private crew for friends. Answer yes to "Open the room for public matchmaking?" in the
+          briefing room to let strangers in too.</dd>
+        <dt>Friends panel</dt>
+        <dd>The shuttle console lists your Steam friends. Pick one to join their crew or invite them
+          to yours. Works in VR.</dd>
+        <dt>Steam</dt>
+        <dd>Friends can use Join Game on you in their Steam friends list, and Steam invites work from
+          the overlay.</dd>
+        <dt>Room browser</dt>
+        <dd>Press F7 on the desktop window for public crews, your room code, and join by code.</dd>
+      </dl>
+      <h3>Early release</h3>
+      <p>Hosting, Quick match, Custom lobby, the friends panel and Steam presence all work for a single
+        player. Two players connecting over Steam hasn't been tested end to end yet. If something
+        breaks, <a href="https://github.com/Demigodrick/bridge-crew-revival/issues">open an issue</a>
+        with your <code>BepInEx/LogOutput.log</code>.</p>
+    </section>
+
+    <section id="faq">
+      <h2>Questions</h2>
+      <details>
+        <summary>Do I need a Ubisoft account or Ubisoft Connect?</summary>
+        <p>No. The mod skips the Ubisoft login entirely.</p>
+      </details>
+      <details>
+        <summary>Can I play with PlayStation VR or Quest players?</summary>
+        <p>No. Consoles and standalone headsets can't load mods, so it's PC with PC only.</p>
+      </details>
+      <details>
+        <summary>Can I get banned on Steam for this?</summary>
+        <p>Bridge Crew has no anti-cheat, and the mod only uses Steam's normal friends, lobbies and
+          networking, the same features other games use.</p>
+      </details>
+      <details>
+        <summary>Does voice chat work?</summary>
+        <p>It should: the game's voice chat travels over the same connection as everything else. It
+          hasn't been confirmed between two players yet, so please report how it goes.</p>
+      </details>
+      <details>
+        <summary>The game shows a black screen or hangs at "Loading".</summary>
+        <p>Run the installer again; it resets the BepInEx setting that causes the black screen. On
+          Linux, check the launch option is set. The log is <code>BepInEx/LogOutput.log</code> in the
+          game folder; include it if you
+          <a href="https://github.com/Demigodrick/bridge-crew-revival/issues">open an issue</a>.</p>
+      </details>
+      <details>
+        <summary>Can I run an always-on server instead?</summary>
+        <p>Yes, there's a Docker server for communities. See the
+          <a href="https://github.com/Demigodrick/bridge-crew-revival#readme">README</a>.</p>
+      </details>
+      <details>
+        <summary>How do I uninstall?</summary>
+        <p>Windows, in PowerShell:<br>
+          <code>&amp; ([scriptblock]::Create((irm https://demigodrick.github.io/bridge-crew-revival/install.ps1))) -Uninstall</code></p>
+        <p>Linux:<br>
+          <code>curl -fsSL https://demigodrick.github.io/bridge-crew-revival/install.sh | bash -s -- --uninstall</code></p>
+        <p>This removes the mod and turns BepInEx off. On Linux, also clear the launch options.</p>
+      </details>
+    </section>
+  </main>
+
+  <footer>
+    <p>Bridge Crew Revival is an unofficial fan project. It isn't affiliated with or endorsed by
+      Ubisoft, Red Storm Entertainment, CBS Studios or Paramount. Star Trek is a trademark of CBS
+      Studios. You need your own copy of the game on Steam; the mod contains none of its files.</p>
+    <p><a href="https://github.com/Demigodrick/bridge-crew-revival">Source on GitHub</a></p>
+  </footer>
+</div>
+
+<script>
+  // Tabs: preselect the visitor's system; arrow keys move between tabs.
+  const tabs = [...document.querySelectorAll('[role="tab"]')];
+  function select(tab) {
+    for (const t of tabs) {
+      const on = t === tab;
+      t.setAttribute('aria-selected', on);
+      t.tabIndex = on ? 0 : -1;
+      document.getElementById(t.getAttribute('aria-controls')).hidden = !on;
+    }
+  }
+  tabs.forEach((t, i) => {
+    t.addEventListener('click', () => select(t));
+    t.addEventListener('keydown', e => {
+      if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+      const next = tabs[(i + (e.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length];
+      select(next); next.focus();
+    });
+  });
+  if (/Linux/i.test(navigator.platform || navigator.userAgent) && !/Android/i.test(navigator.userAgent)) {
+    select(document.getElementById('tab-linux'));
+  }
+
+  // Copy buttons.
+  for (const b of document.querySelectorAll('.copy')) {
+    b.addEventListener('click', async () => {
+      const text = document.getElementById(b.dataset.copy).textContent;
+      try {
+        await navigator.clipboard.writeText(text);
+        b.textContent = 'Copied'; b.classList.add('done');
+      } catch {
+        const range = document.createRange();
+        range.selectNodeContents(document.getElementById(b.dataset.copy));
+        getSelection().removeAllRanges(); getSelection().addRange(range);
+        b.textContent = 'Press Ctrl+C';
+      }
+      setTimeout(() => { b.textContent = 'Copy'; b.classList.remove('done'); }, 2000);
+    });
+  }
+</script>
+</body>
+</html>

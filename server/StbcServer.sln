@@ -1,0 +1,34 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "StbcServer", "StbcServer\StbcServer.csproj", "{E0F2E1CE-E18F-4988-A3AF-1B9C0818E011}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "StbcServer.Tests", "StbcServer.Tests\StbcServer.Tests.csproj", "{38D00D88-5F68-4CF2-A2AB-C3DD2EC5391F}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "StbcCore", "StbcCore\StbcCore.csproj", "{7B40877B-5BCE-4C63-B723-3563936792D4}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{E0F2E1CE-E18F-4988-A3AF-1B9C0818E011}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E0F2E1CE-E18F-4988-A3AF-1B9C0818E011}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E0F2E1CE-E18F-4988-A3AF-1B9C0818E011}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E0F2E1CE-E18F-4988-A3AF-1B9C0818E011}.Release|Any CPU.Build.0 = Release|Any CPU
+		{38D00D88-5F68-4CF2-A2AB-C3DD2EC5391F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{38D00D88-5F68-4CF2-A2AB-C3DD2EC5391F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{38D00D88-5F68-4CF2-A2AB-C3DD2EC5391F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{38D00D88-5F68-4CF2-A2AB-C3DD2EC5391F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7B40877B-5BCE-4C63-B723-3563936792D4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7B40877B-5BCE-4C63-B723-3563936792D4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7B40877B-5BCE-4C63-B723-3563936792D4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7B40877B-5BCE-4C63-B723-3563936792D4}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal

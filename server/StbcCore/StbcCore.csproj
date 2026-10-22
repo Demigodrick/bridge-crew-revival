@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Photon LoadBalancing server core, transport-agnostic. Targets .NET 3.5 so it runs both in the
+    standalone server (.NET 8) and inside Star Trek: Bridge Crew's Unity 5.4 Mono runtime (the mod).
+  -->
+  <PropertyGroup>
+    <TargetFrameworks>net35;netstandard2.0</TargetFrameworks>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <RootNamespace>StbcServer</RootNamespace>
+    <AssemblyName>StbcCore</AssemblyName>
+    <NoWarn>$(NoWarn);CS8632</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies.net35" Version="1.0.3" PrivateAssets="all" Condition="'$(TargetFramework)' == 'net35'" />
+  </ItemGroup>
+</Project>

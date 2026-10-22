@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net35</TargetFramework>
+    <AssemblyName>StbcRevival</AssemblyName>
+    <RootNamespace>StbcRevival</RootNamespace>
+    <LangVersion>latest</LangVersion>
+    <Version>0.6.1</Version>
+    <!-- Point this at your install, or pass -p:GameDir=... -->
+    <GameDir Condition="'$(GameDir)' == ''">$(HOME)/.local/share/Steam/steamapps/common/Star Trek Bridge Crew</GameDir>
+    <ManagedDir>$(GameDir)/stbc_Data/Managed</ManagedDir>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <!-- The in-game Photon server (Steam mode) and the Photon socket hook, shared with the server/tests. -->
+  <ItemGroup>
+    <ProjectReference Include="../server/StbcCore/StbcCore.csproj" />
+    <Compile Include="../shared/VirtualSockets.cs" Link="Shared/VirtualSockets.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="BepInEx.Core" Version="5.4.21" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies.net35" Version="1.0.3" PrivateAssets="all" />
+  </ItemGroup>
+
+  <!-- Game assemblies: compile against them, never ship them. -->
+  <ItemGroup>
+    <Reference Include="Assembly-CSharp" HintPath="$(ManagedDir)/Assembly-CSharp.dll" Private="false" />
+    <Reference Include="UnityEngine" HintPath="$(ManagedDir)/UnityEngine.dll" Private="false" />
+    <Reference Include="Photon3Unity3D" HintPath="$(ManagedDir)/Photon3Unity3D.dll" Private="false" />
+  </ItemGroup>
+</Project>
