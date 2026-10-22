@@ -26,7 +26,7 @@ namespace StbcRevival
     {
         public const string Guid = "stbc.revival";
         public const string Name = "Bridge Crew Revival";
-        public const string Version = "0.6.1";
+        public const string Version = "0.6.2";
 
         internal static ManualLogSource Log;
 
@@ -40,6 +40,7 @@ namespace StbcRevival
         internal static ConfigEntry<bool> StripSteamAuth;
         internal static ConfigEntry<string> MatchmakingTag;
         internal static ConfigEntry<bool> SkipUplay;
+        internal static ConfigEntry<bool> SkipIntro;
         internal static ConfigEntry<string> PlayerName;
         internal static ConfigEntry<string> ExtraDevConfig;
         internal static ConfigEntry<bool> Diagnostics;
@@ -77,6 +78,8 @@ namespace StbcRevival
 
             SkipUplay = Config.Bind("Login", "SkipUplay", true,
                 "Use the game's built-in no-platform login mode: no Uplay client, no Ubisoft account, no Ubisoft online services.");
+            SkipIntro = Config.Bind("Startup", "SkipIntro", true,
+                "Skip the logo and movie screens at launch and go straight to the shuttle. Connection, controller and headset checks still run.");
             PlayerName = Config.Bind("Login", "PlayerName", "",
                 "Name shown to other players. Empty = your Steam persona name (falls back to the OS user name).");
 

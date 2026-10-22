@@ -29,6 +29,8 @@ namespace StbcRevival
             Patch(harmony, AccessTools.Method(typeof(ConfigFile), nameof(ConfigFile.ContainsKey)),
                 prefix: nameof(ContainsKey_Prefix));
 
+            IntroSkip.Patch(harmony);
+
             if (Plugin.SkipUplay.Value)
                 Patch(harmony, AccessTools.Method(typeof(NetworkCore), nameof(NetworkCore.GetLoginMethod)),
                     postfix: nameof(GetLoginMethod_Postfix));

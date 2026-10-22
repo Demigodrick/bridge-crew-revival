@@ -177,6 +177,9 @@ MatchmakingTag =         # optional; only players with the same tag see each oth
 SkipUplay = true
 PlayerName = Picard
 
+[Startup]
+SkipIntro = true         # skip the logo and title screens, straight to the shuttle
+
 [Game]
 ExtraDevConfig =         # e.g. maxnumplayers=5;mutevoip=false;hideNameTag=true
 

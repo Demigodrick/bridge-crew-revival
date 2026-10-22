@@ -122,5 +122,12 @@ var peerBase = photonLib.GetType("ExitGames.Client.Photon.PeerBase");
 Check("  PeerBase.ServerAddress / OnConnect / peerConnectionState",
     peerBase?.GetProperty("ServerAddress", Inst) is not null && peerBase.GetMethod("OnConnect", Inst) is not null && peerBase.GetField("peerConnectionState", Inst) is not null ? peerBase : null);
 
+var introSequence = game.GetType("IntroSequence");
+Check("IntroSequence.GBDBONKGDOM() (next element) + _elements/_curNdx/_skipIsOn",
+    introSequence?.GetMethod("GBDBONKGDOM", Inst) is { } nextElement && nextElement.ReturnType.FullName == "System.Int32"
+    && introSequence.GetField("_elements", Inst) is not null && introSequence.GetField("_curNdx", Inst) is not null
+    && introSequence.GetField("_skipIsOn", Inst) is not null ? introSequence : null);
+Check("MovieIntroElement", game.GetType("MovieIntroElement"));
+
 Console.WriteLine(failures == 0 ? "\nAll targets resolved." : $"\n{failures} target(s) missing.");
 return failures == 0 ? 0 : 1;
