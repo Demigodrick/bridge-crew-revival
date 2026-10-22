@@ -102,6 +102,36 @@ launch_option_set() { # the WINEDLLOVERRIDES launch option, in any Steam user's 
   return 1
 }
 
+# ---- Proton prefix --------------------------------------------------------------------------------
+
+# Load winhttp.dll (BepInEx's loader) from the game folder in the game's own Wine prefix. Unlike the
+# WINEDLLOVERRIDES launch option this also covers the game when Ubisoft Connect restarts it, and nobody
+# has to edit Steam settings. The prefix exists once the game has been started under Proton.
+prefix_reg() { # game -> path of the prefix's user.reg
+  printf '%s\n' "$(cd "$1/../.." && pwd)/compatdata/$APP_ID/pfx/user.reg"
+}
+
+set_prefix_override() { # game on|off -> 0 if the prefix now has the override (or, for off, doesn't)
+  local reg
+  reg="$(prefix_reg "$1")"
+  [ -f "$reg" ] || return 1
+  [ -f "$reg.stbc-backup" ] || cp "$reg" "$reg.stbc-backup"
+  # Drop any winhttp line in [Software\\Wine\\DllOverrides], then (for on) add ours right after the
+  # section header and its #time line; add the section if the prefix has none.
+  awk -v on="$2" '
+    function add() { if (on == "on") print "\"winhttp\"=\"native,builtin\""; added = 1 }
+    index($0, "[Software\\\\Wine\\\\DllOverrides]") == 1 { print; insection = 1; found = 1; next }
+    insection && /^#time=/ { print; next }
+    insection && !added { add() }
+    insection && /^"winhttp"=/ { next }
+    insection && (/^\[/ || /^$/) { insection = 0 }
+    { print }
+    END {
+      if (!found && on == "on") { print ""; print "[Software\\\\Wine\\\\DllOverrides]"; add() }
+    }' "$reg" > "$reg.stbc-tmp" && mv "$reg.stbc-tmp" "$reg"
+  if [ "$2" = on ]; then grep -q '^"winhttp"="native,builtin"' "$reg"; else return 0; fi
+}
+
 start_game() {
   local url="steam://rungameid/$APP_ID"
   if command -v steam >/dev/null; then steam "$url" >/dev/null 2>&1 &
@@ -111,20 +141,48 @@ start_game() {
   fi
 }
 
+# Report what the game is doing, from its Unity log (the mod's messages are copied there too).
+watch_log() { # log from-line -> prints new milestones, echoes the new line count
+  local log="$1" from="$2" total line
+  total=$(wc -l < "$log" 2>/dev/null || echo 0)
+  [ "$total" -lt "$from" ] && from=0   # the log was restarted
+  if [ "$total" -gt "$from" ]; then
+    tail -n +"$((from + 1))" "$log" | head -n "$((total - from))" | while IFS= read -r line; do
+      case "$line" in
+        "Initialize engine version"*) say "  - game starting" >&2 ;;
+        *"Bridge Crew Revival"*" loaded."*) say "  - mod loaded" >&2 ;;
+        *"Ubisoft save import: this run"*) say "  - waiting for Ubisoft to send your save (Ubisoft Connect may ask you to sign in)" >&2 ;;
+        *"Ubisoft save import: quitting"*) say "  - closing the game" >&2 ;;
+      esac
+    done
+  fi
+  echo "$total"
+}
+
 import_save() { # game
-  local game="$1" result="$1/BepInEx/config/stbc.revival.import.txt" waited=0
+  local game="$1" result="$1/BepInEx/config/stbc.revival.import.txt" log="$1/stbc_Data/output_log.txt"
+  local waited=0 seen loaded=0
   say ""
   say "Importing your Ubisoft save: the game starts once, signs in to Ubisoft, copies your settings and"
-  say "quits by itself. Ubisoft Connect must be installed and signed in; put your headset on if it asks."
-  if ! launch_option_set; then
-    say "First set the launch option above in Steam (it's needed for the mod to load)."
-    ask "Done that?" || { say "Skipped the import. Run the installer again with --import-save later."; return; }
+  say "quits by itself (usually within a couple of minutes). Ubisoft Connect must be installed and signed in."
+  if ! grep -qs '^"winhttp"="native,builtin"' "$(prefix_reg "$game")" && ! launch_option_set; then
+    say "The mod won't load yet: start the game once from Steam and quit it, then run this again."
+    return
   fi
   rm -f "$result"
   set_import_flag "$game" true
+  seen=$(wc -l < "$log" 2>/dev/null || echo 0)
   say "Starting Star Trek: Bridge Crew..."
   start_game
-  while [ ! -f "$result" ] && [ "$waited" -lt 420 ]; do sleep 5; waited=$((waited + 5)); done
+  while [ ! -f "$result" ] && [ "$waited" -lt 420 ]; do
+    sleep 5; waited=$((waited + 5))
+    seen=$(watch_log "$log" "$seen")
+    grep -qs 'Bridge Crew Revival.* loaded\.' "$log" && loaded=1
+    if [ $((waited % 30)) -eq 0 ]; then
+      say "  ... still waiting ($((waited / 60))m$((waited % 60))s)"
+      [ "$loaded" = 0 ] && [ "$waited" -ge 90 ] && say "      The mod hasn't loaded yet. If the game is at its menu, quit it: it started without the mod."
+    fi
+  done
   if [ -f "$result" ]; then
     say "$(sed -n 2p "$result")"
   else
@@ -163,8 +221,9 @@ Pass the game folder:  bash install.sh \"/path/to/Star Trek Bridge Crew\""
           "$game/BepInEx/plugins/StbcCore.dll" "$game/BepInEx/plugins/StbcCore.pdb"
     # Without winhttp.dll BepInEx doesn't load at all; the BepInEx folder is left for you to delete.
     rm -f "$game/winhttp.dll" "$game/doorstop_config.ini" "$game/.doorstop_version" "$game/changelog.txt"
+    set_prefix_override "$game" off || true
     say "Removed the mod and disabled BepInEx. You can delete \"$game/BepInEx\" too."
-    say "Also remove the launch options from the game's Steam properties."
+    say "If you set launch options for the game in Steam, you can remove them."
     exit 0
   fi
 
@@ -223,13 +282,16 @@ Pass the game folder:  bash install.sh \"/path/to/Star Trek Bridge Crew\""
   cp "$plugins/"Stbc*.pdb "$game/BepInEx/plugins/" 2>/dev/null || true
   say "Bridge Crew Revival installed."
   say ""
-  say "One more step, in Steam: right-click Star Trek: Bridge Crew > Properties > General >"
-  say "Launch Options, and set:"
+  if set_prefix_override "$game" on; then
+    say "BepInEx is switched on in the game's Proton prefix: just launch the game from Steam."
+  else
+    say "One more step: the game hasn't been started under Proton yet. Either start it once from Steam,"
+    say "quit, and run this installer again, or set its launch options (Properties > General) to:"
+    say ""
+    say "    $LAUNCH_OPTIONS"
+  fi
   say ""
-  say "    $LAUNCH_OPTIONS"
-  say ""
-  say "Proton then loads BepInEx. Settings: BepInEx/config/stbc.revival.cfg (created on first launch)."
-  say "Log: BepInEx/LogOutput.log"
+  say "Settings: BepInEx/config/stbc.revival.cfg (created on first launch). Log: BepInEx/LogOutput.log"
 
   if [ "$import" = yes ] || { [ -z "$import" ] && [ ! -f "$game/BepInEx/config/stbc.revival.save.json" ] \
        && ask "Copy your avatar and settings from your Ubisoft save? (starts the game once)"; }; then

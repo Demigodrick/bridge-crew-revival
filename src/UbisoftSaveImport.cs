@@ -29,6 +29,12 @@ namespace StbcRevival
         {
             if (!Active) return;
             Plugin.Log.LogInfo("Ubisoft save import: this run logs in to Ubisoft to copy your save, then quits");
+            // With the Ubisoft login on, this copy of the game hands over to Ubisoft Connect, which starts a
+            // new one that inherits this process's environment. Doorstop (BepInEx's loader) marks the
+            // environment once it has loaded and then skips any process carrying the mark, so the new copy
+            // would start without the mod. Clear the mark so it loads there too.
+            Environment.SetEnvironmentVariable("DOORSTOP_INITIALIZED", null);
+            Environment.SetEnvironmentVariable("DOORSTOP_DISABLE", null);
             harmony.Patch(AccessTools.Method(typeof(SVR.Network.MFKKMDCIEJA), "OANAMJIDBOO"), // online search result
                 postfix: new HarmonyMethod(typeof(UbisoftSaveImport), nameof(SearchResult_Postfix)));
         }
