@@ -4,11 +4,12 @@
 #   curl -fsSL https://demigodrick.github.io/bridge-crew-revival/install.sh | bash
 #   curl -fsSL https://demigodrick.github.io/bridge-crew-revival/install.sh | bash -s -- --uninstall
 #
-# or from the release zip:  ./install.sh  [game folder]  [--uninstall]
+# or from the release zip:  ./install.sh  [game folder]  [--uninstall]  [--import-save | --no-import]
 #
 # Finds the game in your Steam libraries, installs BepInEx 5 (from its GitHub release, checksum
 # verified), sets the BepInEx entrypoint this game needs, and copies the mod (from the zip it's in,
-# or the latest GitHub release). Run it again to update.
+# or the latest GitHub release). Run it again to update. It then offers to copy your settings from your
+# Ubisoft cloud save (avatar, options) by starting the game once.
 set -euo pipefail
 
 REPO="Demigodrick/bridge-crew-revival"
@@ -24,7 +25,9 @@ fail() { printf 'Error: %s\n' "$*" >&2; exit 1; }
 usage() {
   cat <<'EOF'
 Bridge Crew Revival installer (Linux)
-  install.sh [game folder] [--uninstall]
+  install.sh [game folder] [--uninstall] [--import-save | --no-import]
+  --import-save  copy your Ubisoft cloud save (starts the game once; Ubisoft Connect must be signed in)
+  --no-import    don't ask about it
 Environment: STBC_VERSION=0.6.1 installs that release instead of the latest.
 EOF
 }
@@ -72,11 +75,71 @@ find_game() {
   return 1
 }
 
+# ---- Ubisoft save import ------------------------------------------------------------------------
+
+ask() { # question -> 0 for yes; reads the terminal even when the script is piped into bash
+  local answer=""
+  { : < /dev/tty; } 2>/dev/null || return 1   # no terminal (automated run): don't ask
+  printf '%s [y/N] ' "$1" > /dev/tty
+  read -r answer < /dev/tty || return 1
+  case "$answer" in [yY]*) return 0 ;; *) return 1 ;; esac
+}
+
+set_import_flag() { # game value
+  local cfg="$1/BepInEx/config/stbc.revival.cfg"
+  if [ -f "$cfg" ] && grep -q '^FetchUbisoftSave' "$cfg"; then
+    sed -i "s/^FetchUbisoftSave = .*/FetchUbisoftSave = $2/" "$cfg"
+  elif [ "$2" = true ]; then
+    printf '\n[Import]\n\nFetchUbisoftSave = true\n' >> "$cfg"
+  fi
+}
+
+launch_option_set() { # the WINEDLLOVERRIDES launch option, in any Steam user's settings
+  local root
+  for root in "$HOME/.local/share/Steam" "$HOME/.steam/steam" "$HOME/.var/app/com.valvesoftware.Steam/.local/share/Steam" "$HOME/snap/steam/common/.local/share/Steam"; do
+    grep -qs 'winhttp=n,b' "$root"/userdata/*/config/localconfig.vdf && return 0
+  done
+  return 1
+}
+
+start_game() {
+  local url="steam://rungameid/$APP_ID"
+  if command -v steam >/dev/null; then steam "$url" >/dev/null 2>&1 &
+  elif command -v flatpak >/dev/null && flatpak info com.valvesoftware.Steam >/dev/null 2>&1; then
+    flatpak run com.valvesoftware.Steam "$url" >/dev/null 2>&1 &
+  else xdg-open "$url" >/dev/null 2>&1 &
+  fi
+}
+
+import_save() { # game
+  local game="$1" result="$1/BepInEx/config/stbc.revival.import.txt" waited=0
+  say ""
+  say "Importing your Ubisoft save: the game starts once, signs in to Ubisoft, copies your settings and"
+  say "quits by itself. Ubisoft Connect must be installed and signed in; put your headset on if it asks."
+  if ! launch_option_set; then
+    say "First set the launch option above in Steam (it's needed for the mod to load)."
+    ask "Done that?" || { say "Skipped the import. Run the installer again with --import-save later."; return; }
+  fi
+  rm -f "$result"
+  set_import_flag "$game" true
+  say "Starting Star Trek: Bridge Crew..."
+  start_game
+  while [ ! -f "$result" ] && [ "$waited" -lt 420 ]; do sleep 5; waited=$((waited + 5)); done
+  if [ -f "$result" ]; then
+    say "$(sed -n 2p "$result")"
+  else
+    set_import_flag "$game" false
+    say "No result after 7 minutes; the import didn't run. Check BepInEx/LogOutput.log, then try again with --import-save."
+  fi
+}
+
 main() {
-  local uninstall=0 game="" arg
+  local uninstall=0 game="" import="" arg
   for arg in "$@"; do
     case "$arg" in
       --uninstall) uninstall=1 ;;
+      --import-save) import=yes ;;
+      --no-import) import=no ;;
       -h|--help) usage; exit 0 ;;
       *) game="$arg" ;;
     esac
@@ -167,6 +230,11 @@ Pass the game folder:  bash install.sh \"/path/to/Star Trek Bridge Crew\""
   say ""
   say "Proton then loads BepInEx. Settings: BepInEx/config/stbc.revival.cfg (created on first launch)."
   say "Log: BepInEx/LogOutput.log"
+
+  if [ "$import" = yes ] || { [ -z "$import" ] && [ ! -f "$game/BepInEx/config/stbc.revival.save.json" ] \
+       && ask "Copy your avatar and settings from your Ubisoft save? (starts the game once)"; }; then
+    import_save "$game"
+  fi
 }
 
 # Everything runs from here, so a partly downloaded script (curl | bash) does nothing.

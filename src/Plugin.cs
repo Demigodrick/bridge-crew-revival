@@ -26,7 +26,7 @@ namespace StbcRevival
     {
         public const string Guid = "stbc.revival";
         public const string Name = "Bridge Crew Revival";
-        public const string Version = "0.6.3";
+        public const string Version = "0.6.4";
 
         internal static ManualLogSource Log;
 
@@ -41,6 +41,8 @@ namespace StbcRevival
         internal static ConfigEntry<string> MatchmakingTag;
         internal static ConfigEntry<bool> SkipUplay;
         internal static ConfigEntry<bool> SkipIntro;
+        internal static ConfigEntry<bool> LocalSave;
+        internal static ConfigEntry<bool> FetchUbisoftSave;
         internal static ConfigEntry<bool> ShuttleWasd;
         internal static ConfigEntry<float> ShuttleSpeed;
         internal static ConfigEntry<float> ShuttleTurnSpeed;
@@ -85,6 +87,10 @@ namespace StbcRevival
                 "Use the game's built-in no-platform login mode: no Uplay client, no Ubisoft account, no Ubisoft online services.");
             SkipIntro = Config.Bind("Startup", "SkipIntro", true,
                 "Skip the logo and movie screens at launch and go straight to the shuttle. Connection, controller and headset checks still run.");
+            LocalSave = Config.Bind("Game", "LocalSave", true,
+                "Keep the game's settings (avatar appearance, options, progress flags) in BepInEx/config/stbc.revival.save.json. The game only ever saved these to Ubisoft's servers.");
+            FetchUbisoftSave = Config.Bind("Import", "FetchUbisoftSave", false,
+                "One run only (the installer sets this): log in to Ubisoft, copy your Ubisoft cloud save into the local save, then quit. Needs Ubisoft Connect signed in. Switches itself off afterwards.");
             ShuttleWasd = Config.Bind("Shuttle", "WasdControls", false,
                 "Experimental, doesn't work yet: fly the main-menu shuttle with the keyboard (W/S forward/back, A/D turn, Q/E down/up, Shift faster).");
             ShuttleSpeed = Config.Bind("Shuttle", "Speed", 20f, "Shuttle keyboard speed (scene units per second).");
@@ -140,6 +146,8 @@ namespace StbcRevival
             Safely("room browser", RoomBrowser.Update);
             Safely("steam integration", SteamIntegration.Update);
             Safely("steam friends panel", SteamFriendsPanel.Update);
+            Safely("local save", StbcRevival.LocalSave.Update);
+            Safely("ubisoft save import", UbisoftSaveImport.Update);
         }
 
         private readonly System.Collections.Generic.HashSet<string> failedOnce = new System.Collections.Generic.HashSet<string>();
@@ -152,6 +160,8 @@ namespace StbcRevival
                 if (failedOnce.Add(what)) Log.LogError($"{what} failed (logged once): {e}");
             }
         }
+
+        private void OnApplicationQuit() => Safely("local save on quit", StbcRevival.LocalSave.OnQuit);
 
         private void OnGUI() => Safely("room browser window", RoomBrowser.OnGUI);
     }

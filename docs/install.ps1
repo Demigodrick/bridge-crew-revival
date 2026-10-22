@@ -8,9 +8,13 @@
 # Finds the game in your Steam libraries, installs BepInEx 5 (from its GitHub release, checksum
 # verified), sets the BepInEx entrypoint this game needs, and copies the mod (from the zip it's in,
 # or the latest GitHub release). Run it again to update. $env:STBC_VERSION pins a release.
+# It then offers to copy your settings from your Ubisoft cloud save (avatar, options) by starting the game
+# once; -ImportSave does that without asking, -NoImport skips the question.
 param(
     [string]$GameDir = "",
-    [switch]$Uninstall
+    [switch]$Uninstall,
+    [switch]$ImportSave,
+    [switch]$NoImport
 )
 
 $Repo = "Demigodrick/bridge-crew-revival"
@@ -57,7 +61,39 @@ function Get-Download([string]$Url, [string]$File) {
     Invoke-WebRequest -Uri $Url -OutFile $File -UseBasicParsing
 }
 
-function Install-BridgeCrewRevival([string]$GameDir, [bool]$Uninstall, [string]$Here) {
+# ---- Ubisoft save import ------------------------------------------------------------------------
+
+function Set-ImportFlag([string]$GameDir, [bool]$On) {
+    $cfg = Join-Path $GameDir "BepInEx\config\stbc.revival.cfg"
+    $value = if ($On) { "true" } else { "false" }
+    if ((Test-Path $cfg) -and (Select-String -Path $cfg -Pattern '^FetchUbisoftSave' -Quiet)) {
+        $lines = foreach ($line in Get-Content $cfg) { if ($line -match '^FetchUbisoftSave') { "FetchUbisoftSave = $value" } else { $line } }
+        Set-Content -Path $cfg -Value $lines -Encoding UTF8
+    } elseif ($On) {
+        Add-Content -Path $cfg -Value @("", "[Import]", "", "FetchUbisoftSave = true") -Encoding UTF8
+    }
+}
+
+function Import-UbisoftSave([string]$GameDir) {
+    $result = Join-Path $GameDir "BepInEx\config\stbc.revival.import.txt"
+    Write-Host ""
+    Write-Host "Importing your Ubisoft save: the game starts once, signs in to Ubisoft, copies your settings and"
+    Write-Host "quits by itself. Ubisoft Connect must be installed and signed in; put your headset on if it asks."
+    Remove-Item -LiteralPath $result -ErrorAction SilentlyContinue
+    Set-ImportFlag $GameDir $true
+    Write-Host "Starting Star Trek: Bridge Crew..."
+    Start-Process "steam://rungameid/$AppId"
+    $waited = 0
+    while (-not (Test-Path $result) -and $waited -lt 420) { Start-Sleep -Seconds 5; $waited += 5 }
+    if (Test-Path $result) {
+        Write-Host ((Get-Content $result)[1])
+    } else {
+        Set-ImportFlag $GameDir $false
+        Write-Host "No result after 7 minutes; the import didn't run. Check BepInEx\LogOutput.log, then run the installer again with -ImportSave."
+    }
+}
+
+function Install-BridgeCrewRevival([string]$GameDir, [bool]$Uninstall, [string]$Here, [string]$Import) {
     [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
 
     if (-not $GameDir) {
@@ -147,10 +183,18 @@ function Install-BridgeCrewRevival([string]$GameDir, [bool]$Uninstall, [string]$
     Write-Host ""
     Write-Host "Launch the game from Steam as usual; no launch options are needed on Windows."
     Write-Host "Settings: BepInEx\config\stbc.revival.cfg (created on first launch). Log: BepInEx\LogOutput.log"
+
+    $hasLocalSave = Test-Path (Join-Path $GameDir "BepInEx\config\stbc.revival.save.json")
+    $doImport = $Import -eq "yes"
+    if (-not $Import -and -not $hasLocalSave) {
+        $doImport = (Read-Host "Copy your avatar and settings from your Ubisoft save? (starts the game once) [y/N]") -match '^[yY]'
+    }
+    if ($doImport) { Import-UbisoftSave $GameDir }
 }
 
 try {
-    Install-BridgeCrewRevival -GameDir $GameDir -Uninstall:$Uninstall.IsPresent -Here $PSScriptRoot
+    $import = if ($ImportSave) { "yes" } elseif ($NoImport) { "no" } else { "" }
+    Install-BridgeCrewRevival -GameDir $GameDir -Uninstall:$Uninstall.IsPresent -Here $PSScriptRoot -Import $import
 } catch {
     Write-Host "Error: $($_.Exception.Message)" -ForegroundColor Red
 }

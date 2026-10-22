@@ -30,8 +30,11 @@ namespace StbcRevival
                 prefix: nameof(ContainsKey_Prefix));
 
             IntroSkip.Patch(harmony);
+            LocalSave.Patch(harmony);
+            UbisoftSaveImport.Patch(harmony);
 
-            if (Plugin.SkipUplay.Value)
+            // A Ubisoft save import run needs the real Ubisoft login.
+            if (Plugin.SkipUplay.Value && !UbisoftSaveImport.Active)
                 Patch(harmony, AccessTools.Method(typeof(NetworkCore), nameof(NetworkCore.GetLoginMethod)),
                     postfix: nameof(GetLoginMethod_Postfix));
 

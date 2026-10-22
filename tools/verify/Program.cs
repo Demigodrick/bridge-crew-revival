@@ -141,5 +141,18 @@ Check("ShuttleDriver", game.GetType("ShuttleDriver"));
 var pathAnimator = game.GetType("CameraPathAnimator");
 Check("CameraPathAnimator.animationObject", pathAnimator?.GetField("animationObject"));
 
+var prefs = game.GetType("SVR.Network.IOGFEJEOLBA");
+Check("Preferences entity: .ctor, Set(string, object), FDJOFPBNIFF table",
+    prefs?.GetConstructor(Type.EmptyTypes) is not null && prefs.GetMethod("Set") is not null && prefs.GetField("FDJOFPBNIFF", Inst) is not null ? prefs : null);
+Check("OnlineSave.get_Preferences returns it", game.GetType("SVR.Network.OnlineSave")?.GetMethod("get_Preferences")?.ReturnType == prefs ? prefs : null);
+var singleton = game.GetType("SVR.Singleton_Behaviour_Persistent`1");
+Check("Singleton_Behaviour_Persistent.JKOEGLOEGKD (instance field)", singleton?.GetField("JKOEGLOEGKD", BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Static));
+var json = game.GetType("SVR.Network.Utilities.MHCFEEJDKJM");
+Check("JSON helper JsonToString / StringToJson", json?.GetMethod("JsonToString") is not null && json.GetMethod("StringToJson") is not null ? json : null);
+
+var entityBase = game.GetType("SVR.Network.MFKKMDCIEJA");
+Check("Save entity OANAMJIDBOO(Hashtable) (online search result)",
+    entityBase?.GetMethod("OANAMJIDBOO", Inst) is { } searchResult && searchResult.GetParameters() is { Length: 1 } sp && sp[0].Name == "MIACDBOANPI" ? entityBase : null);
+
 Console.WriteLine(failures == 0 ? "\nAll targets resolved." : $"\n{failures} target(s) missing.");
 return failures == 0 ? 0 : 1;
