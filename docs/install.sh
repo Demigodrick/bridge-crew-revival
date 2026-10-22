@@ -159,6 +159,20 @@ watch_log() { # log from-line -> prints new milestones, echoes the new line coun
   echo "$total"
 }
 
+# The import starts Ubisoft Connect inside the game's Proton prefix, and it stays running afterwards,
+# which keeps Steam showing the game as running. Close it, but only the copy in this game's prefix:
+# other Ubisoft games have their own prefixes and their own copies.
+close_ubisoft_connect() {
+  local pid closed=0 waited=0
+  while pgrep -f '\\stbc\.exe' >/dev/null 2>&1 && [ "$waited" -lt 30 ]; do sleep 2; waited=$((waited + 2)); done
+  for pid in $(pgrep -f 'Ubisoft Game Launcher' 2>/dev/null); do
+    tr '\0' '\n' < "/proc/$pid/environ" 2>/dev/null | grep -q "compatdata/$APP_ID" || continue
+    kill "$pid" 2>/dev/null && closed=1
+  done
+  [ "$closed" = 1 ] && say "Closed Ubisoft Connect (it was only needed for the import)."
+  return 0
+}
+
 import_save() { # game
   local game="$1" result="$1/BepInEx/config/stbc.revival.import.txt" log="$1/stbc_Data/output_log.txt"
   local waited=0 seen loaded=0
@@ -185,6 +199,7 @@ import_save() { # game
   done
   if [ -f "$result" ]; then
     say "$(sed -n 2p "$result")"
+    case "$(sed -n 1p "$result")" in ok|none) close_ubisoft_connect ;; esac
   else
     set_import_flag "$game" false
     say "No result after 7 minutes; the import didn't run. Check BepInEx/LogOutput.log, then try again with --import-save."
