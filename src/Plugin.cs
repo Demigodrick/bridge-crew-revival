@@ -43,6 +43,8 @@ namespace StbcRevival
         internal static ConfigEntry<bool> SkipIntro;
         internal static ConfigEntry<bool> LocalSave;
         internal static ConfigEntry<bool> FetchUbisoftSave;
+        internal static ConfigEntry<bool> CheckForUpdates;
+        internal static ConfigEntry<string> UpdateUrl;
         internal static ConfigEntry<bool> ShuttleWasd;
         internal static ConfigEntry<float> ShuttleSpeed;
         internal static ConfigEntry<float> ShuttleTurnSpeed;
@@ -92,6 +94,10 @@ namespace StbcRevival
                 "Keep the game's settings (avatar appearance, options, progress flags) in BepInEx/config/stbc.revival.save.json. The game only ever saved these to Ubisoft's servers.");
             FetchUbisoftSave = Config.Bind("Import", "FetchUbisoftSave", false,
                 "One run only (the installer sets this): log in to Ubisoft, copy your Ubisoft cloud save into the local save, then quit. Needs Ubisoft Connect signed in. Switches itself off afterwards.");
+            CheckForUpdates = Config.Bind("Updates", "CheckForUpdates", true,
+                "Once per launch, on the shuttle, check the website for a newer version and offer to open it. Nothing is downloaded; if the check fails, nothing is shown.");
+            UpdateUrl = Config.Bind("Updates", "VersionUrl", "",
+                "Where to read the latest version number. Empty = the official website's version.txt.");
             ShuttleWasd = Config.Bind("Shuttle", "WasdControls", false,
                 "Experimental, doesn't work yet: fly the main-menu shuttle with the keyboard (W/S forward/back, A/D turn, Q/E down/up, Shift faster).");
             ShuttleSpeed = Config.Bind("Shuttle", "Speed", 20f, "Shuttle keyboard speed (scene units per second).");
@@ -151,6 +157,7 @@ namespace StbcRevival
             Safely("steam friends panel", SteamFriendsPanel.Update);
             Safely("local save", StbcRevival.LocalSave.Update);
             Safely("vr room panels", StbcRevival.VrRoomPanels.Update);
+            Safely("update check", UpdateCheck.Update);
             Safely("ubisoft save import", UbisoftSaveImport.Update);
         }
 
