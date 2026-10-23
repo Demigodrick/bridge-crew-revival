@@ -175,5 +175,9 @@ foreach (var f in new[] { "_entryObjects", "_pageCountObject", "_upButtonInterac
 Check("TMP_Text.get_text", tmpText?.GetMethod("get_text", Inst));
 Check("PopupMgr.ShowPopup(string, LGNBEBILNCL, PDHCCBFJODN, bool, string[])", game.GetType("UI.PopupMgr")?.GetMethods(PS).FirstOrDefault(m => m.Name == "ShowPopup" && m.GetParameters().Length == 5));
 
+Check("WwiseSoundUtil.PostEvent(string, GameObject)", game.GetType("WwiseSoundUtil")?.GetMethods(PS).FirstOrDefault(m =>
+    m.Name == "PostEvent" && m.GetParameters() is { Length: 2 } pp && pp[0].ParameterType.FullName == "System.String"));
+Check("MicCheckUI reads skipMicCheck", game.GetType("MicCheckUI")?.GetMethod("DNNAEKAMFLG", Inst));
+
 Console.WriteLine(failures == 0 ? "\nAll targets resolved." : $"\n{failures} target(s) missing.");
 return failures == 0 ? 0 : 1;

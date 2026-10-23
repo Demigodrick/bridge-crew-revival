@@ -76,7 +76,8 @@ namespace StbcRevival
                 rows.Add(new Row
                 {
                     Title = "YOUR CREW " + RoomBrowser.Code(current),
-                    Detail = RoomBrowser.CurrentRoomVisible() ? "Public: anyone can join" : "Private: invite or code only",
+                    Detail = (RoomBrowser.CurrentRoomVisible() ? "Public: anyone can join" : "Private: invite or code only")
+                             + (SteamName.SteamInitialized() ? " - tap to invite" : ""),
                     Mine = true,
                 });
             foreach (var e in RoomBrowser.RoomList().Where(e => e.Name != current))
@@ -94,7 +95,18 @@ namespace StbcRevival
             if (row == null) return;
             if (row.Mine)
             {
-                Popup($"This is your crew, {row.Title.Substring("YOUR CREW ".Length)}.\n{row.Detail}", null, UI.PDHCCBFJODN.Notification);
+                var code = row.Title.Substring("YOUR CREW ".Length);
+                if (!SteamName.SteamInitialized())
+                {
+                    Popup($"This is your crew, {code}.\n{row.Detail}", null, UI.PDHCCBFJODN.Notification);
+                    return;
+                }
+                // Steam's invite window shows on the desktop and, in VR, in the SteamVR dashboard.
+                Popup($"Your crew {code}: {row.Detail}\n\nInvite Steam friends? This opens Steam's invite window " +
+                      "(in VR, open the SteamVR dashboard to see it).", ok =>
+                {
+                    if (ok) SteamIntegration.OpenInviteOverlay();
+                }, UI.PDHCCBFJODN.Question);
                 return;
             }
             if (row.Room == null) return;

@@ -26,7 +26,7 @@ namespace StbcRevival
     {
         public const string Guid = "stbc.revival";
         public const string Name = "Bridge Crew Revival";
-        public const string Version = "0.6.5";
+        public const string Version = "0.6.6";
 
         internal static ManualLogSource Log;
 
@@ -44,6 +44,12 @@ namespace StbcRevival
         internal static ConfigEntry<bool> LocalSave;
         internal static ConfigEntry<bool> FetchUbisoftSave;
         internal static ConfigEntry<bool> CheckForUpdates;
+        internal static ConfigEntry<bool> SkipMicCheck;
+        internal static ConfigEntry<bool> HideFullCrews;
+        internal static ConfigEntry<bool> HideCrewsInMission;
+        internal static ConfigEntry<CrewContent> CrewContentFilter;
+        internal static ConfigEntry<bool> PlayerJoinedAlert;
+        internal static ConfigEntry<UnityEngine.KeyCode> BugReportKey;
         internal static ConfigEntry<string> UpdateUrl;
         internal static ConfigEntry<bool> ShuttleWasd;
         internal static ConfigEntry<float> ShuttleSpeed;
@@ -94,6 +100,18 @@ namespace StbcRevival
                 "Keep the game's settings (avatar appearance, options, progress flags) in BepInEx/config/stbc.revival.save.json. The game only ever saved these to Ubisoft's servers.");
             FetchUbisoftSave = Config.Bind("Import", "FetchUbisoftSave", false,
                 "One run only (the installer sets this): log in to Ubisoft, copy your Ubisoft cloud save into the local save, then quit. Needs Ubisoft Connect signed in. Switches itself off afterwards.");
+            SkipMicCheck = Config.Bind("Startup", "SkipMicCheck", false,
+                "Skip the microphone check the game shows when you start. Your mic still works; set it up in the game's options.");
+            HideFullCrews = Config.Bind("Rooms", "HideFullCrews", false,
+                "Crew lists (shuttle, escape menu, F7): leave out crews with no free seat.");
+            HideCrewsInMission = Config.Bind("Rooms", "HideCrewsInMission", false,
+                "Crew lists: leave out crews already in a mission (only list those in a briefing room or shuttle).");
+            CrewContentFilter = Config.Bind("Rooms", "Content", CrewContent.Any,
+                "Crew lists: Any, NextGenerationOnly (crews with The Next Generation content on) or NoNextGeneration.");
+            PlayerJoinedAlert = Config.Bind("Rooms", "PlayerJoinedAlert", true,
+                "When someone joins your crew: a chime, and the game's taskbar entry flashes if the window isn't in front. Handy while waiting with the headset off.");
+            BugReportKey = Config.Bind("Debug", "BugReportKey", UnityEngine.KeyCode.F10,
+                "Saves the logs and settings needed for a bug report as one zip in the game folder.");
             CheckForUpdates = Config.Bind("Updates", "CheckForUpdates", true,
                 "Once per launch, on the shuttle, check the website for a newer version and offer to open it. Nothing is downloaded; if the check fails, nothing is shown.");
             UpdateUrl = Config.Bind("Updates", "VersionUrl", "",
@@ -158,6 +176,8 @@ namespace StbcRevival
             Safely("local save", StbcRevival.LocalSave.Update);
             Safely("vr room panels", StbcRevival.VrRoomPanels.Update);
             Safely("update check", UpdateCheck.Update);
+            Safely("player joined alert", StbcRevival.PlayerJoinedAlert.Update);
+            Safely("bug report", BugReport.Update);
             Safely("ubisoft save import", UbisoftSaveImport.Update);
         }
 
@@ -182,6 +202,8 @@ namespace StbcRevival
     /// The game still asks for keys like "server" / "serverport" / "protocol" / "region" / "name";
     /// in retail nothing ever fills them, so it falls back to the official Photon cloud.
     /// </summary>
+    internal enum CrewContent { Any, NextGenerationOnly, NoNextGeneration }
+
     internal static class DevConfig
     {
         internal static readonly Dictionary<string, string> Values = new Dictionary<string, string>();
@@ -223,6 +245,9 @@ namespace StbcRevival
                 Values["environmentoverride"] = Plugin.MatchmakingTag.Value.Trim();
             if (!string.IsNullOrEmpty(Plugin.PlayerName.Value))
                 Values["name"] = Plugin.PlayerName.Value.Trim();
+            // Read by MicCheckUI ("skipMicCheck", bool).
+            if (Plugin.SkipMicCheck.Value)
+                Values["skipmiccheck"] = "true";
 
             foreach (var kv in Values)
                 Plugin.Log.LogInfo($"dev config: {kv.Key} = {kv.Value}");

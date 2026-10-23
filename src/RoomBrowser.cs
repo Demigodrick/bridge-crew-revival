@@ -89,6 +89,9 @@ namespace StbcRevival
             Plugin.Log.LogInfo($"Join requested: {name}");
         }
 
+        private static string ContentLabel(CrewContent c) =>
+            c == CrewContent.NextGenerationOnly ? "Content: TNG only" : c == CrewContent.NoNextGeneration ? "Content: no TNG" : "Content: any";
+
         internal static string Code(string roomName) =>
             roomName == null ? "" : roomName.Contains("|") ? roomName.Substring(roomName.IndexOf('|') + 1) : roomName;
 
@@ -167,6 +170,12 @@ namespace StbcRevival
 
             GUILayout.Space(8);
             GUILayout.Label(SteamMode.Enabled ? "Public rooms (Steam, worldwide):" : "Public rooms on this server:");
+            GUILayout.BeginHorizontal();
+            Plugin.HideFullCrews.Value = GUILayout.Toggle(Plugin.HideFullCrews.Value, " Hide full", GUILayout.Width(110));
+            Plugin.HideCrewsInMission.Value = GUILayout.Toggle(Plugin.HideCrewsInMission.Value, " Hide in mission", GUILayout.Width(140));
+            if (GUILayout.Button(ContentLabel(Plugin.CrewContentFilter.Value), GUILayout.Width(170)))
+                Plugin.CrewContentFilter.Value = (CrewContent)(((int)Plugin.CrewContentFilter.Value + 1) % 3);
+            GUILayout.EndHorizontal();
             scroll = GUILayout.BeginScrollView(scroll, GUILayout.Height(270));
             var rooms = RoomList();
             if (rooms.Length == 0)
@@ -195,7 +204,7 @@ namespace StbcRevival
         {
             public string Name, Code, Mode, Phase;
             public int Players, MaxPlayers;
-            public bool Joinable, Mine;
+            public bool Joinable, Mine, InMission, NextGeneration;
         }
 
         private static Entry MakeEntry(string name, IDictionary props, int players, int max, bool open, bool mine) => new Entry
@@ -208,7 +217,24 @@ namespace StbcRevival
             MaxPlayers = max,
             Joinable = open && (max == 0 || players < max),
             Mine = mine,
+            // C6 game phase: 1 shuttle, 2 briefing room, 4 intro; anything else is a mission.
+            InMission = Int(props, "C6") is int phase && phase != 1 && phase != 2 && phase != 4,
+            NextGeneration = Int(props, "C9") == 1,
         };
+
+        // [Rooms] HideFullCrews / HideCrewsInMission / Content. Your own room is always listed.
+        private static bool PassesFilters(Entry e)
+        {
+            if (e.Mine) return true;
+            if (Plugin.HideFullCrews.Value && !e.Joinable) return false;
+            if (Plugin.HideCrewsInMission.Value && e.InMission) return false;
+            switch (Plugin.CrewContentFilter.Value)
+            {
+                case CrewContent.NextGenerationOnly: return e.NextGeneration;
+                case CrewContent.NoNextGeneration: return !e.NextGeneration;
+                default: return true;
+            }
+        }
 
         /// <summary>Public rooms (your own first), for this window and the VR panels.</summary>
         internal static Entry[] RoomList()
@@ -220,7 +246,7 @@ namespace StbcRevival
                 var entries = SteamMode.Enabled
                     ? SteamMode.PublicRooms().Select(r => MakeEntry(r.Name, (IDictionary)r.Properties, r.Players, r.MaxPlayers, r.Open, r.Mine))
                     : PhotonRooms();
-                return entries.Where(e => e.Name != null)
+                return entries.Where(e => e.Name != null && PassesFilters(e))
                     .OrderByDescending(e => e.Mine).ThenByDescending(e => e.Joinable).ThenBy(e => e.Code).ToArray();
             }
             catch (Exception e)
