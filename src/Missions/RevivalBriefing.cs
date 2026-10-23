@@ -178,9 +178,9 @@ namespace StbcRevival.Missions
                     var label = Field<TMP_Text>(console, ship + "Text");
                     bool tng = ship == "_tngToggle";
                     if (label != null)
-                        label.color = Colour(console, (toggle.isOn || chooser)
+                        SetColour(label, Colour(console, (toggle.isOn || chooser)
                             ? (tng ? "_enabledOptionsColorTNG" : "_enabledOptionsColor")
-                            : (tng ? "_disabledOptionsColorTNG" : "_disabledOptionsColor"));
+                            : (tng ? "_disabledOptionsColorTNG" : "_disabledOptionsColor")));
                 }
                 foreach (var button in new[] { "_nextMissionButton", "_previousMissionButton" })
                 {
@@ -216,8 +216,14 @@ namespace StbcRevival.Missions
         private static void CopyLabelColour(ConsoleBriefingRoom console, Toggle to, bool enabled)
         {
             foreach (var label in to.GetComponentsInChildren<TMP_Text>(true))
-                label.color = enabled ? (Color)AccessTools.Field(typeof(ConsoleBriefingRoom), "_enabledOptionsColor").GetValue(console)
-                                      : (Color)AccessTools.Field(typeof(ConsoleBriefingRoom), "_disabledOptionsColor").GetValue(console);
+                SetColour(label, enabled ? (Color)AccessTools.Field(typeof(ConsoleBriefingRoom), "_enabledOptionsColor").GetValue(console)
+                                      : (Color)AccessTools.Field(typeof(ConsoleBriefingRoom), "_disabledOptionsColor").GetValue(console));
+        }
+
+        // TMP's own colour (DANKDBKPDNI, what the console sets), not Graphic.color, which TMP doesn't draw with.
+        private static void SetColour(TMP_Text text, Color colour)
+        {
+            if (text.DANKDBKPDNI != colour) text.DANKDBKPDNI = colour;
         }
 
         private static readonly MethodInfo GetText = AccessTools.Method(typeof(TMP_Text), "get_text");
