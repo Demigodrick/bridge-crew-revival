@@ -179,5 +179,19 @@ Check("WwiseSoundUtil.PostEvent(string, GameObject)", game.GetType("WwiseSoundUt
     m.Name == "PostEvent" && m.GetParameters() is { Length: 2 } pp && pp[0].ParameterType.FullName == "System.String"));
 Check("MicCheckUI reads skipMicCheck", game.GetType("MicCheckUI")?.GetMethod("DNNAEKAMFLG", Inst));
 
+// Revival missions
+var missionManager = game.GetType("Mission.MissionManager");
+Check("MissionManager.GenerateProceduralMission + ENGIPFEKJAK (script runner)",
+    missionManager?.GetMethod("GenerateProceduralMission") is not null && missionManager.GetField("ENGIPFEKJAK", Inst) is { } runnerField
+    && runnerField.FieldType.GetConstructors(Inst).Any(c => c.GetParameters().Length == 2) ? missionManager : null);
+foreach (var t in new[] { "Mission.Scripting.MNFBGALLEAJ", "Mission.Scripting.MJHDDKANLEC", "Mission.Scripting.KOOLIJPNDOH", "AI.CPLIILIDJKG" })
+    Check($"  mission framework type {t}", game.GetType(t));
+var briefing = game.GetType("ConsoleBriefingRoom");
+Check("ConsoleBriefingRoom.Start / BatchUpdate", briefing?.GetMethod("Start", Inst) is not null && briefing.GetMethod("BatchUpdate", Inst) is not null ? briefing : null);
+foreach (var f in new[] { "_proceduralMissionToggle", "_campaignMissionToggle", "_aegisToggle", "_enterpriseToggle", "_tngToggle", "_nextMissionButton",
+             "_previousMissionButton", "_experienceWarningText", "_missionName", "_missionDescriptionText", "_enabledOptionsColor", "_disabledOptionsColor" })
+    Check($"  ConsoleBriefingRoom.{f}", briefing?.GetField(f, Inst));
+Check("Room.SetCustomProperties", photon?.GetMethod("get_room", PS)?.ReturnType.GetMethod("SetCustomProperties", Inst));
+
 Console.WriteLine(failures == 0 ? "\nAll targets resolved." : $"\n{failures} target(s) missing.");
 return failures == 0 ? 0 : 1;

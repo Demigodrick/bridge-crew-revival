@@ -26,7 +26,7 @@ namespace StbcRevival
     {
         public const string Guid = "stbc.revival";
         public const string Name = "Bridge Crew Revival";
-        public const string Version = "0.6.6";
+        public const string Version = "0.7.0";
 
         internal static ManualLogSource Log;
 
@@ -44,6 +44,7 @@ namespace StbcRevival
         internal static ConfigEntry<bool> LocalSave;
         internal static ConfigEntry<bool> FetchUbisoftSave;
         internal static ConfigEntry<bool> CheckForUpdates;
+        internal static ConfigEntry<bool> TestLastStand;
         internal static ConfigEntry<bool> SkipMicCheck;
         internal static ConfigEntry<bool> HideFullCrews;
         internal static ConfigEntry<bool> HideCrewsInMission;
@@ -112,6 +113,8 @@ namespace StbcRevival
                 "When someone joins your crew: a chime, and the game's taskbar entry flashes if the window isn't in front. Handy while waiting with the headset off.");
             BugReportKey = Config.Bind("Debug", "BugReportKey", UnityEngine.KeyCode.F10,
                 "Saves the logs and settings needed for a bug report as one zip in the game folder.");
+            TestLastStand = Config.Bind("Debug", "TestLastStand", false,
+                "Testing only: every Ongoing Voyage you host runs the Revival mission Last Stand instead.");
             CheckForUpdates = Config.Bind("Updates", "CheckForUpdates", true,
                 "Once per launch, on the shuttle, check the website for a newer version and offer to open it. Nothing is downloaded; if the check fails, nothing is shown.");
             UpdateUrl = Config.Bind("Updates", "VersionUrl", "",
