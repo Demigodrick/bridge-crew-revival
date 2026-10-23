@@ -59,20 +59,24 @@ namespace StbcRevival
 
                 // Layout (from the Diagnostics dump): Root/Canvas/FriendAction (friend requests) and
                 // Root/Canvas/InviteAction (game invites), each with _Aegis/_Enterprise/_Tng variants.
-                foreach (var panel in __instance.GetComponentsInChildren<Transform>(true).Where(t => t.name == "FriendAction"))
-                    if (panel.gameObject.activeSelf)
-                    {
-                        panel.gameObject.SetActive(false);
-                        if (!loggedHide) Plugin.Log.LogInfo($"Pause menu: hid {Path(panel)}");
-                        loggedHide = true;
-                    }
+                // With the VR room panels on, the left panel shows the mod's details (VrRoomPanels fills it)
+                // and the right one the crews; otherwise the left one is hidden and the right one shows the mod.
+                bool panels = VrRoomPanels.Enabled;
+                if (!panels)
+                    foreach (var panel in __instance.GetComponentsInChildren<Transform>(true).Where(t => t.name == "FriendAction"))
+                        if (panel.gameObject.activeSelf)
+                        {
+                            panel.gameObject.SetActive(false);
+                            if (!loggedHide) Plugin.Log.LogInfo($"Pause menu: hid {Path(panel)}");
+                            loggedHide = true;
+                        }
                 foreach (var t in texts)
                 {
                     string path = Path(t.transform);
-                    if (path.Contains("/InviteAction/Title/") || Matches(t, GameInvites)) SetText(t, "BRIDGE CREW REVIVAL");
-                    // With the VR room panels on, they own this text (the crews list shows there).
-                    else if (!VrRoomPanels.Enabled && (path.Contains("/InviteAction/NoInvites/") || Matches(t, NoGameInvites)))
-                        SetText(t, $"Version {Plugin.Version}\nSteam multiplayer mod\n{Website}");
+                    if (path.Contains("/InviteAction/Title/") || Matches(t, GameInvites)) SetText(t, panels ? "PUBLIC CREWS" : "BRIDGE CREW REVIVAL");
+                    else if (panels && path.Contains("/FriendAction/Title/")) SetText(t, "BRIDGE CREW REVIVAL");
+                    else if (!panels && (path.Contains("/InviteAction/NoInvites/") || Matches(t, NoGameInvites)))
+                        SetText(t, ModInfo);
                 }
             }
             catch (Exception e)
@@ -80,6 +84,9 @@ namespace StbcRevival
                 Plugin.Log.LogWarning("Pause menu tweak failed: " + e.Message);
             }
         }
+
+        /// <summary>The mod's name, version and website, for the escape menu.</summary>
+        internal static string ModInfo => $"Version {Plugin.Version}\nSteam multiplayer mod\n{Website}";
 
         private static bool Matches(Component tmp, string[] names)
         {

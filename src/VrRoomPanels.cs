@@ -46,6 +46,8 @@ namespace StbcRevival
             // Escape menu invites panel.
             Prefix(typeof(InviteActionUI), "BAPLBKELENL", nameof(Invites_Render));   // draws the list
             Prefix(typeof(InviteActionEntry), "OnClicked", nameof(InviteEntry_Clicked));
+            // Escape menu friend requests panel: the mod's details instead.
+            Prefix(typeof(FriendActionUI), "BAPLBKELENL", nameof(Info_Render));
         }
 
         internal static void Update()
@@ -251,12 +253,37 @@ namespace StbcRevival
                 PagingButton(__instance, "JNELKOHEPPF", "_upButtonInteraction", any, page > 1);
                 PagingButton(__instance, "OACCJDCBMDP", "_downButtonInteraction", any, page < pages);
                 var empty = Field<TextMeshProUGUI>(__instance, "DGJOHLEKBNJ");
-                SetText(empty, $"No public crews right now.\nStart a Quick match to host one.\n\nBridge Crew Revival {Plugin.Version}");
+                SetText(empty, "No public crews right now.\nStart a Quick match to host one.");
                 if (empty != null) empty.gameObject.SetActive(!any);
             }
             catch (Exception e)
             {
                 Plugin.Log.LogWarning("VR room panels: escape menu: " + e.Message);
+            }
+            return false;
+        }
+
+        // The left panel (Ubisoft friend requests) shows the mod's name, version and website: no list,
+        // just its "no requests" line with our text.
+        private static bool Info_Render(FriendActionUI __instance)
+        {
+            try
+            {
+                foreach (var entry in Field<GameObject[]>(__instance, "_entryObjects") ?? new GameObject[0])
+                    if (entry != null) entry.SetActive(false);
+                Field<GameObject>(__instance, "_pageCountObject")?.SetActive(false);
+                foreach (var hand in new[] { "_upButtonInteraction", "_downButtonInteraction" })
+                {
+                    var interaction = Field<Component>(__instance, hand);
+                    if (interaction != null) interaction.gameObject.SetActive(false);
+                }
+                var text = Field<TextMeshProUGUI>(__instance, "GOLGOCFPNGB");
+                SetText(text, PauseMenuTweaks.ModInfo);
+                if (text != null) text.gameObject.SetActive(true);
+            }
+            catch (Exception e)
+            {
+                Plugin.Log.LogWarning("VR room panels: mod info panel: " + e.Message);
             }
             return false;
         }

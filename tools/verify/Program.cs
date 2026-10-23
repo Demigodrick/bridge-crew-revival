@@ -168,6 +168,10 @@ var inviteEntry = game.GetType("InviteActionEntry");
 foreach (var f in new[] { "_nameText", "_actionText", "_avatarIcon" })
     Check($"  InviteActionEntry.{f}", inviteEntry?.GetField(f, Inst));
 Check("  InviteActionEntry.OnClicked", inviteEntry?.GetMethod("OnClicked", Inst));
+var friendAction = game.GetType("FriendActionUI");
+Check("FriendActionUI.BAPLBKELENL", friendAction?.GetMethod("BAPLBKELENL", Inst));
+foreach (var f in new[] { "_entryObjects", "_pageCountObject", "_upButtonInteraction", "_downButtonInteraction", "GOLGOCFPNGB" })
+    Check($"  FriendActionUI.{f}", friendAction?.GetField(f, Inst));
 Check("TMP_Text.get_text", tmpText?.GetMethod("get_text", Inst));
 Check("PopupMgr.ShowPopup(string, LGNBEBILNCL, PDHCCBFJODN, bool, string[])", game.GetType("UI.PopupMgr")?.GetMethods(PS).FirstOrDefault(m => m.Name == "ShowPopup" && m.GetParameters().Length == 5));
 
