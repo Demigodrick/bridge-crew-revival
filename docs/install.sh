@@ -19,8 +19,12 @@ BEPINEX_SHA256="82f9878551030f54657792c0740d9d51a09500eeae1fba21106b0c441e6732c4
 APP_ID=527100
 LAUNCH_OPTIONS='WINEDLLOVERRIDES="winhttp=n,b" %command%'
 
-say()  { printf '%s\n' "$*"; }
-fail() { printf 'Error: %s\n' "$*" >&2; exit 1; }
+say()   { printf '%s\n' "$*"; }
+step()  { printf '\n%s\n' "$*"; }        # a numbered step heading
+ok()    { printf '  OK   %s\n' "$*"; }  # something done
+info()  { printf '       %s\n' "$*"; }  # detail under a step
+warn()  { printf '  !!   %s\n' "$*"; }  # needs the player's attention
+fail()  { printf '\n  Error: %s\n' "$*" >&2; exit 1; }
 
 usage() {
   cat <<'EOF'
@@ -144,15 +148,15 @@ start_game() {
 # Report what the game is doing, from its Unity log (the mod's messages are copied there too).
 watch_log() { # log from-line -> prints new milestones, echoes the new line count
   local log="$1" from="$2" total line
-  total=$(wc -l < "$log" 2>/dev/null || echo 0)
+  total=$( { wc -l < "$log"; } 2>/dev/null || echo 0)
   [ "$total" -lt "$from" ] && from=0   # the log was restarted
   if [ "$total" -gt "$from" ]; then
     tail -n +"$((from + 1))" "$log" | head -n "$((total - from))" | while IFS= read -r line; do
       case "$line" in
-        "Initialize engine version"*) say "  - game starting" >&2 ;;
-        *"Bridge Crew Revival"*" loaded."*) say "  - mod loaded" >&2 ;;
-        *"Ubisoft save import: this run"*) say "  - waiting for your save: choose your controller in the game if it asks" >&2 ;;
-        *"Ubisoft save import: quitting"*) say "  - closing the game" >&2 ;;
+        "Initialize engine version"*) info "- game starting" >&2 ;;
+        *"Bridge Crew Revival"*" loaded."*) info "- mod loaded" >&2 ;;
+        *"Ubisoft save import: this run"*) info "- waiting for your save: choose your controller in the game if it asks" >&2 ;;
+        *"Ubisoft save import: quitting"*) info "- closing the game" >&2 ;;
       esac
     done
   fi
@@ -169,42 +173,44 @@ close_ubisoft_connect() {
     tr '\0' '\n' < "/proc/$pid/environ" 2>/dev/null | grep -q "compatdata/$APP_ID" || continue
     kill "$pid" 2>/dev/null && closed=1
   done
-  [ "$closed" = 1 ] && say "Closed Ubisoft Connect (it was only needed for the import)."
+  [ "$closed" = 1 ] && ok "Closed Ubisoft Connect (it was only needed for the import)"
   return 0
 }
 
-import_save() { # game
+import_save() { # game -> prints the outcome
   local game="$1" result="$1/BepInEx/config/stbc.revival.import.txt" log="$1/stbc_Data/output_log.txt"
   local waited=0 seen loaded=0
-  say ""
-  say "Importing your Ubisoft save: the game starts once, signs in to Ubisoft, copies your settings and"
-  say "quits by itself. Ubisoft Connect must be installed and signed in."
-  say "When the game asks you to choose a controller, choose it: it only connects to Ubisoft after that."
   if ! grep -qs '^"winhttp"="native,builtin"' "$(prefix_reg "$game")" && ! launch_option_set; then
-    say "The mod won't load yet: start the game once from Steam and quit it, then run this again."
+    warn "Can't import yet: the mod won't load until the game has been started once."
+    info "Start the game from Steam, quit it, then run this installer again."
     return
   fi
   rm -f "$result"
   set_import_flag "$game" true
-  seen=$(wc -l < "$log" 2>/dev/null || echo 0)
-  say "Starting Star Trek: Bridge Crew..."
+  seen=$( { wc -l < "$log"; } 2>/dev/null || echo 0)
+  info "Starting Star Trek: Bridge Crew. When it asks you to choose a controller, choose one:"
+  info "the game only connects to Ubisoft after that. It closes by itself when it's done."
   start_game
   while [ ! -f "$result" ] && [ "$waited" -lt 420 ]; do
     sleep 5; waited=$((waited + 5))
     seen=$(watch_log "$log" "$seen")
     grep -qs 'Bridge Crew Revival.* loaded\.' "$log" && loaded=1
     if [ $((waited % 30)) -eq 0 ]; then
-      say "  ... still waiting ($((waited / 60))m$((waited % 60))s)"
-      [ "$loaded" = 0 ] && [ "$waited" -ge 90 ] && say "      The mod hasn't loaded yet. If the game is at its menu, quit it: it started without the mod."
+      info "... still waiting ($((waited / 60))m$((waited % 60))s)"
+      [ "$loaded" = 0 ] && [ "$waited" -ge 90 ] && info "    The mod hasn't loaded yet. If the game is at its menu, quit it: it started without the mod."
     fi
   done
-  if [ -f "$result" ]; then
-    say "$(sed -n 2p "$result")"
-    case "$(sed -n 1p "$result")" in ok|none) close_ubisoft_connect ;; esac
-  else
+  if [ ! -f "$result" ]; then
     set_import_flag "$game" false
-    say "No result after 7 minutes; the import didn't run. Check BepInEx/LogOutput.log, then try again with --import-save."
+    warn "Your save didn't arrive within 7 minutes, so nothing was imported."
+    info "Run the installer again to retry. (Details: BepInEx/LogOutput.log in the game folder.)"
+    return
   fi
+  case "$(sed -n 1p "$result")" in
+    ok)   ok "$(sed -n 2p "$result")"; close_ubisoft_connect ;;
+    none) ok "Your Ubisoft account has no Bridge Crew save, so there was nothing to import."; close_ubisoft_connect ;;
+    *)    warn "$(sed -n 2p "$result")"; info "Run the installer again to retry." ;;
+  esac
 }
 
 main() {
@@ -219,38 +225,50 @@ main() {
     esac
   done
 
+  say "Bridge Crew Revival installer"
+  say "Adds online multiplayer over Steam to Star Trek: Bridge Crew. Nothing to set up: just answer"
+  say "the questions as they come."
+
+  step "1. Finding the game"
   if [ -z "$game" ]; then
     game="$(find_game)" || fail "couldn't find Star Trek: Bridge Crew in your Steam libraries.
-Pass the game folder:  bash install.sh \"/path/to/Star Trek Bridge Crew\""
+  If it's installed somewhere unusual, run the installer with its folder:
+    bash install.sh \"/path/to/Star Trek Bridge Crew\""
   fi
-  [ -f "$game/stbc.exe" ] || fail "\"$game\" isn't the Bridge Crew folder (no stbc.exe there)."
-  say "Game folder: $game"
+  [ -f "$game/stbc.exe" ] || fail "\"$game\" isn't the Bridge Crew folder (there's no stbc.exe in it)."
+  ok "Found it: $game"
 
   # The game itself runs as "S:\...\stbc.exe"; Proton's launcher wrapper (".../stbc.exe") lingers while
   # anything else, e.g. Ubisoft Connect, still runs in the game's prefix, so match the backslash.
   if pgrep -f '\\stbc\.exe' >/dev/null 2>&1; then
-    fail "the game is running. Quit it first."
+    fail "Star Trek: Bridge Crew is running. Quit it, then run the installer again."
   fi
 
   # ---- Uninstall ------------------------------------------------------------------------------
 
   if [ "$uninstall" = 1 ]; then
+    step "2. Removing Bridge Crew Revival"
     rm -f "$game/BepInEx/plugins/StbcRevival.dll" "$game/BepInEx/plugins/StbcRevival.pdb" \
           "$game/BepInEx/plugins/StbcCore.dll" "$game/BepInEx/plugins/StbcCore.pdb"
     # Without winhttp.dll BepInEx doesn't load at all; the BepInEx folder is left for you to delete.
     rm -f "$game/winhttp.dll" "$game/doorstop_config.ini" "$game/.doorstop_version" "$game/changelog.txt"
     set_prefix_override "$game" off || true
-    say "Removed the mod and disabled BepInEx. You can delete \"$game/BepInEx\" too."
-    say "If you set launch options for the game in Steam, you can remove them."
+    ok "Removed the mod and switched off its loader (BepInEx)"
+    info "Your settings are left in \"$game/BepInEx\"; delete that folder too if you like."
+    info "If you ever set launch options for the game in Steam, you can clear them."
+    say ""
+    say "Done. Star Trek: Bridge Crew is back to normal."
     exit 0
   fi
 
   tmp="$(mktemp -d)"
   trap 'rm -rf "$tmp"' EXIT
 
+  step "2. Installing"
+
   # ---- The mod's files: next to this script (release zip), or the GitHub release --------------
 
-  local here="" plugins
+  local here="" plugins version
   if [ -n "${BASH_SOURCE[0]:-}" ] && [ -f "${BASH_SOURCE[0]}" ]; then
     here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
   fi
@@ -259,26 +277,30 @@ Pass the game folder:  bash install.sh \"/path/to/Star Trek Bridge Crew\""
   else
     local base="https://github.com/$REPO/releases/latest/download"
     [ -n "${STBC_VERSION:-}" ] && base="https://github.com/$REPO/releases/download/v${STBC_VERSION#v}"
-    say "Downloading Bridge Crew Revival ${STBC_VERSION:-(latest release)}..."
+    info "Downloading Bridge Crew Revival..."
     download "$base/BridgeCrewRevival.zip" "$tmp/mod.zip"
     download "$base/BridgeCrewRevival.zip.sha256" "$tmp/mod.zip.sha256"
     echo "$(cut -d' ' -f1 "$tmp/mod.zip.sha256")  $tmp/mod.zip" | sha256sum -c --quiet - \
-      || fail "Bridge Crew Revival download checksum mismatch."
+      || fail "the Bridge Crew Revival download was damaged (checksum mismatch). Try again."
     extract "$tmp/mod.zip" "$tmp/mod"
     plugins="$(dirname "$(find "$tmp/mod" -name StbcRevival.dll | head -n1)")"
   fi
   [ -f "$plugins/StbcRevival.dll" ] && [ -f "$plugins/StbcCore.dll" ] || fail "the mod's files are missing."
+  version="$(basename "$(dirname "$plugins")")"   # BridgeCrewRevival-<version>
+  version="${version#BridgeCrewRevival-}"
+  case "$version" in [0-9]*) ;; *) version="" ;; esac
 
   # ---- BepInEx --------------------------------------------------------------------------------
 
   if [ -f "$game/winhttp.dll" ] && [ -f "$game/BepInEx/core/BepInEx.dll" ]; then
-    say "BepInEx is already installed."
+    ok "Mod loader (BepInEx $BEPINEX_VERSION) already installed"
   else
-    say "Downloading BepInEx $BEPINEX_VERSION..."
+    info "Downloading the mod loader (BepInEx $BEPINEX_VERSION)..."
     download "$BEPINEX_URL" "$tmp/bepinex.zip"
-    echo "$BEPINEX_SHA256  $tmp/bepinex.zip" | sha256sum -c --quiet - || fail "BepInEx download checksum mismatch."
+    echo "$BEPINEX_SHA256  $tmp/bepinex.zip" | sha256sum -c --quiet - \
+      || fail "the BepInEx download was damaged (checksum mismatch). Try again."
     extract "$tmp/bepinex.zip" "$game"
-    say "BepInEx installed."
+    ok "Mod loader (BepInEx $BEPINEX_VERSION) installed"
   fi
 
   # Unity 5.4 needs BepInEx to start from MonoBehaviour's static constructor: the default
@@ -292,28 +314,50 @@ Pass the game folder:  bash install.sh \"/path/to/Star Trek Bridge Crew\""
     # BepInEx fills in every other setting on first launch.
     printf '[Preloader.Entrypoint]\n\nAssembly = UnityEngine.dll\n\nType = MonoBehaviour\n\nMethod = .cctor\n' > "$cfg"
   fi
-  grep -q '^Type = MonoBehaviour' "$cfg" || fail "couldn't set the BepInEx entrypoint in $cfg."
+  grep -q '^Type = MonoBehaviour' "$cfg" || fail "couldn't set up the mod loader (in $cfg)."
 
   # ---- Install ----------------------------------------------------------------------------------
 
   cp "$plugins/"Stbc*.dll "$game/BepInEx/plugins/"
   cp "$plugins/"Stbc*.pdb "$game/BepInEx/plugins/" 2>/dev/null || true
-  say "Bridge Crew Revival installed."
-  say ""
+  ok "Bridge Crew Revival${version:+ $version} installed"
+  local loader_on=1
   if set_prefix_override "$game" on; then
-    say "BepInEx is switched on in the game's Proton prefix: just launch the game from Steam."
+    ok "Mod loader switched on for the game (no Steam launch options needed)"
+  elif launch_option_set; then
+    ok "Mod loader switched on by the game's Steam launch options"
   else
-    say "One more step: the game hasn't been started under Proton yet. Either start it once from Steam,"
-    say "quit, and run this installer again, or set its launch options (Properties > General) to:"
-    say ""
-    say "    $LAUNCH_OPTIONS"
+    loader_on=0
   fi
-  say ""
-  say "Settings: BepInEx/config/stbc.revival.cfg (created on first launch). Log: BepInEx/LogOutput.log"
 
-  if [ "$import" = yes ] || { [ -z "$import" ] && [ ! -f "$game/BepInEx/config/stbc.revival.save.json" ] \
-       && ask "Copy your avatar and settings from your Ubisoft save? (starts the game once)"; }; then
-    import_save "$game"
+  # ---- Ubisoft save ---------------------------------------------------------------------------
+
+  step "3. Your avatar and settings (optional)"
+  if [ "$import" != yes ] && [ -f "$game/BepInEx/config/stbc.revival.save.json" ]; then
+    ok "Already kept on this PC; nothing to do"
+  elif [ "$import" = no ]; then
+    info "Skipped"
+  else
+    info "Bridge Crew only saved your avatar and settings on Ubisoft's servers. They can be copied to"
+    info "this PC once: the game starts, signs in with Ubisoft Connect (which must be installed and"
+    info "signed in), copies your save and closes again. It takes a minute or two."
+    if [ "$import" = yes ] || ask "       Copy them now?"; then
+      import_save "$game"
+    else
+      info "Skipped. To do it later, run the installer again and answer yes."
+    fi
+  fi
+
+  # ---- Summary ----------------------------------------------------------------------------------
+
+  say ""
+  if [ "$loader_on" = 1 ]; then
+    say "All done: Bridge Crew Revival${version:+ $version} is installed."
+    say "Launch Star Trek: Bridge Crew from Steam as usual. To update later, run the same command again."
+  else
+    say "Installed, with one step left: the game has never been started on this PC, so the mod loader"
+    say "can't be switched on yet. Start the game once from Steam, quit it, and run this installer again."
+    say "(Or set the game's Steam launch options, Properties > General, to: $LAUNCH_OPTIONS)"
   fi
 }
 
