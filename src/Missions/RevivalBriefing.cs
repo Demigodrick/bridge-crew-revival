@@ -78,11 +78,14 @@ namespace StbcRevival.Missions
                 var campaign = Field<Toggle>(console, "_campaignMissionToggle");
                 if (procedural == null || campaign == null) return;
 
-                // Same look, same group; placed one step past Ongoing Voyages, as far as Campaign is from it.
+                // Same look, same group. The GAME TYPE box holds two rows, from half a row above Campaign to half
+                // a row below Ongoing Voyages; space three rows evenly in that span instead.
                 var copy = (GameObject)UnityEngine.Object.Instantiate(procedural.gameObject, procedural.transform.parent);
                 copy.name = "Revival Missions Toggle";
-                copy.transform.localPosition = procedural.transform.localPosition
-                                               + (procedural.transform.localPosition - campaign.transform.localPosition);
+                Vector3 first = campaign.transform.localPosition, step = procedural.transform.localPosition - first;
+                campaign.transform.localPosition = first + step * (-1f / 6f);
+                procedural.transform.localPosition = first + step * 0.5f;
+                copy.transform.localPosition = first + step * (7f / 6f);
                 copy.transform.SetSiblingIndex(procedural.transform.GetSiblingIndex() + 1);
                 var revivalToggle = copy.GetComponent<Toggle>();
                 revivalToggle.onValueChanged.RemoveAllListeners();
@@ -145,11 +148,19 @@ namespace StbcRevival.Missions
                 if (chooser && Loader.GetMissionType() != Loader.DAPMGBKPDNM.Procedural)
                     Loader.SetMissionType(Loader.DAPMGBKPDNM.Procedural);
 
-                // Ships as for an Ongoing Voyage; no next/previous mission (there's one Revival mission so far).
+                // Ships as for an Ongoing Voyage (the console greys their names unless Ongoing Voyages is
+                // selected); no next/previous mission (there's one Revival mission so far).
                 foreach (var ship in new[] { "_aegisToggle", "_enterpriseToggle", "_tngToggle" })
                 {
                     var toggle = Field<Toggle>(console, ship);
-                    if (toggle != null) toggle.interactable = chooser && !toggle.isOn;
+                    if (toggle == null) continue;
+                    toggle.interactable = chooser && !toggle.isOn;
+                    var label = Field<TMP_Text>(console, ship + "Text");
+                    bool tng = ship == "_tngToggle";
+                    if (label != null)
+                        label.color = Colour(console, (toggle.isOn || chooser)
+                            ? (tng ? "_enabledOptionsColorTNG" : "_enabledOptionsColor")
+                            : (tng ? "_disabledOptionsColorTNG" : "_disabledOptionsColor"));
                 }
                 foreach (var button in new[] { "_nextMissionButton", "_previousMissionButton" })
                 {
@@ -170,6 +181,9 @@ namespace StbcRevival.Missions
                 applying = false;
             }
         }
+
+        private static Color Colour(ConsoleBriefingRoom console, string field) =>
+            (Color)AccessTools.Field(typeof(ConsoleBriefingRoom), field).GetValue(console);
 
         private static void CopyLabelColour(ConsoleBriefingRoom console, Toggle to, bool enabled)
         {

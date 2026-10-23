@@ -189,7 +189,8 @@ foreach (var t in new[] { "Mission.Scripting.MNFBGALLEAJ", "Mission.Scripting.MJ
 var briefing = game.GetType("ConsoleBriefingRoom");
 Check("ConsoleBriefingRoom.Start / BatchUpdate", briefing?.GetMethod("Start", Inst) is not null && briefing.GetMethod("BatchUpdate", Inst) is not null ? briefing : null);
 foreach (var f in new[] { "_proceduralMissionToggle", "_campaignMissionToggle", "_aegisToggle", "_enterpriseToggle", "_tngToggle", "_nextMissionButton",
-             "_previousMissionButton", "_experienceWarningText", "_missionName", "_missionDescriptionText", "_enabledOptionsColor", "_disabledOptionsColor" })
+             "_previousMissionButton", "_experienceWarningText", "_missionName", "_missionDescriptionText", "_enabledOptionsColor", "_disabledOptionsColor",
+             "_aegisToggleText", "_enterpriseToggleText", "_tngToggleText", "_enabledOptionsColorTNG", "_disabledOptionsColorTNG" })
     Check($"  ConsoleBriefingRoom.{f}", briefing?.GetField(f, Inst));
 Check("Room.SetCustomProperties", photon?.GetMethod("get_room", PS)?.ReturnType.GetMethod("SetCustomProperties", Inst));
 
