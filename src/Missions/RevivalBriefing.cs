@@ -28,6 +28,13 @@ namespace StbcRevival.Missions
             new System.Collections.Generic.Dictionary<ConsoleBriefingRoom, Toggle>();
         private static bool applying;
 
+        // Ship toggles → their console, and the consoles where this player is choosing a Revival mission.
+        private static readonly System.Collections.Generic.Dictionary<Selectable, ConsoleBriefingRoom> shipToggles =
+            new System.Collections.Generic.Dictionary<Selectable, ConsoleBriefingRoom>();
+        private static readonly System.Collections.Generic.HashSet<ConsoleBriefingRoom> choosingRevival =
+            new System.Collections.Generic.HashSet<ConsoleBriefingRoom>();
+        private static readonly string[] ShipFields = { "_aegisToggle", "_enterpriseToggle", "_tngToggle" };
+
         internal static void Patch(Harmony harmony)
         {
             var start = AccessTools.Method(typeof(ConsoleBriefingRoom), "Start");
@@ -39,6 +46,14 @@ namespace StbcRevival.Missions
             }
             harmony.Patch(start, postfix: new HarmonyMethod(typeof(RevivalBriefing), nameof(Start_Postfix)));
             harmony.Patch(refresh, postfix: new HarmonyMethod(typeof(RevivalBriefing), nameof(Refresh_Postfix)));
+            // The console disables the Enterprise and Enterprise-D unless Ongoing Voyages is selected, every
+            // frame, through this helper; setting them back afterwards restarts the button's fade each frame,
+            // leaving them greyed. Change the value going in instead.
+            var setInteractable = AccessTools.Method(AccessTools.TypeByName("KHDFGIINMKJ"), "SetInteractable", new[] { typeof(Selectable), typeof(bool) });
+            if (setInteractable != null)
+                harmony.Patch(setInteractable, prefix: new HarmonyMethod(typeof(RevivalBriefing), nameof(SetInteractable_Prefix)));
+            else
+                Plugin.Log.LogWarning("Revival missions: KHDFGIINMKJ.SetInteractable not found; ship choice may be greyed out");
         }
 
         // ---- The selection, shared through the room ---------------------------------------------------
@@ -93,6 +108,11 @@ namespace StbcRevival.Missions
                 foreach (var label in copy.GetComponentsInChildren<TMP_Text>(true)) label.SetLocalizedText("REVIVAL MISSIONS");
                 revivalToggle.onValueChanged.AddListener(on => OnToggled(console, on));
                 toggles[console] = revivalToggle;
+                foreach (var ship in ShipFields)
+                {
+                    var toggle = Field<Toggle>(console, ship);
+                    if (toggle != null) shipToggles[toggle] = console;
+                }
                 Plugin.Log.LogInfo("Revival missions: added the REVIVAL MISSIONS category to the briefing console");
             }
             catch (Exception e)
@@ -139,6 +159,7 @@ namespace StbcRevival.Missions
                 var procedural = Field<Toggle>(console, "_proceduralMissionToggle");
                 var campaign = Field<Toggle>(console, "_campaignMissionToggle");
                 CopyLabelColour(console, revivalToggle, selected != null || chooser);
+                if (selected != null && chooser) choosingRevival.Add(console); else choosingRevival.Remove(console);
                 if (selected == null) return;
 
                 if (procedural.isOn) procedural.isOn = false;
@@ -150,11 +171,10 @@ namespace StbcRevival.Missions
 
                 // Ships as for an Ongoing Voyage (the console greys their names unless Ongoing Voyages is
                 // selected); no next/previous mission (there's one Revival mission so far).
-                foreach (var ship in new[] { "_aegisToggle", "_enterpriseToggle", "_tngToggle" })
+                foreach (var ship in ShipFields)
                 {
                     var toggle = Field<Toggle>(console, ship);
                     if (toggle == null) continue;
-                    toggle.interactable = chooser && !toggle.isOn;
                     var label = Field<TMP_Text>(console, ship + "Text");
                     bool tng = ship == "_tngToggle";
                     if (label != null)
@@ -180,6 +200,14 @@ namespace StbcRevival.Missions
             {
                 applying = false;
             }
+        }
+
+        // A ship toggle on a console where this player is choosing a Revival mission: choosable unless it's
+        // the current ship (as the console does for an Ongoing Voyage).
+        private static void SetInteractable_Prefix(Selectable __0, ref bool __1)
+        {
+            if (__0 != null && !__1 && shipToggles.TryGetValue(__0, out var console) && choosingRevival.Contains(console))
+                __1 = !((Toggle)__0).isOn;
         }
 
         private static Color Colour(ConsoleBriefingRoom console, string field) =>

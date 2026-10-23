@@ -10,15 +10,17 @@ using Spawner = Mission.Scripting.FFPNMKADDPK;          // a spawn definition (p
 using Step = Mission.Scripting.Framework.Tasks.KAPOBAJDOEJ; // a scripting task, yielded from objective coroutines
 using StartSystem = BHNEPPPPMKH;                         // starting-system choice
 using Tag = BLECEHNPNBH;
+using Subsystem = Sector.Spacecraft.BaseSpacecraft.HGKJKJMPFMB;
 using AIObjective = AI.CPLIILIDJKG;                      // AI objective kinds (Attack, ...)
 
 namespace StbcRevival.Missions
 {
     /// <summary>
     /// Last Stand (Revival Missions): hold your ground against endless, growing waves of hostiles.
-    /// Each wave warps in around the ship; destroy them all for a short breather, then the next wave comes,
-    /// bigger and tougher (Klingons, then pirates and Romulans, with a flagship every fifth wave). It ends
-    /// when your ship is destroyed; the score is the number of waves cleared.
+    /// Each wave warps in around the ship; destroy them all for a short breather (the ship is repaired and
+    /// its torpedoes restocked), then the next wave comes, bigger and tougher (Klingons, then pirates and
+    /// Romulans, with a flagship every fifth wave). Warp and impulse travel are locked: the fight is here.
+    /// It ends when your ship is destroyed; the score is the number of waves cleared.
     ///
     /// Written in the game's own mission framework: a sequence with one objective whose script is a
     /// coroutine yielding the framework's tasks (spawn, wait, wait-until-destroyed, directives), so the
@@ -59,6 +61,7 @@ namespace StbcRevival.Missions
         private BodyRef player;
         private Map.SystemRoot system;
         private int cleared;
+        private int startingTorpedoes = -1;
 
         public override void StartScript()
         {
@@ -69,6 +72,7 @@ namespace StbcRevival.Missions
 
         private IEnumerator<Step> Waves()
         {
+            yield return Task.OGJONIFINCB.DisableWarping(); // and the helm's warp/impulse travel: see LastStandLocks
             yield return Task.NECMCDDOFJB.WithDescriptionString(Directive);
             yield return Task.HHNFJKHGEPH.WithMissionString(Title);
             yield return Task.KNMMMJOOBHC.WithTime(8f); // a moment to settle in before the first wave
@@ -97,12 +101,22 @@ namespace StbcRevival.Missions
                 foreach (var ship in spawned)
                     yield return Task.NDFEDBHFGFB.TellAI(ship).ToAddObjectives(player).OfObjectiveType(AIObjective.Attack);
 
-                // Destroyed means hull at zero; waiting on each in turn waits for all of them.
-                foreach (var ship in spawned)
-                    yield return Task.PDJFKGIBKPL.WhenTarget(ship).IsLessThanEqualTo(0f);
+                // Wait until every ship is gone or at zero hull. (Checked here rather than with the game's
+                // health condition, which never fires once a destroyed ship has been removed.)
+                int remaining = spawned.Count;
+                float started = UnityEngine.Time.time;
+                while (remaining > 0)
+                {
+                    yield return Task.KNMMMJOOBHC.WithTime(1f);
+                    int alive = 0;
+                    foreach (var ship in spawned) if (Alive(ship, UnityEngine.Time.time - started < 10f)) alive++;
+                    if (alive != remaining) Plugin.Log.LogInfo($"Last Stand: wave {wave}: {alive} of {spawned.Count} left");
+                    remaining = alive;
+                }
 
                 cleared = wave;
                 Plugin.Log.LogInfo($"Last Stand: wave {wave} cleared");
+                yield return RepairAndRestock();
                 yield return Task.NECMCDDOFJB.CompleteSubDirective(Directive, waveLine);
                 yield return Task.HHNFJKHGEPH.WithMissionResult($"Waves survived: {cleared}", false);
                 yield return Task.OKLDNLKLLFJ.WithGroup("State_Group_Mus_Dyn").WithState("Explore");
@@ -130,6 +144,58 @@ namespace StbcRevival.Missions
             if (wave >= 8 && wave % 3 == 2) ships[ships.Count - 1] = Warbird;
             if (wave % 5 == 0) ships.Add(Flagship);
             return ships;
+        }
+
+        // A ship counts as alive while its body exists with hull left. Just after spawning the body may not be
+        // set yet; count it as alive then.
+        private static bool Alive(BodyRef ship, bool justSpawned)
+        {
+            try
+            {
+                var body = ship.AHMPFHDGMKJ;
+                if (body == null || (body is UnityEngine.Object o && o == null)) return justSpawned;
+                if (body is Component c && !c.gameObject.activeInHierarchy) return false;
+                var info = body.GetTargetInfo();
+                return info == null || info.GBNCJMFFIDI > 0f; // hull health
+            }
+            catch (Exception)
+            {
+                return false; // a torn-down ship
+            }
+        }
+
+        // Between waves: hull, shields and every system back to full, torpedoes back to the starting load.
+        private Step RepairAndRestock()
+        {
+            var repair = Task.CIAHOPCODGJ.WithTargets(player).SetHullHealthPercent(100f).SetShieldHealthPercent(100f);
+            foreach (var system in new[]
+                     {
+                         Subsystem.Engines, Subsystem.Shields, Subsystem.Phasers, Subsystem.Lauchers, Subsystem.Sensors,
+                         Subsystem.Warpcore, Subsystem.TransporterRoom, Subsystem.ComputerCore, Subsystem.Sickbay, Subsystem.ScienceLab,
+                     })
+                repair = repair.SetSubsystemHealthPercent(system, 100f);
+            if (startingTorpedoes < 0) startingTorpedoes = StartingTorpedoes();
+            if (startingTorpedoes > 0) repair = repair.SetTorpedoCount(startingTorpedoes);
+            Plugin.Log.LogInfo($"Last Stand: repaired; torpedoes {(startingTorpedoes > 0 ? "restocked to " + startingTorpedoes : "unchanged (load unknown)")}");
+            return repair;
+        }
+
+        // The ship's torpedo launchers' starting load (LauncherGroup._startingAmmo).
+        private int StartingTorpedoes()
+        {
+            try
+            {
+                if (!(player.AHMPFHDGMKJ is Component body)) return -1;
+                int total = 0;
+                foreach (var group in body.GetComponentsInChildren<LauncherGroup>(true))
+                    total += (int)HarmonyLib.AccessTools.Field(typeof(LauncherGroup), "_startingAmmo").GetValue(group);
+                return total;
+            }
+            catch (Exception e)
+            {
+                Plugin.Log.LogWarning("Last Stand: torpedo load unknown: " + e.Message);
+                return -1;
+            }
         }
 
         private Spawner MakeSpawner(string prefab, int wave) =>

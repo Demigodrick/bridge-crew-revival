@@ -193,6 +193,15 @@ foreach (var f in new[] { "_proceduralMissionToggle", "_campaignMissionToggle", 
              "_aegisToggleText", "_enterpriseToggleText", "_tngToggleText", "_enabledOptionsColorTNG", "_disabledOptionsColorTNG" })
     Check($"  ConsoleBriefingRoom.{f}", briefing?.GetField(f, Inst));
 Check("Room.SetCustomProperties", photon?.GetMethod("get_room", PS)?.ReturnType.GetMethod("SetCustomProperties", Inst));
+Check("KHDFGIINMKJ.SetInteractable(Selectable, bool)", game.GetType("KHDFGIINMKJ")?.GetMethods(PS).FirstOrDefault(m =>
+    m.Name == "SetInteractable" && m.GetParameters() is { Length: 2 } sip && sip[1].ParameterType.FullName == "System.Boolean"));
+var helm = game.GetType("ConsoleHelm");
+foreach (var m in new[] { "get_CanWarp", "get_CanImpulse", "OnEngageWarpDown", "OnEngageImpulseDown", "OnEngageWarpImpulse", "OnWarpThrottleValueChanged" })
+    Check($"ConsoleHelm.{m} (Last Stand travel lock)", helm?.GetMethod(m, Inst));
+var shipModifier = game.GetType("Mission.Scripting.Framework.Tasks.KAGMFNHKOPC");
+foreach (var m in new[] { "WithTargets", "SetHullHealthPercent", "SetShieldHealthPercent", "SetSubsystemHealthPercent", "SetTorpedoCount" })
+    Check($"  ship modifier task {m} (Last Stand repair)", shipModifier?.GetMethods(Inst).FirstOrDefault(x => x.Name == m));
+Check("LauncherGroup._startingAmmo", game.GetType("LauncherGroup")?.GetField("_startingAmmo", Inst));
 
 Console.WriteLine(failures == 0 ? "\nAll targets resolved." : $"\n{failures} target(s) missing.");
 return failures == 0 ? 0 : 1;
