@@ -50,6 +50,7 @@ namespace StbcRevival.Missions
             harmony.Patch(generate, postfix: new HarmonyMethod(typeof(RevivalMissions), nameof(Generated_Postfix)));
             RevivalBriefing.Patch(harmony);
             LastStandLocks.Patch(harmony);
+            LastStandBridgeRepair.Patch(harmony);
         }
 
         // The sector now exists (generated from the Ongoing Voyage's encounters); swap the script before

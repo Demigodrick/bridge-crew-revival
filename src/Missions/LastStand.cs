@@ -61,7 +61,6 @@ namespace StbcRevival.Missions
         private BodyRef player;
         private Map.SystemRoot system;
         private int cleared;
-        private int startingTorpedoes = -1;
 
         public override void StartScript()
         {
@@ -164,7 +163,8 @@ namespace StbcRevival.Missions
             }
         }
 
-        // Between waves: hull, shields and every system back to full, torpedoes back to the starting load.
+        // Between waves: hull, shields and every system back to full (the game's ship modifier task), and
+        // torpedoes back to the ship's starting load.
         private Step RepairAndRestock()
         {
             var repair = Task.CIAHOPCODGJ.WithTargets(player).SetHullHealthPercent(100f).SetShieldHealthPercent(100f);
@@ -174,27 +174,35 @@ namespace StbcRevival.Missions
                          Subsystem.Warpcore, Subsystem.TransporterRoom, Subsystem.ComputerCore, Subsystem.Sickbay, Subsystem.ScienceLab,
                      })
                 repair = repair.SetSubsystemHealthPercent(system, 100f);
-            if (startingTorpedoes < 0) startingTorpedoes = StartingTorpedoes();
-            if (startingTorpedoes > 0) repair = repair.SetTorpedoCount(startingTorpedoes);
-            Plugin.Log.LogInfo($"Last Stand: repaired; torpedoes {(startingTorpedoes > 0 ? "restocked to " + startingTorpedoes : "unchanged (load unknown)")}");
+            Plugin.Log.LogInfo("Last Stand: repaired; torpedoes " + Restock());
             return repair;
         }
 
-        // The ship's torpedo launchers' starting load (LauncherGroup._startingAmmo).
-        private int StartingTorpedoes()
+        private static readonly System.Reflection.FieldInfo StartingAmmo = HarmonyLib.AccessTools.Field(typeof(LauncherGroup), "_startingAmmo");
+        private static readonly System.Reflection.MethodInfo SetRemainingAmmo = HarmonyLib.AccessTools.PropertySetter(typeof(LauncherGroup), "RemainingAmmo");
+
+        // The fore and aft launcher groups back to their starting reserve, as when the ship was built
+        // (LauncherGroup.Init). Torpedoes already loaded in the tubes stay loaded.
+        private static string Restock()
         {
             try
             {
-                if (!(player.AHMPFHDGMKJ is Component body)) return -1;
-                int total = 0;
-                foreach (var group in body.GetComponentsInChildren<LauncherGroup>(true))
-                    total += (int)HarmonyLib.AccessTools.Field(typeof(LauncherGroup), "_startingAmmo").GetValue(group);
-                return total;
+                var ship = UnityEngine.Object.FindObjectOfType<Sector.Spacecraft.PlayerSpacecraft>();
+                if (ship == null) return "unchanged (no player ship)";
+                var parts = new List<string>();
+                foreach (var side in new[] { "_foreLaunchers", "_aftLaunchers" })
+                {
+                    var group = HarmonyLib.AccessTools.Field(typeof(Sector.Spacecraft.BaseSpacecraft), side).GetValue(ship) as LauncherGroup;
+                    if (group == null) continue;
+                    int full = (int)StartingAmmo.GetValue(group);
+                    parts.Add($"{group.RemainingAmmo}->{full}");
+                    if (group.RemainingAmmo < full) SetRemainingAmmo.Invoke(group, new object[] { full });
+                }
+                return parts.Count == 0 ? "unchanged (no launchers)" : "restocked " + string.Join(", ", parts.ToArray());
             }
             catch (Exception e)
             {
-                Plugin.Log.LogWarning("Last Stand: torpedo load unknown: " + e.Message);
-                return -1;
+                return "unchanged (" + e.Message + ")";
             }
         }
 

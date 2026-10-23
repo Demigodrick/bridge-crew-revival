@@ -202,6 +202,16 @@ var shipModifier = game.GetType("Mission.Scripting.Framework.Tasks.KAGMFNHKOPC")
 foreach (var m in new[] { "WithTargets", "SetHullHealthPercent", "SetShieldHealthPercent", "SetSubsystemHealthPercent", "SetTorpedoCount" })
     Check($"  ship modifier task {m} (Last Stand repair)", shipModifier?.GetMethods(Inst).FirstOrDefault(x => x.Name == m));
 Check("LauncherGroup._startingAmmo", game.GetType("LauncherGroup")?.GetField("_startingAmmo", Inst));
+Check("  LauncherGroup.set_RemainingAmmo", game.GetType("LauncherGroup")?.GetMethod("set_RemainingAmmo", Inst));
+foreach (var f in new[] { "_foreLaunchers", "_aftLaunchers" })
+    Check($"  BaseSpacecraft.{f}", game.GetType("Sector.Spacecraft.BaseSpacecraft")?.GetField(f, Inst));
+var damage = game.GetType("DamageManager");
+Check("DamageManager.MKKPCHBHOJK / AHOLJBPEIDO / KEEIKMDLMJO (bridge damage)", damage?.GetMethod("MKKPCHBHOJK", Inst) is not null
+    && damage.GetProperty("AHOLJBPEIDO", Inst) is not null && damage.GetProperty("KEEIKMDLMJO", Inst) is not null ? damage : null);
+foreach (var f in new[] { "_persistentDamageEffectObjects", "_damageThresholds", "HIHNENIJNKE" })
+    Check($"  DamageManager.{f}", damage?.GetField(f, Inst));
+Check("PersistentBridgeDamageEffect._meshesToDisable / Stop", game.GetType("PersistentBridgeDamageEffect") is { } pbde
+    && pbde.GetField("_meshesToDisable", Inst) is not null && pbde.GetMethod("Stop", Inst) is not null ? pbde : null);
 
 Console.WriteLine(failures == 0 ? "\nAll targets resolved." : $"\n{failures} target(s) missing.");
 return failures == 0 ? 0 : 1;
