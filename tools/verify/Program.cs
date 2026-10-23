@@ -154,5 +154,22 @@ var entityBase = game.GetType("SVR.Network.MFKKMDCIEJA");
 Check("Save entity OANAMJIDBOO(Hashtable) (online search result)",
     entityBase?.GetMethod("OANAMJIDBOO", Inst) is { } searchResult && searchResult.GetParameters() is { Length: 1 } sp && sp[0].Name == "MIACDBOANPI" ? entityBase : null);
 
+var news = game.GetType("NewsPage");
+foreach (var m in new[] { "OnEnable", "FLBDMBHOBJG", "MLMAOLKJDHN", "OnTopNewsSelected", "OnBottomNewsSelected" })
+    Check($"NewsPage.{m}", news?.GetMethod(m, Inst));
+foreach (var f in new[] { "BBPGHDDIBPO", "KLCKHJPAMFD", "TopNewsSlot", "BottomNewsSlot", "TopSlotTitle", "BottomSlotTitle", "TopSlotBanner", "BottomSlotBanner",
+             "DefaultBanner", "NewsListPage", "NoNewsImage", "DetailsPage", "PrevPageButton", "NextPageButton" })
+    Check($"  NewsPage.{f}", news?.GetField(f, Inst));
+var invites = game.GetType("InviteActionUI");
+Check("InviteActionUI.BAPLBKELENL / SetDirty", invites?.GetMethod("BAPLBKELENL", Inst) is not null && invites.GetMethod("SetDirty", Inst) is not null ? invites : null);
+foreach (var f in new[] { "KJEOKFJEMIH", "_entryObjects", "PPJBBELBAFH", "KLCKHJPAMFD", "DGJOHLEKBNJ", "JNELKOHEPPF", "OACCJDCBMDP", "_upButtonInteraction", "_downButtonInteraction" })
+    Check($"  InviteActionUI.{f}", invites?.GetField(f, Inst));
+var inviteEntry = game.GetType("InviteActionEntry");
+foreach (var f in new[] { "_nameText", "_actionText", "_avatarIcon" })
+    Check($"  InviteActionEntry.{f}", inviteEntry?.GetField(f, Inst));
+Check("  InviteActionEntry.OnClicked", inviteEntry?.GetMethod("OnClicked", Inst));
+Check("TMP_Text.get_text", tmpText?.GetMethod("get_text", Inst));
+Check("PopupMgr.ShowPopup(string, LGNBEBILNCL, PDHCCBFJODN, bool, string[])", game.GetType("UI.PopupMgr")?.GetMethods(PS).FirstOrDefault(m => m.Name == "ShowPopup" && m.GetParameters().Length == 5));
+
 Console.WriteLine(failures == 0 ? "\nAll targets resolved." : $"\n{failures} target(s) missing.");
 return failures == 0 ? 0 : 1;

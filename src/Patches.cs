@@ -171,6 +171,7 @@ namespace StbcRevival
             RoomBrowser.Patch(harmony);
             SteamFriendsPanel.Patch(harmony);
             PauseMenuTweaks.Patch(harmony);
+            VrRoomPanels.Patch(harmony);
             if (Plugin.Diagnostics.Value)
                 StbcRevival.Diagnostics.Apply(harmony, photonNetwork);
         }

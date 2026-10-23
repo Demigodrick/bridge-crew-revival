@@ -65,6 +65,9 @@ namespace StbcRevival
             return input.Contains("|") ? input : SVR.Network.OHCFGLAFILF.AddRegion(input.ToUpperInvariant());
         }
 
+        /// <summary>The last message from Join (e.g. why a room couldn't be joined).</summary>
+        internal static string Status => status;
+
         internal static void Join(string input)
         {
             var name = FullRoomName(input);
@@ -188,7 +191,7 @@ namespace StbcRevival
             GUI.DragWindow();
         }
 
-        private sealed class Entry
+        internal sealed class Entry
         {
             public string Name, Code, Mode, Phase;
             public int Players, MaxPlayers;
@@ -207,8 +210,10 @@ namespace StbcRevival
             Mine = mine,
         };
 
-        private static Entry[] RoomList()
+        /// <summary>Public rooms (your own first), for this window and the VR panels.</summary>
+        internal static Entry[] RoomList()
         {
+            photonNetwork = photonNetwork ?? Patches.PhotonNetworkType;
             try
             {
                 // Steam mode: Steam lobbies (Photon's lobby list is empty while you're in a room).
@@ -239,14 +244,16 @@ namespace StbcRevival
         }
 
         // Room.visible: Custom lobbies start hidden; "open for public matchmaking" makes them visible.
-        private static bool CurrentRoomVisible()
+        internal static bool CurrentRoomVisible()
         {
+            photonNetwork = photonNetwork ?? Patches.PhotonNetworkType;
             var room = photonNetwork?.GetMethod("get_room", BindingFlags.Public | BindingFlags.Static)?.Invoke(null, null);
             return room?.GetType().GetMethod("get_visible", All)?.Invoke(room, null) is true;
         }
 
-        private static string CurrentRoomName()
+        internal static string CurrentRoomName()
         {
+            photonNetwork = photonNetwork ?? Patches.PhotonNetworkType;
             var room = photonNetwork?.GetMethod("get_room", BindingFlags.Public | BindingFlags.Static)?.Invoke(null, null);
             return room?.GetType().GetMethod("get_name", All)?.Invoke(room, null) as string;
         }

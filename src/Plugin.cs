@@ -26,7 +26,7 @@ namespace StbcRevival
     {
         public const string Guid = "stbc.revival";
         public const string Name = "Bridge Crew Revival";
-        public const string Version = "0.6.4";
+        public const string Version = "0.6.5";
 
         internal static ManualLogSource Log;
 
@@ -53,6 +53,7 @@ namespace StbcRevival
         internal static ConfigEntry<string> TraceTypes;
         internal static ConfigEntry<UnityEngine.KeyCode> BrowserKey;
         internal static ConfigEntry<bool> ShortRoomCodes;
+        internal static ConfigEntry<bool> VrRoomPanels;
         internal static ConfigEntry<bool> SteamPresence;
         internal static ConfigEntry<string> PublicServerAddress;
 
@@ -104,6 +105,8 @@ namespace StbcRevival
 
             BrowserKey = Config.Bind("Rooms", "BrowserKey", UnityEngine.KeyCode.F7,
                 "Key that opens the room browser / join-by-code window (desktop window; not visible inside a VR headset).");
+            VrRoomPanels = Config.Bind("Rooms", "VrPanels", true,
+                "Show public crews in VR: on the shuttle's newsfeed console, and (with your crew's code and status) in the escape menu's More pane.");
             ShortRoomCodes = Config.Bind("Rooms", "ShortRoomCodes", true,
                 "Give new rooms short 6-character codes (e.g. K7QX2M) instead of GUIDs, so they're easy to share for private matches.");
 
@@ -147,6 +150,7 @@ namespace StbcRevival
             Safely("steam integration", SteamIntegration.Update);
             Safely("steam friends panel", SteamFriendsPanel.Update);
             Safely("local save", StbcRevival.LocalSave.Update);
+            Safely("vr room panels", StbcRevival.VrRoomPanels.Update);
             Safely("ubisoft save import", UbisoftSaveImport.Update);
         }
 

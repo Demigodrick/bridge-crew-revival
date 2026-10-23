@@ -70,7 +70,8 @@ namespace StbcRevival
                 {
                     string path = Path(t.transform);
                     if (path.Contains("/InviteAction/Title/") || Matches(t, GameInvites)) SetText(t, "BRIDGE CREW REVIVAL");
-                    else if (path.Contains("/InviteAction/NoInvites/") || Matches(t, NoGameInvites))
+                    // With the VR room panels on, they own this text (the crews list shows there).
+                    else if (!VrRoomPanels.Enabled && (path.Contains("/InviteAction/NoInvites/") || Matches(t, NoGameInvites)))
                         SetText(t, $"Version {Plugin.Version}\nSteam multiplayer mod\n{Website}");
                 }
             }
