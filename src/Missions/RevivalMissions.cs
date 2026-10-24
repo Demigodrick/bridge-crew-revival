@@ -14,10 +14,11 @@ namespace StbcRevival.Missions
     internal static class RevivalMissions
     {
         internal const string LastStand = "LastStand";
+        internal const string FleetBattle = "FleetBattle";
         internal const string FreeRoam = "FreeRoam"; // the developers' own exploration mission, as shipped
 
         /// <summary>The Revival missions, in the order the briefing's next/previous buttons step through them.</summary>
-        internal static readonly string[] All = { LastStand, FreeRoam };
+        internal static readonly string[] All = { LastStand, FleetBattle, FreeRoam };
 
         /// <summary>The Revival mission the next launch should run, or null for the game's own missions.</summary>
         internal static Type Selected
@@ -28,6 +29,7 @@ namespace StbcRevival.Missions
                 switch (RevivalBriefing.RoomSelection())
                 {
                     case LastStand: return typeof(LastStandSequence);
+                    case FleetBattle: return typeof(FleetBattleSequence);
                     case FreeRoam: return typeof(Mission.DebugExplorationMode.DebugExplorationModeSequence);
                     default: return null;
                 }
@@ -35,7 +37,8 @@ namespace StbcRevival.Missions
         }
 
         internal static string Name(string mission) =>
-            mission == LastStand ? "LAST STAND" : mission == FreeRoam ? "FREE ROAM" : "REVIVAL MISSION";
+            mission == LastStand ? "LAST STAND" : mission == FleetBattle ? "FLEET BATTLE"
+            : mission == FreeRoam ? "FREE ROAM" : "REVIVAL MISSION";
 
         internal static string Description(string mission)
         {
@@ -44,6 +47,9 @@ namespace StbcRevival.Missions
                 case LastStand:
                     return "Hold your ground against endless waves of Klingons, pirates and Romulans, each bigger than the last, "
                            + "with a flagship every fifth wave. How many waves can your crew survive?";
+                case FleetBattle:
+                    return $"Lead a Starfleet battle group of {Plugin.FleetBattleSize.Value} ships against a Klingon or Romulan fleet "
+                           + "just as big. Destroy every enemy ship to win; keep your own ship in one piece.";
                 case FreeRoam:
                     var map = Plugin.MapOverride.Value;
                     return "No hostiles, no objectives: fly, scan and warp around a sector at your own pace "

@@ -54,6 +54,7 @@ namespace StbcRevival
         internal static ConfigEntry<UnityEngine.KeyCode> AvatarDumpKey;
         internal static ConfigEntry<bool> RomulanFace;
         internal static ConfigEntry<string> MapOverride;
+        internal static ConfigEntry<int> FleetBattleSize;
         internal static ConfigEntry<string> UpdateUrl;
         internal static ConfigEntry<bool> ShuttleWasd;
         internal static ConfigEntry<float> ShuttleSpeed;
@@ -120,6 +121,8 @@ namespace StbcRevival
                 "Wear the Romulan captain's face. Female Vulcan character presets only; crewmates with the mod see it too.");
             AvatarDumpKey = Config.Bind("Debug", "AvatarDumpKey", UnityEngine.KeyCode.F9,
                 "Testing only: describes the hail-screen characters and the player avatars to BepInEx/avatar-dump.txt.");
+            FleetBattleSize = Config.Bind("Revival", "FleetBattleSize", 30,
+                "Fleet Battle: ships on each side (1-60). Big battles are heavy on the host's computer; lower it if the game stutters.");
             MapOverride = Config.Bind("Debug", "MapOverride", "",
                 "Testing only: the sector map Free Roam and Ongoing Voyages load, as a path in the game's Resources, e.g. \"Mission Data/Maps/Sector - E3\" "
                 + "or \"Mission Data/Maps/Sector - SpaceStationRescue\". Applies to your whole crew when you host. Off the Trench there are no "

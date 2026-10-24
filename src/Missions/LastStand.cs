@@ -148,7 +148,7 @@ namespace StbcRevival.Missions
 
         // A ship counts as alive while its body exists with hull left. Just after spawning the body may not be
         // set yet; count it as alive then.
-        private static bool Alive(BodyRef ship, bool justSpawned)
+        internal static bool Alive(BodyRef ship, bool justSpawned)
         {
             try
             {
