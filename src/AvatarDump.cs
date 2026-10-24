@@ -115,12 +115,13 @@ namespace StbcRevival
                         + string.Join(", ", sounds.GroupBy(m => m.GetType().Name).OrderBy(g => g.Key)
                             .Select(g => $"{g.Key} {g.Count(m => m.isActiveAndEnabled)}/{g.Count()} active").ToArray()));
 
-            // The shuttle (main menu) scene: what's there, where, and what moves it. For dressing up the
-            // waiting area (park it at the starbase, ships coming and going).
-            var shuttleScene = UnityEngine.SceneManagement.SceneManager.GetSceneByName("Lobby_Shuttle");
-            if (shuttleScene.IsValid() && shuttleScene.isLoaded)
+            // The waiting areas (the briefing room, the shuttle): what's there, where, and what moves. For
+            // dressing up the view (out of warp, a starbase, ships coming and going).
+            foreach (var sceneName in new[] { "Aegis_Briefing_Room", "Lobby_Shuttle" })
             {
-                report.AppendLine("==== SHUTTLE SCENE ====");
+                var shuttleScene = UnityEngine.SceneManagement.SceneManager.GetSceneByName(sceneName);
+                if (!shuttleScene.IsValid() || !shuttleScene.isLoaded) continue;
+                report.AppendLine($"==== SCENE {sceneName} ====");
                 foreach (var root in shuttleScene.GetRootGameObjects()) Scenery(report, root.transform, 0, 4);
                 var all = shuttleScene.GetRootGameObjects().SelectMany(r => r.GetComponentsInChildren<Component>(true)).Where(c => c != null).ToList();
                 report.AppendLine("-- animators / animations");
@@ -137,9 +138,10 @@ namespace StbcRevival
                     report.AppendLine($"   {FullName(cam.transform)} active {cam.isActiveAndEnabled} depth {cam.depth} clear {cam.clearFlags} far {cam.farClipPlane} pos {cam.transform.position}");
                 report.AppendLine($"-- skybox {RenderSettings.skybox?.name}");
                 var shuttle = GameObject.Find("Player_Shuttle_and_Cameras");
-                summary.Add($"shuttle scene: {shuttleScene.rootCount} roots, {all.OfType<ParticleSystem>().Count()} particle systems, "
+                summary.Add($"{sceneName}: {shuttleScene.rootCount} roots, {all.OfType<ParticleSystem>().Count()} particle systems, "
                             + $"{all.OfType<Animator>().Count() + all.OfType<Animation>().Count()} animated, skybox {RenderSettings.skybox?.name}, "
-                            + $"shuttle at {(shuttle != null ? shuttle.transform.position.ToString() : "?")}");
+                            + $"shuttle at {(shuttle != null ? shuttle.transform.position.ToString() : "none")}, "
+                            + $"main camera at {(Camera.main != null ? Camera.main.transform.position.ToString() : "?")}");
             }
 
             report.AppendLine("==== HEAD COMPARISON ====");
