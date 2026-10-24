@@ -46,6 +46,15 @@ namespace StbcRevival.Missions
             }
             harmony.Patch(start, postfix: new HarmonyMethod(typeof(RevivalBriefing), nameof(Start_Postfix)));
             harmony.Patch(refresh, postfix: new HarmonyMethod(typeof(RevivalBriefing), nameof(Refresh_Postfix)));
+            // Next/previous mission (NKIGJPBIGND / JEKNGMEIFGM): with Revival Missions selected, step through
+            // those instead of the Ongoing Voyage tables.
+            string[] buttons = { "NKIGJPBIGND", "JEKNGMEIFGM" }, prefixes = { nameof(Next_Prefix), nameof(Previous_Prefix) };
+            for (int i = 0; i < buttons.Length; i++)
+            {
+                var target = AccessTools.Method(typeof(ConsoleBriefingRoom), buttons[i]);
+                if (target != null) harmony.Patch(target, prefix: new HarmonyMethod(typeof(RevivalBriefing), prefixes[i]));
+                else Plugin.Log.LogWarning($"Revival missions: ConsoleBriefingRoom.{buttons[i]} not found; can't step through Revival missions");
+            }
             // The console disables the Enterprise and Enterprise-D unless Ongoing Voyages is selected, every
             // frame, through this helper; setting them back afterwards restarts the button's fade each frame,
             // leaving them greyed. Change the value going in instead.
@@ -170,7 +179,7 @@ namespace StbcRevival.Missions
                     Loader.SetMissionType(Loader.DAPMGBKPDNM.Procedural);
 
                 // Ships as for an Ongoing Voyage (the console greys their names unless Ongoing Voyages is
-                // selected); no next/previous mission (there's one Revival mission so far).
+                // selected). Next/previous step through the Revival missions (see Next_Prefix).
                 foreach (var ship in ShipFields)
                 {
                     var toggle = Field<Toggle>(console, ship);
@@ -181,11 +190,6 @@ namespace StbcRevival.Missions
                         SetColour(label, Colour(console, (toggle.isOn || chooser)
                             ? (tng ? "_enabledOptionsColorTNG" : "_enabledOptionsColor")
                             : (tng ? "_disabledOptionsColorTNG" : "_disabledOptionsColor")));
-                }
-                foreach (var button in new[] { "_nextMissionButton", "_previousMissionButton" })
-                {
-                    var b = Field<Button>(console, button);
-                    if (b != null) b.interactable = false;
                 }
                 Field<TMP_Text>(console, "_experienceWarningText")?.gameObject.SetActive(false);
                 SetText(Field<TMP_Text>(console, "_missionName"), RevivalMissions.Name(selected));
@@ -208,6 +212,22 @@ namespace StbcRevival.Missions
         {
             if (__0 != null && !__1 && shipToggles.TryGetValue(__0, out var console) && choosingRevival.Contains(console))
                 __1 = !((Toggle)__0).isOn;
+        }
+
+        private static bool Next_Prefix(ConsoleBriefingRoom __instance) => Step(__instance, 1);
+        private static bool Previous_Prefix(ConsoleBriefingRoom __instance) => Step(__instance, -1);
+
+        // false: handled here (Revival Missions selected), skip the game's own table stepping.
+        private static bool Step(ConsoleBriefingRoom console, int by)
+        {
+            var selected = RoomSelection();
+            if (selected == null) return true;
+            if (IsChooser(console))
+            {
+                int n = RevivalMissions.All.Length, i = Array.IndexOf(RevivalMissions.All, selected);
+                SetRoomSelection(RevivalMissions.All[((i < 0 ? 0 : i) + by + n) % n]);
+            }
+            return false;
         }
 
         private static Color Colour(ConsoleBriefingRoom console, string field) =>

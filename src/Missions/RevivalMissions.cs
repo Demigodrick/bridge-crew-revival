@@ -14,6 +14,10 @@ namespace StbcRevival.Missions
     internal static class RevivalMissions
     {
         internal const string LastStand = "LastStand";
+        internal const string TestFlight = "TestFlight";
+
+        /// <summary>The Revival missions, in the order the briefing's next/previous buttons step through them.</summary>
+        internal static readonly string[] All = { LastStand, TestFlight };
 
         /// <summary>The Revival mission the next launch should run, or null for the game's own missions.</summary>
         internal static Type Selected
@@ -24,17 +28,30 @@ namespace StbcRevival.Missions
                 switch (RevivalBriefing.RoomSelection())
                 {
                     case LastStand: return typeof(LastStandSequence);
+                    case TestFlight: return typeof(TestFlightSequence);
                     default: return null;
                 }
             }
         }
 
-        internal static string Name(string mission) => mission == LastStand ? "LAST STAND" : "REVIVAL MISSION";
+        internal static string Name(string mission) =>
+            mission == LastStand ? "LAST STAND" : mission == TestFlight ? "TEST FLIGHT" : "REVIVAL MISSION";
 
-        internal static string Description(string mission) => mission == LastStand
-            ? "Hold your ground against endless waves of Klingons, pirates and Romulans, each bigger than the last, "
-              + "with a flagship every fifth wave. How many waves can your crew survive?"
-            : "";
+        internal static string Description(string mission)
+        {
+            switch (mission)
+            {
+                case LastStand:
+                    return "Hold your ground against endless waves of Klingons, pirates and Romulans, each bigger than the last, "
+                           + "with a flagship every fifth wave. How many waves can your crew survive?";
+                case TestFlight:
+                    var map = Plugin.MapOverride.Value;
+                    return "No hostiles, no objectives: fly, scan and warp around a sector at your own pace. Sector: "
+                           + (string.IsNullOrEmpty(map) ? "The Trench (set [Debug] MapOverride to visit another)." : map.Substring(map.LastIndexOf('/') + 1) + ".");
+                default:
+                    return "";
+            }
+        }
 
         // MissionManager's script runner (internal type Mission.Scripting.Framework.HHJAGACLBKA).
         private static readonly FieldInfo ScriptField = AccessTools.Field(typeof(MissionManager), "ENGIPFEKJAK");

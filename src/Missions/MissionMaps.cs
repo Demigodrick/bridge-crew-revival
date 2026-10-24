@@ -53,15 +53,35 @@ namespace StbcRevival.Missions
             if (__result == null || __result.IndexOf("Training", StringComparison.OrdinalIgnoreCase) >= 0) return;
             var map = Override();
             if (map == null || string.Equals(map, __result, StringComparison.OrdinalIgnoreCase)) return;
+            if (!IsMap(map))
+            {
+                Plugin.Log.LogWarning($"Mission maps: '{map}' isn't a sector map in the game; loading {__result}");
+                return;
+            }
             Plugin.Log.LogInfo($"Mission maps: loading {map} instead of {__result}");
             __result = map;
+        }
+
+        // Only real sector maps: the game waits for the map forever, so a typo (or a room value from someone
+        // else's game) must never get through. Loading it here is no extra cost: the game loads it next.
+        private static readonly System.Collections.Generic.Dictionary<string, bool> checkedMaps =
+            new System.Collections.Generic.Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+
+        private static bool IsMap(string path)
+        {
+            if (!path.StartsWith("Mission Data/Maps/", StringComparison.OrdinalIgnoreCase) || path.IndexOf("..", StringComparison.Ordinal) >= 0) return false;
+            if (!checkedMaps.TryGetValue(path, out var ok))
+                checkedMaps[path] = ok = Resources.Load(path) is Map.SectorRoot;
+            return ok;
         }
 
         // Host: off the Trench, choose a starting system without placing Ongoing Voyage encounters.
         private static bool Generate_Prefix(MissionManager __instance, ref int __result)
         {
+            // Off the Trench there are no encounters to place; a Revival mission brings its own (or, for Test
+            // Flight, none), so skip the Ongoing Voyage's there too.
             var map = Loader.EJLNDBGLIFL.GetLoadedMap();
-            if (map == null || map.name.IndexOf("Trench", StringComparison.OrdinalIgnoreCase) >= 0) return true;
+            if (map == null || (map.name.IndexOf("Trench", StringComparison.OrdinalIgnoreCase) >= 0 && RevivalMissions.Selected == null)) return true;
             try
             {
                 AccessTools.Method(typeof(MissionManager), "AMAMFJDNMKB").Invoke(__instance, null); // the seeded Random
