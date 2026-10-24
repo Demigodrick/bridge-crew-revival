@@ -32,13 +32,13 @@ namespace StbcRevival
             if (Time.unscaledTime < nextCheck) return;
             nextCheck = Time.unscaledTime + 1f;
 
-            Publish();
+            bool inRoom = Publish();
             foreach (var info in UnityEngine.Object.FindObjectsOfType<PlayerInfo>())
             {
                 var face = info.VisualPawnObject == null ? null : info.VisualPawnObject.GetComponentInChildren<FaceCustomization>(true);
                 var head = face == null ? null : face.GetComponent<SkinnedMeshRenderer>();
                 if (head == null) continue;
-                bool want = Wants(info);
+                bool want = Wants(info, inRoom);
                 if (want && Find() is Material material && !IsRomulan(head.sharedMaterial))
                 {
                     var worn = new Material(material) { name = "Romulan face", renderQueue = head.sharedMaterial != null ? head.sharedMaterial.renderQueue : material.renderQueue };
@@ -56,28 +56,31 @@ namespace StbcRevival
         }
 
         // A female Vulcan preset whose player chose it: us from the setting, others from their player property.
-        // No network player yet (main menu, shuttle on your own) means it's ours.
-        private static bool Wants(PlayerInfo info)
+        // Out of a room (main menu, character creator) the only avatar is ours; in a room, one with no network
+        // player is an AI crew member (Lt. T'Nar at engineering), never changed.
+        private static bool Wants(PlayerInfo info, bool inRoom)
         {
             var profile = info.Profile;
             if (profile == null || profile.CharacterSpecies.ToString() != "Vulcan" || profile.CharacterGender.ToString() != "Female") return false;
             var player = info.PKIBEAIHJNE;
-            if (player == null || IsLocal(player)) return Plugin.RomulanFace.Value;
+            if (player == null) return !inRoom && Plugin.RomulanFace.Value;
+            if (IsLocal(player)) return Plugin.RomulanFace.Value;
             return Properties(player) is IDictionary props && props.Contains(PlayerKey) && props[PlayerKey] is bool on && on;
         }
 
-        // Keep our player property in step with the setting while in a room.
-        private static void Publish()
+        // Keep our player property in step with the setting while in a room; says whether we're in one.
+        private static bool Publish()
         {
-            var local = Patches.PhotonNetworkType?.GetMethod("get_player", BindingFlags.Public | BindingFlags.Static)?.Invoke(null, null);
-            if (local == null) return;
-            var room = Patches.PhotonNetworkType.GetMethod("get_room", BindingFlags.Public | BindingFlags.Static)?.Invoke(null, null);
-            if (room == null) return;
+            var room = Patches.PhotonNetworkType?.GetMethod("get_room", BindingFlags.Public | BindingFlags.Static)?.Invoke(null, null);
+            if (room == null) return false;
+            var local = Patches.PhotonNetworkType.GetMethod("get_player", BindingFlags.Public | BindingFlags.Static)?.Invoke(null, null);
+            if (local == null) return true;
             bool on = Plugin.RomulanFace.Value;
             var props = Properties(local) as IDictionary;
-            if (props != null && props.Contains(PlayerKey) && props[PlayerKey] is bool current && current == on) return;
+            if (props != null && props.Contains(PlayerKey) && props[PlayerKey] is bool current && current == on) return true;
             local.GetType().GetMethod("SetCustomProperties", All)?.Invoke(local, new object[] { new PhotonHashtable { [PlayerKey] = on }, null, false });
             Plugin.Log.LogInfo($"Romulan face: told the crew {(on ? "on" : "off")}");
+            return true;
         }
 
         private static bool IsLocal(object player) => AccessTools.Field(player.GetType(), "isLocal")?.GetValue(player) is bool local && local;
