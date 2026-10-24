@@ -220,6 +220,9 @@ var faceCustomization = game.GetType("FaceCustomization");
 foreach (var f in new[] { "LookMaterialNames", "_originalLookIdx" })
     Check($"FaceCustomization.{f} (Romulan face)", faceCustomization?.GetField(f, Inst));
 Check("  FaceCustomization.SetDefaultLook", faceCustomization?.GetMethod("SetDefaultLook", Inst));
+Check("  CustomizationManager.FFJOIFLJFPF (creator avatars)", game.GetType("CustomizationManager")?.GetField("FFJOIFLJFPF", Inst));
+Check("  NovaPlayerManager.get_Instance + PlayerManager.CharacterProfiles", game.GetType("NovaPlayerManager")?.GetMethod("get_Instance", PS) is not null
+    && game.GetType("SVR.PlayerManager")?.GetField("CharacterProfiles", Inst) is { } cpf ? cpf : null);
 var photonPlayer = game.GetType("CBBCCGMALMP");
 Check("  photon player isLocal / get_customProperties / SetCustomProperties", photonPlayer?.GetField("isLocal", Inst) is not null
     && photonPlayer.GetMethod("get_customProperties", Inst) is not null && photonPlayer.GetMethod("SetCustomProperties", Inst) is not null ? photonPlayer : null);

@@ -34,25 +34,48 @@ namespace StbcRevival
 
             bool inRoom = Publish();
             foreach (var info in UnityEngine.Object.FindObjectsOfType<PlayerInfo>())
-            {
-                var face = info.VisualPawnObject == null ? null : info.VisualPawnObject.GetComponentInChildren<FaceCustomization>(true);
-                var head = face == null ? null : face.GetComponent<SkinnedMeshRenderer>();
-                if (head == null) continue;
-                bool want = Wants(info, inRoom);
-                if (want && Find() is Material material && !IsRomulan(head.sharedMaterial))
-                {
-                    var worn = new Material(material) { name = "Romulan face", renderQueue = head.sharedMaterial != null ? head.sharedMaterial.renderQueue : material.renderQueue };
-                    head.material = worn;
-                    wearing.Add(head);
-                    Plugin.Log.LogInfo($"Romulan face: on {info.VisualPawnObject.name}");
-                }
-                else if (!want && wearing.Remove(head))
-                {
-                    face.SetDefaultLook(); // the preset's own face back
-                    Plugin.Log.LogInfo($"Romulan face: off {info.VisualPawnObject.name}");
-                }
-            }
+                Apply(info.VisualPawnObject, Wants(info, inRoom));
+            // The character creator shows its own copy of each preset (CustomizationManager.FFJOIFLJFPF, in
+            // the order of NovaPlayerManager.CharacterProfiles), not your player avatar.
+            var creator = UnityEngine.Object.FindObjectOfType<CustomizationManager>();
+            if (creator != null && CreatorAvatars?.GetValue(creator) is GameObject[] avatars && Profiles() is IList profiles)
+                for (int i = 0; i < avatars.Length && i < profiles.Count; i++)
+                    if (avatars[i] != null && avatars[i].activeInHierarchy)
+                        Apply(avatars[i], Plugin.RomulanFace.Value && FemaleVulcan(profiles[i] as CharacterProfile));
             wearing.RemoveWhere(h => h == null);
+        }
+
+        private static readonly FieldInfo CreatorAvatars = AccessTools.Field(typeof(CustomizationManager), "FFJOIFLJFPF");
+
+        private static IList Profiles()
+        {
+            var instance = AccessTools.Method(AccessTools.TypeByName("NovaPlayerManager"), "get_Instance")?.Invoke(null, null);
+            return instance == null ? null : AccessTools.Field(instance.GetType(), "CharacterProfiles")?.GetValue(instance) as IList; // SVR.PlayerManager field
+        }
+
+        private static bool FemaleVulcan(CharacterProfile profile) =>
+            profile != null && profile.CharacterSpecies.ToString() == "Vulcan" && profile.CharacterGender.ToString() == "Female";
+
+        private static void Apply(GameObject avatar, bool want)
+        {
+            var face = avatar == null ? null : avatar.GetComponentInChildren<FaceCustomization>(true);
+            var head = face == null ? null : face.GetComponent<SkinnedMeshRenderer>();
+            if (head == null) return;
+            if (want && Find() is Material material && !IsRomulan(head.sharedMaterial))
+            {
+                head.material = new Material(material)
+                {
+                    name = "Romulan face",
+                    renderQueue = head.sharedMaterial != null ? head.sharedMaterial.renderQueue : material.renderQueue,
+                };
+                wearing.Add(head);
+                Plugin.Log.LogInfo($"Romulan face: on {avatar.name}");
+            }
+            else if (!want && wearing.Remove(head))
+            {
+                face.SetDefaultLook(); // the preset's own face back
+                Plugin.Log.LogInfo($"Romulan face: off {avatar.name}");
+            }
         }
 
         // A female Vulcan preset whose player chose it: us from the setting, others from their player property.
@@ -60,8 +83,7 @@ namespace StbcRevival
         // player is an AI crew member (Lt. T'Nar at engineering), never changed.
         private static bool Wants(PlayerInfo info, bool inRoom)
         {
-            var profile = info.Profile;
-            if (profile == null || profile.CharacterSpecies.ToString() != "Vulcan" || profile.CharacterGender.ToString() != "Female") return false;
+            if (!FemaleVulcan(info.Profile)) return false;
             var player = info.PKIBEAIHJNE;
             if (player == null) return !inRoom && Plugin.RomulanFace.Value;
             if (IsLocal(player)) return Plugin.RomulanFace.Value;
