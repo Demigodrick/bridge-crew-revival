@@ -19,6 +19,9 @@ namespace StbcRevival.Missions
     ///   - Hunt: raiders attacking shipping; destroy them.
     ///   - Defend: a disabled freighter under attack; keep it alive through two waves.
     ///   - Rescue: a disabled freighter with survivors; scan it for life signs, beam them aboard.
+    ///   - Ambush: offered as a rescue, but Klingons decloak around you as you close in; rescue the survivors
+    ///     and beat off the ambush.
+    /// Warping out of the assignment's system abandons it (it counts as failed) and a new one is offered.
     /// Between assignments (before accepting the next), flying within 5 km of a space station repairs and
     /// restocks the ship. Raiders grow in number as assignments are completed. Leave through the pause menu.
     /// </summary>
@@ -45,10 +48,15 @@ namespace StbcRevival.Missions
         private const string Directive = "Patrol: carry out Starfleet's assignments";
         private const double RepairRange = 5000;   // metres from a station
         private const float RepairCooldown = 60f;  // seconds between station repairs
+        private const double AmbushRange = 10000;  // metres from the freighter when the ambush is sprung
 
         private static readonly string[] Raiders =
         {
             "Sector/Ships/Ship - Pirate A", "Sector/Ships/Ship - Pirate B", "Sector/Ships/Ship - Bird Of Prey",
+        };
+        private static readonly string[] Ambushers =
+        {
+            "Sector/Ships/Ship - Bird Of Prey", "Sector/Ships/Ship - Bird Of Prey", "Sector/Ships/Ship - D5 Cruiser",
         };
         private static readonly string[] Freighters =
         {
@@ -62,7 +70,8 @@ namespace StbcRevival.Missions
         private readonly System.Random random = new System.Random();
         private BodyRef player;
         private int completed, failed, spawnCount;
-        private bool succeeded;
+        private bool succeeded, abandoned;
+        private Map.SystemRoot jobSystem;
         private float lastRepair = -RepairCooldown;
 
         public override void StartScript()
@@ -82,7 +91,7 @@ namespace StbcRevival.Missions
             for (;;)
             {
                 // The offer: a job in another system, marked on the warp map.
-                int job = random.Next(3);
+                int job = random.Next(4);
                 var here = Objective.KALBLMGFNIN;
                 var target = Objective.FindSystemDifferentThan(new[] { here }) ?? here;
                 string name = SystemName(target);
@@ -113,16 +122,18 @@ namespace StbcRevival.Missions
                 yield return Task.NECMCDDOFJB.RemoveSubDirective(Directive, repairs);
                 yield return Task.NECMCDDOFJB.RemoveSubDirective(Directive, offer);
                 Plugin.Log.LogInfo($"Patrol: {JobName(job)} in {name} accepted");
-                succeeded = false;
-                IEnumerable<Step> run = job == 0 ? Hunt() : job == 1 ? Defend() : Rescue();
+                succeeded = abandoned = false;
+                jobSystem = target;
+                IEnumerable<Step> run = job == 0 ? Hunt() : job == 1 ? Defend() : Rescue(job == 3);
                 foreach (var step in run) yield return step;
+                yield return Task.BCJDEKKIHDD.RemoveAllMarkers();
 
                 if (succeeded) completed++; else failed++;
-                Plugin.Log.LogInfo($"Patrol: {JobName(job)} {(succeeded ? "complete" : "failed")}; {completed} done, {failed} failed");
+                Plugin.Log.LogInfo($"Patrol: {JobName(job)} {(succeeded ? "complete" : abandoned ? "abandoned" : "failed")}; {completed} done, {failed} failed");
                 yield return Task.HHNFJKHGEPH.WithMissionResult($"Assignments completed: {completed}", false);
                 yield return Task.OKLDNLKLLFJ.WithGroup("State_Group_Mus_Dyn").WithState("Explore");
-                string result = succeeded
-                    ? $"Assignment complete. Well done. Assignments completed: {completed}"
+                string result = succeeded ? $"Assignment complete. Well done. Assignments completed: {completed}"
+                    : abandoned ? $"Assignment abandoned. Assignments completed: {completed}"
                     : $"Assignment failed. Assignments completed: {completed}";
                 yield return Task.NECMCDDOFJB.AddSubDirectives(Directive, result);
                 yield return Task.KNMMMJOOBHC.WithTime(20f);
@@ -141,7 +152,7 @@ namespace StbcRevival.Missions
             var raiders = new List<BodyRef>();
             foreach (var step in SpawnRaiders(RaiderCount(), raiders, player)) yield return step;
             foreach (var step in UntilGone(raiders, () => false)) yield return step;
-            succeeded = true;
+            succeeded = !abandoned;
             yield return Task.NECMCDDOFJB.RemoveSubDirective(Directive, line);
         }
 
@@ -159,28 +170,29 @@ namespace StbcRevival.Missions
             yield return Task.OKLDNLKLLFJ.WithGroup("State_Group_Mus_Dyn").WithState("Tension");
             float started = UnityEngine.Time.time;
             bool lost = false;
-            for (int wave = 0; wave < 2 && !lost; wave++)
+            for (int wave = 0; wave < 2 && !lost && !abandoned; wave++)
             {
                 var raiders = new List<BodyRef>();
                 foreach (var step in SpawnRaiders(RaiderCount(), raiders, freighter)) yield return step;
                 foreach (var step in UntilGone(raiders, () => lost = !LastStandWaves.Alive(freighter, UnityEngine.Time.time - started < 10f))) yield return step;
-                if (!lost && wave == 0) yield return Task.KNMMMJOOBHC.WithTime(15f);
+                if (!lost && !abandoned && wave == 0) yield return Task.KNMMMJOOBHC.WithTime(15f);
             }
-            succeeded = !lost;
-            yield return Task.BCJDEKKIHDD.RemoveAllMarkers();
+            succeeded = !lost && !abandoned;
             yield return Task.NECMCDDOFJB.RemoveSubDirective(Directive, line);
         }
 
         // A disabled freighter with survivors: scan it for life signs, then beam them aboard (the game's
         // rescue missions do the same: Life at 100 when scanned, then the "People" cargo tracker to 100).
         // Sometimes raiders turn up. Lost if the freighter is destroyed first.
-        private IEnumerable<Step> Rescue()
+        // As an ambush the freighter is further off, and when you close to within AmbushRange, Klingons
+        // decloak around you; the job also needs them beaten off.
+        private IEnumerable<Step> Rescue(bool ambush)
         {
             string line = "Scan the disabled freighter for life signs, then beam the survivors aboard";
             yield return Task.NECMCDDOFJB.AddSubDirectives(Directive, line);
             var wreck = new BodyRef();
             yield return Task.BFMBGDIDKEI.UsingSpawner(MakeSpawner(RescueFreighters[random.Next(RescueFreighters.Length)], "Freighter", Tag.Neutral))
-                .AtAngleAndDistanceFromBody(player, random.Next(0, 360), 6000f).OutputTo(wreck);
+                .AtAngleAndDistanceFromBody(player, random.Next(0, 360), ambush ? 20000f : 6000f).OutputTo(wreck);
             yield return Task.OFNIKPPKOGI.TellAI(wreck).ToSetShieldStrength(AI.IDCAFFBNKFO.Weak);
             yield return Task.KDNOMKAPDKG.TellAI(wreck).ToDisable();
             // The survivors: the game's rescue encounters load them as "People" cargo; a plain spawn has none,
@@ -201,7 +213,7 @@ namespace StbcRevival.Missions
             yield return Task.KKALNAMJCNH.WithName(steps);
 
             var raiders = new List<BodyRef>();
-            if (random.Next(2) == 0)
+            if (!ambush && random.Next(2) == 0)
             {
                 yield return Task.KNMMMJOOBHC.WithTime(20f);
                 yield return Task.OKLDNLKLLFJ.WithGroup("State_Group_Mus_Dyn").WithState("Tension");
@@ -209,16 +221,34 @@ namespace StbcRevival.Missions
             }
 
             float started = UnityEngine.Time.time;
-            bool lost = false;
-            while (!rescued && !lost)
+            bool lost = false, sprung = false;
+            string fight = "Ambush! Destroy the Klingon ships";
+            for (;;)
             {
                 yield return Task.KNMMMJOOBHC.WithTime(2f);
-                lost = !LastStandWaves.Alive(wreck, UnityEngine.Time.time - started < 10f);
+                bool justSpawned = UnityEngine.Time.time - started < 10f;
+                lost = !LastStandWaves.Alive(wreck, justSpawned);
+                if (lost || Abandoned()) break;
+                // Sprung on approach (or at the latest once the survivors are aboard, if beamed from further out).
+                if (ambush && !sprung && (Distance(player, wreck) <= AmbushRange || rescued))
+                {
+                    sprung = true;
+                    Plugin.Log.LogInfo("Patrol: ambush sprung");
+                    yield return Task.ABHANLLBILL.WithEventID("PLAY_SND_INCOMING_CLOAK_ALARM_LP").ContinueImmediately();
+                    yield return Task.ABHANLLBILL.WithEventID("STOP_SND_INCOMING_CLOAK_ALARM_LP").WithDelay(8f);
+                    yield return Task.ABHANLLBILL.WithEventID("PLAY_NPC_SHIP_KLING_DECLOAK").ContinueImmediately();
+                    yield return Task.OKLDNLKLLFJ.WithGroup("State_Group_Mus_Dyn").WithState("Tension");
+                    yield return Task.NECMCDDOFJB.AddSubDirectives(Directive, fight);
+                    foreach (var step in SpawnRaiders(RaiderCount() + 1, raiders, player, Ambushers, 5000f, 4000)) yield return step;
+                    started = UnityEngine.Time.time; // the new ships count as alive while they appear
+                }
+                bool raidersLeft = sprung && raiders.Any(r => LastStandWaves.Alive(r, UnityEngine.Time.time - started < 10f));
+                if (rescued && (!ambush || (sprung && !raidersLeft))) break;
             }
             yield return Task.CLNFMDFOFKL.WithName(steps);
-            Plugin.Log.LogInfo($"Patrol: rescue {(rescued ? "complete" : "failed, freighter lost")}");
-            succeeded = rescued;
-            yield return Task.BCJDEKKIHDD.RemoveAllMarkers();
+            Plugin.Log.LogInfo($"Patrol: {(ambush ? "ambush" : "rescue")} {(lost ? "failed, freighter lost" : abandoned ? "abandoned" : "complete")}");
+            succeeded = !lost && !abandoned;
+            if (sprung) yield return Task.NECMCDDOFJB.RemoveSubDirective(Directive, fight);
             yield return Task.NECMCDDOFJB.RemoveSubDirective(Directive, line);
             // Raiders still about stay in the system: a parting gift.
         }
@@ -227,29 +257,46 @@ namespace StbcRevival.Missions
 
         private int RaiderCount() => Math.Min(2 + completed / 2, 6);
 
-        private IEnumerable<Step> SpawnRaiders(int count, List<BodyRef> into, BodyRef target)
+        private IEnumerable<Step> SpawnRaiders(int count, List<BodyRef> into, BodyRef target,
+                                               string[] pool = null, float distance = 18000f, int spread = 8000)
         {
+            pool = pool ?? Raiders;
+            var spawned = new List<BodyRef>();
             float angle = random.Next(0, 360);
             for (int i = 0; i < count; i++)
             {
                 var ship = new BodyRef();
-                into.Add(ship);
+                spawned.Add(ship);
                 angle += 360f / count + random.Next(-20, 20);
-                yield return Task.BFMBGDIDKEI.UsingSpawner(MakeSpawner(Raiders[random.Next(Raiders.Length)], "Raider", Tag.Enemy))
-                    .AtAngleAndDistanceFromBody(player, angle, 18000f + random.Next(0, 8000)).FaceOtherBody(player).OutputTo(ship);
+                yield return Task.BFMBGDIDKEI.UsingSpawner(MakeSpawner(pool[random.Next(pool.Length)], "Raider", Tag.Enemy))
+                    .AtAngleAndDistanceFromBody(player, angle, distance + random.Next(0, spread)).FaceOtherBody(player).OutputTo(ship);
             }
-            foreach (var ship in into)
+            foreach (var ship in spawned)
                 yield return Task.NDFEDBHFGFB.TellAI(ship).ToAddObjectives(random.Next(3) == 0 ? player : target).OfObjectiveType(AIObjective.Attack);
+            into.AddRange(spawned);
         }
 
-        // Waits until every ship is gone, or stop() says to give up.
+        // Left the assignment's system: the assignment is given up.
+        private bool Abandoned()
+        {
+            if (!abandoned && jobSystem != null && Objective.KALBLMGFNIN != jobSystem) abandoned = true;
+            return abandoned;
+        }
+
+        private static double Distance(BodyRef a, BodyRef b)
+        {
+            try { return UnityEngine.Vector3d.Distance(a.AHMPFHDGMKJ.ALPAOOKFIEE.Position, b.AHMPFHDGMKJ.ALPAOOKFIEE.Position); }
+            catch { return double.MaxValue; }
+        }
+
+        // Waits until every ship is gone, or stop() says to give up, or the crew has left the system.
         private IEnumerable<Step> UntilGone(List<BodyRef> ships, Func<bool> stop)
         {
             float started = UnityEngine.Time.time;
             for (;;)
             {
                 yield return Task.KNMMMJOOBHC.WithTime(2f);
-                if (stop()) yield break;
+                if (stop() || Abandoned()) yield break;
                 bool justSpawned = UnityEngine.Time.time - started < 10f;
                 if (!ships.Any(s => LastStandWaves.Alive(s, justSpawned))) yield break;
             }
@@ -288,8 +335,9 @@ namespace StbcRevival.Missions
             catch { return system.SystemName; }
         }
 
-        private static string JobName(int job) => job == 0 ? "hunt" : job == 1 ? "defend" : "rescue";
+        private static string JobName(int job) => job == 0 ? "hunt" : job == 1 ? "defend" : job == 2 ? "rescue" : "ambush";
 
+        // An ambush is offered as a rescue: it's a trap.
         private static string Offer(int job) => job == 0 ? "raiders are attacking shipping"
             : job == 1 ? "a disabled freighter is under attack"
             : "a freighter is adrift with survivors aboard";
