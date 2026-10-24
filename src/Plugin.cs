@@ -52,6 +52,7 @@ namespace StbcRevival
         internal static ConfigEntry<bool> PlayerJoinedAlert;
         internal static ConfigEntry<UnityEngine.KeyCode> BugReportKey;
         internal static ConfigEntry<UnityEngine.KeyCode> AvatarDumpKey;
+        internal static ConfigEntry<bool> RomulanFace;
         internal static ConfigEntry<string> UpdateUrl;
         internal static ConfigEntry<bool> ShuttleWasd;
         internal static ConfigEntry<float> ShuttleSpeed;
@@ -114,6 +115,8 @@ namespace StbcRevival
                 "When someone joins your crew: a chime, and the game's taskbar entry flashes if the window isn't in front. Handy while waiting with the headset off.");
             BugReportKey = Config.Bind("Debug", "BugReportKey", UnityEngine.KeyCode.F10,
                 "Saves the logs and settings needed for a bug report as one zip in the game folder.");
+            RomulanFace = Config.Bind("Avatar", "RomulanFace", false,
+                "Wear the Romulan captain's face. Female Vulcan character presets only; crewmates with the mod see it too.");
             AvatarDumpKey = Config.Bind("Debug", "AvatarDumpKey", UnityEngine.KeyCode.F9,
                 "Testing only: describes the hail-screen characters and the player avatars to BepInEx/avatar-dump.txt.");
             TestLastStand = Config.Bind("Debug", "TestLastStand", false,
@@ -185,6 +188,7 @@ namespace StbcRevival
             Safely("player joined alert", StbcRevival.PlayerJoinedAlert.Update);
             Safely("bug report", BugReport.Update);
             Safely("avatar dump", AvatarDump.Update);
+            Safely("romulan face", StbcRevival.RomulanFace.Update);
             Safely("ubisoft save import", UbisoftSaveImport.Update);
         }
 

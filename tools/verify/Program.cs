@@ -216,5 +216,13 @@ Check("PersistentBridgeDamageEffect._meshesToDisable / Stop", game.GetType("Pers
 Check("NPCHailingView._characterPrefab (avatar dump)", game.GetType("NPCHailingView")?.GetField("_characterPrefab", Inst));
 Check("  NPCHailingManager._hailingViews", game.GetType("NPCHailingManager")?.GetField("_hailingViews", Inst));
 
+var faceCustomization = game.GetType("FaceCustomization");
+foreach (var f in new[] { "LookMaterialNames", "_originalLookIdx" })
+    Check($"FaceCustomization.{f} (Romulan face)", faceCustomization?.GetField(f, Inst));
+Check("  FaceCustomization.SetDefaultLook", faceCustomization?.GetMethod("SetDefaultLook", Inst));
+var photonPlayer = game.GetType("CBBCCGMALMP");
+Check("  photon player isLocal / get_customProperties / SetCustomProperties", photonPlayer?.GetField("isLocal", Inst) is not null
+    && photonPlayer.GetMethod("get_customProperties", Inst) is not null && photonPlayer.GetMethod("SetCustomProperties", Inst) is not null ? photonPlayer : null);
+
 Console.WriteLine(failures == 0 ? "\nAll targets resolved." : $"\n{failures} target(s) missing.");
 return failures == 0 ? 0 : 1;
