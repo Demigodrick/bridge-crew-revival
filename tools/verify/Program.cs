@@ -237,5 +237,15 @@ var photonPlayer = game.GetType("CBBCCGMALMP");
 Check("  photon player isLocal / get_customProperties / SetCustomProperties", photonPlayer?.GetField("isLocal", Inst) is not null
     && photonPlayer.GetMethod("get_customProperties", Inst) is not null && photonPlayer.GetMethod("SetCustomProperties", Inst) is not null ? photonPlayer : null);
 
+// Mission maps (Last Stand on E3, [Debug] MapOverride)
+Check("Loader.GetMapName / GetLoadedMap", game.GetType("Loader") is { } loaderType && loaderType.GetMethod("GetMapName", Inst) is not null
+    && loaderType.GetMethod("GetLoadedMap", Inst) is not null ? loaderType : null);
+foreach (var m in new[] { "AMAMFJDNMKB" })
+    Check($"  MissionManager.{m} (seeded Random)", missionManager?.GetMethod(m, Inst));
+foreach (var f in new[] { "GBEFMAACMFK", "DJFMMNBHJPC" })
+    Check($"  MissionManager.{f}", missionManager?.GetField(f, Inst));
+Check("  MissionManager base .LFBBCGCLOKG (sector map)", missionManager?.BaseType?.GetField("LFBBCGCLOKG", Inst) ?? missionManager?.GetField("LFBBCGCLOKG", Inst));
+Check("  Sector.MapBase.ChooseStartingSystem", game.GetType("Sector.MapBase")?.GetMethod("ChooseStartingSystem", Inst));
+
 Console.WriteLine(failures == 0 ? "\nAll targets resolved." : $"\n{failures} target(s) missing.");
 return failures == 0 ? 0 : 1;

@@ -51,6 +51,7 @@ namespace StbcRevival.Missions
             RevivalBriefing.Patch(harmony);
             LastStandLocks.Patch(harmony);
             LastStandBridgeRepair.Patch(harmony);
+            MissionMaps.Patch(harmony);
         }
 
         // The sector now exists (generated from the Ongoing Voyage's encounters); swap the script before

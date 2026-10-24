@@ -53,6 +53,7 @@ namespace StbcRevival
         internal static ConfigEntry<UnityEngine.KeyCode> BugReportKey;
         internal static ConfigEntry<UnityEngine.KeyCode> AvatarDumpKey;
         internal static ConfigEntry<bool> RomulanFace;
+        internal static ConfigEntry<string> MapOverride;
         internal static ConfigEntry<string> UpdateUrl;
         internal static ConfigEntry<bool> ShuttleWasd;
         internal static ConfigEntry<float> ShuttleSpeed;
@@ -119,6 +120,10 @@ namespace StbcRevival
                 "Wear the Romulan captain's face. Female Vulcan character presets only; crewmates with the mod see it too.");
             AvatarDumpKey = Config.Bind("Debug", "AvatarDumpKey", UnityEngine.KeyCode.F9,
                 "Testing only: describes the hail-screen characters and the player avatars to BepInEx/avatar-dump.txt.");
+            MapOverride = Config.Bind("Debug", "MapOverride", "",
+                "Testing only: the sector map your Ongoing Voyages load, as a path in the game's Resources, e.g. \"Mission Data/Maps/Sector - E3\" "
+                + "or \"Mission Data/Maps/Sector - SpaceStationRescue\". Applies to your whole crew when you host. Off the Trench there are no "
+                + "mission encounters: you start in one of the map's systems and can warp to its others. Empty: the game's own map.");
             TestLastStand = Config.Bind("Debug", "TestLastStand", false,
                 "Testing only: every Ongoing Voyage you host runs the Revival mission Last Stand instead.");
             CheckForUpdates = Config.Bind("Updates", "CheckForUpdates", true,
@@ -190,6 +195,7 @@ namespace StbcRevival
             Safely("avatar dump", AvatarDump.Update);
             Safely("romulan face", StbcRevival.RomulanFace.Update);
             Safely("romulan creator choice", StbcRevival.RomulanCreatorOption.Update);
+            Safely("mission maps", StbcRevival.Missions.MissionMaps.Update);
             Safely("ubisoft save import", UbisoftSaveImport.Update);
         }
 
