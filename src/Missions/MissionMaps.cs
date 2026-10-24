@@ -75,7 +75,9 @@ namespace StbcRevival.Missions
             return ok;
         }
 
-        // Host: off the Trench, choose a starting system without placing Ongoing Voyage encounters.
+        // Host: off the Trench (or for a Revival mission), set up as GenerateProceduralMission and
+        // INHGNBIPNHB.PopulateEncounters do (contract, sector, starting system, player spawn point), without
+        // placing any encounters. The ship spawn (MissionManager.NJHADEBHMNN) needs that spawn point and contract.
         private static bool Generate_Prefix(MissionManager __instance, ref int __result)
         {
             // Off the Trench there are no encounters to place; a Revival mission brings its own (or, for Test
@@ -84,21 +86,50 @@ namespace StbcRevival.Missions
             if (map == null || (map.name.IndexOf("Trench", StringComparison.OrdinalIgnoreCase) >= 0 && RevivalMissions.Selected == null)) return true;
             try
             {
-                AccessTools.Method(typeof(MissionManager), "AMAMFJDNMKB").Invoke(__instance, null); // the seeded Random
-                var random = AccessTools.Field(typeof(MissionManager), "GBEFMAACMFK").GetValue(__instance) as System.Random ?? new System.Random();
-                var selection = AccessTools.Field(typeof(MissionManager), "DJFMMNBHJPC").GetValue(__instance) ?? new BHNEPPPPMKH();
-                var sectorMap = AccessTools.Field(typeof(MissionManager), "LFBBCGCLOKG").GetValue(__instance);
-                var system = (Map.SystemRoot)AccessTools.Method(sectorMap.GetType(), "ChooseStartingSystem")
-                    .Invoke(sectorMap, new[] { map, selection, random });
+                var manager = typeof(MissionManager);
+                AccessTools.Method(manager, "AMAMFJDNMKB").Invoke(__instance, null); // the seeded Random
+                var random = (System.Random)AccessTools.Field(manager, "GBEFMAACMFK").GetValue(__instance);
+                var selection = (BHNEPPPPMKH)AccessTools.Field(manager, "DJFMMNBHJPC").GetValue(__instance);
+                var sectorMap = AccessTools.Field(manager, "LFBBCGCLOKG").GetValue(__instance);
+                var system = (Map.SystemRoot)AccessTools.Method(sectorMap.GetType(), "ChooseStartingSystem").Invoke(sectorMap, new object[] { map, selection, random });
+
+                // The mission's contract, with the table's encounter settings, as the game applies them.
+                var runner = AccessTools.Field(manager, "ENGIPFEKJAK").GetValue(__instance);
+                var contract = Member(runner, "Contract");
+                var entry = AccessTools.Field(manager, "ABBGEGBEKIF").GetValue(__instance);
+                var settings = Member(entry, "Encounter");
+                AccessTools.Method(settings.GetType(), "ApplyEncounterSettingsToContract").Invoke(settings, new[] { contract });
+
+                // The encounter system's state, minus the encounters.
+                var encounters = AccessTools.TypeByName("Mission.Scripting.Encounter.INHGNBIPNHB");
+                AccessTools.Method(encounters, "JMEJBKFNKDA").Invoke(null, null); // reset
+                AccessTools.Field(encounters, "MJDNNOGMKFG").SetValue(null, contract);
+                AccessTools.Field(encounters, "AHNEIJMLBCH").SetValue(null, random);
+                AccessTools.Field(encounters, "LFBBCGCLOKG").SetValue(null, sectorMap);
+                var playerEncounters = Member(contract, "LNIBLGBKLGI");
+                var startSystem = Member(playerEncounters, "JFAIKAOOPMO");
+                Traverse.Create(startSystem).Field("System").SetValue(system);
+                var spawn = AccessTools.Method(manager, "FindSpawnPoint").Invoke(null, new object[] { sectorMap, system, selection.SpawnChoice, random });
+                if (spawn == null) throw new InvalidOperationException($"no spawn point in {system.SystemName}");
+                AccessTools.Field(encounters, "<HBMGPABJGIK>k__BackingField").SetValue(null, spawn);
+
                 __result = system.SystemID;
                 Plugin.Log.LogInfo($"Mission maps: {map.name}, starting in {system.SystemName} (no Ongoing Voyage encounters)");
                 return false;
             }
             catch (Exception e)
             {
-                Plugin.Log.LogError("Mission maps: couldn't choose a starting system, using the game's set-up: " + e);
+                Plugin.Log.LogError("Mission maps: couldn't set up the mission, using the game's set-up: " + e);
                 return true;
             }
+        }
+
+        // A field or property, by name, on the object's type or a base type.
+        private static object Member(object target, string name)
+        {
+            var t = Traverse.Create(target);
+            var field = t.Field(name);
+            return field.FieldExists() ? field.GetValue() : t.Property(name).GetValue();
         }
 
         // ---- The room's copy of the host's MapOverride -------------------------------------------------

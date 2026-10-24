@@ -247,6 +247,22 @@ foreach (var m in new[] { "AMAMFJDNMKB" })
 foreach (var f in new[] { "GBEFMAACMFK", "DJFMMNBHJPC" })
     Check($"  MissionManager.{f}", missionManager?.GetField(f, Inst));
 Check("  MissionManager base .LFBBCGCLOKG (sector map)", missionManager?.BaseType?.GetField("LFBBCGCLOKG", Inst) ?? missionManager?.GetField("LFBBCGCLOKG", Inst));
+foreach (var f in new[] { "ENGIPFEKJAK", "ABBGEGBEKIF" })
+    Check($"  MissionManager.{f}", missionManager?.GetField(f, Inst));
+Check("  MissionManager.FindSpawnPoint (static)", missionManager?.GetMethod("FindSpawnPoint", PS));
+Check("  GPNFBMFLKFP.Contract (runner contract)", game.GetType("Mission.Scripting.Framework.GPNFBMFLKFP") is { } runnerBase
+    ? (object)runnerBase.GetField("Contract", Inst) ?? runnerBase.GetProperty("Contract", Inst) : null);
+Check("  ObjectiveTableEntry.Encounter", game.GetType("Mission.Tables.ObjectiveTableEntry")?.GetField("Encounter", Inst));
+Check("  EncounterContractSettings.ApplyEncounterSettingsToContract", game.GetType("Mission.Scripting.Encounter.EncounterContractSettings")?.GetMethod("ApplyEncounterSettingsToContract", Inst));
+var encounterSetup = game.GetType("Mission.Scripting.Encounter.INHGNBIPNHB");
+const BindingFlags SF = BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Static;
+foreach (var f in new[] { "MJDNNOGMKFG", "AHNEIJMLBCH", "LFBBCGCLOKG", "<HBMGPABJGIK>k__BackingField" })
+    Check($"  INHGNBIPNHB.{f}", encounterSetup?.GetField(f, SF));
+Check("  INHGNBIPNHB.JMEJBKFNKDA (reset)", encounterSetup?.GetMethod("JMEJBKFNKDA", SF));
+Check("  CEOFAJJJCAN.LNIBLGBKLGI / AJPIEMDPKDC.JFAIKAOOPMO / EncounterSystem.System",
+    game.GetType("Mission.Scripting.Encounter.CEOFAJJJCAN")?.GetProperty("LNIBLGBKLGI", Inst) is not null
+    && game.GetType("Mission.Scripting.Encounter.AJPIEMDPKDC")?.GetProperty("JFAIKAOOPMO", Inst) is not null
+    && game.GetType("Mission.Scripting.Encounter.EncounterSystem") is { } es && ((object)es.GetField("System", Inst) ?? es.GetProperty("System", Inst)) is not null ? es : null);
 Check("  Sector.MapBase.ChooseStartingSystem", game.GetType("Sector.MapBase")?.GetMethod("ChooseStartingSystem", Inst));
 
 Console.WriteLine(failures == 0 ? "\nAll targets resolved." : $"\n{failures} target(s) missing.");

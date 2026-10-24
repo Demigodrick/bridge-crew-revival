@@ -20,7 +20,7 @@ namespace StbcRevival.Missions
         private static readonly Type Manager = AccessTools.TypeByName("DamageManager");
         private static readonly System.Reflection.MethodInfo Hull = AccessTools.PropertyGetter(Manager, "AHOLJBPEIDO");
         private static readonly System.Reflection.MethodInfo MaxHull = AccessTools.PropertyGetter(Manager, "KEEIKMDLMJO");
-        private static bool failed;
+        private static bool warned;
 
         internal static void Patch(Harmony harmony)
         {
@@ -37,7 +37,7 @@ namespace StbcRevival.Missions
         private static void Update_Postfix(object __instance, List<PersistentBridgeDamageEffect> ____persistentDamageEffectObjects,
                                            float[] ____damageThresholds, int[] ___HIHNENIJNKE)
         {
-            if (failed || !LastStandLocks.Locked || ____persistentDamageEffectObjects == null || ____damageThresholds == null || ___HIHNENIJNKE == null) return;
+            if (!LastStandLocks.Locked || ____persistentDamageEffectObjects == null || ____damageThresholds == null || ___HIHNENIJNKE == null) return;
             try
             {
                 float max = (float)MaxHull.Invoke(__instance, null);
@@ -58,8 +58,9 @@ namespace StbcRevival.Missions
             }
             catch (Exception e)
             {
-                Plugin.Log.LogWarning("Last Stand: clearing bridge damage: " + e.Message);
-                failed = true;
+                // Expected while the bridge loads (no ship yet for the hull values); say so once.
+                if (!warned) Plugin.Log.LogInfo("Last Stand: bridge damage check not ready yet: " + (e.InnerException ?? e).Message);
+                warned = true;
             }
         }
     }
