@@ -169,7 +169,9 @@ namespace StbcRevival
             GUILayout.EndHorizontal();
 
             GUILayout.Space(8);
-            GUILayout.Label(SteamMode.Enabled ? "Public rooms (Steam, worldwide):" : "Public rooms on this server:");
+            GUILayout.Label(SteamMode.Enabled
+                ? "Public rooms (Steam, worldwide):" + (SteamMode.OnlineText.Length > 0 ? "   · " + SteamMode.OnlineText : "")
+                : "Public rooms on this server:");
             GUILayout.BeginHorizontal();
             Plugin.HideFullCrews.Value = GUILayout.Toggle(Plugin.HideFullCrews.Value, " Hide full", GUILayout.Width(110));
             Plugin.HideCrewsInMission.Value = GUILayout.Toggle(Plugin.HideCrewsInMission.Value, " Hide in mission", GUILayout.Width(140));

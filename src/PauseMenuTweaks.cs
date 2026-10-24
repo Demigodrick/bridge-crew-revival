@@ -86,7 +86,8 @@ namespace StbcRevival
         }
 
         /// <summary>The mod's name, version and website, for the escape menu.</summary>
-        internal static string ModInfo => $"Version {Plugin.Version}\nSteam multiplayer mod\n{Website}";
+        internal static string ModInfo => $"Version {Plugin.Version}\nSteam multiplayer mod\n"
+                                          + (SteamMode.OnlineText.Length > 0 ? SteamMode.OnlineText + "\n" : "") + Website;
 
         private static bool Matches(Component tmp, string[] names)
         {

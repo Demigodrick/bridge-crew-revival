@@ -172,7 +172,11 @@ namespace StbcRevival
                 if (page == null || !page.isActiveAndEnabled) return;
                 var rows = Rows(includeMine: false);
                 if (rows.Count == 0)
-                    rows.Add(new Row { Title = "No public crews right now", Detail = "Start a Quick match to host one" });
+                    rows.Add(new Row
+                    {
+                        Title = "No public crews right now",
+                        Detail = SteamMode.OnlineText.Length > 0 ? SteamMode.OnlineText + ". Start a Quick match to host one" : "Start a Quick match to host one",
+                    });
                 int pages = (rows.Count + 1) / 2;
                 ref int index = ref NewsPageIndex(page);
                 index = Mathf.Clamp(index, 0, pages - 1);
@@ -210,22 +214,29 @@ namespace StbcRevival
         // The panel's "newsfeed" heading sits a few levels above the NewsPage component.
         private static readonly HashSet<NewsPage> retitled = new HashSet<NewsPage>();
 
+        // The newsfeed's title: "PUBLIC CREWS", with the players online once known.
+        private static readonly List<TMP_Text> newsTitles = new List<TMP_Text>();
+
         private static void RetitleNewsfeed(NewsPage page)
         {
-            if (retitled.Contains(page)) return;
-            retitled.Add(page);
-            var root = page.transform;
-            for (int i = 0; i < 3 && root.parent != null; i++) root = root.parent;
-            foreach (var text in root.GetComponentsInChildren<TMP_Text>(true))
+            if (retitled.Add(page))
             {
-                var key = AccessTools.Field(typeof(TMP_Text), "EEHDAODMMFJ")?.GetValue(text) as string ?? "";
-                if (key.IndexOf("newsfeed", StringComparison.OrdinalIgnoreCase) >= 0
-                    || string.Equals(GetText(text).Trim(), "newsfeed", StringComparison.OrdinalIgnoreCase))
+                var root = page.transform;
+                for (int i = 0; i < 3 && root.parent != null; i++) root = root.parent;
+                foreach (var text in root.GetComponentsInChildren<TMP_Text>(true))
                 {
-                    SetText(text, "PUBLIC CREWS");
-                    Plugin.Log.LogInfo("VR room panels: newsfeed panel shows public crews");
+                    var key = AccessTools.Field(typeof(TMP_Text), "EEHDAODMMFJ")?.GetValue(text) as string ?? "";
+                    if (key.IndexOf("newsfeed", StringComparison.OrdinalIgnoreCase) >= 0
+                        || string.Equals(GetText(text).Trim(), "newsfeed", StringComparison.OrdinalIgnoreCase))
+                    {
+                        newsTitles.Add(text);
+                        Plugin.Log.LogInfo("VR room panels: newsfeed panel shows public crews");
+                    }
                 }
             }
+            newsTitles.RemoveAll(t => t == null);
+            int online = SteamMode.Enabled ? SteamMode.OnlineCount : 0;
+            foreach (var title in newsTitles) SetText(title, online > 0 ? $"PUBLIC CREWS ({online} ONLINE)" : "PUBLIC CREWS");
         }
 
         // ---- Escape menu (InviteAction panel) -----------------------------------------------------
@@ -265,7 +276,8 @@ namespace StbcRevival
                 PagingButton(__instance, "JNELKOHEPPF", "_upButtonInteraction", any, page > 1);
                 PagingButton(__instance, "OACCJDCBMDP", "_downButtonInteraction", any, page < pages);
                 var empty = Field<TextMeshProUGUI>(__instance, "DGJOHLEKBNJ");
-                SetText(empty, "No public crews right now.\nStart a Quick match to host one.");
+                SetText(empty, "No public crews right now.\nStart a Quick match to host one."
+                               + (SteamMode.OnlineText.Length > 0 ? "\n" + SteamMode.OnlineText + "." : ""));
                 if (empty != null) empty.gameObject.SetActive(!any);
             }
             catch (Exception e)

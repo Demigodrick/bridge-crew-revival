@@ -222,6 +222,12 @@ namespace StbcRevival
 
         internal static ulong CurrentLobby => directory.MyLobby;
 
+        /// <summary>Bridge Crew Revival players online (in the shared "online" Steam lobbies), or 0 while unknown.</summary>
+        internal static int OnlineCount => directory.OnlineCount;
+
+        /// <summary>"12 players online", or "" while unknown: for the crew lists.</summary>
+        internal static string OnlineText => Enabled && OnlineCount > 0 ? $"{OnlineCount} Revival player{(OnlineCount == 1 ? "" : "s")} online" : "";
+
         // ---- For the room browser -------------------------------------------------------------
 
         internal sealed class Listing
@@ -350,11 +356,108 @@ namespace StbcRevival
             public void Tick(LoadBalancingServer server)
             {
                 Publish(server);
-                if (Time.realtimeSinceStartup >= nextList && !listing)
+                if (listing) return;
+                // One search at a time (Steam keeps one result list): the players-online search takes a turn
+                // every 30 seconds, the crew search the rest.
+                if (Time.realtimeSinceStartup >= nextOnline)
+                {
+                    nextOnline = Time.realtimeSinceStartup + 30f;
+                    RequestOnline();
+                }
+                else if (Time.realtimeSinceStartup >= nextList)
                 {
                     nextList = Time.realtimeSinceStartup + 5f;
                     RequestList();
                 }
+            }
+
+            // ---- Players online -----------------------------------------------------------------
+            // Every player's game sits in one shared public Steam lobby tagged "stbcOnline" (members up to 250;
+            // Steam hands it on when its owner leaves). Its member count is the number of players online.
+            // If two get made at once (or one fills), everyone drifts to the biggest, and counts are summed.
+
+            private const string OnlineTag = "stbcOnline";
+            private const int OnlineMax = 250;
+            private float nextOnline = 10f;
+            private ulong onlineLobby;
+            private int otherOnline;
+            private bool creatingOnline;
+            private Steamworks.KLNNLNGKHKC<LobbyCreated> onlineCreateResult;
+
+            public int OnlineCount
+            {
+                get
+                {
+                    int mine = 0;
+                    try { if (onlineLobby != 0) mine = SteamMatchmaking.GetNumLobbyMembers(new CSteamID(onlineLobby)); }
+                    catch { /* Steam not ready */ }
+                    return mine + otherOnline;
+                }
+            }
+
+            private void RequestOnline()
+            {
+                listing = true;
+                SteamMatchmaking.AddRequestLobbyListStringFilter(OnlineTag, "1", ELobbyComparison.k_ELobbyComparisonEqual);
+                SteamMatchmaking.AddRequestLobbyListDistanceFilter(ELobbyDistanceFilter.k_ELobbyDistanceFilterWorldwide);
+                var call = SteamMatchmaking.RequestLobbyList();
+                listResult = Steamworks.KLNNLNGKHKC<LobbyMatchList>.Create((r, ioFailure) =>
+                {
+                    listing = false;
+                    if (ioFailure) return;
+                    ulong best = 0;
+                    int bestCount = -1, others = 0;
+                    for (int i = 0; i < r.m_nLobbiesMatching; i++)
+                    {
+                        var lobby = SteamMatchmaking.GetLobbyByIndex(i);
+                        int count = SteamMatchmaking.GetNumLobbyMembers(lobby);
+                        if (lobby.m_SteamID != onlineLobby) others += count;
+                        if (count < OnlineMax && (count > bestCount || (count == bestCount && lobby.m_SteamID < best)))
+                        {
+                            best = lobby.m_SteamID;
+                            bestCount = count;
+                        }
+                    }
+                    otherOnline = others;
+                    int ours = onlineLobby != 0 ? SteamMatchmaking.GetNumLobbyMembers(new CSteamID(onlineLobby)) : 0;
+                    if (onlineLobby != 0 && ours > 0 && (best == 0 || best == onlineLobby || bestCount <= ours)) return;
+
+                    // Not in one (or ours is the smaller): move to the biggest, or start one.
+                    if (onlineLobby != 0)
+                    {
+                        SteamMatchmaking.LeaveLobby(new CSteamID(onlineLobby));
+                        onlineLobby = 0;
+                    }
+                    if (best != 0)
+                    {
+                        SteamMatchmaking.JoinLobby(new CSteamID(best));
+                        onlineLobby = best;
+                        otherOnline = Math.Max(0, others - bestCount);
+                        Plugin.Log.LogInfo($"Steam mode: joined the players-online lobby ({bestCount + 1} online there)");
+                    }
+                    else CreateOnline();
+                });
+                listResult.Set(call, null);
+            }
+
+            private void CreateOnline()
+            {
+                if (creatingOnline) return;
+                creatingOnline = true;
+                var call = SteamMatchmaking.CreateLobby(ELobbyType.k_ELobbyTypePublic, OnlineMax);
+                onlineCreateResult = Steamworks.KLNNLNGKHKC<LobbyCreated>.Create((r, ioFailure) =>
+                {
+                    creatingOnline = false;
+                    if (ioFailure || r.m_ulSteamIDLobby == 0)
+                    {
+                        Plugin.Log.LogWarning($"Steam mode: players-online lobby creation failed ({r.m_eResult})");
+                        return;
+                    }
+                    onlineLobby = r.m_ulSteamIDLobby;
+                    SteamMatchmaking.SetLobbyData(new CSteamID(onlineLobby), OnlineTag, "1");
+                    Plugin.Log.LogInfo($"Steam mode: started the players-online lobby {onlineLobby}");
+                });
+                onlineCreateResult.Set(call, null);
             }
 
             private void Publish(LoadBalancingServer server)
