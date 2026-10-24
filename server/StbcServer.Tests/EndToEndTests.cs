@@ -2,6 +2,7 @@
 using System.Net;
 using StbcServer.Game;
 using StbcServer.Net;
+using StbcServer.Protocol;
 using PhotonHashtable = ExitGames.Client.Photon.Hashtable;
 
 namespace StbcServer.Tests;
@@ -90,6 +91,31 @@ public sealed class EndToEndTests : IDisposable
         Assert.Equal("riker", ((PhotonHashtable)seenByHost[249])[(byte)255]);
         Assert.Equal(new[] { 1, 2 }, (int[])seenByHost[252]);
         guest.WaitEvent(255, e => (int)e[254] == 2);
+    }
+
+    [Fact]
+    public void ReservedRoomIsJoinedLikeAnyOther()
+    {
+        if (listenerServer == null) return; // needs the in-process server
+        var props = new PHashtable
+        {
+            [GameProp.MaxPlayers] = (byte)4, [GameProp.IsOpen] = true, [GameProp.IsVisible] = false, ["C7"] = "crew",
+        };
+        var first = Client("archer"); // a connected player: the room takes its app version and lobby
+        Assert.True(listenerServer.ReserveRoom("enterprise", props));
+        Assert.False(listenerServer.ReserveRoom("enterprise", props));
+
+        Assert.Equal(0, first.JoinRoom("enterprise").ReturnCode);
+        Assert.Equal(1, first.ActorNr);
+        var second = Client("tpol");
+        var joined = second.JoinRoom("enterprise");
+        Assert.Equal(0, joined.ReturnCode);
+        Assert.Equal(2, second.ActorNr);
+        Assert.Equal("crew", ((PhotonHashtable)joined[248])["C7"]);
+
+        Assert.False(listenerServer.ReleaseRoom("enterprise")); // has players
+        Assert.True(listenerServer.ReserveRoom("spare", props));
+        Assert.True(listenerServer.ReleaseRoom("spare"));
     }
 
     [Fact]

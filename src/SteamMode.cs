@@ -91,7 +91,8 @@ namespace StbcRevival
                 }
                 CurrentHost = steamId;
                 Plugin.Log.LogInfo($"Steam mode: connecting to host {steamId} over Steam P2P");
-                return relayClient.Connect(steamId, deliver, closed);
+                // Closed from the host's end (their game went, or Steam lost them): the crew may regroup.
+                return relayClient.Connect(steamId, deliver, () => { HostHandoff.HostLinkLost(steamId); closed(); });
             }
             return null;
         }
@@ -189,6 +190,9 @@ namespace StbcRevival
 
         /// <summary>Make a room joinable by name: it's hosted by this Steam user (from an invite or friend).</summary>
         internal static void RememberRoom(string roomName, ulong host) => directory.Remember(roomName, host);
+
+        /// <summary>This room is now hosted by this Steam user, whatever the lobby search still says (host hand-off).</summary>
+        internal static void RedirectRoom(string roomName, ulong host) => directory.Redirect(roomName, host);
 
         internal static bool Knows(string roomName) => directory.Rooms.Any(r => r.Name == roomName) || Server.HostedRooms().Any(r => r.Name == roomName);
 
@@ -317,7 +321,9 @@ namespace StbcRevival
                 {
                     lock (sync)
                     {
-                        var all = new List<ExternalRoom>(lobbies);
+                        var all = lobbies.Where(r => !redirected.ContainsKey(r.Name)).ToList();
+                        foreach (var kv in redirected)
+                            all.Add(new ExternalRoom(kv.Key, $"steam:{kv.Value}:1", "", new PHashtable { [GameProp.IsOpen] = true }, 0));
                         foreach (var kv in remembered)
                             if (all.All(r => r.Name != kv.Key))
                                 all.Add(new ExternalRoom(kv.Key, $"steam:{kv.Value}:1", "",
@@ -330,6 +336,15 @@ namespace StbcRevival
             public void Remember(string room, ulong host)
             {
                 lock (sync) remembered[room] = host;
+            }
+
+            // Rooms that moved to a new host: these win over lobby search results (the old host's lobby can
+            // linger on Steam for a while after they drop).
+            private readonly Dictionary<string, ulong> redirected = new Dictionary<string, ulong>();
+
+            public void Redirect(string room, ulong host)
+            {
+                lock (sync) redirected[room] = host;
             }
 
             public void Tick(LoadBalancingServer server)

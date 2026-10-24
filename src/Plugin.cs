@@ -200,6 +200,7 @@ namespace StbcRevival
             Safely("romulan creator choice", StbcRevival.RomulanCreatorOption.Update);
             Safely("mission maps", StbcRevival.Missions.MissionMaps.Update);
             Safely("mod version check", ModVersionCheck.Update);
+            Safely("host hand-off", HostHandoff.Update);
             Safely("ubisoft save import", UbisoftSaveImport.Update);
         }
 

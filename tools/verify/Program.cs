@@ -274,5 +274,14 @@ Check("  CEOFAJJJCAN.LNIBLGBKLGI / AJPIEMDPKDC.JFAIKAOOPMO / EncounterSystem.Sys
     && game.GetType("Mission.Scripting.Encounter.EncounterSystem") is { } es && ((object)es.GetField("System", Inst) ?? es.GetProperty("System", Inst)) is not null ? es : null);
 Check("  Sector.MapBase.ChooseStartingSystem", game.GetType("Sector.MapBase")?.GetMethod("ChooseStartingSystem", Inst));
 
+// Host hand-off
+Check("PhotonNetwork.get_playerList (host hand-off)", photon?.GetMethod("get_playerList", PS));
+var roomType = photon?.GetMethod("get_room", PS)?.ReturnType;
+foreach (var m in new[] { "get_maxPlayers", "get_open", "get_visible", "get_propertiesListedInLobby", "get_customProperties", "get_name" })
+    Check($"  Room.{m}", roomType?.GetMethod(m, Inst));
+var playerType = photon?.GetMethod("get_player", PS)?.ReturnType;
+foreach (var m in new[] { "get_ID", "get_name", "get_customProperties", "SetCustomProperties" })
+    Check($"  PhotonPlayer.{m}", playerType?.GetMethod(m, Inst));
+
 Console.WriteLine(failures == 0 ? "\nAll targets resolved." : $"\n{failures} target(s) missing.");
 return failures == 0 ? 0 : 1;

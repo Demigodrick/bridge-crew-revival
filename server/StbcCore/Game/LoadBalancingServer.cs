@@ -163,6 +163,38 @@ public sealed class LoadBalancingServer : IPeerHandler
     /// <summary>The local rooms this server hosts (for publishing them elsewhere, e.g. as Steam lobbies).</summary>
     public List<RoomSnapshot> HostedRooms() => SnapshotRooms();
 
+    /// <summary>
+    /// Create an empty room, ready to be joined like any other: the first to join becomes its master. For a
+    /// crew whose host dropped: the next host recreates the room under the same name and settings, and the
+    /// rest of the crew joins it. Without an app version or lobby, those of a player connected to this server
+    /// are used (the next host's own game). False if the room already exists.
+    /// </summary>
+    public bool ReserveRoom(string name, PHashtable properties, string? appVersion = null, LobbyKey? lobby = null)
+    {
+        lock (sync)
+        {
+            if (rooms.ContainsKey(name)) return false;
+            var local = connections.Select(c => c.Session as ClientSession).FirstOrDefault(cs => cs is { Authenticated: true });
+            var room = new Room(name, appVersion ?? local?.AppVersion ?? "", lobby ?? local?.Lobby ?? LobbyKey.Default);
+            Room.Merge(room.Properties, properties);
+            rooms[name] = room;
+            Log.Info($"room '{name}' reserved (lobby {room.Lobby}, max {room.MaxPlayers}, version '{room.AppVersion}')");
+            return true;
+        }
+    }
+
+    /// <summary>Remove a reserved room nobody joined. False if it has players (or doesn't exist).</summary>
+    public bool ReleaseRoom(string name)
+    {
+        lock (sync)
+        {
+            if (!rooms.TryGetValue(name, out var room) || room.Actors.Count > 0) return false;
+            rooms.Remove(name);
+            Log.Info($"room '{name}' released");
+            return true;
+        }
+    }
+
     // Values for JSON: primitives and strings as-is, anything else described.
     private static object? Plain(object? v) => v switch
     {
