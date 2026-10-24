@@ -127,12 +127,15 @@ namespace StbcRevival.Missions
             int enemiesLeft = enemies.Count, alliesLeft = allies.Count;
             string status = Status(enemiesLeft, alliesLeft);
             yield return Task.NECMCDDOFJB.AddSubDirectives(directive, status);
+            int ticks = 0;
             while (enemiesLeft > 0)
             {
                 yield return Task.KNMMMJOOBHC.WithTime(2f);
                 bool justSpawned = UnityEngine.Time.time - started < 10f;
                 var liveEnemies = enemies.Where(e => LastStandWaves.Alive(e, justSpawned)).ToList();
                 var liveAllies = allies.Where(a => LastStandWaves.Alive(a, justSpawned)).ToList();
+                if (++ticks % 10 == 0) // every 20 seconds, for the balance
+                    Plugin.Log.LogInfo($"Fleet battle: enemies {Condition(liveEnemies)}; allies {Condition(liveAllies)}");
                 if (liveEnemies.Count == enemiesLeft && liveAllies.Count == alliesLeft) continue;
 
                 // Ships whose target died go after a survivor (re-ordering everyone is cheap and keeps it simple).
@@ -147,7 +150,7 @@ namespace StbcRevival.Missions
 
                 enemiesLeft = liveEnemies.Count;
                 alliesLeft = liveAllies.Count;
-                Plugin.Log.LogInfo($"Fleet battle: {enemiesLeft} enemies, {alliesLeft} allies left");
+                Plugin.Log.LogInfo($"Fleet battle: {enemiesLeft} enemies ({Condition(liveEnemies)}), {alliesLeft} allies ({Condition(liveAllies)}) left");
                 yield return Task.NECMCDDOFJB.RemoveSubDirective(directive, status);
                 status = Status(enemiesLeft, alliesLeft);
                 yield return Task.NECMCDDOFJB.AddSubDirectives(directive, status);
@@ -159,6 +162,29 @@ namespace StbcRevival.Missions
             yield return Task.HHNFJKHGEPH.WithMissionResult($"Victory: {alliesLeft} of {allies.Count} allied ships survived", true);
             yield return Task.KNMMMJOOBHC.WithTime(10f);
         }
+
+        // "hull 87%, shields 40%": the side's average, for judging the balance from the log.
+        private static string Condition(List<BodyRef> ships)
+        {
+            double hull = 0, hullMax = 0, shield = 0, shieldMax = 0;
+            foreach (var ship in ships)
+            {
+                try
+                {
+                    var info = ship.AHMPFHDGMKJ?.GetTargetInfo();
+                    if (info == null) continue;
+                    hull += Read(info, "get_HullHealth");
+                    hullMax += Read(info, "get_HullMaxHealth");
+                    shield += Read(info, "get_ShieldHealth");
+                    shieldMax += Read(info, "get_ShieldMaxHealth");
+                }
+                catch { /* gone */ }
+            }
+            return $"hull {(hullMax > 0 ? 100 * hull / hullMax : 0):F0}%, shields {(shieldMax > 0 ? 100 * shield / shieldMax : 0):F0}%";
+        }
+
+        private static double Read(object info, string getter) =>
+            info.GetType().GetMethod(getter)?.Invoke(info, null) is float f ? f : 0;
 
         private static string Status(int enemies, int allies) => $"Enemy ships left: {enemies}. Allied ships left: {allies}";
 
