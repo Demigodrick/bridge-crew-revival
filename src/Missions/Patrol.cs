@@ -183,6 +183,11 @@ namespace StbcRevival.Missions
                 .AtAngleAndDistanceFromBody(player, random.Next(0, 360), 6000f).OutputTo(wreck);
             yield return Task.OFNIKPPKOGI.TellAI(wreck).ToSetShieldStrength(AI.IDCAFFBNKFO.Weak);
             yield return Task.KDNOMKAPDKG.TellAI(wreck).ToDisable();
+            // The survivors: the game's rescue encounters load them as "People" cargo; a plain spawn has none,
+            // which leaves no life signs to find and nothing to beam.
+            int survivors = 8 + random.Next(0, 13);
+            yield return Task.CIAHOPCODGJ.WithTargets(wreck).SetCargo(Sector.CargoTypes.People, survivors);
+            Plugin.Log.LogInfo($"Patrol: rescue freighter with {survivors} survivors");
             yield return Task.BCJDEKKIHDD.AddMarker(new[] { wreck });
 
             bool rescued = false;
