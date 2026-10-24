@@ -115,6 +115,33 @@ namespace StbcRevival
                         + string.Join(", ", sounds.GroupBy(m => m.GetType().Name).OrderBy(g => g.Key)
                             .Select(g => $"{g.Key} {g.Count(m => m.isActiveAndEnabled)}/{g.Count()} active").ToArray()));
 
+            // The shuttle (main menu) scene: what's there, where, and what moves it. For dressing up the
+            // waiting area (park it at the starbase, ships coming and going).
+            var shuttleScene = UnityEngine.SceneManagement.SceneManager.GetSceneByName("Lobby_Shuttle");
+            if (shuttleScene.IsValid() && shuttleScene.isLoaded)
+            {
+                report.AppendLine("==== SHUTTLE SCENE ====");
+                foreach (var root in shuttleScene.GetRootGameObjects()) Scenery(report, root.transform, 0, 4);
+                var all = shuttleScene.GetRootGameObjects().SelectMany(r => r.GetComponentsInChildren<Component>(true)).Where(c => c != null).ToList();
+                report.AppendLine("-- animators / animations");
+                foreach (var a2 in all.OfType<Animator>())
+                    report.AppendLine($"   {FullName(a2.transform)} active {a2.isActiveAndEnabled} controller {a2.runtimeAnimatorController?.name} clips "
+                                      + string.Join(",", (a2.runtimeAnimatorController?.animationClips ?? new AnimationClip[0]).Select(c => c.name).ToArray()));
+                foreach (var a2 in all.OfType<Animation>())
+                    report.AppendLine($"   {FullName(a2.transform)} active {a2.isActiveAndEnabled} playing {a2.isPlaying} clip {a2.clip?.name}");
+                report.AppendLine("-- particle systems");
+                foreach (var ps in all.OfType<ParticleSystem>())
+                    report.AppendLine($"   {FullName(ps.transform)} active {ps.gameObject.activeInHierarchy} playing {ps.isPlaying}");
+                report.AppendLine("-- cameras");
+                foreach (var cam in all.OfType<Camera>())
+                    report.AppendLine($"   {FullName(cam.transform)} active {cam.isActiveAndEnabled} depth {cam.depth} clear {cam.clearFlags} far {cam.farClipPlane} pos {cam.transform.position}");
+                report.AppendLine($"-- skybox {RenderSettings.skybox?.name}");
+                var shuttle = GameObject.Find("Player_Shuttle_and_Cameras");
+                summary.Add($"shuttle scene: {shuttleScene.rootCount} roots, {all.OfType<ParticleSystem>().Count()} particle systems, "
+                            + $"{all.OfType<Animator>().Count() + all.OfType<Animation>().Count()} animated, skybox {RenderSettings.skybox?.name}, "
+                            + $"shuttle at {(shuttle != null ? shuttle.transform.position.ToString() : "?")}");
+            }
+
             report.AppendLine("==== HEAD COMPARISON ====");
             foreach (var npc in compare)
             {
@@ -206,6 +233,19 @@ namespace StbcRevival
             summary.Add($"{label}: active {toggle.activeInHierarchy}, interactable {toggle.GetComponent<UnityEngine.UI.Toggle>()?.IsInteractable()}, "
                         + $"hand {(hand != null ? "yes" : "no")}, {colliders.Length} colliders ({colliders.Count(c => c.enabled && c.gameObject.activeInHierarchy)} live), "
                         + $"trigger centres {string.Join(" ", colliders.Where(c => c.gameObject.layer != 0).Select(c => c.bounds.center.ToString("F3")).ToArray())}");
+        }
+
+        // Name, active, position and components, to a depth: the shuttle scene is too big for the full tree.
+        private static void Scenery(StringBuilder report, Transform t, int depth, int maxDepth)
+        {
+            var components = t.GetComponents<Component>().Where(c => c != null && !(c is Transform)).Select(c => c.GetType().Name).ToArray();
+            report.Append(' ', depth * 2).Append(t.name).Append(t.gameObject.activeSelf ? "" : " (off)")
+                  .Append($" @{t.position}");
+            if (components.Length > 0) report.Append("  [").Append(string.Join(", ", components)).Append(']');
+            if (depth == maxDepth && t.childCount > 0) report.Append($"  +{t.childCount} children");
+            report.AppendLine();
+            if (depth < maxDepth)
+                for (int i = 0; i < t.childCount; i++) Scenery(report, t.GetChild(i), depth + 1, maxDepth);
         }
 
         private static void Hierarchy(StringBuilder report, Transform t, int depth)
