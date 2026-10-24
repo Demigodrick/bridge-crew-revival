@@ -37,7 +37,7 @@ namespace StbcRevival.Missions
         private static void Update_Postfix(object __instance, List<PersistentBridgeDamageEffect> ____persistentDamageEffectObjects,
                                            float[] ____damageThresholds, int[] ___HIHNENIJNKE)
         {
-            if (!LastStandLocks.Locked || ____persistentDamageEffectObjects == null || ____damageThresholds == null || ___HIHNENIJNKE == null) return;
+            if (!RevivalMissions.RepairsShip || ____persistentDamageEffectObjects == null || ____damageThresholds == null || ___HIHNENIJNKE == null) return;
             try
             {
                 float max = (float)MaxHull.Invoke(__instance, null);

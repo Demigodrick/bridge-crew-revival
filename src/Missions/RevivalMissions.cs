@@ -15,10 +15,11 @@ namespace StbcRevival.Missions
     {
         internal const string LastStand = "LastStand";
         internal const string FleetBattle = "FleetBattle";
+        internal const string Patrol = "Patrol";
         internal const string FreeRoam = "FreeRoam"; // the developers' own exploration mission, as shipped
 
         /// <summary>The Revival missions, in the order the briefing's next/previous buttons step through them.</summary>
-        internal static readonly string[] All = { LastStand, FleetBattle, FreeRoam };
+        internal static readonly string[] All = { LastStand, FleetBattle, Patrol, FreeRoam };
 
         /// <summary>The Revival mission the next launch should run, or null for the game's own missions.</summary>
         internal static Type Selected
@@ -30,14 +31,34 @@ namespace StbcRevival.Missions
                 {
                     case LastStand: return typeof(LastStandSequence);
                     case FleetBattle: return typeof(FleetBattleSequence);
+                    case Patrol: return typeof(PatrolSequence);
                     case FreeRoam: return typeof(Mission.DebugExplorationMode.DebugExplorationModeSequence);
                     default: return null;
                 }
             }
         }
 
+        // Missions that repair the ship mid-mission (so the bridge's damage effects are cleared too); checked
+        // every frame by LastStandBridgeRepair, so cached per frame.
+        private static int repairsCheckedFrame = -1;
+        private static bool repairsShip;
+
+        internal static bool RepairsShip
+        {
+            get
+            {
+                if (repairsCheckedFrame != UnityEngine.Time.frameCount)
+                {
+                    repairsCheckedFrame = UnityEngine.Time.frameCount;
+                    try { var m = Selected; repairsShip = m == typeof(LastStandSequence) || m == typeof(PatrolSequence); }
+                    catch { repairsShip = false; }
+                }
+                return repairsShip;
+            }
+        }
+
         internal static string Name(string mission) =>
-            mission == LastStand ? "LAST STAND" : mission == FleetBattle ? "FLEET BATTLE"
+            mission == LastStand ? "LAST STAND" : mission == FleetBattle ? "FLEET BATTLE" : mission == Patrol ? "PATROL"
             : mission == FreeRoam ? "FREE ROAM" : "REVIVAL MISSION";
 
         internal static string Description(string mission)
@@ -50,6 +71,9 @@ namespace StbcRevival.Missions
                 case FleetBattle:
                     return $"Lead a Starfleet battle group of {Plugin.FleetBattleSize.Value} ships against a Klingon or Romulan fleet "
                            + "just as big. Destroy every enemy ship to win; keep your own ship in one piece.";
+                case Patrol:
+                    return "A patrol that never ends: Starfleet sends you from system to system to hunt raiders, defend "
+                           + "freighters and rescue survivors. Repair and restock at space stations between assignments.";
                 case FreeRoam:
                     var map = Plugin.MapOverride.Value;
                     return "No hostiles, no objectives: fly, scan and warp around a sector at your own pace "

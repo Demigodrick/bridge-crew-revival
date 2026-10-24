@@ -116,7 +116,7 @@ namespace StbcRevival.Missions
 
                 cleared = wave;
                 Plugin.Log.LogInfo($"Last Stand: wave {wave} cleared");
-                yield return RepairAndRestock();
+                yield return RepairAndRestock(Task, player, "Last Stand");
                 yield return Task.NECMCDDOFJB.CompleteSubDirective(Directive, waveLine);
                 yield return Task.HHNFJKHGEPH.WithMissionResult($"Waves survived: {cleared}", false);
                 yield return Task.OKLDNLKLLFJ.WithGroup("State_Group_Mus_Dyn").WithState("Explore");
@@ -166,16 +166,16 @@ namespace StbcRevival.Missions
 
         // Between waves: hull, shields and every system back to full (the game's ship modifier task), and
         // torpedoes back to the ship's starting load.
-        private Step RepairAndRestock()
+        internal static Step RepairAndRestock(Mission.Scripting.Framework.Tasks.FNICGFPIEOL task, BodyRef player, string who)
         {
-            var repair = Task.CIAHOPCODGJ.WithTargets(player).SetHullHealthPercent(100f).SetShieldHealthPercent(100f);
+            var repair = task.CIAHOPCODGJ.WithTargets(player).SetHullHealthPercent(100f).SetShieldHealthPercent(100f);
             foreach (var system in new[]
                      {
                          Subsystem.Engines, Subsystem.Shields, Subsystem.Phasers, Subsystem.Lauchers, Subsystem.Sensors,
                          Subsystem.Warpcore, Subsystem.TransporterRoom, Subsystem.ComputerCore, Subsystem.Sickbay, Subsystem.ScienceLab,
                      })
                 repair = repair.SetSubsystemHealthPercent(system, 100f);
-            Plugin.Log.LogInfo("Last Stand: repaired; torpedoes " + Restock());
+            Plugin.Log.LogInfo($"{who}: repaired; torpedoes " + Restock());
             return repair;
         }
 

@@ -195,6 +195,14 @@ foreach (var f in new[] { "_proceduralMissionToggle", "_campaignMissionToggle", 
 Check("ConsoleBriefingRoom.NKIGJPBIGND / JEKNGMEIFGM (next/previous mission)", briefing?.GetMethod("NKIGJPBIGND", Inst) is not null
     && briefing.GetMethod("JEKNGMEIFGM", Inst) is not null ? briefing : null);
 Check("Mission.DebugExplorationMode.DebugExplorationModeSequence (Free Roam)", game.GetType("Mission.DebugExplorationMode.DebugExplorationModeSequence"));
+// Patrol
+var objectiveContext = game.GetType("Mission.Scripting.Framework.IHKAJDDPCIB");
+foreach (var m in new[] { "get_ActiveSystem", "FindSystemDifferentThan", "FindAllBodyWithTags", "AddStep" })
+    Check($"  objective context {m} (Patrol)", objectiveContext?.GetMethods(Inst).FirstOrDefault(x => x.Name == m));
+Check("  Sector.NHGGGDMADKM.Life (rescue life signs)", game.GetType("Sector.NHGGGDMADKM")?.GetField("Life"));
+Check("  Sector.CargoTypes.People (rescue survivors)", game.GetType("Sector.CargoTypes")?.GetField("People"));
+Check("  SystemTransform.Position / BaseName / System", game.GetType("SystemTransform") is { } st && st.GetProperty("Position") is not null
+    && st.GetProperty("BaseName") is not null && st.GetProperty("System") is not null ? st : null);
 Check("Room.SetCustomProperties", photon?.GetMethod("get_room", PS)?.ReturnType.GetMethod("SetCustomProperties", Inst));
 Check("KHDFGIINMKJ.SetInteractable(Selectable, bool)", game.GetType("KHDFGIINMKJ")?.GetMethods(PS).FirstOrDefault(m =>
     m.Name == "SetInteractable" && m.GetParameters() is { Length: 2 } sip && sip[1].ParameterType.FullName == "System.Boolean"));
