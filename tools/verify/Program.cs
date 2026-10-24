@@ -213,5 +213,7 @@ foreach (var f in new[] { "_persistentDamageEffectObjects", "_damageThresholds",
 Check("PersistentBridgeDamageEffect._meshesToDisable / Stop", game.GetType("PersistentBridgeDamageEffect") is { } pbde
     && pbde.GetField("_meshesToDisable", Inst) is not null && pbde.GetMethod("Stop", Inst) is not null ? pbde : null);
 
+Check("NPCHailingView._characterPrefab (avatar dump)", game.GetType("NPCHailingView")?.GetField("_characterPrefab", Inst));
+
 Console.WriteLine(failures == 0 ? "\nAll targets resolved." : $"\n{failures} target(s) missing.");
 return failures == 0 ? 0 : 1;
