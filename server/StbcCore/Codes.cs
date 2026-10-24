@@ -40,6 +40,15 @@ public static class ActorProp
     public const byte PlayerName = 255, IsInactive = 254, UserId = 253;
 }
 
+/// <summary>
+/// Bridge Crew Revival's own string keys. The mod puts its version in the room (by the host) and in each
+/// player's properties (sent with the join): a room that has a version only takes players on the same one.
+/// </summary>
+public static class ModProp
+{
+    public const string Version = "MV";
+}
+
 public static class ErrorCode
 {
     public const short Ok = 0, OperationNotAllowed = -3, InvalidOperation = -2,

@@ -184,7 +184,15 @@ public sealed class PunClient : IPhotonPeerListener, IDisposable
         ActorNr = 0;
     }
 
-    private PhotonHashtable PlayerProps() => new() { [(byte)255] = Name };
+    /// <summary>The Bridge Crew Revival version this client sends with its joins (none when null), as the mod does.</summary>
+    public string? ModVersion { get; set; }
+
+    private PhotonHashtable PlayerProps()
+    {
+        var props = new PhotonHashtable { [(byte)255] = Name };
+        if (ModVersion != null) props["MV"] = ModVersion;
+        return props;
+    }
 
     // ---- Operations and waiting ------------------------------------------------------------
 

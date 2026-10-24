@@ -93,6 +93,30 @@ public sealed class EndToEndTests : IDisposable
     }
 
     [Fact]
+    public void RoomWithModVersionOnlyTakesTheSameVersion()
+    {
+        var host = Client("janeway");
+        host.ModVersion = "0.6.9";
+        Assert.Equal(0, host.CreateRoom("voyager", new PhotonHashtable { ["MV"] = "0.6.9" }, [], maxPlayers: 4).ReturnCode);
+
+        var same = Client("chakotay");
+        same.ModVersion = "0.6.9";
+        Assert.Equal(0, same.JoinRoom("voyager").ReturnCode);
+
+        var older = Client("tuvok");
+        older.ModVersion = "0.6.8";
+        Assert.Equal(ErrorCode.GameClosed, older.JoinRoom("voyager").ReturnCode);
+
+        var noMod = Client("neelix"); // a mod from before versions were sent
+        Assert.Equal(ErrorCode.GameClosed, noMod.JoinRoom("voyager").ReturnCode);
+
+        // A room without a version (an older host, or no mod) takes anyone.
+        var oldHost = Client("paris");
+        Assert.Equal(0, oldHost.CreateRoom("delta flyer", new PhotonHashtable(), [], maxPlayers: 4).ReturnCode);
+        Assert.Equal(0, older.JoinRoom("delta flyer").ReturnCode);
+    }
+
+    [Fact]
     public void QuickJoinRespectsFilterAndFullRooms()
     {
         var host = Client("sisko");

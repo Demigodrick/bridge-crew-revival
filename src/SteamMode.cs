@@ -383,6 +383,7 @@ namespace StbcRevival
                     [LobbyTag] = LobbyProtocol,
                     ["room"] = room.Name,
                     ["ver"] = room.AppVersion,
+                    ["mod"] = Plugin.Version, // searches only find crews on the searcher's mod version
                     ["players"] = room.Players.ToString(),
                     ["max"] = room.MaxPlayers.ToString(),
                     ["open"] = room.Open ? "1" : "0",
@@ -405,6 +406,7 @@ namespace StbcRevival
             {
                 listing = true;
                 SteamMatchmaking.AddRequestLobbyListStringFilter(LobbyTag, LobbyProtocol, ELobbyComparison.k_ELobbyComparisonEqual);
+                SteamMatchmaking.AddRequestLobbyListStringFilter("mod", Plugin.Version, ELobbyComparison.k_ELobbyComparisonEqual);
                 SteamMatchmaking.AddRequestLobbyListDistanceFilter(ELobbyDistanceFilter.k_ELobbyDistanceFilterWorldwide);
                 var call = SteamMatchmaking.RequestLobbyList();
                 listResult = Steamworks.KLNNLNGKHKC<LobbyMatchList>.Create((r, ioFailure) =>

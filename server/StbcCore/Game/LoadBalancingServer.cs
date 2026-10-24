@@ -442,6 +442,18 @@ public sealed class LoadBalancingServer : IPeerHandler
         connection.SendResponse(resp);
     }
 
+    // A room with a mod version (set by the mod on the host) only takes players sending the same one; older
+    // mods send none. Rooms without one (other clients, older hosts) take anyone. Returns the joiner's
+    // version, or null when they may join.
+    private static string? ModVersionMismatch(Room room, OperationRequest req)
+    {
+        if (!room.Properties.TryGetValue(ModProp.Version, out var w) || w is not string wanted || wanted.Length == 0) return null;
+        object? t = null;
+        (req[Param.PlayerProperties] as PHashtable)?.TryGetValue(ModProp.Version, out t);
+        var theirs = t as string;
+        return theirs == wanted ? null : (string.IsNullOrEmpty(theirs) ? "an older mod version" : "mod version " + theirs);
+    }
+
     private static short JoinError(Room room) =>
         !room.IsOpen ? ErrorCode.GameClosed : room.IsFull ? ErrorCode.GameFull : (short)0;
 
@@ -558,6 +570,12 @@ public sealed class LoadBalancingServer : IPeerHandler
             if (error != 0)
             {
                 connection.SendResponse(new OperationResponse(OpCode.JoinGame, error, error == ErrorCode.GameFull ? "room full" : "room closed"));
+                return;
+            }
+            if (ModVersionMismatch(room, req) is string mismatch)
+            {
+                Log.Info($"room '{name}': refused a player on {mismatch}");
+                connection.SendResponse(new OperationResponse(OpCode.JoinGame, ErrorCode.GameClosed, "different Bridge Crew Revival version"));
                 return;
             }
         }

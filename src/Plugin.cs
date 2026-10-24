@@ -199,6 +199,7 @@ namespace StbcRevival
             Safely("romulan face", StbcRevival.RomulanFace.Update);
             Safely("romulan creator choice", StbcRevival.RomulanCreatorOption.Update);
             Safely("mission maps", StbcRevival.Missions.MissionMaps.Update);
+            Safely("mod version check", ModVersionCheck.Update);
             Safely("ubisoft save import", UbisoftSaveImport.Update);
         }
 
