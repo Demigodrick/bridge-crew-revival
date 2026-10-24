@@ -40,6 +40,7 @@ namespace StbcRevival.Missions
 
         private IEnumerator<Step> Flight()
         {
+            foreach (var step in MissionAudio.Start(Task)) yield return step;
             yield return Task.NECMCDDOFJB.WithDescriptionString(Directive);
             yield return Task.HHNFJKHGEPH.WithMissionString(Title);
             yield return Task.OKLDNLKLLFJ.WithGroup("State_Group_Mus_Dyn").WithState("Explore");

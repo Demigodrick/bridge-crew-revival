@@ -71,6 +71,7 @@ namespace StbcRevival.Missions
 
         private IEnumerator<Step> Waves()
         {
+            foreach (var step in MissionAudio.Start(Task)) yield return step;
             yield return Task.OGJONIFINCB.DisableWarping(); // and the helm's warp/impulse travel: see LastStandLocks
             yield return Task.NECMCDDOFJB.WithDescriptionString(Directive);
             yield return Task.HHNFJKHGEPH.WithMissionString(Title);
