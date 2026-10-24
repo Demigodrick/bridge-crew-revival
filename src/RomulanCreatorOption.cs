@@ -39,6 +39,11 @@ namespace StbcRevival
             }
             harmony.Patch(init, postfix: new HarmonyMethod(typeof(RomulanCreatorOption), nameof(Init_Postfix)));
             harmony.Patch(refresh, postfix: new HarmonyMethod(typeof(RomulanCreatorOption), nameof(Refresh_Postfix)));
+            // A VR press ends in HandInteraction.OnPointerUp; pick ROMULAN from there in case the toggle's
+            // own click never arrives.
+            var pressed = AccessTools.Method(typeof(HandInteraction), "OnPointerUp");
+            if (pressed != null)
+                harmony.Patch(pressed, postfix: new HarmonyMethod(typeof(RomulanCreatorOption), nameof(Pressed_Postfix)));
         }
 
         private static Toggle Field(CustomizationManager creator, string name) =>
@@ -58,6 +63,11 @@ namespace StbcRevival
                 var last = android != null && android.gameObject.activeSelf ? android : vulcan;
                 var copy = (GameObject)UnityEngine.Object.Instantiate(vulcan.gameObject, vulcan.transform.parent);
                 copy.name = "Romulan Race Toggle";
+                // HandInteraction.Awake builds trigger helpers under its toggle; the copy brought Vulcan's along
+                // (and built its own). Drop Vulcan's so only the copy's own triggers are pressed.
+                foreach (Transform child in copy.transform)
+                    if (child.name.StartsWith(vulcan.name + "_", StringComparison.Ordinal))
+                        UnityEngine.Object.Destroy(child.gameObject);
                 copy.transform.SetSiblingIndex(last.transform.GetSiblingIndex() + 1);
                 romulan = copy.GetComponent<Toggle>();
                 creator = __instance;
@@ -155,6 +165,20 @@ namespace StbcRevival
                 Plugin.Log.LogWarning("Romulan face: creator refresh: " + e.Message);
                 romulan = null;
             }
+        }
+
+        private static void Pressed_Postfix(HandInteraction __instance)
+        {
+            if (romulan == null || __instance == null || __instance.gameObject != romulan.gameObject) return;
+            Plugin.Log.LogInfo($"Romulan face: ROMULAN pressed (on: {romulan.isOn})");
+            Plugin.Instance.StartCoroutine(PickAfterClick());
+        }
+
+        // A frame later, so a click the toggle does get isn't undone by picking it twice.
+        private static System.Collections.IEnumerator PickAfterClick()
+        {
+            yield return null;
+            if (romulan != null && !romulan.isOn && romulan.IsInteractable()) romulan.isOn = true; // fires Toggled
         }
 
         private static void Set(Toggle toggle, bool on)
