@@ -15,8 +15,9 @@ namespace StbcRevival.Missions
     /// <summary>
     /// Fleet Battle (Revival Missions): a Starfleet fleet and yours against a Klingon or Romulan fleet,
     /// [Revival] FleetBattleSize ships a side (30 by default). Allies form up around you, the enemy arrives
-    /// ahead; every ship is ordered to attack one on the other side, so the fight spreads out. Won when the
-    /// enemy fleet is destroyed; lost if your ship is. No warp or impulse travel: the battle is here.
+    /// ahead: every ally is ordered to attack an enemy ship, and the enemy hunts in packs of three (one ship in
+    /// six comes for you), sending a third as many again as reinforcements when it's down to half. Won when
+    /// the enemy fleet is destroyed; lost if your ship is. No warp or impulse travel: the battle is here.
     /// </summary>
     public sealed class FleetBattleSequence : MissionSequence
     {
@@ -56,6 +57,7 @@ namespace StbcRevival.Missions
         private readonly System.Random random = new System.Random();
         private BodyRef player;
         private Map.SystemRoot system;
+        private int enemyCount;
 
         public override void StartScript()
         {
@@ -92,35 +94,21 @@ namespace StbcRevival.Missions
             yield return Task.KNMMMJOOBHC.WithTime(5f); // a moment to see the fleet before the enemy arrives
             yield return Task.OKLDNLKLLFJ.WithGroup("State_Group_Mus_Dyn").WithState("Tension");
 
-            // Enemies: a wide front ahead, facing you; a flagship among them for every six ships.
-            var enemies = new List<BodyRef>();
-            for (int i = 0; i < size; i++)
-            {
-                var ship = new BodyRef();
-                enemies.Add(ship);
-                bool flagship = i % 6 == 5;
-                string prefab = flagship ? EnemyFlagships[empire] : Enemies[empire][random.Next(Enemies[empire].Length)];
-                float angle = random.Next(-50, 50), distance = 25000f + random.Next(0, 10000);
-                yield return Task.BFMBGDIDKEI.UsingSpawner(MakeSpawner(prefab, EnemyNames[empire], i, Tag.Enemy))
-                    .AtAngleAndDistanceFromBody(player, angle, distance).FaceOtherBody(player).OutputTo(ship);
-            }
-
-            // Balance: allied ships can be destroyed (some Starfleet ships spawn invulnerable, as mission
-            // allies), with normal shields; the enemy fleet gets strong shields.
+            // Balance (from the logged hull and shields: with fire spread over thirty ships no allied shield
+            // ever broke): allied ships can be destroyed (some Starfleet ships spawn invulnerable, as mission
+            // allies) and have weak shields; the enemy fleet has strong ones and hunts in packs (see EnemyTarget),
+            // and sends reinforcements when it's down to half.
             foreach (var ally in allies)
             {
                 yield return Task.FEBCHOJGMHM.TellAI(ally).ToSetVulnerable();
-                yield return Task.OFNIKPPKOGI.TellAI(ally).ToSetShieldStrength(AI.IDCAFFBNKFO.Normal);
+                yield return Task.OFNIKPPKOGI.TellAI(ally).ToSetShieldStrength(AI.IDCAFFBNKFO.Weak);
             }
-            foreach (var enemy in enemies)
-                yield return Task.OFNIKPPKOGI.TellAI(enemy).ToSetShieldStrength(AI.IDCAFFBNKFO.Strong);
 
-            // Orders: every ally takes an enemy; every enemy takes an ally, or (one in six) you.
+            var enemies = new List<BodyRef>();
+            foreach (var step in SpawnEnemies(size, empire, enemies, allies)) yield return step;
             foreach (var ally in allies)
                 yield return Task.NDFEDBHFGFB.TellAI(ally).ToAddObjectives(enemies[random.Next(enemies.Count)]).OfObjectiveType(AIObjective.Attack);
-            foreach (var enemy in enemies)
-                yield return Task.NDFEDBHFGFB.TellAI(enemy).ToAddObjectives(random.Next(6) == 0 ? player : allies[random.Next(allies.Count)])
-                    .OfObjectiveType(AIObjective.Attack);
+            bool reinforced = false;
 
             // The fight: re-order idle ships at the survivors, report the count as it changes.
             float started = UnityEngine.Time.time;
@@ -143,10 +131,28 @@ namespace StbcRevival.Missions
                     foreach (var ally in liveAllies)
                         yield return Task.NDFEDBHFGFB.TellAI(ally).ToAddObjectives(liveEnemies[random.Next(liveEnemies.Count)]).OfObjectiveType(AIObjective.Attack);
                 if (liveAllies.Count < alliesLeft)
-                    foreach (var enemy in liveEnemies)
-                        yield return Task.NDFEDBHFGFB.TellAI(enemy)
-                            .ToAddObjectives(liveAllies.Count == 0 || random.Next(6) == 0 ? player : liveAllies[random.Next(liveAllies.Count)])
+                    for (int i = 0; i < liveEnemies.Count; i++)
+                        yield return Task.NDFEDBHFGFB.TellAI(liveEnemies[i]).ToAddObjectives(EnemyTarget(i, liveAllies))
                             .OfObjectiveType(AIObjective.Attack);
+
+                // Reinforcements when the enemy is down to half: a third as many again, warping in ahead.
+                if (!reinforced && liveEnemies.Count > 0 && liveEnemies.Count <= size / 2)
+                {
+                    reinforced = true;
+                    string arriving = $"{EnemyNames[empire]} reinforcements arriving";
+                    yield return Task.NECMCDDOFJB.AddSubDirectives(directive, arriving);
+                    yield return Task.ABHANLLBILL.WithEventID("PLAY_SND_INCOMING_CLOAK_ALARM_LP").ContinueImmediately();
+                    yield return Task.ABHANLLBILL.WithEventID("STOP_SND_INCOMING_CLOAK_ALARM_LP").WithDelay(6f);
+                    int extra = Math.Max(1, size / 3);
+                    Plugin.Log.LogInfo($"Fleet battle: {extra} enemy reinforcements");
+                    var more = new List<BodyRef>();
+                    foreach (var step in SpawnEnemies(extra, empire, more, liveAllies.Count > 0 ? liveAllies : allies)) yield return step;
+                    enemies.AddRange(more);
+                    liveEnemies.AddRange(more);
+                    started = UnityEngine.Time.time; // the new ships count as alive while they appear
+                    yield return Task.KNMMMJOOBHC.WithTime(6f);
+                    yield return Task.NECMCDDOFJB.RemoveSubDirective(directive, arriving);
+                }
 
                 enemiesLeft = liveEnemies.Count;
                 alliesLeft = liveAllies.Count;
@@ -162,6 +168,33 @@ namespace StbcRevival.Missions
             yield return Task.HHNFJKHGEPH.WithMissionResult($"Victory: {alliesLeft} of {allies.Count} allied ships survived", true);
             yield return Task.KNMMMJOOBHC.WithTime(10f);
         }
+
+        // Enemy ships at the far side of the field, facing you, with strong shields and their orders; a flagship
+        // among them for every six ships.
+        private IEnumerable<Step> SpawnEnemies(int count, int empire, List<BodyRef> into, List<BodyRef> allies)
+        {
+            int first = enemyCount;
+            for (int i = 0; i < count; i++)
+            {
+                var ship = new BodyRef();
+                into.Add(ship);
+                bool flagship = (first + i) % 6 == 5;
+                string prefab = flagship ? EnemyFlagships[empire] : Enemies[empire][random.Next(Enemies[empire].Length)];
+                float angle = random.Next(-50, 50), distance = 25000f + random.Next(0, 10000);
+                yield return Task.BFMBGDIDKEI.UsingSpawner(MakeSpawner(prefab, EnemyNames[empire], enemyCount++, Tag.Enemy))
+                    .AtAngleAndDistanceFromBody(player, angle, distance).FaceOtherBody(player).OutputTo(ship);
+            }
+            for (int i = 0; i < into.Count; i++)
+            {
+                yield return Task.OFNIKPPKOGI.TellAI(into[i]).ToSetShieldStrength(AI.IDCAFFBNKFO.Strong);
+                yield return Task.NDFEDBHFGFB.TellAI(into[i]).ToAddObjectives(EnemyTarget(first + i, allies)).OfObjectiveType(AIObjective.Attack);
+            }
+        }
+
+        // Enemies hunt in packs of three, each pack on one allied ship, so shields actually break; one ship in
+        // six comes for the player instead.
+        private BodyRef EnemyTarget(int index, List<BodyRef> allies) =>
+            allies.Count == 0 || index % 6 == 0 ? player : allies[(index / 3) % allies.Count];
 
         // "hull 87%, shields 40%": the side's average, for judging the balance from the log.
         private static string Condition(List<BodyRef> ships)
