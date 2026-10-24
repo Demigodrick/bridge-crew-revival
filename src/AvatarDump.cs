@@ -10,8 +10,8 @@ using UnityEngine;
 namespace StbcRevival
 {
     /// <summary>
-    /// [Debug] AvatarDumpKey (F9): describe the hail-screen characters (Romulan captain and the rest, from the
-    /// ship prefabs' NPCHailingView) and the player avatar presets (CharacterProfile.VisualPrefab, plus any
+    /// [Debug] AvatarDumpKey (F9, on the bridge): describe the hail-screen characters (Romulan captain and the
+    /// rest, from the bridge's NPCHailingManager) and the player avatar presets (CharacterProfile.VisualPrefab, plus any
     /// avatars in the scene) to BepInEx/avatar-dump.txt, with a head-by-head comparison in the log. For
     /// working out whether an NPC head can be fitted to a player avatar: same skeleton, same mesh layout,
     /// same face shapes?
@@ -44,15 +44,18 @@ namespace StbcRevival
         {
             var summary = new List<string>();
 
-            // Hail-screen characters: each ship prefab's NPCHailingView has the character it shows.
-            var hailView = AccessTools.TypeByName("NPCHailingView");
-            var characterField = hailView == null ? null : AccessTools.Field(hailView, "_characterPrefab");
+            // Hail-screen characters: the bridge's NPCHailingManager lists a view per character
+            // (_hailingViews), and each view has the character it shows (_characterPrefab).
+            var hailManager = AccessTools.TypeByName("NPCHailingManager");
+            var viewsField = hailManager == null ? null : AccessTools.Field(hailManager, "_hailingViews");
+            var characterField = AccessTools.Field(AccessTools.TypeByName("NPCHailingView"), "_characterPrefab");
             var npcs = new Dictionary<string, GameObject>();
-            if (characterField != null)
-                foreach (var ship in Resources.LoadAll<GameObject>("Sector/Ships"))
-                foreach (var view in ship.GetComponentsInChildren(hailView, true))
-                    if (characterField.GetValue(view) is GameObject character && !npcs.ContainsKey(character.name))
-                        npcs[character.name] = character;
+            if (viewsField != null && characterField != null)
+                foreach (var manager in Resources.FindObjectsOfTypeAll(hailManager))
+                    if (viewsField.GetValue(manager) is Array views)
+                        foreach (var view in views)
+                            if (view != null && characterField.GetValue(view) is GameObject character && !npcs.ContainsKey(character.name))
+                                npcs[character.name] = character;
             summary.Add($"{npcs.Count} hail-screen characters: {string.Join(", ", npcs.Keys.OrderBy(n => n).ToArray())}");
 
             // Player presets, as the character creator offers them.
