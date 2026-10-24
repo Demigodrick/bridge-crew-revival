@@ -83,7 +83,10 @@ namespace StbcRevival.Missions
             // Off the Trench there are no encounters to place; a Revival mission brings its own (or, for Test
             // Flight, none), so skip the Ongoing Voyage's there too.
             var map = Loader.EJLNDBGLIFL.GetLoadedMap();
-            if (map == null || (map.name.IndexOf("Trench", StringComparison.OrdinalIgnoreCase) >= 0 && RevivalMissions.Selected == null)) return true;
+            if (map == null) return true;
+            bool trench = map.name.IndexOf("Trench", StringComparison.OrdinalIgnoreCase) >= 0;
+            if (trench && RevivalMissions.Selected == null) return true;
+            Map.SystemRoot system = null;
             try
             {
                 var manager = typeof(MissionManager);
@@ -91,7 +94,8 @@ namespace StbcRevival.Missions
                 var random = (System.Random)AccessTools.Field(manager, "GBEFMAACMFK").GetValue(__instance);
                 var selection = (BHNEPPPPMKH)AccessTools.Field(manager, "DJFMMNBHJPC").GetValue(__instance);
                 var sectorMap = AccessTools.Field(manager, "LFBBCGCLOKG").GetValue(__instance);
-                var system = (Map.SystemRoot)AccessTools.Method(sectorMap.GetType(), "ChooseStartingSystem").Invoke(sectorMap, new object[] { map, selection, random });
+                system = (Map.SystemRoot)AccessTools.Method(sectorMap.GetType(), "ChooseStartingSystem").Invoke(sectorMap, new object[] { map, selection, random });
+                var spawn = FindSpawn(sectorMap, ref system, selection, random);
 
                 // The mission's contract, with the table's encounter settings, as the game applies them.
                 var runner = AccessTools.Field(manager, "ENGIPFEKJAK").GetValue(__instance);
@@ -109,8 +113,6 @@ namespace StbcRevival.Missions
                 var playerEncounters = Member(contract, "LNIBLGBKLGI");
                 var startSystem = Member(playerEncounters, "JFAIKAOOPMO");
                 Traverse.Create(startSystem).Field("System").SetValue(system);
-                var spawn = AccessTools.Method(manager, "FindSpawnPoint").Invoke(null, new object[] { sectorMap, system, selection.SpawnChoice, random });
-                if (spawn == null) throw new InvalidOperationException($"no spawn point in {system.SystemName}");
                 AccessTools.Field(encounters, "<HBMGPABJGIK>k__BackingField").SetValue(null, spawn);
 
                 __result = system.SystemID;
@@ -119,9 +121,40 @@ namespace StbcRevival.Missions
             }
             catch (Exception e)
             {
-                Plugin.Log.LogError("Mission maps: couldn't set up the mission, using the game's set-up: " + e);
-                return true;
+                // On the Trench the game's own set-up works. Anywhere else it retries forever (a frozen load),
+                // so carry on with what we have: worst case the mission starts broken and can be left.
+                Plugin.Log.LogError("Mission maps: couldn't set up the mission: " + e);
+                if (trench || system == null) return true;
+                __result = system.SystemID;
+                return false;
             }
+        }
+
+        // A player spawn point: in the chosen system if it has one, else in another of the map's systems (which
+        // then becomes the starting system), trying the default and the alternative spawn tags. Last resort:
+        // any body in the chosen system.
+        private static object FindSpawn(object sectorMap, ref Map.SystemRoot system, BHNEPPPPMKH selection, System.Random random)
+        {
+            var find = AccessTools.Method(typeof(MissionManager), "FindSpawnPoint");
+            var systems = new System.Collections.Generic.List<Map.SystemRoot> { system };
+            if (Traverse.Create(sectorMap).Property("MLHNDAEKLHO").GetValue() is System.Collections.Generic.List<Map.SystemRoot> all)
+                foreach (var other in all) if (other != null && !systems.Contains(other)) systems.Add(other);
+            var choices = new[] { selection.SpawnChoice, BHNEPPPPMKH.EIKCLNAPKBE.Default, BHNEPPPPMKH.EIKCLNAPKBE.UseAlternatives };
+            foreach (var candidate in systems)
+                foreach (var choice in choices)
+                    if (find.Invoke(null, new object[] { sectorMap, candidate, choice, random }) is object spawn && !(spawn is UnityEngine.Object o && o == null))
+                    {
+                        if (candidate != system) Plugin.Log.LogInfo($"Mission maps: no spawn point in {system.SystemName}; starting in {candidate.SystemName}");
+                        system = candidate;
+                        return spawn;
+                    }
+            var bodies = AccessTools.Method(sectorMap.GetType(), "FindBodies").Invoke(sectorMap, null);
+            var inSystem = AccessTools.Method(bodies.GetType(), "InThisSystem").Invoke(bodies, new object[] { system });
+            var any = Traverse.Create(inSystem).Property("MFAHBBHBNLN").GetValue();
+            AccessTools.Method(inSystem.GetType(), "Destroy")?.Invoke(inSystem, null);
+            if (any == null) throw new InvalidOperationException($"no spawn point or body anywhere in {system.SystemName}");
+            Plugin.Log.LogWarning($"Mission maps: no spawn points on this map; starting at a body in {system.SystemName}");
+            return any;
         }
 
         // A field or property, by name, on the object's type or a base type.
