@@ -5,8 +5,8 @@ using UnityEngine;
 namespace StbcRevival.Missions
 {
     /// <summary>
-    /// Last Stand is fought where you start: the helm can't warp out or impulse to another point in the
-    /// system. Applied on every player's machine (whoever is at the helm), from the room's Revival choice.
+    /// Last Stand and Fleet Battle are fought where you start: the helm can't warp out or impulse to another
+    /// point in the system. Applied on every player's machine (whoever is at the helm), from the room's Revival choice.
     /// Ordinary throttle and steering are untouched.
     /// </summary>
     internal static class LastStandLocks
@@ -21,7 +21,7 @@ namespace StbcRevival.Missions
                 if (checkedFrame != Time.frameCount)
                 {
                     checkedFrame = Time.frameCount;
-                    try { locked = RevivalMissions.Selected == typeof(LastStandSequence); }
+                    try { var mission = RevivalMissions.Selected; locked = mission == typeof(LastStandSequence) || mission == typeof(FleetBattleSequence); }
                     catch { locked = false; }
                 }
                 return locked;

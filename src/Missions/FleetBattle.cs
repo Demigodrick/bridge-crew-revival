@@ -16,7 +16,7 @@ namespace StbcRevival.Missions
     /// Fleet Battle (Revival Missions): a Starfleet fleet and yours against a Klingon or Romulan fleet,
     /// [Revival] FleetBattleSize ships a side (30 by default). Allies form up around you, the enemy arrives
     /// ahead; every ship is ordered to attack one on the other side, so the fight spreads out. Won when the
-    /// enemy fleet is destroyed; lost if your ship is.
+    /// enemy fleet is destroyed; lost if your ship is. No warp or impulse travel: the battle is here.
     /// </summary>
     public sealed class FleetBattleSequence : MissionSequence
     {
@@ -63,6 +63,7 @@ namespace StbcRevival.Missions
         private IEnumerator<Step> Battle()
         {
             foreach (var step in MissionAudio.Start(Task)) yield return step;
+            yield return Task.OGJONIFINCB.DisableWarping(); // and the helm's warp/impulse travel: see LastStandLocks
             int size = Math.Max(1, Math.Min(Plugin.FleetBattleSize.Value, 60));
             int empire = random.Next(Enemies.Length);
             string directive = $"Fleet battle: destroy the {EnemyNames[empire]} fleet";
