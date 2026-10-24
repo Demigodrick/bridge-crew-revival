@@ -15,9 +15,10 @@ namespace StbcRevival.Missions
     {
         internal const string LastStand = "LastStand";
         internal const string TestFlight = "TestFlight";
+        internal const string DevExploration = "DevExploration"; // the developers' own debug mission, as shipped
 
         /// <summary>The Revival missions, in the order the briefing's next/previous buttons step through them.</summary>
-        internal static readonly string[] All = { LastStand, TestFlight };
+        internal static readonly string[] All = { LastStand, TestFlight, DevExploration };
 
         /// <summary>The Revival mission the next launch should run, or null for the game's own missions.</summary>
         internal static Type Selected
@@ -29,13 +30,15 @@ namespace StbcRevival.Missions
                 {
                     case LastStand: return typeof(LastStandSequence);
                     case TestFlight: return typeof(TestFlightSequence);
+                    case DevExploration: return typeof(Mission.DebugExplorationMode.DebugExplorationModeSequence);
                     default: return null;
                 }
             }
         }
 
         internal static string Name(string mission) =>
-            mission == LastStand ? "LAST STAND" : mission == TestFlight ? "TEST FLIGHT" : "REVIVAL MISSION";
+            mission == LastStand ? "LAST STAND" : mission == TestFlight ? "TEST FLIGHT"
+            : mission == DevExploration ? "DEV EXPLORATION" : "REVIVAL MISSION";
 
         internal static string Description(string mission)
         {
@@ -48,6 +51,10 @@ namespace StbcRevival.Missions
                     var map = Plugin.MapOverride.Value;
                     return "No hostiles, no objectives: fly, scan and warp around a sector at your own pace. Sector: "
                            + (string.IsNullOrEmpty(map) ? "The Trench (set [Debug] MapOverride to visit another)." : map.Substring(map.LastIndexOf('/') + 1) + ".");
+                case DevExploration:
+                    var devMap = Plugin.MapOverride.Value;
+                    return "The developers' own exploration mission, left in the game: no hostiles, no music, no mission text. "
+                           + "Sector: " + (string.IsNullOrEmpty(devMap) ? "The Trench" : devMap.Substring(devMap.LastIndexOf('/') + 1)) + ".";
                 default:
                     return "";
             }

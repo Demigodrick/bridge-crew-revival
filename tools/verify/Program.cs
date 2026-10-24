@@ -194,6 +194,7 @@ foreach (var f in new[] { "_proceduralMissionToggle", "_campaignMissionToggle", 
     Check($"  ConsoleBriefingRoom.{f}", briefing?.GetField(f, Inst));
 Check("ConsoleBriefingRoom.NKIGJPBIGND / JEKNGMEIFGM (next/previous mission)", briefing?.GetMethod("NKIGJPBIGND", Inst) is not null
     && briefing.GetMethod("JEKNGMEIFGM", Inst) is not null ? briefing : null);
+Check("Mission.DebugExplorationMode.DebugExplorationModeSequence (Dev Exploration)", game.GetType("Mission.DebugExplorationMode.DebugExplorationModeSequence"));
 Check("Room.SetCustomProperties", photon?.GetMethod("get_room", PS)?.ReturnType.GetMethod("SetCustomProperties", Inst));
 Check("KHDFGIINMKJ.SetInteractable(Selectable, bool)", game.GetType("KHDFGIINMKJ")?.GetMethods(PS).FirstOrDefault(m =>
     m.Name == "SetInteractable" && m.GetParameters() is { Length: 2 } sip && sip[1].ParameterType.FullName == "System.Boolean"));
