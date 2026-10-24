@@ -39,12 +39,16 @@ namespace StbcRevival.Missions
     {
         internal const string Title = "FLEET BATTLE";
 
-        private static readonly string[] Starfleet = { "Sector/Ships/Ship - Raleigh", "Sector/Ships/Ship - Saladin", "Sector/Ships/Ship - Huxley" };
+        // Mostly light ships, so the fight isn't one-sided (the cruisers outclass the raiders they meet).
+        private static readonly string[] Starfleet =
+        {
+            "Sector/Ships/Ship - Saladin", "Sector/Ships/Ship - Saladin", "Sector/Ships/Ship - Raleigh", "Sector/Ships/Ship - Huxley",
+        };
         // One empire per battle: a mixed fleet might turn on itself.
         private static readonly string[][] Enemies =
         {
-            new[] { "Sector/Ships/Ship - Bird Of Prey", "Sector/Ships/Ship - Bird Of Prey", "Sector/Ships/Ship - D5 Cruiser" },
-            new[] { "Sector/Ships/Ship - Romulan Scout", "Sector/Ships/Ship - Romulan Scout", "Sector/Ships/Ship - Romulan Medium" },
+            new[] { "Sector/Ships/Ship - Bird Of Prey", "Sector/Ships/Ship - D5 Cruiser", "Sector/Ships/Ship - D5 Cruiser" },
+            new[] { "Sector/Ships/Ship - Romulan Scout", "Sector/Ships/Ship - Romulan Medium", "Sector/Ships/Ship - Romulan Medium" },
         };
         private static readonly string[] EnemyFlagships = { "Sector/Ships/Ship - Klingon Flagship", "Sector/Ships/Ship - Romulan DDeridex" };
         private static readonly string[] EnemyNames = { "Klingon", "Romulan" };
@@ -57,7 +61,9 @@ namespace StbcRevival.Missions
         {
             player = Objective.FFKKADIEOGP;
             system = Objective.KALBLMGFNIN;
-            Objective.AddStep("battle", Task.MFLJBKCDBMC.WithSubtaskCoroutine(Battle));
+            // Success after the script, as the game's own missions do: an objective can't be completed from
+            // inside a subtask coroutine (the framework throws an InvalidCastException and the mission never ends).
+            Objective.AddStep("battle", Task.MFLJBKCDBMC.WithSubtaskCoroutine(Battle), Objective.Success());
         }
 
         private IEnumerator<Step> Battle()
@@ -86,24 +92,34 @@ namespace StbcRevival.Missions
             yield return Task.KNMMMJOOBHC.WithTime(5f); // a moment to see the fleet before the enemy arrives
             yield return Task.OKLDNLKLLFJ.WithGroup("State_Group_Mus_Dyn").WithState("Tension");
 
-            // Enemies: a wide front ahead, facing you; a flagship among them for every ten ships.
+            // Enemies: a wide front ahead, facing you; a flagship among them for every six ships.
             var enemies = new List<BodyRef>();
             for (int i = 0; i < size; i++)
             {
                 var ship = new BodyRef();
                 enemies.Add(ship);
-                bool flagship = i % 10 == 9;
+                bool flagship = i % 6 == 5;
                 string prefab = flagship ? EnemyFlagships[empire] : Enemies[empire][random.Next(Enemies[empire].Length)];
                 float angle = random.Next(-50, 50), distance = 25000f + random.Next(0, 10000);
                 yield return Task.BFMBGDIDKEI.UsingSpawner(MakeSpawner(prefab, EnemyNames[empire], i, Tag.Enemy))
                     .AtAngleAndDistanceFromBody(player, angle, distance).FaceOtherBody(player).OutputTo(ship);
             }
 
-            // Orders: every ally takes an enemy; every enemy takes an ally, or (one in four) you.
+            // Balance: allied ships can be destroyed (some Starfleet ships spawn invulnerable, as mission
+            // allies), with normal shields; the enemy fleet gets strong shields.
+            foreach (var ally in allies)
+            {
+                yield return Task.FEBCHOJGMHM.TellAI(ally).ToSetVulnerable();
+                yield return Task.OFNIKPPKOGI.TellAI(ally).ToSetShieldStrength(AI.IDCAFFBNKFO.Normal);
+            }
+            foreach (var enemy in enemies)
+                yield return Task.OFNIKPPKOGI.TellAI(enemy).ToSetShieldStrength(AI.IDCAFFBNKFO.Strong);
+
+            // Orders: every ally takes an enemy; every enemy takes an ally, or (one in six) you.
             foreach (var ally in allies)
                 yield return Task.NDFEDBHFGFB.TellAI(ally).ToAddObjectives(enemies[random.Next(enemies.Count)]).OfObjectiveType(AIObjective.Attack);
             foreach (var enemy in enemies)
-                yield return Task.NDFEDBHFGFB.TellAI(enemy).ToAddObjectives(random.Next(4) == 0 ? player : allies[random.Next(allies.Count)])
+                yield return Task.NDFEDBHFGFB.TellAI(enemy).ToAddObjectives(random.Next(6) == 0 ? player : allies[random.Next(allies.Count)])
                     .OfObjectiveType(AIObjective.Attack);
 
             // The fight: re-order idle ships at the survivors, report the count as it changes.
@@ -126,7 +142,7 @@ namespace StbcRevival.Missions
                 if (liveAllies.Count < alliesLeft)
                     foreach (var enemy in liveEnemies)
                         yield return Task.NDFEDBHFGFB.TellAI(enemy)
-                            .ToAddObjectives(liveAllies.Count == 0 || random.Next(4) == 0 ? player : liveAllies[random.Next(liveAllies.Count)])
+                            .ToAddObjectives(liveAllies.Count == 0 || random.Next(6) == 0 ? player : liveAllies[random.Next(liveAllies.Count)])
                             .OfObjectiveType(AIObjective.Attack);
 
                 enemiesLeft = liveEnemies.Count;
@@ -142,7 +158,6 @@ namespace StbcRevival.Missions
             yield return Task.NECMCDDOFJB.CompleteSubDirective(directive, status);
             yield return Task.HHNFJKHGEPH.WithMissionResult($"Victory: {alliesLeft} of {allies.Count} allied ships survived", true);
             yield return Task.KNMMMJOOBHC.WithTime(10f);
-            yield return Objective.Success();
         }
 
         private static string Status(int enemies, int allies) => $"Enemy ships left: {enemies}. Allied ships left: {allies}";

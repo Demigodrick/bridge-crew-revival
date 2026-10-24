@@ -77,7 +77,7 @@ namespace StbcRevival
             var me = photon.GetMethod("get_player", Static)?.Invoke(null, null);
             string mine = SteamMode.MySteamId.ToString();
             if (me != null && !Equals(Props(me)?[SteamIdKey], mine))
-                me.GetType().GetMethod("SetCustomProperties", All)?.Invoke(me, new object[] { new PhotonHashtable { [SteamIdKey] = mine }, null, false });
+                PhotonProps.Set(me, SteamIdKey, mine);
 
             var room = photon.GetMethod("get_room", Static)?.Invoke(null, null);
             if (room != null)

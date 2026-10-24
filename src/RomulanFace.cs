@@ -95,7 +95,7 @@ namespace StbcRevival
             bool on = Plugin.RomulanFace.Value;
             var props = Properties(local) as IDictionary;
             if (props != null && props.Contains(PlayerKey) && props[PlayerKey] is bool current && current == on) return true;
-            local.GetType().GetMethod("SetCustomProperties", All)?.Invoke(local, new object[] { new PhotonHashtable { [PlayerKey] = on }, null, false });
+            if (!PhotonProps.Set(local, PlayerKey, on)) return true;
             Plugin.Log.LogInfo($"Romulan face: told the crew {(on ? "on" : "off")}");
             return true;
         }

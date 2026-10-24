@@ -177,7 +177,7 @@ namespace StbcRevival.Missions
             if (room == null || !IsMasterClient()) return;
             var own = Plugin.MapOverride.Value ?? "";
             if ((RoomValue() ?? "") == own) return;
-            room.GetType().GetMethod("SetCustomProperties", All)?.Invoke(room, new object[] { new PhotonHashtable { [RoomKey] = own }, null, false });
+            if (!PhotonProps.Set(room, RoomKey, own)) return;
             Plugin.Log.LogInfo(own == "" ? "Mission maps: map override cleared for the crew" : $"Mission maps: crew will load {own}");
         }
 

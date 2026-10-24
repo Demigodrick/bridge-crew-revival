@@ -81,8 +81,7 @@ namespace StbcRevival
 
         private static string Value(IDictionary props) => props != null && props.Contains(Key) ? props[Key] as string : null;
 
-        private static void Set(object owner, string version) =>
-            owner.GetType().GetMethod("SetCustomProperties", All)?.Invoke(owner, new object[] { new PhotonHashtable { [Key] = version }, null, false });
+        private static void Set(object owner, string version) => PhotonProps.Set(owner, Key, version);
 
         private static void Leave(Type photon)
         {
