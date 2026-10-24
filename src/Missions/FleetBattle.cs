@@ -15,8 +15,9 @@ namespace StbcRevival.Missions
     /// <summary>
     /// Fleet Battle (Revival Missions): a Starfleet fleet and yours against a Klingon or Romulan fleet,
     /// [Revival] FleetBattleSize ships a side (30 by default). Allies form up around you, the enemy arrives
-    /// ahead: every ally is ordered to attack an enemy ship, and the enemy hunts in packs of three (one ship in
-    /// six comes for you), sending a third as many again as reinforcements when it's down to half. Won when
+    /// ahead: every ally is ordered to attack an enemy ship, and the enemy hunts in packs of five (one ship in
+    /// six comes for you), sending a third as many again as reinforcements when it's down to half and to a
+    /// third. The allied fleet arrives battle-worn (three-quarters hull). Won when
     /// the enemy fleet is destroyed; lost if your ship is. No warp or impulse travel: the battle is here.
     /// </summary>
     public sealed class FleetBattleSequence : MissionSequence
@@ -108,10 +109,12 @@ namespace StbcRevival.Missions
             foreach (var step in SpawnEnemies(size, empire, enemies, allies)) yield return step;
             foreach (var ally in allies)
                 yield return Task.NDFEDBHFGFB.TellAI(ally).ToAddObjectives(enemies[random.Next(enemies.Count)]).OfObjectiveType(AIObjective.Attack);
-            bool reinforced = false;
+            int reinforcements = 0;
+            foreach (var ship in allies.Concat(enemies)) spawnedAt[ship] = UnityEngine.Time.time;
+            // Battle-worn: the allied fleet starts at three-quarters hull.
+            yield return Task.CIAHOPCODGJ.WithTargets(allies.ToArray()).SetHullHealthPercent(75f);
 
             // The fight: re-order idle ships at the survivors, report the count as it changes.
-            float started = UnityEngine.Time.time;
             int enemiesLeft = enemies.Count, alliesLeft = allies.Count;
             string status = Status(enemiesLeft, alliesLeft);
             yield return Task.NECMCDDOFJB.AddSubDirectives(directive, status);
@@ -119,9 +122,8 @@ namespace StbcRevival.Missions
             while (enemiesLeft > 0)
             {
                 yield return Task.KNMMMJOOBHC.WithTime(2f);
-                bool justSpawned = UnityEngine.Time.time - started < 10f;
-                var liveEnemies = enemies.Where(e => LastStandWaves.Alive(e, justSpawned)).ToList();
-                var liveAllies = allies.Where(a => LastStandWaves.Alive(a, justSpawned)).ToList();
+                var liveEnemies = enemies.Where(Alive).ToList();
+                var liveAllies = allies.Where(Alive).ToList();
                 if (++ticks % 10 == 0) // every 20 seconds, for the balance
                     Plugin.Log.LogInfo($"Fleet battle: enemies {Condition(liveEnemies)}; allies {Condition(liveAllies)}");
                 if (liveEnemies.Count == enemiesLeft && liveAllies.Count == alliesLeft) continue;
@@ -135,10 +137,11 @@ namespace StbcRevival.Missions
                         yield return Task.NDFEDBHFGFB.TellAI(liveEnemies[i]).ToAddObjectives(EnemyTarget(i, liveAllies))
                             .OfObjectiveType(AIObjective.Attack);
 
-                // Reinforcements when the enemy is down to half: a third as many again, warping in ahead.
-                if (!reinforced && liveEnemies.Count > 0 && liveEnemies.Count <= size / 2)
+                // Reinforcements when the enemy is down to half, and again to a third: a third as many again each
+                // time, warping in ahead.
+                if (liveEnemies.Count > 0 && reinforcements < 2 && liveEnemies.Count <= (reinforcements == 0 ? size / 2 : size / 3))
                 {
-                    reinforced = true;
+                    reinforcements++;
                     string arriving = $"{EnemyNames[empire]} reinforcements arriving";
                     yield return Task.NECMCDDOFJB.AddSubDirectives(directive, arriving);
                     yield return Task.ABHANLLBILL.WithEventID("PLAY_SND_INCOMING_CLOAK_ALARM_LP").ContinueImmediately();
@@ -149,7 +152,7 @@ namespace StbcRevival.Missions
                     foreach (var step in SpawnEnemies(extra, empire, more, liveAllies.Count > 0 ? liveAllies : allies)) yield return step;
                     enemies.AddRange(more);
                     liveEnemies.AddRange(more);
-                    started = UnityEngine.Time.time; // the new ships count as alive while they appear
+                    foreach (var ship in more) spawnedAt[ship] = UnityEngine.Time.time;
                     yield return Task.KNMMMJOOBHC.WithTime(6f);
                     yield return Task.NECMCDDOFJB.RemoveSubDirective(directive, arriving);
                 }
@@ -191,10 +194,16 @@ namespace StbcRevival.Missions
             }
         }
 
-        // Enemies hunt in packs of three, each pack on one allied ship, so shields actually break; one ship in
+        // Enemies hunt in packs of five, each pack on one allied ship, so shields actually break; one ship in
         // six comes for the player instead.
         private BodyRef EnemyTarget(int index, List<BodyRef> allies) =>
-            allies.Count == 0 || index % 6 == 0 ? player : allies[(index / 3) % allies.Count];
+            allies.Count == 0 || index % 6 == 0 ? player : allies[(index / 5) % allies.Count];
+
+        // When each ship appeared: a ship counts as alive for its first seconds, before its body is set.
+        private readonly Dictionary<BodyRef, float> spawnedAt = new Dictionary<BodyRef, float>();
+
+        private bool Alive(BodyRef ship) =>
+            LastStandWaves.Alive(ship, spawnedAt.TryGetValue(ship, out var t) && UnityEngine.Time.time - t < 10f);
 
         // "hull 87%, shields 40%": the side's average, for judging the balance from the log.
         private static string Condition(List<BodyRef> ships)
