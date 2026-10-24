@@ -80,6 +80,19 @@ namespace StbcRevival
             var playerHeads = profiles.Select(p => new { Name = p.CharacterName + " " + p.CharacterSpecies, Head = Head(p.VisualPrefab) })
                 .Concat(inScene.Select(c => new { Name = "scene " + c.name, Head = Head(c.gameObject) }))
                 .Where(x => x.Head != null).ToList();
+            // In the character creator: the Vulcan species toggle against the ROMULAN copy, as the VR hand sees them.
+            var creator = UnityEngine.Object.FindObjectOfType<CustomizationManager>();
+            if (creator != null)
+            {
+                report.AppendLine("==== CREATOR SPECIES TOGGLES ====");
+                foreach (var name in new[] { "_humanRaceToggle", "_vulcanRaceToggle", "_androidRaceToggle" })
+                    if (AccessTools.Field(typeof(CustomizationManager), name)?.GetValue(creator) is UnityEngine.UI.Toggle t)
+                        Interaction(report, summary, name, t.gameObject);
+                var romulan = GameObject.Find("Romulan Race Toggle");
+                if (romulan != null) Interaction(report, summary, "ROMULAN", romulan);
+                else summary.Add("ROMULAN toggle not found in the scene");
+            }
+
             report.AppendLine("==== HEAD COMPARISON ====");
             foreach (var npc in compare)
             {
@@ -150,6 +163,27 @@ namespace StbcRevival
                 foreach (var m in r.sharedMaterials.Where(m => m != null))
                     report.AppendLine($"    material '{m.name}' shader '{m.shader?.name}' main '{(m.HasProperty("_MainTex") ? m.mainTexture?.name : "-")}'");
             }
+        }
+
+        private static void Interaction(StringBuilder report, List<string> summary, string label, GameObject toggle)
+        {
+            report.AppendLine().AppendLine($"---- {label}: {FullName(toggle.transform)} active {toggle.activeInHierarchy} layer {toggle.layer} pos {toggle.transform.localPosition}");
+            Hierarchy(report, toggle.transform, 0);
+            var hand = toggle.GetComponent<HandInteraction>();
+            if (hand != null)
+                foreach (var f in AccessTools.GetDeclaredFields(typeof(HandInteraction)).Where(f => !f.IsStatic))
+                {
+                    object v;
+                    try { v = f.GetValue(hand); } catch { continue; }
+                    var text = v is Array a ? $"[{a.Length}]" : v is UnityEngine.Object o ? (o == null ? "null" : o.name) : v?.ToString() ?? "null";
+                    report.AppendLine($"    {f.Name} = {text}");
+                }
+            var colliders = toggle.GetComponentsInChildren<Collider>(true);
+            foreach (var c in colliders)
+                report.AppendLine($"  collider {c.GetType().Name} '{c.name}' enabled {c.enabled} active {c.gameObject.activeInHierarchy} layer {LayerMask.LayerToName(c.gameObject.layer)} centre {c.bounds.center} size {c.bounds.size}");
+            summary.Add($"{label}: active {toggle.activeInHierarchy}, interactable {toggle.GetComponent<UnityEngine.UI.Toggle>()?.IsInteractable()}, "
+                        + $"hand {(hand != null ? "yes" : "no")}, {colliders.Length} colliders ({colliders.Count(c => c.enabled && c.gameObject.activeInHierarchy)} live), "
+                        + $"trigger centres {string.Join(" ", colliders.Where(c => c.gameObject.layer != 0).Select(c => c.bounds.center.ToString("F3")).ToArray())}");
         }
 
         private static void Hierarchy(StringBuilder report, Transform t, int depth)
