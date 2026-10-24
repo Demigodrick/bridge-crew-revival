@@ -93,6 +93,28 @@ namespace StbcRevival
                 else summary.Add("ROMULAN toggle not found in the scene");
             }
 
+            // Sound: every Wwise component in the loaded scenes (Ak*), with its event/state/bank names, and
+            // which sector map and system are loaded. For comparing a Trench mission with another map.
+            var sounds = UnityEngine.Object.FindObjectsOfType<MonoBehaviour>()
+                .Where(m => m != null && m.GetType().Name.StartsWith("Ak", StringComparison.Ordinal)).ToList();
+            var loadedMap = Loader.EJLNDBGLIFL != null ? Loader.EJLNDBGLIFL.GetLoadedMap() : null;
+            report.AppendLine("==== SOUND ====").AppendLine($"map {(loadedMap != null ? loadedMap.name : "none")}");
+            foreach (var group in sounds.GroupBy(m => m.GetType().Name).OrderBy(g => g.Key))
+            {
+                report.AppendLine($"-- {group.Key} x{group.Count()}");
+                foreach (var m in group)
+                {
+                    var names = AccessTools.GetDeclaredFields(m.GetType()).Concat(AccessTools.GetDeclaredFields(m.GetType().BaseType ?? typeof(object)))
+                        .Where(f => !f.IsStatic && (f.FieldType == typeof(string) || f.FieldType == typeof(int) || f.FieldType == typeof(uint)))
+                        .Select(f => { try { return $"{f.Name}={f.GetValue(m)}"; } catch { return null; } })
+                        .Where(x => x != null).ToArray();
+                    report.AppendLine($"   {FullName(m.transform)} active {m.isActiveAndEnabled} {string.Join(" ", names)}");
+                }
+            }
+            summary.Add($"sound: map {(loadedMap != null ? loadedMap.name : "none")}, "
+                        + string.Join(", ", sounds.GroupBy(m => m.GetType().Name).OrderBy(g => g.Key)
+                            .Select(g => $"{g.Key} {g.Count(m => m.isActiveAndEnabled)}/{g.Count()} active").ToArray()));
+
             report.AppendLine("==== HEAD COMPARISON ====");
             foreach (var npc in compare)
             {
