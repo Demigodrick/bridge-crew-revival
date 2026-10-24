@@ -17,6 +17,11 @@ namespace StbcRevival
     {
         private const BindingFlags All = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
         private static Toggle romulan;
+        private static CustomizationManager creator;
+        private static Toggle[] rows;           // the species toggles shown with ROMULAN, top to bottom
+        private static Vector3[] rowPositions;  // their own positions (ROMULAN hidden)
+        private static Vector3 rowStep;
+        private static bool laidOutFor;
         private static bool applying;
 
         private static readonly FieldInfo Gender = AccessTools.Field(typeof(CustomizationManager), "EPNEDLICCMJ");
@@ -49,14 +54,19 @@ namespace StbcRevival
                 var android = Field(__instance, "_androidRaceToggle");
                 if (human == null || vulcan == null) return;
 
-                // One row on from the last species shown (Android is only there with the TNG content).
+                // A row after the last species shown (Android is only there with the TNG content).
                 var last = android != null && android.gameObject.activeSelf ? android : vulcan;
-                var step = vulcan.transform.localPosition - human.transform.localPosition;
                 var copy = (GameObject)UnityEngine.Object.Instantiate(vulcan.gameObject, vulcan.transform.parent);
                 copy.name = "Romulan Race Toggle";
-                copy.transform.localPosition = last.transform.localPosition + step;
                 copy.transform.SetSiblingIndex(last.transform.GetSiblingIndex() + 1);
                 romulan = copy.GetComponent<Toggle>();
+                creator = __instance;
+                rows = last == android ? new[] { human, vulcan, android } : new[] { human, vulcan };
+                rowPositions = Array.ConvertAll(rows, r => r.transform.localPosition);
+                rowStep = vulcan.transform.localPosition - human.transform.localPosition;
+                laidOutFor = true;
+                Layout(false);
+                copy.SetActive(false); // Update shows it (and makes room) while Female is picked
                 romulan.onValueChanged.RemoveAllListeners();
                 romulan.isOn = false;
                 foreach (var label in copy.GetComponentsInChildren<TMP_Text>(true))
@@ -65,7 +75,8 @@ namespace StbcRevival
                     label.SetLocalizedText(text != null && text == text.ToUpperInvariant() ? "ROMULAN" : "Romulan");
                 }
                 romulan.onValueChanged.AddListener(on => Toggled(__instance, on));
-                Plugin.Log.LogInfo("Romulan face: added the ROMULAN choice to the character creator");
+                Plugin.Log.LogInfo("Romulan face: added the ROMULAN choice to the character creator ("
+                                   + string.Join(", ", Array.ConvertAll(copy.GetComponentsInChildren<Component>(true), c => c.GetType().Name)) + ")");
             }
             catch (Exception e)
             {
@@ -93,14 +104,47 @@ namespace StbcRevival
             }
         }
 
-        // After the game shows the current choice: ROMULAN only for Female, and on in place of Vulcan if chosen.
+        // ROMULAN only while Female is picked (checked every frame: the creator doesn't always refresh on a
+        // gender change). Hidden while chosen: Vulcan shows instead; the choice is kept for Female.
+        internal static void Update()
+        {
+            if (romulan == null || creator == null) return;
+            bool female = Gender.GetValue(creator).ToString() == "Female";
+            if (romulan.gameObject.activeSelf == female) return;
+            if (!female && romulan.isOn && Field(creator, "_vulcanRaceToggle") is Toggle vulcan)
+            {
+                Set(vulcan, true);
+                if (romulan.group == null) Set(romulan, false);
+            }
+            romulan.gameObject.SetActive(female);
+            Layout(female);
+        }
+
+        // The species box holds its rows from half a row above the first to half a row below the last;
+        // with ROMULAN, space one more row evenly in that span.
+        private static void Layout(bool withRomulan)
+        {
+            if (rows == null || laidOutFor == withRomulan) return;
+            laidOutFor = withRomulan;
+            int n = rows.Length;
+            if (!withRomulan)
+            {
+                for (int i = 0; i < n; i++) rows[i].transform.localPosition = rowPositions[i];
+                return;
+            }
+            var step = rowStep * (n / (float)(n + 1));
+            var first = rowPositions[0] - rowStep * 0.5f + step * 0.5f;
+            for (int i = 0; i < n; i++) rows[i].transform.localPosition = first + step * i;
+            romulan.transform.localPosition = first + step * n;
+        }
+
+        // After the game shows the current choice: ROMULAN on in place of Vulcan if chosen.
         private static void Refresh_Postfix(CustomizationManager __instance)
         {
             if (romulan == null) return;
             try
             {
                 bool female = Gender.GetValue(__instance).ToString() == "Female";
-                romulan.gameObject.SetActive(female);
                 bool show = female && Species.GetValue(__instance).ToString() == "Vulcan" && Plugin.RomulanFace.Value;
                 if (romulan.isOn == show) return;
                 Set(romulan, show);

@@ -189,6 +189,7 @@ namespace StbcRevival
             Safely("bug report", BugReport.Update);
             Safely("avatar dump", AvatarDump.Update);
             Safely("romulan face", StbcRevival.RomulanFace.Update);
+            Safely("romulan creator choice", StbcRevival.RomulanCreatorOption.Update);
             Safely("ubisoft save import", UbisoftSaveImport.Update);
         }
 
