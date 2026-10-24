@@ -171,6 +171,8 @@ namespace StbcRevival
             {
                 if (page == null || !page.isActiveAndEnabled) return;
                 var rows = Rows(includeMine: false);
+                if (rows.Count > 0 && SteamMode.OnlineText.Length > 0)
+                    rows.Add(new Row { Title = SteamMode.OnlineText, Detail = "Start a Quick match to host another crew" });
                 if (rows.Count == 0)
                     rows.Add(new Row
                     {
@@ -214,7 +216,7 @@ namespace StbcRevival
         // The panel's "newsfeed" heading sits a few levels above the NewsPage component.
         private static readonly HashSet<NewsPage> retitled = new HashSet<NewsPage>();
 
-        // The newsfeed's title: "PUBLIC CREWS", with the players online once known.
+        // The newsfeed's title, "PUBLIC CREWS" (set again on each refresh, in case the page reset it).
         private static readonly List<TMP_Text> newsTitles = new List<TMP_Text>();
 
         private static void RetitleNewsfeed(NewsPage page)
@@ -235,8 +237,7 @@ namespace StbcRevival
                 }
             }
             newsTitles.RemoveAll(t => t == null);
-            int online = SteamMode.Enabled ? SteamMode.OnlineCount : 0;
-            foreach (var title in newsTitles) SetText(title, online > 0 ? $"PUBLIC CREWS ({online} ONLINE)" : "PUBLIC CREWS");
+            foreach (var title in newsTitles) SetText(title, "PUBLIC CREWS"); // the players online go in the list: the title has no room
         }
 
         // ---- Escape menu (InviteAction panel) -----------------------------------------------------
