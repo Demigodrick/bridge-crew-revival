@@ -61,13 +61,8 @@ namespace StbcRevival
             var face = avatar == null ? null : avatar.GetComponentInChildren<FaceCustomization>(true);
             var head = face == null ? null : face.GetComponent<SkinnedMeshRenderer>();
             if (head == null) return;
-            if (want && Find() is Material material && !IsRomulan(head.sharedMaterial))
+            if (want && !IsRomulan(head.sharedMaterial) && Wear(head))
             {
-                head.material = new Material(material)
-                {
-                    name = "Romulan face",
-                    renderQueue = head.sharedMaterial != null ? head.sharedMaterial.renderQueue : material.renderQueue,
-                };
                 wearing.Add(head);
                 Plugin.Log.LogInfo($"Romulan face: on {avatar.name}");
             }
@@ -108,6 +103,39 @@ namespace StbcRevival
         private static bool IsLocal(object player) => AccessTools.Field(player.GetType(), "isLocal")?.GetValue(player) is bool local && local;
 
         private static object Properties(object player) => player.GetType().GetMethod("get_customProperties", All)?.Invoke(player, null);
+
+        // Put the Romulan face on, keeping the hair colour and intensity the creator set on the face it replaces.
+        private static bool Wear(SkinnedMeshRenderer head)
+        {
+            if (!(Find() is Material material)) return false;
+            var previous = head.sharedMaterial;
+            var worn = new Material(material) { name = "Romulan face", renderQueue = previous != null ? previous.renderQueue : material.renderQueue };
+            if (previous != null)
+            {
+                if (previous.HasProperty("_HairColor") && worn.HasProperty("_HairColor")) worn.SetColor("_HairColor", previous.GetColor("_HairColor"));
+                if (previous.HasProperty("_HairIntensity") && worn.HasProperty("_HairIntensity")) worn.SetFloat("_HairIntensity", previous.GetFloat("_HairIntensity"));
+            }
+            head.material = worn;
+            return true;
+        }
+
+        internal static void Patch(Harmony harmony)
+        {
+            // The creator swaps the face material when you change look, head or hair (DNNOHHKPGDA puts a look
+            // on, CAJFLMIJGLL the original ones back); put the Romulan face straight back on a face wearing it.
+            foreach (var name in new[] { "DNNOHHKPGDA", "CAJFLMIJGLL" })
+            {
+                var method = AccessTools.Method(typeof(FaceCustomization), name);
+                if (method != null) harmony.Patch(method, postfix: new HarmonyMethod(typeof(RomulanFace), nameof(Swapped_Postfix)));
+                else Plugin.Log.LogWarning($"Romulan face: FaceCustomization.{name} not found; face changes undo the Romulan face for a second");
+            }
+        }
+
+        private static void Swapped_Postfix(FaceCustomization __instance)
+        {
+            var head = __instance.GetComponent<SkinnedMeshRenderer>();
+            if (head != null && wearing.Contains(head) && !IsRomulan(head.sharedMaterial)) Wear(head);
+        }
 
         private static bool IsRomulan(Material material) => material != null && material.name.StartsWith("Romulan face", StringComparison.Ordinal);
 
