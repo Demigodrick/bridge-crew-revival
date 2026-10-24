@@ -80,8 +80,8 @@ namespace StbcRevival.Missions
         // placing any encounters. The ship spawn (MissionManager.NJHADEBHMNN) needs that spawn point and contract.
         private static bool Generate_Prefix(MissionManager __instance, ref int __result)
         {
-            // Off the Trench there are no encounters to place; a Revival mission brings its own (or, for Test
-            // Flight, none), so skip the Ongoing Voyage's there too.
+            // Off the Trench there are no encounters to place; a Revival mission brings its own (or, for Free
+            // Roam, none), so skip the Ongoing Voyage's there too.
             var map = Loader.EJLNDBGLIFL.GetLoadedMap();
             if (map == null) return true;
             bool trench = map.name.IndexOf("Trench", StringComparison.OrdinalIgnoreCase) >= 0;

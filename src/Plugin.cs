@@ -121,7 +121,7 @@ namespace StbcRevival
             AvatarDumpKey = Config.Bind("Debug", "AvatarDumpKey", UnityEngine.KeyCode.F9,
                 "Testing only: describes the hail-screen characters and the player avatars to BepInEx/avatar-dump.txt.");
             MapOverride = Config.Bind("Debug", "MapOverride", "",
-                "Testing only: the sector map your Ongoing Voyages load, as a path in the game's Resources, e.g. \"Mission Data/Maps/Sector - E3\" "
+                "Testing only: the sector map Free Roam and Ongoing Voyages load, as a path in the game's Resources, e.g. \"Mission Data/Maps/Sector - E3\" "
                 + "or \"Mission Data/Maps/Sector - SpaceStationRescue\". Applies to your whole crew when you host. Off the Trench there are no "
                 + "mission encounters: you start in one of the map's systems and can warp to its others. Empty: the game's own map.");
             TestLastStand = Config.Bind("Debug", "TestLastStand", false,
