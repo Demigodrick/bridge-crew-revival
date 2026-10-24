@@ -126,8 +126,34 @@ namespace StbcRevival
                 Set(vulcan, true);
                 if (romulan.group == null) Set(romulan, false);
             }
-            romulan.gameObject.SetActive(female);
             Layout(female);
+            romulan.gameObject.SetActive(female);
+            if (female) TellHands();
+        }
+
+        // The VR hands only reach the controls they collected when the console loaded
+        // (HandAnimator.UpdateHandInteractionsForConsole); the game re-collects with
+        // HandAnimatorManager.NotifyAnimatorsForConsole when it adds buttons itself (warp panel, targeting).
+        // Camera focus areas keep their own list too.
+        private static void TellHands()
+        {
+            try
+            {
+                foreach (var area in romulan.GetComponentsInParent<CameraFocusArea>(true)) area.RecacheChildHandInteractions();
+                var console = romulan.GetComponentInParent<ConsoleBase>();
+                var manager = AccessTools.Method(AccessTools.TypeByName("HandAnimatorManager"), "get_Instance")?.Invoke(null, null);
+                if (console == null || manager == null)
+                {
+                    Plugin.Log.LogWarning($"Romulan face: can't tell the hands about ROMULAN (console {console != null}, hand manager {manager != null})");
+                    return;
+                }
+                AccessTools.Method(manager.GetType(), "NotifyAnimatorsForConsole").Invoke(manager, new object[] { console });
+                Plugin.Log.LogInfo($"Romulan face: hands told about ROMULAN on {console.name}");
+            }
+            catch (Exception e)
+            {
+                Plugin.Log.LogWarning("Romulan face: telling the hands about ROMULAN: " + e.Message);
+            }
         }
 
         // The species box holds its rows from half a row above the first to half a row below the last;

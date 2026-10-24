@@ -228,6 +228,9 @@ foreach (var m in new[] { "OGEINMNDPMI", "KPAOOOCNEKP", "PHHOOCMCLIJ" })
     Check($"  CustomizationManager.{m} (ROMULAN choice)", creatorType?.GetMethod(m, Inst));
 foreach (var f in new[] { "EPNEDLICCMJ", "COABBGKIHFL", "_humanRaceToggle", "_vulcanRaceToggle", "_androidRaceToggle" })
     Check($"  CustomizationManager.{f}", creatorType?.GetField(f, Inst));
+Check("  HandAnimatorManager.get_Instance / NotifyAnimatorsForConsole", game.GetType("HandAnimatorManager") is { } ham
+    && ham.GetMethod("get_Instance", PS) is not null && ham.GetMethod("NotifyAnimatorsForConsole", Inst) is not null ? ham : null);
+Check("  CameraFocusArea.RecacheChildHandInteractions", game.GetType("CameraFocusArea")?.GetMethod("RecacheChildHandInteractions", Inst));
 var photonPlayer = game.GetType("CBBCCGMALMP");
 Check("  photon player isLocal / get_customProperties / SetCustomProperties", photonPlayer?.GetField("isLocal", Inst) is not null
     && photonPlayer.GetMethod("get_customProperties", Inst) is not null && photonPlayer.GetMethod("SetCustomProperties", Inst) is not null ? photonPlayer : null);
