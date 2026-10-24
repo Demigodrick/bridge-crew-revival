@@ -173,6 +173,7 @@ namespace StbcRevival
             PauseMenuTweaks.Patch(harmony);
             VrRoomPanels.Patch(harmony);
             Missions.RevivalMissions.Patch(harmony);
+            RomulanCreatorOption.Patch(harmony);
             if (Plugin.Diagnostics.Value)
                 StbcRevival.Diagnostics.Apply(harmony, photonNetwork);
         }

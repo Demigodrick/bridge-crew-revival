@@ -223,6 +223,11 @@ Check("  FaceCustomization.SetDefaultLook", faceCustomization?.GetMethod("SetDef
 Check("  CustomizationManager.FFJOIFLJFPF (creator avatars)", game.GetType("CustomizationManager")?.GetField("FFJOIFLJFPF", Inst));
 Check("  NovaPlayerManager.get_Instance + PlayerManager.CharacterProfiles", game.GetType("NovaPlayerManager")?.GetMethod("get_Instance", PS) is not null
     && game.GetType("SVR.PlayerManager")?.GetField("CharacterProfiles", Inst) is { } cpf ? cpf : null);
+var creatorType = game.GetType("CustomizationManager");
+foreach (var m in new[] { "OGEINMNDPMI", "KPAOOOCNEKP", "PHHOOCMCLIJ" })
+    Check($"  CustomizationManager.{m} (ROMULAN choice)", creatorType?.GetMethod(m, Inst));
+foreach (var f in new[] { "EPNEDLICCMJ", "COABBGKIHFL", "_humanRaceToggle", "_vulcanRaceToggle", "_androidRaceToggle" })
+    Check($"  CustomizationManager.{f}", creatorType?.GetField(f, Inst));
 var photonPlayer = game.GetType("CBBCCGMALMP");
 Check("  photon player isLocal / get_customProperties / SetCustomProperties", photonPlayer?.GetField("isLocal", Inst) is not null
     && photonPlayer.GetMethod("get_customProperties", Inst) is not null && photonPlayer.GetMethod("SetCustomProperties", Inst) is not null ? photonPlayer : null);
