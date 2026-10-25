@@ -105,7 +105,7 @@ public sealed class Room
         _ => 0,
     };
 
-    /// <summary>Set only when clients use server-side master client (room property 248).</summary>
+    /// <summary>The master from room property 248 (always set once someone's in; null if it names a player who left).</summary>
     public int? ExplicitMasterClientId =>
         Properties.GetOrDefault(GameProp.MasterClientId) is int id && Actors.ContainsKey(id) ? id : null;
 

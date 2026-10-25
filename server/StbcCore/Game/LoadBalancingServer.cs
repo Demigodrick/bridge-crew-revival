@@ -641,6 +641,11 @@ public sealed class LoadBalancingServer : IPeerHandler
         room.Actors.Add(actor.ActorNr, actor);
         s.Room = room;
         s.Actor = actor;
+        // The room says who its master is (248), as Photon's own servers do: PUN then uses server-side master
+        // client, where any player can take the role (SetMasterClient). The game hands it to the captain when
+        // they launch a mission; with the client-side kind, only the master can hand it over, and a captain
+        // who isn't the master waits forever.
+        if (room.ExplicitMasterClientId == null) room.Properties[GameProp.MasterClientId] = room.MasterClientId;
 
         var resp = new OperationResponse(opCode);
         resp[Param.ActorNr] = actor.ActorNr;

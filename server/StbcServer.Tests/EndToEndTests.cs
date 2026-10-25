@@ -371,6 +371,29 @@ public sealed class EndToEndTests : IDisposable
     }
 
     [Fact]
+    public void MasterClientIsServerSide()
+    {
+        var (a, b, _) = ThreePlayerRoom();
+
+        // The room says who its master is (property 248), so PUN uses server-side master client and any player
+        // may take it over: a briefing-room captain who isn't the host does, to launch the mission.
+        var room = (PhotonHashtable)b.Op(251, new Dictionary<byte, object>())[248];
+        Assert.Equal(1, room[(byte)248]);
+
+        // PUN's SetMasterClient: 248 to the new master, expecting the current one.
+        var take = b.Op(252, new Dictionary<byte, object>
+            { [251] = new PhotonHashtable { [(byte)248] = 2 }, [250] = true, [231] = new PhotonHashtable { [(byte)248] = 1 } });
+        Assert.Equal(0, take.ReturnCode);
+        a.WaitEvent(253, e => (int)e[253] == 0 && ((PhotonHashtable)e[251])[(byte)248] is 2);
+        b.WaitEvent(253, e => (int)e[253] == 0 && ((PhotonHashtable)e[251])[(byte)248] is 2);
+
+        // The master leaving hands it on, and the Leave event says to whom.
+        b.LeaveRoom();
+        var left = a.WaitEvent(254, e => (int)e[254] == 2);
+        Assert.Equal(1, left[203]);
+    }
+
+    [Fact]
     public void LeavingAndDisconnectingNotifyOthers()
     {
         var (a, b, c) = ThreePlayerRoom();
