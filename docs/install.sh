@@ -9,7 +9,7 @@
 # Finds the game in your Steam libraries, installs BepInEx 5 (from its GitHub release, checksum
 # verified), sets the BepInEx entrypoint this game needs, and copies the mod (from the zip it's in,
 # or the latest GitHub release), plus offline speech recognition for voice commands (Vosk and its small
-# English model, checksum verified). Run it again to update. It then offers to copy your settings from your
+# English model, checksum verified). Run it again to update or remove it (it asks). It then offers to copy your settings from your
 # Ubisoft cloud save (avatar, options) by starting the game once.
 set -euo pipefail
 
@@ -269,6 +269,15 @@ main() {
   # anything else, e.g. Ubisoft Connect, still runs in the game's prefix, so match the backslash.
   if pgrep -f '\\stbc\.exe' >/dev/null 2>&1; then
     fail "Star Trek: Bridge Crew is running. Quit it, then run the installer again."
+  fi
+
+  # Already installed, and not told to uninstall: update (Enter), or remove? (Only with a terminal to ask.)
+  if [ "$uninstall" = 0 ] && [ -f "$game/BepInEx/plugins/StbcRevival.dll" ] && { : < /dev/tty; } 2>/dev/null; then
+    local answer=""
+    info "Bridge Crew Revival is installed."
+    printf '       Update it, or remove it? [U]pdate / [R]emove (Enter = update) ' > /dev/tty
+    read -r answer < /dev/tty || answer=""
+    case "$answer" in [rR]*) uninstall=1 ;; esac
   fi
 
   # ---- Uninstall ------------------------------------------------------------------------------

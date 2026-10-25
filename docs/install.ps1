@@ -8,7 +8,7 @@
 # Finds the game in your Steam libraries, installs BepInEx 5 (from its GitHub release, checksum
 # verified), sets the BepInEx entrypoint this game needs, and copies the mod (from the zip it's in,
 # or the latest GitHub release), plus offline speech recognition for voice commands (Vosk and its small
-# English model, checksum verified). Run it again to update. $env:STBC_VERSION pins a release.
+# English model, checksum verified). Run it again to update or remove it (it asks). $env:STBC_VERSION pins a release.
 # It then offers to copy your settings from your Ubisoft cloud save (avatar, options) by starting the game
 # once; -ImportSave does that without asking, -NoImport skips the question.
 param(
@@ -184,6 +184,15 @@ function Install-BridgeCrewRevival([string]$GameDir, [bool]$Uninstall, [string]$
     if (Get-Process -Name "stbc" -ErrorAction SilentlyContinue) { Fail "Star Trek: Bridge Crew is running. Quit it, then run the installer again." }
 
     $plugins = Join-Path $GameDir "BepInEx\plugins"
+
+    # Already installed, and not told to uninstall: update (Enter), or remove?
+    $installed = Join-Path $plugins "StbcRevival.dll"
+    if (-not $Uninstall -and (Test-Path $installed) -and [Environment]::UserInteractive) {
+        $have = ([Diagnostics.FileVersionInfo]::GetVersionInfo($installed).ProductVersion -split '\+')[0]
+        Info "Bridge Crew Revival $have is installed."
+        $answer = try { Read-Host "       Update it, or remove it? [U]pdate / [R]emove (Enter = update)" } catch { "" }
+        if ($answer -match '^\s*[rR]') { $Uninstall = $true }
+    }
 
     # ---- Uninstall --------------------------------------------------------------------------
 

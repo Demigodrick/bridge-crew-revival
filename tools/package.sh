@@ -15,12 +15,19 @@ cp "$root/docs/install.sh" "$out/"
 chmod +x "$out/install.sh"
 # Windows files with CRLF line endings.
 for f in install.cmd install.ps1; do sed 's/\r$//; s/$/\r/' "$root/docs/$f" > "$out/$f"; done
+sed 's/\r$//; s/$/\r/' > "$out/uninstall.cmd" <<'EOF'
+@echo off
+rem Bridge Crew Revival: double-click to remove the mod. Your settings stay in the game's BepInEx folder.
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0install.ps1" -Uninstall %*
+echo.
+pause
+EOF
 sed 's/\r$//; s/$/\r/' > "$out/README.txt" <<EOF
 Bridge Crew Revival $version - multiplayer for Star Trek: Bridge Crew (Steam, PC) after the Ubisoft shutdown.
 
 Website: https://demigodrick.github.io/bridge-crew-revival/
 
-Windows: double-click install.cmd.
+Windows: double-click install.cmd (uninstall.cmd removes the mod).
 Linux:   run ./install.sh. (If the game has never been started under Proton, start it once and quit
          first, or set its Steam launch options to WINEDLLOVERRIDES="winhttp=n,b" %command%.)
 
@@ -30,8 +37,8 @@ prompt, choose your controller: the game only connects to Ubisoft after that. Yo
 copied and the game closes by itself. Run it later with --import-save (Linux) / -ImportSave (Windows).
 
 Both find the game in your Steam libraries (or pass the game folder as an argument), install
-BepInEx 5.4.23.5 from its GitHub release, and copy the mod. Run again to update;
---uninstall (Linux) or -Uninstall (Windows) removes it.
+BepInEx 5.4.23.5 from its GitHub release, and copy the mod. Run again to update or remove it (it
+asks); --uninstall (Linux), -Uninstall or uninstall.cmd (Windows) removes it straight away.
 
 Everyone you play with needs the mod. Host with Quick match or Custom lobby; friends join from
 the shuttle's Steam friends panel, Steam's Join Game / invites, or the F7 room browser (desktop).
