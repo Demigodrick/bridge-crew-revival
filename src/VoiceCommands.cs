@@ -41,7 +41,7 @@ namespace StbcRevival
             // tactical
             "fire", "phasers", "phaser", "torpedoes", "torpedo", "photon", "arm", "disarm", "cease", "hold", "target",
             "targeting", "clear", "engines", "engine", "weapons", "shields", "shield", "comms", "communications",
-            "disrupt", "hack", "scan", "probe", "analyze", "analyse", "beam", "transport", "survivors", "crew",
+            "disrupt", "hack", "scan", "probe", "analyze", "analyse", "analysis", "examine", "identify", "beam", "transport", "survivors", "crew",
             "stealth", "signature", "reduce", "quiet", "silent", "running", "cloak", "cloaked", "hunt",
             // shields
             "up", "down", "raise", "lower", "drop", "on", "off", "modulate",
@@ -80,7 +80,7 @@ namespace StbcRevival
             // Helm travel: prepare / engage warp or impulse.
             if (any(new[] { "prepare", "ready", "plot", "course", "set" }) && (warp || impulse))
                 return Remember(warp ? "PrepareWarp" : "PrepareImpulse");
-            if (any(new[] { "engage", "punch", "jump" }) || (w.Contains("make") && w.Contains("so")))
+            if (any(new[] { "engage", "punch", "jump" }) || (w.Contains("so") && any(new[] { "make", "it" }))) // "make it so", even if "make" is lost
             {
                 if (warp) return "EngageWarp";
                 if (impulse) return "EngageImpulse";
@@ -108,10 +108,10 @@ namespace StbcRevival
             if (any(new[] { "disrupt", "hack" }))
                 return engines ? "DisruptEngines" : shields ? "DisruptShields" : weapons ? "DisruptWeapons"
                     : any(new[] { "comms", "communications" }) ? "DisruptComms" : null;
-            if (any(new[] { "target", "targeting" }))
-                return engines ? "TargetEngines" : shields ? "TargetShields" : weapons ? "TargetWeapons" : null;
+            if (any(new[] { "analyze", "analyse", "analysis", "examine", "identify" })) return "AnalyseTarget";
+            if (any(new[] { "target", "targeting" }))  // a bare "target" (or "analyse the target", with "analyse" lost): analyse it
+                return engines ? "TargetEngines" : shields ? "TargetShields" : weapons ? "TargetWeapons" : "AnalyseTarget";
             if (any(new[] { "beam", "transport" })) return "TransportFromTarget";
-            if (any(new[] { "analyze", "analyse" })) return "AnalyseTarget";
             if (any(new[] { "scan", "probe" })) return "ScanTarget";
             if (any(new[] { "cloak", "cloaked", "hunt" })) return "CloakHunt";
             if (any(new[] { "stealth", "signature", "quiet", "silent" })) return "ReduceSignature";

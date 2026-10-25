@@ -62,12 +62,8 @@ namespace StbcRevival.Missions
         {
             "Sector/Ships/Ship - Freighter A", "Sector/Ships/Ship - Freighter B", "Sector/Ships/Ship - Freighter C",
         };
-        private static readonly string[] RescueFreighters =
-        {
-            "Sector/Ships/Ship - Freighter A Life", "Sector/Ships/Ship - Freighter B Life", "Sector/Ships/Ship - Freighter C Life",
-        };
 
-        private readonly System.Random random = new System.Random();
+        private readonly System.Random random = new System.Random(Guid.NewGuid().GetHashCode());
         private BodyRef player;
         private int completed, failed, spawnCount;
         private bool succeeded, abandoned;
@@ -93,7 +89,7 @@ namespace StbcRevival.Missions
                 // The offer: a job in another system, marked on the warp map.
                 int job = random.Next(4);
                 var here = Objective.KALBLMGFNIN;
-                var target = Objective.FindSystemDifferentThan(new[] { here }) ?? here;
+                var target = PickSystem(here);
                 string name = SystemName(target);
                 string offer = $"New assignment in the {name} system: {Offer(job)}. Warp there to accept";
                 string repairs = "Until then, repairs and torpedoes at any space station (within 5 km)";
@@ -191,7 +187,7 @@ namespace StbcRevival.Missions
             string line = "Scan the disabled freighter for life signs, then beam the survivors aboard";
             yield return Task.NECMCDDOFJB.AddSubDirectives(Directive, line);
             var wreck = new BodyRef();
-            yield return Task.BFMBGDIDKEI.UsingSpawner(MakeSpawner(RescueFreighters[random.Next(RescueFreighters.Length)], "Freighter", Tag.Neutral))
+            yield return Task.BFMBGDIDKEI.UsingSpawner(MakeSpawner(Freighters[random.Next(Freighters.Length)], "Freighter", Tag.Neutral))
                 .AtAngleAndDistanceFromBody(player, random.Next(0, 360), ambush ? 20000f : 6000f).OutputTo(wreck);
             yield return Task.OFNIKPPKOGI.TellAI(wreck).ToSetShieldStrength(AI.IDCAFFBNKFO.Weak);
             yield return Task.KDNOMKAPDKG.TellAI(wreck).ToDisable();
@@ -201,6 +197,7 @@ namespace StbcRevival.Missions
             yield return Task.CIAHOPCODGJ.WithTargets(wreck).SetCargo(Sector.CargoTypes.People, survivors);
             Plugin.Log.LogInfo($"Patrol: rescue freighter with {survivors} survivors");
             yield return Task.BCJDEKKIHDD.AddMarker(new[] { wreck });
+            yield return Task.PAMPNJNPLCI.OfPOIChild(wreck); // as the game's rescue missions do with their target
 
             bool rescued = false;
             string steps = "rescue " + (++spawnCount);
@@ -254,6 +251,13 @@ namespace StbcRevival.Missions
         }
 
         // ---- Helpers ----------------------------------------------------------------------------------
+
+        // Another system of the sector, at random (the game's FindSystemDifferentThan always gives the same one).
+        private Map.SystemRoot PickSystem(Map.SystemRoot here)
+        {
+            var others = (Objective.MLHNDAEKLHO ?? new List<Map.SystemRoot>()).Where(s => s != null && s != here).ToList();
+            return others.Count > 0 ? others[random.Next(others.Count)] : Objective.FindSystemDifferentThan(new[] { here }) ?? here;
+        }
 
         private int RaiderCount() => Math.Min(2 + completed / 2, 6);
 
