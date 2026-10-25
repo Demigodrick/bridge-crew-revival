@@ -85,9 +85,7 @@ namespace StbcRevival
             Leave(photon);
             var message = $"This crew runs {what}; you have {Plugin.Version}. Everyone in a crew needs the same version: "
                           + "update from the Bridge Crew Revival website, or ask the host to.";
-            RoomBrowser.Show(message);
-            try { UI.PopupMgr.ShowPopup(message.Replace('|', ' '), null, UI.PDHCCBFJODN.Notification, true); }
-            catch { /* no popups in this scene */ }
+            RoomBrowser.Show(message); // the F7 window and the game's popup
         }
 
         private static IDictionary Props(object owner) =>

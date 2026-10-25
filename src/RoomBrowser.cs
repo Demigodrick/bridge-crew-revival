@@ -87,7 +87,7 @@ namespace StbcRevival
             // Steam mode: the room must be a public Steam lobby, from an invite, or a friend's room.
             if (SteamMode.Enabled && !SteamMode.Knows(name) && !SteamMode.ResolveFromFriends(name))
             {
-                status = $"Room {Code(name)} not found: it isn't public, and none of your Steam friends are in it.";
+                Show($"Room {Code(name)} not found: it isn't public, and none of your Steam friends are in it.");
                 return;
             }
             // Same event Uplay invites and the friends list send; GamePhaseManager handles the rest
@@ -113,11 +113,23 @@ namespace StbcRevival
         }
 
         /// <summary>Open the window with a message (Steam join notices and the like).</summary>
+        /// <summary>
+        /// A message for the player: in this window, and as the game's own popup, which shows in the headset
+        /// too (the window is the desktop's only). The same message isn't popped up again within ten seconds.
+        /// </summary>
         internal static void Show(string message)
         {
             SetVisible(true);
             status = message;
+            if (message == lastPopup && Time.realtimeSinceStartup - lastPopupAt < 10f) return;
+            lastPopup = message;
+            lastPopupAt = Time.realtimeSinceStartup;
+            try { UI.PopupMgr.ShowPopup(message.Replace('|', ' '), null, UI.PDHCCBFJODN.Notification, true); }
+            catch { /* no popups in this scene (loading); the window still has it */ }
         }
+
+        private static string lastPopup;
+        private static float lastPopupAt;
 
         private static void SetVisible(bool show)
         {

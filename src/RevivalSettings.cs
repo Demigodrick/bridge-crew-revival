@@ -14,6 +14,8 @@ namespace StbcRevival
     ///     text shows the one picked and whether it's on, and its accept button (FMNEJELNGFC, which set the
     ///     region) switches it. The last entry, "Back", returns to the main menu.
     ///   - Changes are saved to stbc.revival.cfg straight away (BepInEx saves on set).
+    ///   - Also on the page: joining a crew by room code (SteamVR's keyboard, VrKeyboard) and which crews are
+    ///     listed (any, The Next Generation only, none).
     /// Other modes keep the region page as it was (it picks the Photon Cloud region there).
     /// </summary>
     internal static class RevivalSettings
@@ -21,26 +23,58 @@ namespace StbcRevival
         private const BindingFlags All = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
         private const string Title = "Revival settings";
 
+        // A line on the page: its text (label and value) and what the accept button says and does.
         private sealed class Entry
         {
-            public string Label;
-            public Func<ConfigEntry<bool>> Setting;
-            public bool Restart; // takes effect on the next launch
+            public Func<string> Text;
+            public Func<string> Button;
+            public Action Press;
         }
+
+        private static Entry Switch(string label, Func<ConfigEntry<bool>> setting, bool restart = false) => new Entry
+        {
+            Text = () => $"{label}: {(setting().Value ? "ON" : "OFF")}{(restart ? " (next launch)" : "")}",
+            Button = () => setting().Value ? "Turn off" : "Turn on",
+            Press = () =>
+            {
+                setting().Value = !setting().Value;
+                Plugin.Log.LogInfo($"Revival settings: {label} {(setting().Value ? "on" : "off")}");
+            },
+        };
 
         private static readonly Entry[] Entries =
         {
-            new Entry { Label = "Skip intro videos", Setting = () => Plugin.SkipIntro, Restart = true },
-            new Entry { Label = "Skip mic check", Setting = () => Plugin.SkipMicCheck, Restart = true },
-            new Entry { Label = "Voice commands", Setting = () => Plugin.VoiceCommands, Restart = true },
-            new Entry { Label = "Romulan face", Setting = () => Plugin.RomulanFace },
-            new Entry { Label = "Chime when someone joins", Setting = () => Plugin.PlayerJoinedAlert },
-            new Entry { Label = "Public crews in VR", Setting = () => Plugin.VrRoomPanels },
-            new Entry { Label = "Hide full crews", Setting = () => Plugin.HideFullCrews },
-            new Entry { Label = "Hide crews on a mission", Setting = () => Plugin.HideCrewsInMission },
-            new Entry { Label = "Show my crew in Steam", Setting = () => Plugin.SteamPresence },
-            new Entry { Label = "Check for updates", Setting = () => Plugin.CheckForUpdates },
+            new Entry
+            {
+                Text = () => VrKeyboard.Status ?? "Join a crew by its room code",
+                Button = () => "Type code",
+                Press = () => VrKeyboard.Open("Room code", 12, code => RoomBrowser.Join(code)),
+            },
+            Switch("Skip intro videos", () => Plugin.SkipIntro, restart: true),
+            Switch("Skip mic check", () => Plugin.SkipMicCheck, restart: true),
+            Switch("Voice commands", () => Plugin.VoiceCommands, restart: true),
+            Switch("Romulan face", () => Plugin.RomulanFace),
+            Switch("Chime when someone joins", () => Plugin.PlayerJoinedAlert),
+            Switch("Public crews in VR", () => Plugin.VrRoomPanels),
+            new Entry
+            {
+                Text = () => "Crews listed: " + ContentName(Plugin.CrewContentFilter.Value),
+                Button = () => "Change",
+                Press = () =>
+                {
+                    var next = (CrewContent)(((int)Plugin.CrewContentFilter.Value + 1) % 3);
+                    Plugin.CrewContentFilter.Value = next;
+                    Plugin.Log.LogInfo($"Revival settings: crews listed {next}");
+                },
+            },
+            Switch("Hide full crews", () => Plugin.HideFullCrews),
+            Switch("Hide crews on a mission", () => Plugin.HideCrewsInMission),
+            Switch("Show my crew in Steam", () => Plugin.SteamPresence),
+            Switch("Check for updates", () => Plugin.CheckForUpdates),
         };
+
+        private static string ContentName(CrewContent content) =>
+            content == CrewContent.NextGenerationOnly ? "TNG only" : content == CrewContent.NoNextGeneration ? "no TNG" : "any";
 
         private static int index;
         private static float nextRetitle;
@@ -102,10 +136,7 @@ namespace StbcRevival
                 setState?.Invoke(state, new[] { main });
                 return false;
             }
-            var entry = Entries[index];
-            var setting = entry.Setting();
-            setting.Value = !setting.Value;
-            Plugin.Log.LogInfo($"Revival settings: {entry.Label} {(setting.Value ? "on" : "off")}");
+            Entries[index].Press();
             Show(__instance);
             return false;
         }
@@ -120,10 +151,8 @@ namespace StbcRevival
             }
             else
             {
-                var entry = Entries[index];
-                bool on = entry.Setting().Value;
-                text = $"{entry.Label}: {(on ? "ON" : "OFF")}{(entry.Restart ? " (next launch)" : "")}";
-                button = on ? "Turn off" : "Turn on";
+                text = Entries[index].Text();
+                button = Entries[index].Button();
             }
             if (Field(menu, "_regionSelectRegionText") is Component label)
             {

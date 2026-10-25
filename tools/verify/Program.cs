@@ -328,5 +328,10 @@ foreach (var f in new[] { "PCPBPMKFJOE", "JEFHDNFCPLD" })
 var novaInfo = game.GetType("NovaPlayerInfo");
 Check("  NovaPlayerInfo.PKIBEAIHJNE", (MemberInfo)novaInfo?.GetField("PKIBEAIHJNE", Inst) ?? novaInfo?.GetProperty("PKIBEAIHJNE", Inst));
 
+// VR keyboard (join by code in the headset)
+Check("Valve.VR CVRSystem.PollNextEvent (vr keyboard)", game.GetType("Valve.VR.PBMLFENDPMG")?.GetMethod("PollNextEvent", Inst));
+Check("  CVROverlay.ShowKeyboard", game.GetType("Valve.VR.HADDNHEFDEE")?.GetMethod("ShowKeyboard", Inst));
+Check("  CVROverlay.GetKeyboardText", game.GetType("Valve.VR.HADDNHEFDEE")?.GetMethod("GetKeyboardText", Inst));
+
 Console.WriteLine(failures == 0 ? "\nAll targets resolved." : $"\n{failures} target(s) missing.");
 return failures == 0 ? 0 : 1;
