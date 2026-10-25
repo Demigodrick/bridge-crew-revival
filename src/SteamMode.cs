@@ -366,10 +366,18 @@ namespace StbcRevival
             });
         }
 
+        // A crew lobby's host: from its "host" data (anyone can read lobby data), else its owner (which Steam only
+        // gives the lobby's members, so 0 for the crews we find by searching). 0 when unknown.
+        private static ulong LobbyHost(CSteamID lobby)
+        {
+            if (ulong.TryParse(SteamMatchmaking.GetLobbyData(lobby, "host"), out var host) && host != 0) return host;
+            return SteamMatchmaking.GetLobbyOwner(lobby).m_SteamID;
+        }
+
         private static bool TryLobbyJoin()
         {
             var room = SteamMatchmaking.GetLobbyData(pendingLobby, "room");
-            var owner = SteamMatchmaking.GetLobbyOwner(pendingLobby).m_SteamID;
+            var owner = LobbyHost(pendingLobby);
             if (string.IsNullOrEmpty(room) || owner == 0) return false;
             Plugin.Log.LogInfo($"Steam mode: lobby join request for '{room}' hosted by {owner}");
             pendingLobbyUntil = 0;
@@ -624,6 +632,8 @@ namespace StbcRevival
                     ["players"] = room.Players.ToString(),
                     ["max"] = room.MaxPlayers.ToString(),
                     ["open"] = room.Open ? "1" : "0",
+                    // Who to connect to: Steam only tells a lobby's members who owns it, and nobody joins these.
+                    ["host"] = MySteamId.ToString(),
                 };
                 foreach (var kv in room.CustomProperties)
                     if (kv.Key.Length <= 4 && Encode(kv.Value) is string v) data[kv.Key] = v;
@@ -655,9 +665,9 @@ namespace StbcRevival
                     for (int i = 0; i < r.m_nLobbiesMatching; i++)
                     {
                         var lobby = SteamMatchmaking.GetLobbyByIndex(i);
-                        var owner = SteamMatchmaking.GetLobbyOwner(lobby).m_SteamID;
+                        var owner = LobbyHost(lobby);
                         var name = SteamMatchmaking.GetLobbyData(lobby, "room");
-                        if (owner == me || string.IsNullOrEmpty(name)) continue;
+                        if (owner == 0 || owner == me || string.IsNullOrEmpty(name)) continue; // 0: a host we can't reach
                         var props = new PHashtable();
                         int count = SteamMatchmaking.GetLobbyDataCount(lobby);
                         for (int k = 0; k < count; k++)
