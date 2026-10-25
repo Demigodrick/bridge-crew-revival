@@ -198,6 +198,7 @@ namespace StbcRevival.Missions
                     if (lastLive != null && !ReferenceEquals(body, lastLive) && stationPeople > 0 && People(pod) == 0)
                     {
                         PutPeople(pod, stationPeople);
+                        Beamable(pod);
                         Plugin.Log.LogInfo($"Stellar evacuation: {stationPeople} people back in the reloaded escape pod");
                     }
                     else stationPeople = People(pod);
@@ -229,6 +230,7 @@ namespace StbcRevival.Missions
                     yield return Task.BFMBGDIDKEI.UsingSpawner(MakeSpawner(EscapePod, "Escape pod", Tag.Friendly))
                         .AtAngleAndDistanceFromBody(station, random.Next(0, 360), 1500f).OutputTo(pod);
                     PutPeople(pod, group);
+                    Beamable(pod);
                     stationPeople = group;
                     lastLive = pod.AHMPFHDGMKJ;
                     yield return Task.BCJDEKKIHDD.RemoveAllMarkers();
@@ -427,6 +429,34 @@ namespace StbcRevival.Missions
         // ---- Helpers ----------------------------------------------------------------------------------
 
         private int Aboard() => People(player);
+
+        // The transporter beams only from a body whose life signs or cargo are known, and a body that counts as
+        // already scanned (as the pods and stations do) can't be scanned again to find them. So they're made
+        // known (on every player's game: SetSubsystemKnown is the game's RPC). Only for a body with ship data
+        // (GetTargetInfo): the captain's order checks read it once the transporter can lock on, and without
+        // it they fail and take every crew order with them.
+        private static void Beamable(BodyRef body)
+        {
+            try
+            {
+                var sector = body?.AHMPFHDGMKJ as Sector.SectorBody;
+                var targetable = sector?.GetDetectable() as Sector.TargetableComponent;
+                bool shipData = sector?.GetTargetInfo() != null;
+                Plugin.Log.LogInfo($"Stellar evacuation: pod {sector?.GetType().Name}, ship data {shipData}, "
+                                   + $"life signs {(targetable == null ? "-" : targetable.IsSubsystemKnown(Sector.NHGGGDMADKM.Life) ? "known" : "unknown")}, "
+                                   + $"cargo {(targetable == null ? "-" : targetable.IsSubsystemKnown(Sector.NHGGGDMADKM.Cargo) ? "known" : "unknown")}");
+                if (targetable == null || !shipData) return;
+                foreach (var subsystem in new[] { Sector.NHGGGDMADKM.Life, Sector.NHGGGDMADKM.Cargo })
+                {
+                    targetable.AddTargetableSubsystem(subsystem);
+                    if (!targetable.IsSubsystemKnown(subsystem)) targetable.SetSubsystemKnown(subsystem, true);
+                }
+            }
+            catch (Exception e)
+            {
+                Plugin.Log.LogWarning("Stellar evacuation: making the pod beamable: " + e.Message);
+            }
+        }
 
         // People onto a body: straight into its cargo bay, adding one if it has none (the game's own cargo task
         // does nothing without one), and shared with the crew's games (Update, "EVC").
