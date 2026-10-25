@@ -187,7 +187,7 @@ namespace StbcRevival.Missions
             string line = "Scan the disabled freighter for life signs, then beam the survivors aboard";
             yield return Task.NECMCDDOFJB.AddSubDirectives(Directive, line);
             var wreck = new BodyRef();
-            yield return Task.BFMBGDIDKEI.UsingSpawner(MakeSpawner(Freighters[random.Next(Freighters.Length)], "Freighter", Tag.Neutral))
+            yield return Task.BFMBGDIDKEI.UsingSpawner(MakeSpawner(Freighters[random.Next(Freighters.Length)], "Freighter", Tag.Friendly) /* neutral shows as hostile: no beaming */)
                 .AtAngleAndDistanceFromBody(player, random.Next(0, 360), ambush ? 20000f : 6000f).OutputTo(wreck);
             yield return Task.OFNIKPPKOGI.TellAI(wreck).ToSetShieldStrength(AI.IDCAFFBNKFO.Weak);
             yield return Task.KDNOMKAPDKG.TellAI(wreck).ToDisable();

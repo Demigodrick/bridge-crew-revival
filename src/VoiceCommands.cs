@@ -42,6 +42,7 @@ namespace StbcRevival
             "fire", "phasers", "phaser", "torpedoes", "torpedo", "photon", "arm", "disarm", "cease", "hold", "target",
             "targeting", "clear", "engines", "engine", "weapons", "shields", "shield", "comms", "communications",
             "disrupt", "hack", "scan", "probe", "analyze", "analyse", "analysis", "examine", "identify", "beam", "transport", "survivors", "crew",
+            "aboard", "bring", "get", "evacuate", "people", "lifeforms", "rescue", "save",
             "stealth", "signature", "reduce", "quiet", "silent", "running", "cloak", "cloaked", "hunt",
             // shields
             "up", "down", "raise", "lower", "drop", "on", "off", "modulate",
@@ -111,7 +112,10 @@ namespace StbcRevival
             if (any(new[] { "analyze", "analyse", "analysis", "examine", "identify" })) return "AnalyseTarget";
             if (any(new[] { "target", "targeting" }))  // a bare "target" (or "analyse the target", with "analyse" lost): analyse it
                 return engines ? "TargetEngines" : shields ? "TargetShields" : weapons ? "TargetWeapons" : "AnalyseTarget";
-            if (any(new[] { "beam", "transport" })) return "TransportFromTarget";
+            // Beaming: "beam the survivors aboard", "transport them", "evacuate the crew", "bring them aboard"...
+            if (any(new[] { "beam", "transport", "evacuate", "energize" }) || (any(new[] { "survivors", "crew", "people", "lifeforms" })
+                && any(new[] { "rescue", "bring", "get", "aboard", "up", "save" })) || (w.Contains("aboard") && any(new[] { "bring", "get", "them" })))
+                return "TransportFromTarget";
             if (any(new[] { "scan", "probe" })) return "ScanTarget";
             if (any(new[] { "cloak", "cloaked", "hunt" })) return "CloakHunt";
             if (any(new[] { "stealth", "signature", "quiet", "silent" })) return "ReduceSignature";
