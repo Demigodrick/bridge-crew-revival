@@ -125,7 +125,7 @@ namespace StbcRevival
             VoiceCommands = Config.Bind("Voice", "VoiceCommands", false,
                 "Prototype: the captain's spoken orders without IBM Watson, recognised offline on this PC. Hold the game's voice "
                 + "command button at the captain's console and say: shields up, full impulse, fire phasers, fire torpedoes, target engines. "
-                + "Needs BepInEx/plugins/vosk (libvosk.dll and a model folder). Takes effect after a restart.");
+                + "Needs BepInEx/vosk (libvosk.dll and a model folder). Takes effect after a restart.");
             FleetBattleSize = Config.Bind("Revival", "FleetBattleSize", 30,
                 "Fleet Battle: ships on each side (1-60). Big battles are heavy on the host's computer; lower it if the game stutters.");
             MapOverride = Config.Bind("Debug", "MapOverride", "",

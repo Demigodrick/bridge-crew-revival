@@ -22,8 +22,8 @@ namespace StbcRevival
     ///     that reports true; the Watson side of VoiceRecognitionManager (never set up) is skipped.
     ///   - Button down: record the microphone (Unity, 16 kHz). Button up: recognise on a background thread.
     ///   - A known phrase: the command, as Watson's answers did; anything else: the crew's "didn't catch that".
-    /// Needs BepInEx/plugins/vosk/libvosk.dll (and its three runtime DLLs) and a model folder,
-    /// BepInEx/plugins/vosk/model (e.g. vosk-model-small-en-us-0.15).
+    /// Needs BepInEx/vosk/libvosk.dll (and its three runtime DLLs) and a model folder,
+    /// BepInEx/vosk/model (e.g. vosk-model-small-en-us-0.15).
     /// </summary>
     internal static class VoiceCommands
     {
@@ -182,10 +182,10 @@ namespace StbcRevival
             if (failed) return false;
             try
             {
-                var folder = Path.Combine(Paths.PluginPath, "vosk");
+                var folder = Path.Combine(Paths.BepInExRootPath, "vosk"); // not under plugins: BepInEx scans that for mods
                 var modelPath = Path.Combine(folder, "model");
                 if (!File.Exists(Path.Combine(folder, "libvosk.dll")) || !Directory.Exists(modelPath))
-                    throw new FileNotFoundException("BepInEx/plugins/vosk (libvosk.dll and model) is missing");
+                    throw new FileNotFoundException("BepInEx/vosk (libvosk.dll and model) is missing");
                 // Load the native DLLs by full path first, so the [DllImport("libvosk")] below finds it loaded.
                 foreach (var dll in new[] { "libwinpthread-1.dll", "libgcc_s_seh-1.dll", "libstdc++-6.dll", "libvosk.dll" })
                 {
