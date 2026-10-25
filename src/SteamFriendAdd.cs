@@ -14,6 +14,8 @@ namespace StbcRevival
     /// In Steam mode it opens Steam's own add-friend page for that player (the overlay: Steam has no call that
     /// sends a request by itself), from the Steam ID every mod player shares in their player properties
     /// (HostHandoff's "SID"). The button is available for a player with one who isn't you or already a friend.
+    /// The ID is what the player says about themselves; Steam's page shows whose profile it is before you
+    /// send anything, so a wrong one only opens someone else's page.
     /// </summary>
     internal static class SteamFriendAdd
     {
@@ -70,7 +72,7 @@ namespace StbcRevival
         {
             if (id == 0 || id == SteamMode.MySteamId) return false;
             try { return SteamFriends.GetFriendRelationship(new CSteamID(id)).ToString() != "k_EFriendRelationshipFriend"; }
-            catch { return true; }
+            catch { return false; } // can't tell: leave it off
         }
 
         // NovaPlayerInfo → its network player (PKIBEAIHJNE) → the "SID" player property.
