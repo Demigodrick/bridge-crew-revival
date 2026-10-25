@@ -8,8 +8,8 @@ namespace StbcRevival
 {
     /// <summary>
     /// The briefing room (Aegis_Briefing_Room), a little livelier. Visual only, on each player's own game:
-    ///   - Props the room ships with but keeps switched off: the Saurian brandy and glasses, the platter, the
-    ///     Starfleet logo.
+    ///   - Props the room ships with but keeps switched off: the Saurian brandy and glasses and the platter, on
+    ///     the side table.
     ///   - The table hologram (Mdl_AegisBriefingRoom: a slowly spinning Aegis, or the Enterprise / Enterprise-D,
     ///     chosen by ConsoleBriefingRoomShipHolograms) shows the chosen Revival mission's enemy ship instead.
     ///     It's a copy of the ship prefab's visible meshes only (no AI, physics or network parts), in the
@@ -23,7 +23,7 @@ namespace StbcRevival
 
         private static readonly string[] Props =
         {
-            "SaurianBrandyBottleNotGlass", "Glasses", "Platter001", "StarFleetLogo",
+            "SaurianBrandyBottleNotGlass", "Glasses", "Platter001", // not the StarFleetLogo: unfinished (no material)
         };
 
         // The ship each Revival mission sends at you.
