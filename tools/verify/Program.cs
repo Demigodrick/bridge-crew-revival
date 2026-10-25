@@ -292,7 +292,7 @@ var commandManager = game.GetType("AI.CommandManager");
 foreach (var m in new[] { "TriggerCommand", "UpdateSimpleOrders", "PlayInvalidCommandVO" })
     Check($"  AI.CommandManager.{m}", commandManager?.GetMethod(m, PS));
 foreach (var c in new[] { "RaiseShields", "SetSpeedFull", "FirePhasers", "FireTorpedoes", "TargetEngines" })
-    Check($"  crew command {c}", game.GetType("BHPPPGKNAHK")?.GetField(c));
+    Check($"  crew command {c}", game.GetType("AI.BHPPPGKNAHK")?.GetField(c));
 foreach (var t in new[] { "GEJIEIDGDBO", "MJNNGHIKMIO", "DCDOEBCMNHK" })
     Check($"  voice UI event {t}", game.GetType(t));
 

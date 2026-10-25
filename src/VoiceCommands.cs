@@ -136,7 +136,7 @@ namespace StbcRevival
         {
             SendUiEvent("DCDOEBCMNHK"); // done
             var manager = AccessTools.TypeByName("AI.CommandManager");
-            var commands = AccessTools.TypeByName("BHPPPGKNAHK");
+            var commands = AccessTools.TypeByName("AI.BHPPPGKNAHK");
             if (manager == null || commands == null) return;
             if (command == null)
             {
