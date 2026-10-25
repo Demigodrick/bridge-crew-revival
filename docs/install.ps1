@@ -211,7 +211,23 @@ function Install-BridgeCrewRevival([string]$GameDir, [bool]$Uninstall, [string]$
     try {
         # ---- The mod's files: next to this script (release zip), or the GitHub release --------
 
-        if ($Here -and (Test-Path (Join-Path $Here "plugins\StbcRevival.dll"))) {
+        # A zip's own copy, unless the website has a newer release (running an old zip's installer again
+        # would otherwise put the same old version back).
+        $zipped = $Here -and (Test-Path (Join-Path $Here "plugins\StbcRevival.dll"))
+        if ($zipped -and -not $env:STBC_VERSION) {
+            $mine = if ((Split-Path -Leaf $Here) -match '^BridgeCrewRevival-([0-9][0-9.]*)$') { $Matches[1] } else { "" }
+            try {
+                $ProgressPreference = "SilentlyContinue"
+                $latest = (Invoke-WebRequest -Uri "https://demigodrick.github.io/bridge-crew-revival/version.txt" -UseBasicParsing -TimeoutSec 15).Content.Trim()
+                if ($mine -and $latest -match '^[0-9][0-9.]*$' -and [version]$latest -gt [version]$mine) {
+                    Info "This zip has Bridge Crew Revival $mine; $latest is out, so that's what goes in."
+                    $zipped = $false
+                }
+            } catch {
+                Info "Couldn't check for a newer version; installing this zip's $mine."
+            }
+        }
+        if ($zipped) {
             $source = Join-Path $Here "plugins"
         } else {
             $base = "https://github.com/$Repo/releases/latest/download"

@@ -300,7 +300,21 @@ main() {
   if [ -n "${BASH_SOURCE[0]:-}" ] && [ -f "${BASH_SOURCE[0]}" ]; then
     here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
   fi
-  if [ -n "$here" ] && [ -f "$here/plugins/StbcRevival.dll" ]; then
+  # A zip's own copy, unless the website has a newer release (running an old zip's installer again would
+  # otherwise put the same old version back).
+  local zipped=0 mine latest
+  [ -n "$here" ] && [ -f "$here/plugins/StbcRevival.dll" ] && zipped=1
+  if [ "$zipped" = 1 ] && [ -z "${STBC_VERSION:-}" ]; then
+    mine="$(basename "$here")"; mine="${mine#BridgeCrewRevival-}"
+    latest="$(curl -fsSL --max-time 15 https://demigodrick.github.io/bridge-crew-revival/version.txt 2>/dev/null | tr -d '[:space:]' || true)"
+    case "$mine$latest" in *[!0-9.]*|"") ;; *)
+      if [ "$latest" != "$mine" ] && [ "$(printf '%s\n%s\n' "$mine" "$latest" | sort -V | tail -n1)" = "$latest" ]; then
+        info "This zip has Bridge Crew Revival $mine; $latest is out, so that's what goes in."
+        zipped=0
+      fi ;;
+    esac
+  fi
+  if [ "$zipped" = 1 ]; then
     plugins="$here/plugins"
   else
     local base="https://github.com/$REPO/releases/latest/download"
