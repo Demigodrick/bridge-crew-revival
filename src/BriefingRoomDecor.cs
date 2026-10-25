@@ -50,11 +50,13 @@ namespace StbcRevival
             {
                 shown = null;
                 hologram = null;
+                placed = false;
                 hidden.Clear();
                 dimmed.Clear();
                 return;
             }
-            ShowProps();
+            bool wereOut = ShowProps();
+            if (wereOut && !placed) PlaceProps(); // a tick after switching them on, when their bounds are known
             var mission = RevivalBriefing.RoomSelection();
             if (mission == null || !Enemies.ContainsKey(mission)) mission = null;
             if (mission == shown && (mission == null || hologram != null)) return;
@@ -63,12 +65,14 @@ namespace StbcRevival
             if (mission != null) Show(root, mission);
         }
 
-        private static void ShowProps()
+        // True when every prop was already out (nothing switched on this time).
+        private static bool ShowProps()
         {
+            bool allOut = true;
             foreach (var name in Props)
             {
                 var prop = FindInactive(name);
-                if (prop == null) continue;
+                if (prop == null) { allOut = false; continue; }
                 bool changed = !prop.activeSelf;
                 if (changed) prop.SetActive(true);
                 // Its renderers may be switched off as well as the object, and it sits on a layer the players'
@@ -80,10 +84,53 @@ namespace StbcRevival
                     if (layer >= 0 && r.gameObject.layer != layer) { r.gameObject.layer = layer; changed = true; }
                 }
                 if (changed)
+                {
+                    allOut = false;
                     foreach (var r in prop.GetComponentsInChildren<Renderer>(true))
                         Plugin.Log.LogInfo($"Briefing room: {name} out: {r.name} at {r.bounds.center}, size {r.bounds.size}, "
                                            + $"scale {prop.transform.lossyScale}, layer {r.gameObject.layer}, material {(r.sharedMaterial != null ? r.sharedMaterial.name : "none")}");
+                }
             }
+            return allOut;
+        }
+
+        private static bool placed;
+
+        // Onto the side table's top (they sit at its middle height, half inside it, until the game would move
+        // them): the platter flat on it, the glasses and the bottle on the platter.
+        private static void PlaceProps()
+        {
+            placed = true;
+            try
+            {
+                var table = FindInactive("BriefingRoom_SideTable (3)");
+                var top = table == null ? null : table.GetComponentsInChildren<Renderer>(true).FirstOrDefault();
+                if (top == null) return;
+                var t = top.bounds;
+                var cam = Camera.main;
+                Plugin.Log.LogInfo($"Briefing room: side table top {t.max.y:0.00} m at ({t.center.x:0.00}, {t.center.z:0.00}); "
+                                   + $"camera draws layer 13: {(cam != null ? ((cam.cullingMask & (1 << 13)) != 0).ToString() : "no camera")}");
+                float surface = t.max.y + 0.005f;
+                surface = Place("Platter001", t.center.x, t.center.z, surface);
+                Place("Glasses", t.center.x + 0.1f, t.center.z + 0.06f, surface);
+                Place("SaurianBrandyBottleNotGlass", t.center.x - 0.12f, t.center.z - 0.05f, surface);
+            }
+            catch (Exception e)
+            {
+                Plugin.Log.LogWarning("Briefing room: placing the props: " + e.Message);
+            }
+        }
+
+        // Moves a prop so its base sits at the given height, centred on (x, z); returns its new top height.
+        private static float Place(string name, float x, float z, float bottom)
+        {
+            var prop = FindInactive(name);
+            var renderer = prop == null ? null : prop.GetComponentsInChildren<Renderer>(true).FirstOrDefault();
+            if (renderer == null) return bottom;
+            var b = renderer.bounds;
+            prop.transform.position += new Vector3(x - b.center.x, bottom - b.min.y, z - b.center.z);
+            Plugin.Log.LogInfo($"Briefing room: {name} placed at ({x:0.00}, {bottom:0.00}, {z:0.00})");
+            return bottom + b.size.y;
         }
 
         // The layer the room's own furniture is drawn on: the side table's (the props stand on one), -1 if not found.
