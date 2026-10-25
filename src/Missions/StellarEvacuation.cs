@@ -60,6 +60,9 @@ namespace StbcRevival.Missions
         private const string ExplosionPrefab = "Sector/System/Mission 02 Prefabs/StarExplosion";
         private const string Home = "Perseph";
         private const string EscapePod = "Sector/Ships/Ship - EscapePodFull"; // the E3 demo's survivors' pods
+        // The transport: a Starfleet ship, so it shows as friendly (a freighter is neutral whatever its tags, and
+        // could be fired on). The Raleigh, where the campaign has you deliver survivors ("their med bay is larger").
+        private const string TransportShip = "Sector/Ships/Ship - Raleigh";
 
         // Raiders out to loot the evacuation: pirates, and Klingons who decloak.
         private static readonly string[] Raiders =
@@ -163,7 +166,7 @@ namespace StbcRevival.Missions
             else
             {
                 dropOff = "the transport";
-                yield return Task.BFMBGDIDKEI.UsingSpawner(MakeSpawner(Freighters[random.Next(Freighters.Length)], "Transport", Tag.Friendly))
+                yield return Task.BFMBGDIDKEI.UsingSpawner(MakeSpawner(TransportShip, "USS Raleigh", Tag.Friendly))
                     .AtAngleAndDistanceFromBody(player, random.Next(0, 360), TransportDistance).OutputTo(transport);
                 yield return Task.KDNOMKAPDKG.TellAI(transport).ToDisable(); // holds position
                 Plugin.Log.LogInfo($"Stellar evacuation: transport {Distance(station, transport) / 1000:0} km from the station");
@@ -259,14 +262,14 @@ namespace StbcRevival.Missions
                 if (quarantine != null && transport.AHMPFHDGMKJ != null && Live(transport) && !LastStandWaves.Alive(transport, false))
                 {
                     Plugin.Log.LogInfo("Stellar evacuation: transport destroyed; another is on its way");
-                    foreach (var step in Say("The transport was destroyed. Another will meet you at Quarantine")) yield return step;
+                    foreach (var step in Say("The USS Raleigh was destroyed. Another transport will meet you at Quarantine")) yield return step;
                     transport = new BodyRef();
                     spawningTransport = false;
                 }
                 if (quarantine != null && transport.AHMPFHDGMKJ == null && !spawningTransport && Distance(player, quarantine) <= ArrivedRange)
                 {
                     spawningTransport = true;
-                    yield return Task.BFMBGDIDKEI.UsingSpawner(MakeSpawner(Freighters[random.Next(Freighters.Length)], "Transport", Tag.Friendly))
+                    yield return Task.BFMBGDIDKEI.UsingSpawner(MakeSpawner(TransportShip, "USS Raleigh", Tag.Friendly))
                         .AtAngleAndDistanceFromBody(player, random.Next(0, 360), 3000f).FaceOtherBody(player).OutputTo(transport);
                     yield return Task.KDNOMKAPDKG.TellAI(transport).ToDisable(); // holds position
                     yield return Mark();
@@ -301,7 +304,7 @@ namespace StbcRevival.Missions
                     if (stationPeople == 0) ready = true;
                     yield return Task.CIAHOPCODGJ.WithTargets(player).SetCargo(Sector.CargoTypes.People, 0);
                     Plugin.Log.LogInfo($"Stellar evacuation: {aboard} delivered, {saved}/{total} saved");
-                    foreach (var step in Say(saved >= total ? "Everyone's off the station. Warp out!" : $"{aboard} people transferred to the transport")) yield return step;
+                    foreach (var step in Say(saved >= total ? "Everyone's off the station. Warp out!" : $"{aboard} people transferred to the USS Raleigh")) yield return step;
                 }
 
                 if (notice != null && UnityEngine.Time.time > noticeUntil)
@@ -494,7 +497,11 @@ namespace StbcRevival.Missions
             if (notice != null) yield return Task.NECMCDDOFJB.RemoveSubDirective(under, notice);
             notice = text;
             noticeUntil = UnityEngine.Time.time + 8f;
-            if (text != null) yield return Task.NECMCDDOFJB.AddSubDirectives(under, text);
+            if (text == null) yield break;
+            yield return Task.NECMCDDOFJB.AddSubDirectives(under, text);
+            // And on every station's console, as the game's own crew messages (sent to every player).
+            try { Bridge.Instance.SendConsoleMessage(UI.MIFGHKACDIH.All, text, 6f); }
+            catch (Exception e) { Plugin.Log.LogWarning("Stellar evacuation: console message: " + e.Message); }
         }
 
         // ---- Helpers ----------------------------------------------------------------------------------
