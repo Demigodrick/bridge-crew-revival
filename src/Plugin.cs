@@ -211,6 +211,7 @@ namespace StbcRevival
             Safely("romulan face", StbcRevival.RomulanFace.Update);
             Safely("romulan creator choice", StbcRevival.RomulanCreatorOption.Update);
             Safely("revival settings", RevivalSettings.Update);
+            Safely("stellar evacuation", StbcRevival.Missions.StellarEvacuationObjective.Update);
             Safely("mission maps", StbcRevival.Missions.MissionMaps.Update);
             Safely("mod version check", ModVersionCheck.Update);
             Safely("host hand-off", HostHandoff.Update);

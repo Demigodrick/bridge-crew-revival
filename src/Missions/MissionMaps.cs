@@ -12,7 +12,7 @@ namespace StbcRevival.Missions
     /// <summary>
     /// Which sector map a mission loads. The game always loads one map per mission (Loader.GetMapName, on
     /// every player's machine); Ongoing Voyages and the campaign use "The Trench". Here:
-    ///   - Last Stand and Stellar Evacuation are played in the E3 demo sector.
+    ///   - Last Stand is fought in the E3 demo sector.
     ///   - [Debug] MapOverride loads any map from the game's Resources ("Mission Data/Maps/...") for an
     ///     Ongoing Voyage, to look around the leftover test and demo sectors.
     /// The host's choice goes in the room ("RM"), so everyone loads the same map. Off the Trench there are no
@@ -47,7 +47,7 @@ namespace StbcRevival.Missions
             var own = Plugin.MapOverride.Value;
             if (!string.IsNullOrEmpty(own) && Room() == null) return own; // on your own, out of a room
             var selected = RevivalMissions.Selected;
-            return selected == typeof(LastStandSequence) || selected == typeof(StellarEvacuationSequence) ? E3 : null;
+            return selected == typeof(LastStandSequence) ? E3 : null;
         }
 
         private static void MapName_Postfix(ref string __result)

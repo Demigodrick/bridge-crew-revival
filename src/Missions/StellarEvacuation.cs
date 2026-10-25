@@ -19,7 +19,10 @@ namespace StbcRevival.Missions
     /// ready for the transporter a group at a time: scan the station, beam the group aboard, impulse to
     /// the transport and drop them off (within DeliverRange, as the game's own rescues "deliver survivors to
     /// safety"), then go back for the next group. [Revival] EvacuationMinutes sets the time (10 by default).
-    /// Played in the E3 demo sector, centred on Perseph. The eruption is the E3 demo's own: that sector's star
+    /// Centred on Perseph (in the Trench). Map stations don't all carry the SpaceStation tag or a cargo bay, so the
+    /// station is found by tag or name, and given a cargo bay for its people if it has none (on every player's
+    /// game: the host shares the station and count as a room property, "EVC"). Where there's a StarManager star
+    /// (the E3 demo sector), the eruption is the E3 demo's own: that sector's star
     /// (tagged Star and Enemy) has a StarManager whose animation goes through "event1", "event2",
     /// "preCataclysm" and "cataclysm" (sent to every player), with the demo's warnings from the comms officer.
     /// Without that star (another map), the game's procedural rescue eruption stands in: the blast-wave
@@ -101,7 +104,8 @@ namespace StbcRevival.Missions
             Plugin.Log.LogInfo($"Stellar evacuation: in {systemName}");
 
             // The station and the transport.
-            station = Find(Tag.SpaceStation).OrderBy(_ => random.Next()).FirstOrDefault();
+            DumpBodies();
+            station = FindStation();
             string stationName = station == null ? null : Localized(station.AHMPFHDGMKJ.ALPAOOKFIEE.BaseName);
             if (station == null)
             {
@@ -118,12 +122,17 @@ namespace StbcRevival.Missions
             star = CriticalStar(system);
             Plugin.Log.LogInfo(star != null ? $"Stellar evacuation: the star's own eruption ({star.name})" : "Stellar evacuation: no erupting star here; the blast-wave effect stands in");
 
-            // The transport, an impulse jump from the station. Spawned as a step of its own and given ten seconds:
-            // if it can't be placed by the station, it goes by the ship instead.
+            // The transport, an impulse jump from the station: at the system's quarantine point if it has one
+            // (Perseph does), else TransportDistance out. Spawned as a step of its own and given ten seconds:
+            // if it can't be placed there, it goes by the ship instead.
+            var quarantine = AllBodies().FirstOrDefault(b => Named(b, "quarantine"));
+            Plugin.Log.LogInfo(quarantine != null ? $"Stellar evacuation: transport at the quarantine point, {Distance(station, quarantine) / 1000:0} km from the station"
+                                                  : "Stellar evacuation: no quarantine point here; transport placed out from the station");
             transport = new BodyRef();
             string prefab = Freighters[random.Next(Freighters.Length)];
             Objective.AddStep("transport", Task.BFMBGDIDKEI.UsingSpawner(MakeSpawner(prefab, "Transport", Tag.Friendly))
-                .AtAngleAndDistanceFromBody(station, random.Next(0, 360), TransportDistance).FaceOtherBody(station).OutputTo(transport));
+                .AtAngleAndDistanceFromBody(quarantine ?? station, random.Next(0, 360), quarantine != null ? 3000f : TransportDistance)
+                .FaceOtherBody(station).OutputTo(transport));
             yield return Task.KKALNAMJCNH.WithName("transport");
             for (int i = 0; i < 10 && transport.AHMPFHDGMKJ == null; i++) yield return Task.KNMMMJOOBHC.WithTime(1f);
             if (transport.AHMPFHDGMKJ == null)
@@ -176,7 +185,7 @@ namespace StbcRevival.Missions
                     placedAt = UnityEngine.Time.time;
                     int group = Math.Min(total - placed, 10 + random.Next(0, 6));
                     placed += group;
-                    yield return Task.CIAHOPCODGJ.WithTargets(station).SetCargo(Sector.CargoTypes.People, group);
+                    PutPeople(station, group);
                     yield return Task.CIAHOPCODGJ.WithTargets(station).SetShieldHealthPercent(0f);
                     LifeSignsKnown(station);
                     Plugin.Log.LogInfo($"Stellar evacuation: group of {group} ready ({placed}/{total} placed)");
@@ -393,6 +402,121 @@ namespace StbcRevival.Missions
             catch (Exception e)
             {
                 Plugin.Log.LogWarning("Stellar evacuation: life signs: " + e.Message);
+            }
+        }
+
+        // People onto a body: straight into its cargo bay, adding one if it has none (the game's own cargo task
+        // does nothing without one), and shared with the crew's games (Update, "EVC").
+        private static void PutPeople(BodyRef body, int count)
+        {
+            try
+            {
+                if (!(body?.AHMPFHDGMKJ is Sector.SectorBody sector))
+                {
+                    Plugin.Log.LogWarning("Stellar evacuation: the station isn't a body people can be put on");
+                    return;
+                }
+                bool had = sector.GetCargo() != null;
+                SetPeople(sector, count);
+                Plugin.Log.LogInfo($"Stellar evacuation: {count} people on {sector.name} ({(had ? "its cargo bay" : "a cargo bay added")}); reads back {People(body)}");
+                var room = Patches.PhotonNetworkType?.GetMethod("get_room", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static)?.Invoke(null, null);
+                if (room != null) PhotonProps.Set(room, RoomKey, $"{sector.FLOBHLBHLLJ}:{count}");
+            }
+            catch (Exception e)
+            {
+                Plugin.Log.LogWarning("Stellar evacuation: putting people aboard: " + e.Message);
+            }
+        }
+
+        private static void SetPeople(Sector.SectorBody sector, int count)
+        {
+            var cargo = sector.GetCargo() ?? sector.AddCargo();
+            cargo.LEDFEFEFFAO.Set(count, Sector.CargoTypes.People);
+            cargo.DMPFGBPDOLN.Set(count, Sector.CargoTypes.People);
+        }
+
+        internal const string RoomKey = "EVC";
+        private static string applied;
+        private static float nextCheck;
+
+        /// <summary>Every player: put the host's latest group on the station here too (its cargo bay may be ours alone).</summary>
+        internal static void Update()
+        {
+            if (UnityEngine.Time.unscaledTime < nextCheck) return;
+            nextCheck = UnityEngine.Time.unscaledTime + 1f;
+            var photon = Patches.PhotonNetworkType;
+            var room = photon?.GetMethod("get_room", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static)?.Invoke(null, null);
+            if (room == null || photon.GetMethod("get_isMasterClient", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static)?.Invoke(null, null) is true) return;
+            var props = room.GetType().GetMethod("get_customProperties")?.Invoke(room, null) as System.Collections.IDictionary;
+            var value = props != null && props.Contains(RoomKey) ? props[RoomKey] as string : null;
+            if (string.IsNullOrEmpty(value) || value == applied) return;
+            var parts = value.Split(':');
+            if (parts.Length != 2 || !int.TryParse(parts[1], out var count)) return;
+            var sector = UnityEngine.Object.FindObjectsOfType<Sector.SectorBody>().FirstOrDefault(b => b.FLOBHLBHLLJ.ToString() == parts[0]);
+            if (sector == null) return; // not loaded yet: try again in a second
+            SetPeople(sector, count);
+            applied = value;
+            Plugin.Log.LogInfo($"Stellar evacuation: {count} people on {sector.name} (from the host)");
+        }
+
+        // The station: tagged SpaceStation, else a body named like one; null if neither.
+        private BodyRef FindStation()
+        {
+            var tagged = Find(Tag.SpaceStation);
+            if (tagged.Count > 0) return tagged[random.Next(tagged.Count)];
+            var named = AllBodies().Where(b => LooksLikeStation(b.AHMPFHDGMKJ.ALPAOOKFIEE.BaseName) && !Named(b, "quarantine") && b.AHMPFHDGMKJ is Sector.SectorBody).ToList();
+            return named.Count > 0 ? named[random.Next(named.Count)] : null;
+        }
+
+        private static bool Named(BodyRef body, string word)
+        {
+            var name = body?.AHMPFHDGMKJ?.ALPAOOKFIEE?.BaseName;
+            return new[] { name, Localized(name) }.Any(text => !string.IsNullOrEmpty(text) && text.IndexOf(word, StringComparison.OrdinalIgnoreCase) >= 0);
+        }
+
+        private static bool LooksLikeStation(string name)
+        {
+            foreach (var text in new[] { name, Localized(name) })
+                if (!string.IsNullOrEmpty(text) && new[] { "station", "starbase", "outpost", "depot", "colony", "base" }
+                        .Any(word => text.IndexOf(word, StringComparison.OrdinalIgnoreCase) >= 0))
+                    return true;
+            return false;
+        }
+
+        private static readonly Tag[] DumpTags =
+        {
+            Tag.SpaceStation, Tag.RegionSpaceStation, Tag.POI, Tag.REGION, Tag.ImpulseDestination, Tag.WarpDestination,
+            Tag.SpawnPoint, Tag.Planet, Tag.Moon, Tag.Star, Tag.StarEruption, Tag.Satellite, Tag.Ship, Tag.Neutral,
+            Tag.Friendly, Tag.Enemy, Tag.Buoy, Tag.Asteroid, Tag.Anomaly, Tag.Nebula, Tag.Mission,
+        };
+
+        // Every body of the system found by any of DumpTags.
+        private List<BodyRef> AllBodies()
+        {
+            var all = new List<BodyRef>();
+            foreach (var tag in DumpTags)
+                foreach (var body in Find(tag))
+                    if (!all.Any(o => o.AHMPFHDGMKJ == body.AHMPFHDGMKJ)) all.Add(body);
+            return all;
+        }
+
+        // What's in the system, for finding stations and the like on maps we don't know.
+        private void DumpBodies()
+        {
+            try
+            {
+                foreach (var body in AllBodies())
+                {
+                    var t = body.AHMPFHDGMKJ.ALPAOOKFIEE;
+                    var tags = DumpTags.Where(tag => { try { return t.HasTag(tag); } catch { return false; } }).Select(tag => tag.ToString()).ToArray();
+                    var sector = body.AHMPFHDGMKJ as Sector.SectorBody;
+                    Plugin.Log.LogInfo($"Stellar evacuation: body '{t.BaseName}' ({Localized(t.BaseName)}), {Distance(player, body) / 1000:0} km: "
+                                       + $"{string.Join(" ", tags)}{(sector == null ? " [not a sector body]" : $" [{sector.GetType().Name}{(sector.GetCargo() != null ? ", cargo bay" : "")}]")}");
+                }
+            }
+            catch (Exception e)
+            {
+                Plugin.Log.LogWarning("Stellar evacuation: listing bodies: " + e.Message);
             }
         }
 
