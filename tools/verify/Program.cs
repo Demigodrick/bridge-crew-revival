@@ -283,5 +283,18 @@ var playerType = photon?.GetMethod("get_player", PS)?.ReturnType;
 foreach (var m in new[] { "get_ID", "get_name", "get_customProperties", "SetCustomProperties" })
     Check($"  PhotonPlayer.{m}", playerType?.GetMethod(m, Inst));
 
+// Voice commands (prototype)
+var vrmType = game.GetType("VoiceRecognitionManager");
+foreach (var m in new[] { "get_UsingVoiceRecognition", "Update", "CurrentRoleIsCaptain" })
+    Check($"VoiceRecognitionManager.{m} (voice commands)", vrmType?.GetMethod(m, Inst));
+Check("  NKEPKEMCLNH(bool) (voice button event)", game.GetType("NKEPKEMCLNH")?.GetConstructors(Inst).FirstOrDefault(c => c.GetParameters().Length == 1));
+var commandManager = game.GetType("AI.CommandManager");
+foreach (var m in new[] { "TriggerCommand", "UpdateSimpleOrders", "PlayInvalidCommandVO" })
+    Check($"  AI.CommandManager.{m}", commandManager?.GetMethod(m, PS));
+foreach (var c in new[] { "RaiseShields", "SetSpeedFull", "FirePhasers", "FireTorpedoes", "TargetEngines" })
+    Check($"  crew command {c}", game.GetType("BHPPPGKNAHK")?.GetField(c));
+foreach (var t in new[] { "GEJIEIDGDBO", "MJNNGHIKMIO", "DCDOEBCMNHK" })
+    Check($"  voice UI event {t}", game.GetType(t));
+
 Console.WriteLine(failures == 0 ? "\nAll targets resolved." : $"\n{failures} target(s) missing.");
 return failures == 0 ? 0 : 1;

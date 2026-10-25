@@ -175,6 +175,7 @@ namespace StbcRevival
             Missions.RevivalMissions.Patch(harmony);
             RomulanCreatorOption.Patch(harmony);
             RomulanFace.Patch(harmony);
+            VoiceCommands.Patch(harmony);
             if (Plugin.Diagnostics.Value)
                 StbcRevival.Diagnostics.Apply(harmony, photonNetwork);
         }
