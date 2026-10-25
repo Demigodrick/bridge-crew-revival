@@ -21,7 +21,7 @@ namespace StbcRevival
     ///     button" event (NKEPKEMCLNH) only while VoiceRecognitionManager.UsingVoiceRecognition is true, so
     ///     that reports true; the Watson side of VoiceRecognitionManager (never set up) is skipped.
     ///   - Button down: record the microphone (Unity, 16 kHz). Button up: recognise on a background thread.
-    ///   - A known phrase: the command, as Watson's answers did; anything else: the crew's "didn't catch that".
+    ///   - Key words pick the command (Parse), as Watson's intents did; nothing usable: the crew's "didn't catch that".
     /// Needs BepInEx/vosk/libvosk.dll (and its three runtime DLLs) and a model folder,
     /// BepInEx/vosk/model (e.g. vosk-model-small-en-us-0.15).
     /// </summary>
@@ -30,15 +30,40 @@ namespace StbcRevival
         private const int SampleRate = 16000;
         private const int MaxSeconds = 10;
 
-        // Prototype phrase list: phrase → the game's crew command (AI.BHPPPGKNAHK names).
-        private static readonly Dictionary<string, string> Phrases = new Dictionary<string, string>
+        // The words listened for (Vosk recognises any sequence of them; anything else comes back as "[unk]").
+        private static readonly string[] Vocabulary =
         {
-            ["shields up"] = "RaiseShields", ["raise shields"] = "RaiseShields",
-            ["full impulse"] = "SetSpeedFull", ["full speed"] = "SetSpeedFull", ["all ahead full"] = "SetSpeedFull",
-            ["fire phasers"] = "FirePhasers", ["fire"] = "FirePhasers",
-            ["fire torpedoes"] = "FireTorpedoes", ["fire photon torpedoes"] = "FireTorpedoes",
-            ["target engines"] = "TargetEngines", ["target their engines"] = "TargetEngines",
+            "shields", "shield", "up", "down", "raise", "lower", "drop", "on", "off", "modulate",
+            "fire", "phasers", "phaser", "torpedoes", "torpedo", "photon", "arm", "disarm", "cease", "hold",
+            "target", "engines", "weapons", "their", "the", "all", "speed", "full", "half", "quarter", "impulse",
+            "ahead", "stop", "reverse", "maximum", "scan", "enemy", "ship", "go",
         };
+
+        // Words → the game's crew command (AI.BHPPPGKNAHK names), by key words as Watson's intents did:
+        // "lower the shields", "shields down" and "drop shields" all lower them. Null when nothing fits.
+        internal static string Parse(string text)
+        {
+            var words = new HashSet<string>((text ?? "").Split(' ').Where(w => w.Length > 0 && w != "[unk]"));
+            Func<string[], bool> any = list => list.Any(words.Contains);
+            if (words.Count == 0) return null;
+            if (any(new[] { "cease", "hold" })) return "CeaseFire";
+            if (words.Contains("target"))
+                return any(new[] { "engines" }) ? "TargetEngines" : any(new[] { "shields", "shield" }) ? "TargetShields"
+                    : any(new[] { "weapons", "phasers", "phaser" }) ? "TargetWeapons" : null;
+            if (any(new[] { "shields", "shield" }))
+                return words.Contains("modulate") ? "ModulateShields"
+                    : any(new[] { "down", "lower", "drop", "off" }) ? "LowerShields" : "RaiseShields";
+            if (words.Contains("disarm")) return "DisarmTorpedoes";
+            if (words.Contains("arm")) return "ArmTorpedoes";
+            if (words.Contains("fire")) return any(new[] { "torpedoes", "torpedo", "photon" }) ? "FireTorpedoes" : "FirePhasers";
+            if (words.Contains("scan")) return "ScanTarget";
+            if (words.Contains("stop")) return "SetSpeedStop";
+            if (words.Contains("reverse")) return "SetSpeedReverse";
+            if (words.Contains("half")) return "SetSpeedHalf";
+            if (words.Contains("quarter")) return "SetSpeedQuarter";
+            if (any(new[] { "full", "maximum", "impulse", "ahead", "speed", "go" })) return "SetSpeedFull";
+            return null;
+        }
 
         private static bool ready, failed, listening;
         private static IntPtr model;
@@ -172,14 +197,14 @@ namespace StbcRevival
             string command = null;
             try
             {
-                var grammar = "[" + string.Join(",", Phrases.Keys.Select(p => "\"" + p + "\"").ToArray()) + ",\"[unk]\"]";
+                var grammar = "[" + string.Join(",", Vocabulary.Select(w => "\"" + w + "\"").ToArray()) + ",\"[unk]\"]";
                 var recogniser = Vosk.RecognizerNewGrm(model, SampleRate, Vosk.Str(grammar));
                 if (recogniser == IntPtr.Zero) throw new Exception("the recogniser didn't start");
                 Vosk.AcceptWaveform(recogniser, pcm, pcm.Length);
                 var json = Utf8(Vosk.FinalResult(recogniser));
                 Vosk.RecognizerFree(recogniser);
                 var text = Field(json, "text");
-                Phrases.TryGetValue(text ?? "", out command);
+                command = Parse(text);
                 Plugin.Log.LogInfo($"Voice commands: heard \"{text}\" → {command ?? "nothing known"}");
             }
             catch (Exception e)

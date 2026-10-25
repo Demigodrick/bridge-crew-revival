@@ -291,7 +291,9 @@ Check("  NKEPKEMCLNH(bool) (voice button event)", game.GetType("NKEPKEMCLNH")?.G
 var commandManager = game.GetType("AI.CommandManager");
 foreach (var m in new[] { "TriggerCommand", "UpdateSimpleOrders", "PlayInvalidCommandVO" })
     Check($"  AI.CommandManager.{m}", commandManager?.GetMethod(m, PS));
-foreach (var c in new[] { "RaiseShields", "SetSpeedFull", "FirePhasers", "FireTorpedoes", "TargetEngines" })
+foreach (var c in new[] { "RaiseShields", "LowerShields", "ModulateShields", "SetSpeedFull", "SetSpeedHalf", "SetSpeedQuarter",
+             "SetSpeedStop", "SetSpeedReverse", "FirePhasers", "FireTorpedoes", "ArmTorpedoes", "DisarmTorpedoes", "CeaseFire",
+             "TargetEngines", "TargetShields", "TargetWeapons", "ScanTarget" })
     Check($"  crew command {c}", game.GetType("AI.BHPPPGKNAHK")?.GetField(c));
 foreach (var t in new[] { "GEJIEIDGDBO", "MJNNGHIKMIO", "DCDOEBCMNHK" })
     Check($"  voice UI event {t}", game.GetType(t));

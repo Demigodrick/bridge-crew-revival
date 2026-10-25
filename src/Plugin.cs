@@ -125,7 +125,8 @@ namespace StbcRevival
                 "Testing only: describes the hail-screen characters and the player avatars to BepInEx/avatar-dump.txt.");
             VoiceCommands = Config.Bind("Voice", "VoiceCommands", false,
                 "Prototype: the captain's spoken orders without IBM Watson, recognised offline on this PC. Hold the game's voice "
-                + "command button at the captain's console and say: shields up, full impulse, fire phasers, fire torpedoes, target engines. "
+                + "command button (or PushToTalkKey) as captain and give an order: shields up/down, full/half/quarter impulse, all stop, reverse, "
+                + "fire phasers/torpedoes, arm/disarm torpedoes, cease fire, target engines/shields/weapons, scan, modulate shields. "
                 + "Needs BepInEx/vosk (libvosk.dll and a model folder). Takes effect after a restart.");
             PushToTalkKey = Config.Bind("Voice", "PushToTalkKey", UnityEngine.KeyCode.V,
                 "Hold to give a voice order as captain (as well as the game's own voice button, which depends on your controllers).");
