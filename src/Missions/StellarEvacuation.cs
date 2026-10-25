@@ -103,16 +103,16 @@ namespace StbcRevival.Missions
             // The system: one with a space station, preferably with an erupting star of its own.
             system = PickSystem();
             string systemName = SystemName(system);
+            // One objective at a time: getting there, then the evacuation (timed), then the escape (timed).
             string travel = $"Warp to the {systemName} system: its star is about to erupt";
-            yield return Task.NECMCDDOFJB.WithDescriptionString(Directive);
-            yield return Task.NECMCDDOFJB.AddSubDirectives(Directive, travel);
             if (Objective.KALBLMGFNIN != system)
             {
+                yield return Task.NECMCDDOFJB.WithDescriptionString(travel);
                 yield return Task.BCJDEKKIHDD.AddMarker(new[] { system });
                 while (Objective.KALBLMGFNIN != system) yield return Task.KNMMMJOOBHC.WithTime(2f);
                 yield return Task.BCJDEKKIHDD.RemoveAllMarkers();
+                yield return Task.NECMCDDOFJB.CompletedDirective(travel);
             }
-            yield return Task.NECMCDDOFJB.RemoveSubDirective(Directive, travel);
             yield return Task.KNMMMJOOBHC.WithTime(3f); // out of warp
             Plugin.Log.LogInfo($"Stellar evacuation: in {systemName}");
 
@@ -148,7 +148,6 @@ namespace StbcRevival.Missions
                 stationName = "the colony ship";
             }
             Plugin.Log.LogInfo($"Stellar evacuation: station {stationName}, {Distance(player, station) / 1000:0} km away");
-            yield return Task.BCJDEKKIHDD.AddMarker(new[] { station });
 
             // The drop-off: the system's quarantine point if it has one (Perseph does): an impulse jump away. The
             // transport waits there, spawned when you first arrive (its area isn't loaded before). Without one,
@@ -167,10 +166,10 @@ namespace StbcRevival.Missions
                 yield return Task.BFMBGDIDKEI.UsingSpawner(MakeSpawner(Freighters[random.Next(Freighters.Length)], "Transport", Tag.Friendly))
                     .AtAngleAndDistanceFromBody(player, random.Next(0, 360), TransportDistance).OutputTo(transport);
                 yield return Task.KDNOMKAPDKG.TellAI(transport).ToDisable(); // holds position
-                yield return Task.BCJDEKKIHDD.AddMarker(new[] { station, transport });
                 Plugin.Log.LogInfo($"Stellar evacuation: transport {Distance(station, transport) / 1000:0} km from the station");
             }
             Plugin.Log.LogInfo($"Stellar evacuation: {total} people on {stationName} in {systemName}, {minutes} minutes");
+            yield return Mark();
 
             string how = quarantine != null
                 ? $"At {stationName}, scan each escape pod and beam the people aboard, then impulse to Quarantine, where a transport takes them"
@@ -270,7 +269,7 @@ namespace StbcRevival.Missions
                     yield return Task.BFMBGDIDKEI.UsingSpawner(MakeSpawner(Freighters[random.Next(Freighters.Length)], "Transport", Tag.Friendly))
                         .AtAngleAndDistanceFromBody(player, random.Next(0, 360), 3000f).FaceOtherBody(player).OutputTo(transport);
                     yield return Task.KDNOMKAPDKG.TellAI(transport).ToDisable(); // holds position
-                    yield return Task.BCJDEKKIHDD.AddMarker(new[] { transport });
+                    yield return Mark();
                     Plugin.Log.LogInfo($"Stellar evacuation: transport waiting at the quarantine point ({(transport.AHMPFHDGMKJ != null ? "spawned" : "not spawned")})");
                 }
 
@@ -290,8 +289,7 @@ namespace StbcRevival.Missions
                     Beamable(pod);
                     stationPeople = group;
                     lastLive = pod.AHMPFHDGMKJ;
-                    yield return Task.BCJDEKKIHDD.RemoveAllMarkers();
-                    yield return Task.BCJDEKKIHDD.AddMarker(transport.AHMPFHDGMKJ != null ? new[] { pod, transport } : new[] { pod });
+                    yield return Mark();
                     Plugin.Log.LogInfo($"Stellar evacuation: group of {group} in an escape pod ({placed}/{total} placed), {Distance(player, pod) / 1000:0} km away");
                     foreach (var step in Say($"{group} people waiting in an escape pod at {stationName}: scan it and beam them aboard")) yield return step;
                 }
@@ -422,6 +420,7 @@ namespace StbcRevival.Missions
             if (notice != null) yield return Task.NECMCDDOFJB.RemoveSubDirective(Directive, notice);
             notice = null;
             yield return Task.NECMCDDOFJB.RemoveSubDirective(Directive, status);
+            yield return Task.NECMCDDOFJB.CompletedDirective(Directive);
             yield return Task.NECMCDDOFJB.WithDescriptionString(Escape).WithTimer(FinalCountdown);
             yield return Task.NECMCDDOFJB.AddSubDirectives(Escape, status);
             if (star != null)
@@ -464,6 +463,21 @@ namespace StbcRevival.Missions
                 Plugin.Log.LogWarning("Stellar evacuation: finding the star: " + e.Message);
             }
             return null;
+        }
+
+        private int markings;
+
+        // The map markers: the station or the current pod, and the drop-off (the transport once it's there, the
+        // quarantine point before). Run as a step of its own: the quarantine point is an unloaded placeholder,
+        // and should marking it wait on its area loading, the mission carries on regardless.
+        private Step Mark()
+        {
+            var bodies = new List<BodyRef> { pod != null ? pod : station };
+            if (transport.AHMPFHDGMKJ != null) bodies.Add(transport);
+            else if (quarantine != null) bodies.Add(quarantine);
+            string name = "markers " + (++markings);
+            Objective.AddStep(name, Task.BCJDEKKIHDD.RemoveAllMarkers(), Task.BCJDEKKIHDD.AddMarker(bodies.ToArray()));
+            return Task.KKALNAMJCNH.WithName(name); // starts it, without waiting for it
         }
 
         private string Status(int aboard) =>
