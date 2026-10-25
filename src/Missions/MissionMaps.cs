@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Linq;
 using System.Reflection;
 using HarmonyLib;
 using Mission;
@@ -95,7 +96,10 @@ namespace StbcRevival.Missions
                 var selection = (BHNEPPPPMKH)AccessTools.Field(manager, "DJFMMNBHJPC").GetValue(__instance);
                 var sectorMap = AccessTools.Field(manager, "LFBBCGCLOKG").GetValue(__instance);
                 system = (Map.SystemRoot)AccessTools.Method(sectorMap.GetType(), "ChooseStartingSystem").Invoke(sectorMap, new object[] { map, selection, random });
-                var spawn = FindSpawn(sectorMap, ref system, selection, random);
+                // Patrol starts anywhere: the game's choice always lands on the same system (on the Trench,
+                // Sarza, which has no spawn point, so Venov).
+                bool anywhere = RevivalMissions.Selected == typeof(StbcRevival.Missions.PatrolSequence);
+                var spawn = FindSpawn(sectorMap, ref system, selection, random, anywhere);
 
                 // The mission's contract, with the table's encounter settings, as the game applies them.
                 var runner = AccessTools.Field(manager, "ENGIPFEKJAK").GetValue(__instance);
@@ -133,12 +137,19 @@ namespace StbcRevival.Missions
         // A player spawn point: in the chosen system if it has one, else in another of the map's systems (which
         // then becomes the starting system), trying the default and the alternative spawn tags. Last resort:
         // any body in the chosen system.
-        private static object FindSpawn(object sectorMap, ref Map.SystemRoot system, BHNEPPPPMKH selection, System.Random random)
+        // With anywhere, the systems are tried in a random order instead.
+        private static object FindSpawn(object sectorMap, ref Map.SystemRoot system, BHNEPPPPMKH selection, System.Random random, bool anywhere = false)
         {
             var find = AccessTools.Method(typeof(MissionManager), "FindSpawnPoint");
             var systems = new System.Collections.Generic.List<Map.SystemRoot> { system };
             if (Traverse.Create(sectorMap).Property("MLHNDAEKLHO").GetValue() is System.Collections.Generic.List<Map.SystemRoot> all)
                 foreach (var other in all) if (other != null && !systems.Contains(other)) systems.Add(other);
+            if (anywhere)
+            {
+                var shuffle = new System.Random(Guid.NewGuid().GetHashCode());
+                systems = systems.OrderBy(_ => shuffle.Next()).ToList();
+                system = systems[0];
+            }
             var choices = new[] { selection.SpawnChoice, BHNEPPPPMKH.EIKCLNAPKBE.Default, BHNEPPPPMKH.EIKCLNAPKBE.UseAlternatives };
             foreach (var candidate in systems)
                 foreach (var choice in choices)

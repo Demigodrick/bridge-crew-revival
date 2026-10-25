@@ -15,7 +15,9 @@ namespace StbcRevival.Missions
 {
     /// <summary>
     /// Patrol (Revival Missions): a mission that never ends. Starfleet hands out one assignment at a time in
-    /// another system of the sector, marked on the warp map; warping there accepts it. Assignments:
+    /// another system of the sector, marked on the warp map; warping there accepts it. The assignment itself
+    /// is out at one of that system's planets, moons or stations, away from where you drop out of warp, so
+    /// the last leg is by impulse. Assignments:
     ///   - Hunt: raiders attacking shipping; destroy them.
     ///   - Defend: a disabled freighter under attack; keep it alive through two waves.
     ///   - Rescue: a disabled freighter with survivors; scan it for life signs, beam them aboard.
@@ -49,6 +51,12 @@ namespace StbcRevival.Missions
         private const double RepairRange = 5000;   // metres from a station
         private const float RepairCooldown = 60f;  // seconds between station repairs
         private const double AmbushRange = 10000;  // metres from the freighter when the ambush is sprung
+        private const double EngageRange = 20000;  // metres from the site when raiders there come for you
+        private const double MinTravel = 30000;    // a site at least this far from the warp arrival, if there is one
+        private static readonly Tag[] SiteTags =
+        {
+            Tag.ImpulseDestination, Tag.Planet, Tag.Moon, Tag.SpaceStation, Tag.Asteroid, Tag.Anomaly, Tag.Nebula,
+        };
 
         private static readonly string[] Raiders =
         {
@@ -68,6 +76,8 @@ namespace StbcRevival.Missions
         private int completed, failed, spawnCount;
         private bool succeeded, abandoned;
         private Map.SystemRoot jobSystem;
+        private BodyRef site;      // where the assignment is: a body of the system, or the player if none was found
+        private string siteName;
         private float lastRepair = -RepairCooldown;
 
         public override void StartScript()
@@ -83,6 +93,9 @@ namespace StbcRevival.Missions
             yield return Task.HHNFJKHGEPH.WithMissionString(Title);
             yield return Task.OKLDNLKLLFJ.WithGroup("State_Group_Mus_Dyn").WithState("Explore");
             yield return Task.KNMMMJOOBHC.WithTime(10f);
+            var systems = Objective.MLHNDAEKLHO ?? new List<Map.SystemRoot>();
+            Plugin.Log.LogInfo($"Patrol: starting in {SystemName(Objective.KALBLMGFNIN)}; {systems.Count} systems: "
+                               + string.Join(", ", systems.Where(x => x != null).Select(SystemName).ToArray()));
 
             for (;;)
             {
@@ -120,6 +133,8 @@ namespace StbcRevival.Missions
                 Plugin.Log.LogInfo($"Patrol: {JobName(job)} in {name} accepted");
                 succeeded = abandoned = false;
                 jobSystem = target;
+                yield return Task.KNMMMJOOBHC.WithTime(3f); // out of warp
+                PickSite();
                 IEnumerable<Step> run = job == 0 ? Hunt() : job == 1 ? Defend() : Rescue(job == 3);
                 foreach (var step in run) yield return step;
                 yield return Task.BCJDEKKIHDD.RemoveAllMarkers();
@@ -142,11 +157,17 @@ namespace StbcRevival.Missions
         // Raiders near the arrival point, coming for you. Won when they're all gone.
         private IEnumerable<Step> Hunt()
         {
-            string line = "Destroy the raiders";
+            string line = $"Destroy the raiders{Near()}";
             yield return Task.NECMCDDOFJB.AddSubDirectives(Directive, line);
-            yield return Task.OKLDNLKLLFJ.WithGroup("State_Group_Mus_Dyn").WithState("Tension");
             var raiders = new List<BodyRef>();
-            foreach (var step in SpawnRaiders(RaiderCount(), raiders, player)) yield return step;
+            foreach (var step in SpawnRaiders(RaiderCount(), raiders, player, around: site, distance: 3000f, spread: 4000, attack: false)) yield return step;
+            yield return Task.BCJDEKKIHDD.AddMarker(raiders.ToArray());
+            foreach (var step in UntilClose(site)) yield return step;
+            if (!abandoned)
+            {
+                yield return Task.OKLDNLKLLFJ.WithGroup("State_Group_Mus_Dyn").WithState("Tension");
+                foreach (var step in Attack(raiders, player)) yield return step;
+            }
             foreach (var step in UntilGone(raiders, () => false)) yield return step;
             succeeded = !abandoned;
             yield return Task.NECMCDDOFJB.RemoveSubDirective(Directive, line);
@@ -155,21 +176,22 @@ namespace StbcRevival.Missions
         // A disabled freighter; two waves of raiders after it. Lost if it's destroyed.
         private IEnumerable<Step> Defend()
         {
-            string line = "Protect the disabled freighter from raiders";
+            string line = $"Protect the disabled freighter{Near()} from raiders";
             yield return Task.NECMCDDOFJB.AddSubDirectives(Directive, line);
             var freighter = new BodyRef();
             yield return Task.BFMBGDIDKEI.UsingSpawner(MakeSpawner(Freighters[random.Next(Freighters.Length)], "Freighter", Tag.Friendly))
-                .AtAngleAndDistanceFromBody(player, random.Next(0, 360), 4000f).OutputTo(freighter);
+                .AtAngleAndDistanceFromBody(site, random.Next(0, 360), site == player ? 4000f : 3000f).OutputTo(freighter);
             yield return Task.KDNOMKAPDKG.TellAI(freighter).ToDisable();
             yield return Task.BCJDEKKIHDD.AddMarker(new[] { freighter });
-            yield return Task.KNMMMJOOBHC.WithTime(10f);
+            yield return Task.KNMMMJOOBHC.WithTime(5f);
+            foreach (var step in UntilClose(freighter)) yield return step; // the raiders arrive with you
             yield return Task.OKLDNLKLLFJ.WithGroup("State_Group_Mus_Dyn").WithState("Tension");
             float started = UnityEngine.Time.time;
             bool lost = false;
             for (int wave = 0; wave < 2 && !lost && !abandoned; wave++)
             {
                 var raiders = new List<BodyRef>();
-                foreach (var step in SpawnRaiders(RaiderCount(), raiders, freighter)) yield return step;
+                foreach (var step in SpawnRaiders(RaiderCount(), raiders, freighter, around: freighter)) yield return step;
                 foreach (var step in UntilGone(raiders, () => lost = !LastStandWaves.Alive(freighter, UnityEngine.Time.time - started < 10f))) yield return step;
                 if (!lost && !abandoned && wave == 0) yield return Task.KNMMMJOOBHC.WithTime(15f);
             }
@@ -184,11 +206,11 @@ namespace StbcRevival.Missions
         // decloak around you; the job also needs them beaten off.
         private IEnumerable<Step> Rescue(bool ambush)
         {
-            string line = "Scan the disabled freighter for life signs, then beam the survivors aboard";
+            string line = $"Scan the disabled freighter{Near()} for life signs, then beam the survivors aboard";
             yield return Task.NECMCDDOFJB.AddSubDirectives(Directive, line);
             var wreck = new BodyRef();
             yield return Task.BFMBGDIDKEI.UsingSpawner(MakeSpawner(Freighters[random.Next(Freighters.Length)], "Freighter", Tag.Friendly) /* neutral shows as hostile: no beaming */)
-                .AtAngleAndDistanceFromBody(player, random.Next(0, 360), ambush ? 20000f : 6000f).OutputTo(wreck);
+                .AtAngleAndDistanceFromBody(site, random.Next(0, 360), site != player ? 3000f : ambush ? 20000f : 6000f).OutputTo(wreck);
             yield return Task.OFNIKPPKOGI.TellAI(wreck).ToSetShieldStrength(AI.IDCAFFBNKFO.Weak);
             yield return Task.KDNOMKAPDKG.TellAI(wreck).ToDisable();
             // The survivors: the game's rescue encounters load them as "People" cargo; a plain spawn has none,
@@ -212,9 +234,13 @@ namespace StbcRevival.Missions
             var raiders = new List<BodyRef>();
             if (!ambush && random.Next(2) == 0)
             {
-                yield return Task.KNMMMJOOBHC.WithTime(20f);
-                yield return Task.OKLDNLKLLFJ.WithGroup("State_Group_Mus_Dyn").WithState("Tension");
-                foreach (var step in SpawnRaiders(Math.Max(1, RaiderCount() - 1), raiders, wreck)) yield return step;
+                foreach (var step in UntilClose(wreck)) yield return step;
+                if (!abandoned)
+                {
+                    yield return Task.KNMMMJOOBHC.WithTime(20f);
+                    yield return Task.OKLDNLKLLFJ.WithGroup("State_Group_Mus_Dyn").WithState("Tension");
+                    foreach (var step in SpawnRaiders(Math.Max(1, RaiderCount() - 1), raiders, wreck, around: wreck)) yield return step;
+                }
             }
 
             float started = UnityEngine.Time.time;
@@ -261,10 +287,13 @@ namespace StbcRevival.Missions
 
         private int RaiderCount() => Math.Min(2 + completed / 2, 6);
 
-        private IEnumerable<Step> SpawnRaiders(int count, List<BodyRef> into, BodyRef target,
-                                               string[] pool = null, float distance = 18000f, int spread = 8000)
+        // Raiders spread round a body (the player by default), coming for the target (or, one in three, the
+        // player); with attack false they wait (see Attack).
+        private IEnumerable<Step> SpawnRaiders(int count, List<BodyRef> into, BodyRef target, string[] pool = null,
+                                               float distance = 18000f, int spread = 8000, BodyRef around = null, bool attack = true)
         {
             pool = pool ?? Raiders;
+            around = around ?? player;
             var spawned = new List<BodyRef>();
             float angle = random.Next(0, 360);
             for (int i = 0; i < count; i++)
@@ -273,11 +302,70 @@ namespace StbcRevival.Missions
                 spawned.Add(ship);
                 angle += 360f / count + random.Next(-20, 20);
                 yield return Task.BFMBGDIDKEI.UsingSpawner(MakeSpawner(pool[random.Next(pool.Length)], "Raider", Tag.Enemy))
-                    .AtAngleAndDistanceFromBody(player, angle, distance + random.Next(0, spread)).FaceOtherBody(player).OutputTo(ship);
+                    .AtAngleAndDistanceFromBody(around, angle, distance + random.Next(0, spread)).FaceOtherBody(around).OutputTo(ship);
             }
-            foreach (var ship in spawned)
-                yield return Task.NDFEDBHFGFB.TellAI(ship).ToAddObjectives(random.Next(3) == 0 ? player : target).OfObjectiveType(AIObjective.Attack);
+            if (attack)
+                foreach (var step in Attack(spawned, target)) yield return step;
             into.AddRange(spawned);
+        }
+
+        private IEnumerable<Step> Attack(List<BodyRef> ships, BodyRef target)
+        {
+            foreach (var ship in ships)
+                yield return Task.NDFEDBHFGFB.TellAI(ship).ToAddObjectives(random.Next(3) == 0 ? player : target).OfObjectiveType(AIObjective.Attack);
+        }
+
+        // Waits until the player is within EngageRange of the body (or has left the system).
+        private IEnumerable<Step> UntilClose(BodyRef body)
+        {
+            if (body == player) yield break;
+            double d;
+            while (!Abandoned() && (d = Distance(player, body)) > EngageRange && d != double.MaxValue) // MaxValue: unknown, go ahead
+                yield return Task.KNMMMJOOBHC.WithTime(2f);
+        }
+
+        // The assignment's site: a planet, moon, station (...) of this system, preferably one at least MinTravel
+        // from where the ship came out of warp, at random; else the furthest; none at all, the player.
+        private void PickSite()
+        {
+            site = player;
+            siteName = null;
+            try
+            {
+                var here = Objective.KALBLMGFNIN;
+                var me = player.AHMPFHDGMKJ?.ALPAOOKFIEE;
+                var bodies = new List<BodyRef>();
+                foreach (var tag in SiteTags)
+                {
+                    var found = new List<BodyRef>();
+                    Objective.FindAllBodyWithTags(found, new[] { tag });
+                    bodies.AddRange(found.Where(b => b?.AHMPFHDGMKJ?.ALPAOOKFIEE is var t && t != null && t.System == here
+                                                     && !bodies.Any(o => o.AHMPFHDGMKJ == b.AHMPFHDGMKJ)));
+                }
+                if (me == null || bodies.Count == 0)
+                {
+                    Plugin.Log.LogInfo($"Patrol: no planets or stations found in {SystemName(here)}; the assignment is where you are");
+                    return;
+                }
+                var far = bodies.Where(b => Distance(player, b) >= MinTravel).ToList();
+                site = far.Count > 0 ? far[random.Next(far.Count)] : bodies.OrderByDescending(b => Distance(player, b)).First();
+                siteName = site.AHMPFHDGMKJ.ALPAOOKFIEE.BaseName;
+                Plugin.Log.LogInfo($"Patrol: site {(string.IsNullOrEmpty(siteName) ? "(unnamed)" : siteName)}, {Distance(player, site) / 1000:0} km away "
+                                   + $"({far.Count} of {bodies.Count} bodies {MinTravel / 1000:0}+ km out)");
+            }
+            catch (Exception e)
+            {
+                site = player;
+                Plugin.Log.LogWarning("Patrol: site: " + e.Message);
+            }
+        }
+
+        private string Near()
+        {
+            if (site == player) return "";
+            string name = siteName;
+            try { if (!string.IsNullOrEmpty(name)) name = SVR.Localization.GetLocalizedText(name); } catch { }
+            return string.IsNullOrEmpty(name) ? " (marked; set an impulse course)" : $" near {name} (set an impulse course)";
         }
 
         // Left the assignment's system: the assignment is given up.
