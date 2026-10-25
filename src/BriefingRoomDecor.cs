@@ -68,11 +68,19 @@ namespace StbcRevival
             foreach (var name in Props)
             {
                 var prop = FindInactive(name);
-                if (prop != null && !prop.activeSelf)
+                if (prop == null) continue;
+                bool changed = !prop.activeSelf;
+                if (changed) prop.SetActive(true);
+                // Its renderers may be switched off as well as the object.
+                foreach (var r in prop.GetComponentsInChildren<Renderer>(true).Where(r => !r.enabled))
                 {
-                    prop.SetActive(true);
-                    Plugin.Log.LogInfo($"Briefing room: {name} out");
+                    r.enabled = true;
+                    changed = true;
                 }
+                if (changed)
+                    foreach (var r in prop.GetComponentsInChildren<Renderer>(true))
+                        Plugin.Log.LogInfo($"Briefing room: {name} out: {r.name} at {r.bounds.center}, size {r.bounds.size}, "
+                                           + $"scale {prop.transform.lossyScale}, layer {r.gameObject.layer}, material {(r.sharedMaterial != null ? r.sharedMaterial.name : "none")}");
             }
         }
 
