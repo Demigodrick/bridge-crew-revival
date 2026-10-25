@@ -56,6 +56,7 @@ namespace StbcRevival
         internal static ConfigEntry<string> MapOverride;
         internal static ConfigEntry<int> FleetBattleSize;
         internal static ConfigEntry<bool> VoiceCommands;
+        internal static ConfigEntry<UnityEngine.KeyCode> PushToTalkKey;
         internal static ConfigEntry<string> UpdateUrl;
         internal static ConfigEntry<bool> ShuttleWasd;
         internal static ConfigEntry<float> ShuttleSpeed;
@@ -126,6 +127,8 @@ namespace StbcRevival
                 "Prototype: the captain's spoken orders without IBM Watson, recognised offline on this PC. Hold the game's voice "
                 + "command button at the captain's console and say: shields up, full impulse, fire phasers, fire torpedoes, target engines. "
                 + "Needs BepInEx/vosk (libvosk.dll and a model folder). Takes effect after a restart.");
+            PushToTalkKey = Config.Bind("Voice", "PushToTalkKey", UnityEngine.KeyCode.V,
+                "Hold to give a voice order as captain (as well as the game's own voice button, which depends on your controllers).");
             FleetBattleSize = Config.Bind("Revival", "FleetBattleSize", 30,
                 "Fleet Battle: ships on each side (1-60). Big battles are heavy on the host's computer; lower it if the game stutters.");
             MapOverride = Config.Bind("Debug", "MapOverride", "",

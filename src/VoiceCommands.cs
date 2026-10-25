@@ -62,10 +62,22 @@ namespace StbcRevival
             harmony.Patch(using_, postfix: new HarmonyMethod(typeof(VoiceCommands), nameof(Using_Postfix)));
             harmony.Patch(update, prefix: new HarmonyMethod(typeof(VoiceCommands), nameof(SkipWatson)));
             harmony.Patch(button, postfix: new HarmonyMethod(typeof(VoiceCommands), nameof(Button_Postfix)));
+            // Our own push-to-talk key too: the game's voice button depends on the controller mapping.
+            var getAction = AccessTools.Method(AccessTools.TypeByName("SVR.InputManager"), "GetAction");
+            voiceAction = Enum.Parse(AccessTools.TypeByName("SVR.LONCAPHEAPA"), "VoiceCommand");
+            if (getAction != null) harmony.Patch(getAction, postfix: new HarmonyMethod(typeof(VoiceCommands), nameof(GetAction_Postfix)));
             Plugin.Log.LogInfo("Voice commands: push-to-talk hooked (prototype, offline recognition)");
         }
 
         private static void Using_Postfix(ref bool __result) => __result = !failed;
+
+        private static object voiceAction;
+        private static bool keyHeld; // read once a frame (Update): GetAction is called a lot
+
+        private static void GetAction_Postfix(object __0, ref bool __result)
+        {
+            if (keyHeld && !__result && Equals(__0, voiceAction)) __result = true;
+        }
 
         private static bool SkipWatson() => false; // Watson's speech-to-text and token handling: never set up
 
@@ -127,6 +139,7 @@ namespace StbcRevival
         // Main thread, every frame: act on a finished recognition.
         internal static void Update()
         {
+            keyHeld = Plugin.VoiceCommands.Value && Input.GetKey(Plugin.PushToTalkKey.Value);
             if (!pendingResult) return;
             pendingResult = false;
             Finish(pendingCommand);
@@ -186,7 +199,9 @@ namespace StbcRevival
                 var modelPath = Path.Combine(folder, "model");
                 if (!File.Exists(Path.Combine(folder, "libvosk.dll")) || !Directory.Exists(modelPath))
                     throw new FileNotFoundException("BepInEx/vosk (libvosk.dll and model) is missing");
-                // Load the native DLLs by full path first, so the [DllImport("libvosk")] below finds it loaded.
+                // Load the native DLLs by full path first, and add the folder to the DLL search path, so the
+                // [DllImport("libvosk.dll")] below finds it (the game's Mono searches its own folders).
+                Vosk.SetDllDirectoryW(folder);
                 foreach (var dll in new[] { "libwinpthread-1.dll", "libgcc_s_seh-1.dll", "libstdc++-6.dll", "libvosk.dll" })
                 {
                     var path = Path.Combine(folder, dll);
@@ -203,7 +218,7 @@ namespace StbcRevival
             catch (Exception e)
             {
                 failed = true;
-                Plugin.Log.LogWarning("Voice commands: off: " + e.Message);
+                Plugin.Log.LogWarning("Voice commands: off: " + e.GetType().Name + ": " + e.Message);
                 return false;
             }
         }
@@ -213,12 +228,15 @@ namespace StbcRevival
             [DllImport("kernel32", CharSet = CharSet.Unicode, SetLastError = true)]
             internal static extern IntPtr LoadLibraryW(string path);
 
-            [DllImport("libvosk")] internal static extern void vosk_set_log_level(int level);
-            [DllImport("libvosk")] internal static extern IntPtr vosk_model_new([MarshalAs(UnmanagedType.LPStr)] string path);
-            [DllImport("libvosk")] internal static extern IntPtr vosk_recognizer_new_grm(IntPtr model, float sampleRate, [MarshalAs(UnmanagedType.LPStr)] string grammar);
-            [DllImport("libvosk")] internal static extern int vosk_recognizer_accept_waveform(IntPtr recogniser, byte[] data, int length);
-            [DllImport("libvosk")] internal static extern IntPtr vosk_recognizer_final_result(IntPtr recogniser);
-            [DllImport("libvosk")] internal static extern void vosk_recognizer_free(IntPtr recogniser);
+            [DllImport("kernel32", CharSet = CharSet.Unicode, SetLastError = true)]
+            internal static extern bool SetDllDirectoryW(string path);
+
+            [DllImport("libvosk.dll")] internal static extern void vosk_set_log_level(int level);
+            [DllImport("libvosk.dll")] internal static extern IntPtr vosk_model_new([MarshalAs(UnmanagedType.LPStr)] string path);
+            [DllImport("libvosk.dll")] internal static extern IntPtr vosk_recognizer_new_grm(IntPtr model, float sampleRate, [MarshalAs(UnmanagedType.LPStr)] string grammar);
+            [DllImport("libvosk.dll")] internal static extern int vosk_recognizer_accept_waveform(IntPtr recogniser, byte[] data, int length);
+            [DllImport("libvosk.dll")] internal static extern IntPtr vosk_recognizer_final_result(IntPtr recogniser);
+            [DllImport("libvosk.dll")] internal static extern void vosk_recognizer_free(IntPtr recogniser);
         }
 
         // ---- Helpers ----------------------------------------------------------------------------------
