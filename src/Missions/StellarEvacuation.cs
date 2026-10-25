@@ -10,6 +10,7 @@ using StartSystem = BHNEPPPPMKH;                         // starting-system choi
 using Tag = BLECEHNPNBH;
 using BridgeObject = KFLPAPJAAGO;                        // bridge crew members who speak VO lines
 using ViewScreen = UI.CAJKAPALCCO;                       // viewscreen messages
+using AIObjective = AI.CPLIILIDJKG;                      // AI objective kinds (Attack, ...)
 
 namespace StbcRevival.Missions
 {
@@ -60,6 +61,12 @@ namespace StbcRevival.Missions
         private const string Home = "Perseph";
         private const string EscapePod = "Sector/Ships/Ship - EscapePodFull"; // the E3 demo's survivors' pods
 
+        // Raiders out to loot the evacuation: pirates, and Klingons who decloak.
+        private static readonly string[] Raiders =
+        {
+            "Sector/Ships/Ship - Pirate A", "Sector/Ships/Ship - Pirate B", "Sector/Ships/Ship - Bird Of Prey",
+        };
+
         private static readonly string[] Freighters =
         {
             "Sector/Ships/Ship - Freighter A", "Sector/Ships/Ship - Freighter B", "Sector/Ships/Ship - Freighter C",
@@ -72,7 +79,7 @@ namespace StbcRevival.Missions
         private int stationPeople;  // as last seen while the station was loaded
         private UnityEngine.Component star; // the E3 star's StarManager (its eruption animation), if the system has it
         private static readonly Type StarManagerType = HarmonyLib.AccessTools.TypeByName("StarManager"); // internal to the game
-        private int total, placed, saved, spawnCount;
+        private int total, placed, saved, lostPeople, spawnCount;
         private bool lost, erupting, spawningTransport;
         private object lastLive;   // the station's loaded body when last seen (a new one means it reloaded)
         private string notice;     // a short-lived line under the objective (group ready, people transferred)
@@ -176,6 +183,8 @@ namespace StbcRevival.Missions
             bool ready = true;  // the next group can go onto the pad (the last one's been dropped off)
             float placedAt = 0; bool warnedEmpty = false;
             float said45 = 0, said30 = 0, said20 = 0, said10 = 0;
+            float nextRaid = UnityEngine.Time.time + random.Next(60, 120);
+            int raids = 0;
             for (;;)
             {
                 yield return Task.KNMMMJOOBHC.WithTime(1f);
@@ -204,9 +213,57 @@ namespace StbcRevival.Missions
                     else stationPeople = People(pod);
                     lastLive = body;
                 }
+                // A pod lost to raiders takes its people with it; the next group gets a new one.
+                if (pod != null && stationPeople > 0 && atStation && UnityEngine.Time.time - placedAt > 10f && !LastStandWaves.Alive(pod, false))
+                {
+                    lostPeople += stationPeople;
+                    Plugin.Log.LogInfo($"Stellar evacuation: escape pod destroyed, {stationPeople} lost");
+                    foreach (var step in Say($"The escape pod was destroyed: {stationPeople} people lost")) yield return step;
+                    stationPeople = 0;
+                    pod = null;
+                    ready = true;
+                }
                 int onStation = stationPeople;
 
-                // The transport at the quarantine point, once you're there (its area is loaded then).
+                // Now and then, raiders: around the ship, after it or (sometimes) the pod or transport near it.
+                // Bigger as the evacuation goes on; none once the star's going (everyone's running then).
+                if (!erupting && UnityEngine.Time.time >= nextRaid)
+                {
+                    nextRaid = UnityEngine.Time.time + random.Next(90, 180);
+                    raids++;
+                    int count = Math.Min(4, 1 + raids / 2 + random.Next(0, 2));
+                    var prey = new List<BodyRef> { player };
+                    if (pod != null && Live(pod) && Distance(player, pod) < 30000) prey.Add(pod);
+                    if (transport.AHMPFHDGMKJ != null && Live(transport) && Distance(player, transport) < 30000) prey.Add(transport);
+                    Plugin.Log.LogInfo($"Stellar evacuation: raid {raids}, {count} ships");
+                    yield return Task.ABHANLLBILL.WithEventID("PLAY_NPC_SHIP_KLING_DECLOAK").ContinueImmediately();
+                    yield return Task.CAJKAPALCCO.SendViewScreenMessage(ViewScreen.GCIOEGLLOLP.Warning, 5f, "Raiders inbound");
+                    yield return Task.OKLDNLKLLFJ.WithGroup("State_Group_Mus_Dyn").WithState("Tension");
+                    float angle = random.Next(0, 360);
+                    var spawned = new List<BodyRef>();
+                    for (int r = 0; r < count; r++)
+                    {
+                        var ship = new BodyRef();
+                        spawned.Add(ship);
+                        angle += 360f / count + random.Next(-20, 20);
+                        yield return Task.BFMBGDIDKEI.UsingSpawner(MakeSpawner(Raiders[random.Next(Raiders.Length)], "Raider", Tag.Enemy))
+                            .AtAngleAndDistanceFromBody(player, angle, 12000f + random.Next(0, 6000)).FaceOtherBody(player).OutputTo(ship);
+                    }
+                    foreach (var ship in spawned)
+                        yield return Task.NDFEDBHFGFB.TellAI(ship).ToAddObjectives(random.Next(3) == 0 ? prey[random.Next(prey.Count)] : player)
+                            .OfObjectiveType(AIObjective.Attack);
+                    foreach (var step in Say(count == 1 ? "A raider is closing in!" : $"{count} raiders closing in!")) yield return step;
+                }
+
+                // The transport at the quarantine point, once you're there (its area is loaded then); a new one if
+                // raiders got the last.
+                if (quarantine != null && transport.AHMPFHDGMKJ != null && Live(transport) && !LastStandWaves.Alive(transport, false))
+                {
+                    Plugin.Log.LogInfo("Stellar evacuation: transport destroyed; another is on its way");
+                    foreach (var step in Say("The transport was destroyed. Another will meet you at Quarantine")) yield return step;
+                    transport = new BodyRef();
+                    spawningTransport = false;
+                }
                 if (quarantine != null && transport.AHMPFHDGMKJ == null && !spawningTransport && Distance(player, quarantine) <= ArrivedRange)
                 {
                     spawningTransport = true;
@@ -410,7 +467,7 @@ namespace StbcRevival.Missions
         }
 
         private string Status(int aboard) =>
-            $"Saved: {saved} of {total}" + (aboard > 0 ? $" ({aboard} aboard, take them to the transport)" : "");
+            $"Saved: {saved} of {total}" + (lostPeople > 0 ? $", {lostPeople} lost" : "") + (aboard > 0 ? $" ({aboard} aboard, take them to the transport)" : "");
 
         private Step Comms(string id) => Task.JJFBKBLIMCC.WithEventID(id).OnBridgeObject(BridgeObject.Comms_Officer_Mori).ContinueImmediately();
 
