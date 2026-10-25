@@ -123,11 +123,11 @@ namespace StbcRevival
                 "Wear the Romulan captain's face. Female Vulcan character presets only; crewmates with the mod see it too.");
             AvatarDumpKey = Config.Bind("Debug", "AvatarDumpKey", UnityEngine.KeyCode.F9,
                 "Testing only: describes the hail-screen characters and the player avatars to BepInEx/avatar-dump.txt.");
-            VoiceCommands = Config.Bind("Voice", "VoiceCommands", false,
-                "Prototype: the captain's spoken orders without IBM Watson, recognised offline on this PC. Hold the game's voice "
+            VoiceCommands = Config.Bind("Voice", "VoiceCommands", true,
+                "Experimental: the captain's spoken orders without IBM Watson, recognised offline on this PC. Hold the game's voice "
                 + "command button (or PushToTalkKey) as captain and give an order, as with the original Watson voice commands: "
                 + "speed, prepare/engage warp or impulse, shields, fire, target, scan, repair, power, optimize, disrupt, and more. "
-                + "Needs BepInEx/vosk (libvosk.dll and a model folder). Takes effect after a restart.");
+                + "Needs BepInEx/vosk (libvosk.dll and a model folder; the installer sets it up). Takes effect after a restart.");
             PushToTalkKey = Config.Bind("Voice", "PushToTalkKey", UnityEngine.KeyCode.V,
                 "Hold to give a voice order as captain (as well as the game's own voice button, which depends on your controllers).");
             FleetBattleSize = Config.Bind("Revival", "FleetBattleSize", 30,

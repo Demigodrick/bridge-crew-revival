@@ -174,6 +174,8 @@
           from its official release and checks the file before installing it.</li>
         <li>Sets the one BepInEx option this game needs to start.</li>
         <li>Downloads the latest Bridge Crew Revival release, checks it, and copies it into the game.</li>
+        <li>Downloads <a href="https://alphacephei.com/vosk/">Vosk</a> and its small English model (about
+          55&nbsp;MB, checked) for voice commands, recognised offline on your PC.</li>
       </ol>
       <p>Run the same command again to update. Prefer to read it first?
         <a href="install.ps1">install.ps1</a> and <a href="install.sh">install.sh</a> are short.
@@ -246,9 +248,10 @@
         <dd>Skip the launch videos and the mic check, a chime when someone joins your crew, crew filters, an
           update notice when a new version is out, and F10 to save a bug report.</dd>
         <dt>Voice commands</dt>
-        <dd>Experimental and off by default: the captain's spoken orders are coming back, recognised on your
-          PC instead of IBM's discontinued Watson service ("Red alert!", "Make it so", "Beam the survivors
-          aboard"). Not set up by the installer yet.</dd>
+        <dd>Experimental: the captain's spoken orders are back, recognised on your PC instead of IBM's
+          discontinued Watson service. As captain, hold V (or the voice button) and say "Red alert!", "Make it
+          so" or "Beam the survivors aboard". Turn it off with <code>VoiceCommands = false</code> in <code>BepInEx/config/stbc.revival.cfg</code>, the mod's
+          settings.</dd>
       </dl>
     </section>
 

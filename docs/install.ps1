@@ -7,7 +7,8 @@
 #
 # Finds the game in your Steam libraries, installs BepInEx 5 (from its GitHub release, checksum
 # verified), sets the BepInEx entrypoint this game needs, and copies the mod (from the zip it's in,
-# or the latest GitHub release). Run it again to update. $env:STBC_VERSION pins a release.
+# or the latest GitHub release), plus offline speech recognition for voice commands (Vosk and its small
+# English model, checksum verified). Run it again to update. $env:STBC_VERSION pins a release.
 # It then offers to copy your settings from your Ubisoft cloud save (avatar, options) by starting the game
 # once; -ImportSave does that without asking, -NoImport skips the question.
 param(
@@ -21,6 +22,10 @@ $Repo = "Demigodrick/bridge-crew-revival"
 $BepInExVersion = "5.4.23.5"
 $BepInExUrl = "https://github.com/BepInEx/BepInEx/releases/download/v$BepInExVersion/BepInEx_win_x64_$BepInExVersion.zip"
 $BepInExSha256 = "82f9878551030f54657792c0740d9d51a09500eeae1fba21106b0c441e6732c4"
+$VoskUrl = "https://github.com/alphacep/vosk-api/releases/download/v0.3.45/vosk-win64-0.3.45.zip"
+$VoskSha256 = "f1dcc9cca460630f81ea8f71794f69c80bed6556d2a4e6237b5785e1d2dff34b"
+$VoskModelUrl = "https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip"
+$VoskModelSha256 = "30f26242c4eb449f948e42cb302dd7a686cb29a3423a8367f99ff41780942498"
 $AppId = 527100
 
 # Run through "irm | iex" this is the user's own PowerShell session: no "exit", errors are thrown
@@ -71,6 +76,45 @@ function Set-ImportFlag([string]$GameDir, [bool]$On) {
         Set-Content -Path $cfg -Value $lines -Encoding UTF8
     } elseif ($On) {
         Add-Content -Path $cfg -Value @("", "[Import]", "", "FetchUbisoftSave = true") -Encoding UTF8
+    }
+}
+
+# Voice commands: Vosk (libvosk.dll and the three runtime DLLs it needs) and the model, in BepInEx\vosk.
+# Not essential, so a failed download is only a warning.
+function Install-Vosk([string]$GameDir, [string]$Tmp) {
+    $vosk = Join-Path $GameDir "BepInEx\vosk"
+    if ((Test-Path (Join-Path $vosk "libvosk.dll")) -and (Test-Path (Join-Path $vosk "model"))) {
+        Ok "Voice recognition (Vosk) already installed"
+        return
+    }
+    try {
+        Info "Downloading voice recognition (Vosk and its English model, about 55 MB)..."
+        $zip = Join-Path $Tmp "vosk.zip"
+        Get-Download $VoskUrl $zip
+        if ((Get-FileHash -Algorithm SHA256 $zip).Hash -ne $VoskSha256) { throw "the Vosk download was damaged (checksum mismatch)" }
+        $modelZip = Join-Path $Tmp "vosk-model.zip"
+        Get-Download $VoskModelUrl $modelZip
+        if ((Get-FileHash -Algorithm SHA256 $modelZip).Hash -ne $VoskModelSha256) { throw "the voice model download was damaged (checksum mismatch)" }
+        Expand-Archive -Path $zip -DestinationPath (Join-Path $Tmp "vosk") -Force
+        Expand-Archive -Path $modelZip -DestinationPath (Join-Path $Tmp "vosk-model") -Force
+        New-Item -ItemType Directory -Force -Path $vosk | Out-Null
+        foreach ($dll in "libvosk.dll", "libgcc_s_seh-1.dll", "libstdc++-6.dll", "libwinpthread-1.dll") {
+            $file = Get-ChildItem -Path (Join-Path $Tmp "vosk") -Recurse -Filter $dll | Select-Object -First 1
+            if (-not $file) { throw "$dll is missing from the Vosk download" }
+            Copy-Item -LiteralPath $file.FullName -Destination $vosk -Force
+        }
+        $model = Get-ChildItem -Path (Join-Path $Tmp "vosk-model") -Directory | Select-Object -First 1
+        Remove-Item -Recurse -Force (Join-Path $vosk "model") -ErrorAction SilentlyContinue
+        Move-Item -LiteralPath $model.FullName -Destination (Join-Path $vosk "model")
+        # 0.7.2 wrote VoiceCommands = false (then off by default); with Vosk here for the first time, switch it on.
+        $cfg = Join-Path $GameDir "BepInEx\config\stbc.revival.cfg"
+        if ((Test-Path $cfg) -and (Select-String -Path $cfg -Pattern '^VoiceCommands = false' -Quiet)) {
+            $lines = foreach ($line in Get-Content $cfg) { if ($line -match '^VoiceCommands = ') { "VoiceCommands = true" } else { $line } }
+            Set-Content -Path $cfg -Value $lines -Encoding UTF8
+        }
+        Ok "Voice recognition (Vosk) installed"
+    } catch {
+        Warn "Voice commands won't work: $($_.Exception.Message). Everything else does; run the installer again to retry."
     }
 }
 
@@ -148,6 +192,7 @@ function Install-BridgeCrewRevival([string]$GameDir, [bool]$Uninstall, [string]$
         foreach ($name in "StbcRevival.dll", "StbcRevival.pdb", "StbcCore.dll", "StbcCore.pdb") {
             Remove-Item -LiteralPath (Join-Path $plugins $name) -ErrorAction SilentlyContinue
         }
+        Remove-Item -Recurse -Force (Join-Path $GameDir "BepInEx\vosk") -ErrorAction SilentlyContinue
         # Without winhttp.dll BepInEx doesn't load at all; the BepInEx folder is left for you to delete.
         foreach ($name in "winhttp.dll", "doorstop_config.ini", ".doorstop_version", "changelog.txt") {
             Remove-Item -LiteralPath (Join-Path $GameDir $name) -ErrorAction SilentlyContinue
@@ -219,11 +264,13 @@ function Install-BridgeCrewRevival([string]$GameDir, [bool]$Uninstall, [string]$
         # ---- Install ------------------------------------------------------------------------------
 
         Copy-Item -Path (Join-Path $source "Stbc*") -Destination $plugins -Force
+        Install-Vosk $GameDir $tmp
     } finally {
         Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue
     }
     $versionText = if ($version) { " $version" } else { "" }
     Ok "Bridge Crew Revival$versionText installed"
+    Info "Voice commands: as captain, hold V (or the voice button) and give an order, e.g. `"red alert`"."
 
     # ---- Ubisoft save -------------------------------------------------------------------------
 

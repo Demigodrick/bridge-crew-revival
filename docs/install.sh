@@ -8,7 +8,8 @@
 #
 # Finds the game in your Steam libraries, installs BepInEx 5 (from its GitHub release, checksum
 # verified), sets the BepInEx entrypoint this game needs, and copies the mod (from the zip it's in,
-# or the latest GitHub release). Run it again to update. It then offers to copy your settings from your
+# or the latest GitHub release), plus offline speech recognition for voice commands (Vosk and its small
+# English model, checksum verified). Run it again to update. It then offers to copy your settings from your
 # Ubisoft cloud save (avatar, options) by starting the game once.
 set -euo pipefail
 
@@ -16,6 +17,10 @@ REPO="Demigodrick/bridge-crew-revival"
 BEPINEX_VERSION="5.4.23.5"
 BEPINEX_URL="https://github.com/BepInEx/BepInEx/releases/download/v${BEPINEX_VERSION}/BepInEx_win_x64_${BEPINEX_VERSION}.zip"
 BEPINEX_SHA256="82f9878551030f54657792c0740d9d51a09500eeae1fba21106b0c441e6732c4"
+VOSK_URL="https://github.com/alphacep/vosk-api/releases/download/v0.3.45/vosk-win64-0.3.45.zip"
+VOSK_SHA256="f1dcc9cca460630f81ea8f71794f69c80bed6556d2a4e6237b5785e1d2dff34b"
+VOSK_MODEL_URL="https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip"
+VOSK_MODEL_SHA256="30f26242c4eb449f948e42cb302dd7a686cb29a3423a8367f99ff41780942498"
 APP_ID=527100
 LAUNCH_OPTIONS='WINEDLLOVERRIDES="winhttp=n,b" %command%'
 
@@ -111,6 +116,28 @@ launch_option_set() { # the WINEDLLOVERRIDES launch option, in any Steam user's 
 # Load winhttp.dll (BepInEx's loader) from the game folder in the game's own Wine prefix. Unlike the
 # WINEDLLOVERRIDES launch option this also covers the game when Ubisoft Connect restarts it, and nobody
 # has to edit Steam settings. The prefix exists once the game has been started under Proton.
+# Voice commands: Vosk (libvosk.dll and the three runtime DLLs it needs, Windows builds as the game runs
+# under Proton) and the model, in BepInEx/vosk. Run in a subshell: a failure there is only a warning.
+install_vosk() { # game tmp
+  local vosk="$1/BepInEx/vosk" dll
+  info "Downloading voice recognition (Vosk and its English model, about 55 MB)..."
+  download "$VOSK_URL" "$2/vosk.zip"
+  echo "$VOSK_SHA256  $2/vosk.zip" | sha256sum -c --quiet - || fail "the Vosk download was damaged (checksum mismatch)."
+  download "$VOSK_MODEL_URL" "$2/vosk-model.zip"
+  echo "$VOSK_MODEL_SHA256  $2/vosk-model.zip" | sha256sum -c --quiet - || fail "the voice model download was damaged (checksum mismatch)."
+  extract "$2/vosk.zip" "$2/vosk"
+  extract "$2/vosk-model.zip" "$2/vosk-model"
+  mkdir -p "$vosk"
+  for dll in libvosk.dll libgcc_s_seh-1.dll libstdc++-6.dll libwinpthread-1.dll; do
+    cp "$(find "$2/vosk" -name "$dll" | head -n1)" "$vosk/" || fail "$dll is missing from the Vosk download."
+  done
+  rm -rf "$vosk/model"
+  mv "$(find "$2/vosk-model" -mindepth 1 -maxdepth 1 -type d | head -n1)" "$vosk/model"
+  # 0.7.2 wrote VoiceCommands = false (then off by default); with Vosk here for the first time, switch it on.
+  [ -f "$1/BepInEx/config/stbc.revival.cfg" ] && sed -i 's/^VoiceCommands = false/VoiceCommands = true/' "$1/BepInEx/config/stbc.revival.cfg"
+  return 0
+}
+
 prefix_reg() { # game -> path of the prefix's user.reg
   printf '%s\n' "$(cd "$1/../.." && pwd)/compatdata/$APP_ID/pfx/user.reg"
 }
@@ -250,6 +277,7 @@ main() {
     step "2. Removing Bridge Crew Revival"
     rm -f "$game/BepInEx/plugins/StbcRevival.dll" "$game/BepInEx/plugins/StbcRevival.pdb" \
           "$game/BepInEx/plugins/StbcCore.dll" "$game/BepInEx/plugins/StbcCore.pdb"
+    rm -rf "$game/BepInEx/vosk"
     # Without winhttp.dll BepInEx doesn't load at all; the BepInEx folder is left for you to delete.
     rm -f "$game/winhttp.dll" "$game/doorstop_config.ini" "$game/.doorstop_version" "$game/changelog.txt"
     set_prefix_override "$game" off || true
@@ -321,6 +349,14 @@ main() {
   cp "$plugins/"Stbc*.dll "$game/BepInEx/plugins/"
   cp "$plugins/"Stbc*.pdb "$game/BepInEx/plugins/" 2>/dev/null || true
   ok "Bridge Crew Revival${version:+ $version} installed"
+  if [ -f "$game/BepInEx/vosk/libvosk.dll" ] && [ -d "$game/BepInEx/vosk/model" ]; then
+    ok "Voice recognition (Vosk) already installed"
+  elif (install_vosk "$game" "$tmp"); then
+    ok "Voice recognition (Vosk) installed"
+    info "Voice commands: as captain, hold V (or the voice button) and give an order, e.g. \"red alert\"."
+  else
+    warn "Voice commands won't work (see above). Everything else does; run the installer again to retry."
+  fi
   local loader_on=1
   if set_prefix_override "$game" on; then
     ok "Mod loader switched on for the game (no Steam launch options needed)"
