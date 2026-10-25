@@ -1,7 +1,7 @@
 # Bridge Crew Revival installer for Windows.
 #
 #   irm https://demigodrick.github.io/bridge-crew-revival/install.ps1 | iex
-#   & ([scriptblock]::Create((irm https://demigodrick.github.io/bridge-crew-revival/install.ps1))) -Uninstall
+#   irm https://demigodrick.github.io/bridge-crew-revival/uninstall.ps1 | iex     (uninstall)
 #
 # or from the release zip: double-click install.cmd  (install.cmd "D:\Games\Star Trek Bridge Crew", install.cmd -Uninstall)
 #

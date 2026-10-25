@@ -208,6 +208,50 @@
         with your <code>BepInEx/LogOutput.log</code>.</p>
     </section>
 
+    <section id="features">
+      <h2>What the mod adds</h2>
+      <p>Besides getting crews back together, the mod adds to the game itself.</p>
+      <h3>Revival Missions</h3>
+      <p>A third mission category in the briefing room, next to Campaign and Ongoing Voyages. Step through
+        its missions with the arrows; your whole crew sees the choice.</p>
+      <dl class="modes">
+        <dt>Last Stand</dt>
+        <dd>Endless, growing waves of Klingons, pirates and Romulans, with a flagship every fifth wave. Your
+          ship is repaired and restocked between waves. How long can your crew hold out?</dd>
+        <dt>Fleet Battle</dt>
+        <dd>Lead 30 Starfleet ships against a Klingon or Romulan fleet just as big, with reinforcements.
+          Fleet size is a setting.</dd>
+        <dt>Patrol</dt>
+        <dd>A mission that never ends: Starfleet sends you from system to system to hunt raiders, defend
+          freighters, rescue survivors, and walk into the odd ambush. Repair and restock at space stations
+          between assignments.</dd>
+        <dt>Free Roam</dt>
+        <dd>The developers' own exploration mission, left in the game: no hostiles, just space.</dd>
+      </dl>
+      <h3>Crews and comfort</h3>
+      <dl class="modes">
+        <dt>In VR</dt>
+        <dd>Public crews on the shuttle's newsfeed and in the escape menu, your Steam friends on the shuttle
+          console, and invites, all without taking the headset off. The crew lists show how many players are
+          online.</dd>
+        <dt>Host drops</dt>
+        <dd>If the host's game goes, the crew regroups in the briefing room under the next player instead of
+          everyone landing back at the main menu.</dd>
+        <dt>Your settings stick</dt>
+        <dd>Your avatar, options and progress are saved on your PC (the game only ever saved them on
+          Ubisoft's servers), with a one-time import from Ubisoft.</dd>
+        <dt>Romulan faces</dt>
+        <dd>A ROMULAN choice for female characters in the character creator; your crewmates see it too.</dd>
+        <dt>Small things</dt>
+        <dd>Skip the launch videos and the mic check, a chime when someone joins your crew, crew filters, an
+          update notice when a new version is out, and F10 to save a bug report.</dd>
+        <dt>Voice commands</dt>
+        <dd>Experimental and off by default: the captain's spoken orders are coming back, recognised on your
+          PC instead of IBM's discontinued Watson service ("Red alert!", "Make it so", "Beam the survivors
+          aboard"). Not set up by the installer yet.</dd>
+      </dl>
+    </section>
+
     <section id="faq">
       <h2>Questions</h2>
       <details>
@@ -252,11 +296,14 @@
       </details>
       <details>
         <summary>How do I uninstall?</summary>
-        <p>Windows, in PowerShell:<br>
-          <code>&amp; ([scriptblock]::Create((irm https://demigodrick.github.io/bridge-crew-revival/install.ps1))) -Uninstall</code></p>
-        <p>Linux:<br>
-          <code>curl -fsSL https://demigodrick.github.io/bridge-crew-revival/install.sh | bash -s -- --uninstall</code></p>
-        <p>This removes the mod and turns BepInEx off. On Linux, also clear the launch options.</p>
+        <p>Quit the game first. Windows, in PowerShell:</p>
+        <div class="cmd ps"><code id="cmd-uninstall-win">irm https://demigodrick.github.io/bridge-crew-revival/uninstall.ps1 | iex</code><button class="copy" data-copy="cmd-uninstall-win">Copy</button></div>
+        <p>Linux, in a terminal:</p>
+        <div class="cmd"><code id="cmd-uninstall-linux">curl -fsSL https://demigodrick.github.io/bridge-crew-revival/install.sh | bash -s -- --uninstall</code><button class="copy" data-copy="cmd-uninstall-linux">Copy</button></div>
+        <p>This removes the mod and turns BepInEx off. On Linux, also clear the launch options. Your settings
+          and avatar stay in the game's <code>BepInEx</code> folder, so reinstalling picks them up again; delete
+          that folder to remove everything. The game then goes back to your Ubisoft save, as it was before you
+          installed the mod.</p>
       </details>
     </section>
   </main>
