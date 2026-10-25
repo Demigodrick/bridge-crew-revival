@@ -366,12 +366,15 @@ namespace StbcRevival
             });
         }
 
-        // A crew lobby's host: from its "host" data (anyone can read lobby data), else its owner (which Steam only
-        // gives the lobby's members, so 0 for the crews we find by searching). 0 when unknown.
+        // A crew lobby's host. Steam's own record of the owner wins whenever Steam gives it (only to the lobby's
+        // members); otherwise the "host" the owner wrote into the lobby's data, which anyone can read. Only the
+        // owner can write lobby data, so at worst an advertiser points joiners at another account, whose game
+        // refuses a room it doesn't host. 0 when unknown.
         private static ulong LobbyHost(CSteamID lobby)
         {
-            if (ulong.TryParse(SteamMatchmaking.GetLobbyData(lobby, "host"), out var host) && host != 0) return host;
-            return SteamMatchmaking.GetLobbyOwner(lobby).m_SteamID;
+            ulong owner = SteamMatchmaking.GetLobbyOwner(lobby).m_SteamID;
+            if (owner != 0) return owner;
+            return ulong.TryParse(SteamMatchmaking.GetLobbyData(lobby, "host"), out var host) ? host : 0;
         }
 
         private static bool TryLobbyJoin()
