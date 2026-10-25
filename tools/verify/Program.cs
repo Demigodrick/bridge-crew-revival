@@ -296,6 +296,17 @@ foreach (var c in new[] { "AnalyseTarget", "ArmTorpedoes", "CeaseFire", "CeaseTa
 foreach (var t in new[] { "GEJIEIDGDBO", "MJNNGHIKMIO", "DCDOEBCMNHK" })
     Check($"  voice UI event {t}", game.GetType(t));
 
+// Voice "approach target": the helm menu's Move To entries
+Check("  CommandManager.IEFBKOMBFGO (instance)", (MemberInfo)commandManager?.GetField("IEFBKOMBFGO", AnyS) ?? commandManager?.GetProperty("IEFBKOMBFGO", AnyS));
+Check("  CommandManager.ENLHIAIPDMD (menus)", commandManager?.GetField("ENLHIAIPDMD", Inst | AnyS));
+Check("  CommandManager.ECNLCPFAEGF (roles)", commandManager?.GetProperty("ECNLCPFAEGF", AnyS));
+Check("  menus GetHelmMenu", commandManager?.GetField("ENLHIAIPDMD", Inst | AnyS)?.FieldType.GetMethod("GetHelmMenu"));
+var menuItem = game.GetType("AI.CHJEFCBPHGN");
+foreach (var m in new[] { "ICJLNIICKNH", "ENDEAOOGKOL", "OKKPPMGDKAP", "LLMAEPCPLGP", "BLFHNLLDICM" })
+    Check($"  menu item {m}", menuItem?.GetProperty(m, Inst));
+foreach (var m in new[] { "OnUpdateMenuState", "OnExecute" })
+    Check($"  menu item {m}", menuItem?.GetMethod(m, Inst));
+
 // Revival settings (the shuttle's region page)
 var mainMenu = game.GetType("ConsoleMainMenu");
 foreach (var m in new[] { "PKOIDGNDHFO", "GLFCDJFLJDK", "BJNFFMDAOGH", "FMNEJELNGFC" })

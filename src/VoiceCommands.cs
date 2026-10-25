@@ -37,7 +37,7 @@ namespace StbcRevival
             // helm
             "speed", "full", "half", "quarter", "impulse", "ahead", "stop", "reverse", "maximum", "go", "warp", "prepare",
             "ready", "plot", "course", "set", "engage", "punch", "jump", "make", "it", "so", "approach", "intercept",
-            "close", "move", "away", "evade", "retreat", "avoid", "toward", "towards",
+            "close", "move", "away", "evade", "retreat", "avoid", "toward", "towards", "head", "fly",
             // tactical
             "fire", "phasers", "phaser", "torpedoes", "torpedo", "photon", "arm", "disarm", "cease", "hold", "target",
             "targeting", "clear", "engines", "engine", "weapons", "shields", "shield", "comms", "communications",
@@ -130,6 +130,7 @@ namespace StbcRevival
             // Helm movement and speed.
             if (any(new[] { "approach", "intercept", "close", "toward", "towards" })) return "MoveTo";
             if (any(new[] { "away", "evade", "retreat", "avoid" })) return "MoveAwayFrom";
+            if (target && any(new[] { "move", "head", "fly", "go" })) return "MoveTo"; // "move to the target", "head for the target"
             if (w.Contains("stop")) return "SetSpeedStop";
             if (w.Contains("reverse")) return "SetSpeedReverse";
             if (w.Contains("half")) return "SetSpeedHalf";
@@ -300,9 +301,63 @@ namespace StbcRevival
                 }
                 foreach (var role in new[] { "Engineering", "Tactical", "Helm" })
                     update?.Invoke(null, new[] { Enum.Parse(roles, role) });
+                // The helm menu has several Move To orders (to the captain's target, the closest contact, a cloaked
+                // one); TriggerCommand takes the first, so "approach target" goes to the captain's-target one.
+                if (one == "MoveTo" && ApproachTarget(manager)) continue;
                 trigger?.Invoke(null, new[] { Enum.Parse(commands, one) });
             }
             Plugin.Log.LogInfo($"Voice commands: {command}");
+        }
+
+        private static bool loggedHelmMenu;
+
+        // Runs the helm menu's "Approach Target" (Move To, label 7809|Approach Target) as its button does
+        // (CommandManager.TriggerCommand: OnUpdateMenuState with the crew's roles, then OnExecute). False if
+        // it isn't in the menu, for TriggerCommand to try.
+        private static bool ApproachTarget(Type manager)
+        {
+            try
+            {
+                var instance = AccessTools.Field(manager, "IEFBKOMBFGO")?.GetValue(null) ?? AccessTools.Property(manager, "IEFBKOMBFGO")?.GetValue(null, null);
+                var menus = instance == null ? null : AccessTools.Field(manager, "ENLHIAIPDMD")?.GetValue(instance);
+                var helm = menus?.GetType().GetMethod("GetHelmMenu")?.Invoke(menus, null);
+                if (helm == null) return false;
+                var items = new List<object>();
+                Collect(helm, items, 0);
+                var itemType = AccessTools.TypeByName("AI.CHJEFCBPHGN");
+                string Label(object item) => $"{AccessTools.Property(itemType, "ENDEAOOGKOL")?.GetValue(item, null)} {AccessTools.Property(itemType, "OKKPPMGDKAP")?.GetValue(item, null)}";
+                string Command(object item) => AccessTools.Property(itemType, "ICJLNIICKNH")?.GetValue(item, null)?.ToString();
+                if (!loggedHelmMenu)
+                {
+                    loggedHelmMenu = true;
+                    Plugin.Log.LogInfo("Voice commands: helm menu: " + string.Join("; ", items.Select(i => $"{Command(i)} '{Label(i).Trim()}' ({i.GetType().Name})").ToArray()));
+                }
+                var moves = items.Where(i => Command(i) == "MoveTo" && !(AccessTools.Property(itemType, "BLFHNLLDICM")?.GetValue(i, null) is true)).ToList();
+                var approach = moves.FirstOrDefault(i => Label(i).IndexOf("7809", StringComparison.Ordinal) >= 0 || Label(i).IndexOf("Approach", StringComparison.OrdinalIgnoreCase) >= 0)
+                               ?? moves.FirstOrDefault(i => Label(i).IndexOf("My", StringComparison.Ordinal) >= 0);
+                if (approach == null) return false;
+                var updateState = AccessTools.Method(itemType, "OnUpdateMenuState");
+                var roles = AccessTools.Property(manager, "ECNLCPFAEGF")?.GetValue(null, null); // the crew's roles (a List), as TriggerCommand passes them
+                var array = roles?.GetType().GetMethod("ToArray")?.Invoke(roles, null)
+                            ?? Array.CreateInstance(updateState.GetParameters()[0].ParameterType.GetElementType(), 0);
+                updateState.Invoke(approach, new object[] { array, false });
+                AccessTools.Method(itemType, "OnExecute").Invoke(approach, null);
+                Plugin.Log.LogInfo($"Voice commands: approach target ('{Label(approach).Trim()}')");
+                return true;
+            }
+            catch (Exception e)
+            {
+                Plugin.Log.LogWarning("Voice commands: approach target: " + (e.InnerException ?? e).Message);
+                return false;
+            }
+        }
+
+        private static void Collect(object item, List<object> into, int depth)
+        {
+            if (item == null || depth > 6) return;
+            into.Add(item);
+            if (AccessTools.Property(item.GetType(), "LLMAEPCPLGP")?.GetValue(item, null) is Array children)
+                foreach (var child in children) Collect(child, into, depth + 1);
         }
 
         // ---- Recognition (Vosk, offline) --------------------------------------------------------------
