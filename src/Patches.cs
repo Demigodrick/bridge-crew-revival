@@ -174,6 +174,7 @@ namespace StbcRevival
             VrRoomPanels.Patch(harmony);
             Missions.RevivalMissions.Patch(harmony);
             RomulanCreatorOption.Patch(harmony);
+            RevivalSettings.Patch(harmony);
             RomulanFace.Patch(harmony);
             VoiceCommands.Patch(harmony);
             if (Plugin.Diagnostics.Value)

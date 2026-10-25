@@ -58,11 +58,14 @@ namespace StbcRevival
         // ---- Joining -----------------------------------------------------------------------
 
         /// <summary>"K7QX2M" or a full room name ("eu|K7QX2M", "eu|guid").</summary>
+        /// Steam mode: a bare code is looked up by code alone, as the host's region (its prefix) may not be ours.
         internal static string FullRoomName(string input)
         {
             input = (input ?? "").Trim();
             if (input.Length == 0) return "";
-            return input.Contains("|") ? input : SVR.Network.OHCFGLAFILF.AddRegion(input.ToUpperInvariant());
+            if (input.Contains("|")) return input;
+            if (SteamMode.Enabled && SteamMode.FindByCode(input) is string found) return found;
+            return SVR.Network.OHCFGLAFILF.AddRegion(input.ToUpperInvariant());
         }
 
         /// <summary>The last message from Join (e.g. why a room couldn't be joined).</summary>

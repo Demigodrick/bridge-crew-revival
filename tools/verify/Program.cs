@@ -296,5 +296,14 @@ foreach (var c in new[] { "AnalyseTarget", "ArmTorpedoes", "CeaseFire", "CeaseTa
 foreach (var t in new[] { "GEJIEIDGDBO", "MJNNGHIKMIO", "DCDOEBCMNHK" })
     Check($"  voice UI event {t}", game.GetType(t));
 
+// Revival settings (the shuttle's region page)
+var mainMenu = game.GetType("ConsoleMainMenu");
+foreach (var m in new[] { "PKOIDGNDHFO", "GLFCDJFLJDK", "BJNFFMDAOGH", "FMNEJELNGFC" })
+    Check($"ConsoleMainMenu.{m} (revival settings)", mainMenu?.GetMethod(m, Inst));
+foreach (var f in new[] { "CKGKIBEGPOA", "_regionSelectButton", "_regionSelectGO", "_regionSelectRegionText", "_regionAcceptBtn" })
+    Check($"  ConsoleMainMenu.{f}", mainMenu?.GetField(f, Inst));
+Check("  menu state SetState(Main)", mainMenu?.GetField("CKGKIBEGPOA", Inst)?.FieldType.GetMethod("SetState", Inst) is MethodInfo set
+    && Enum.GetNames(set.GetParameters()[0].ParameterType).Contains("Main") ? set : null);
+
 Console.WriteLine(failures == 0 ? "\nAll targets resolved." : $"\n{failures} target(s) missing.");
 return failures == 0 ? 0 : 1;

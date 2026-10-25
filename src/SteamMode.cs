@@ -196,6 +196,34 @@ namespace StbcRevival
 
         internal static bool Knows(string roomName) => directory.Rooms.Any(r => r.Name == roomName) || Server.HostedRooms().Any(r => r.Name == roomName);
 
+        /// <summary>
+        /// The full name ("eu|K7QX2M") of a room by its code alone, whatever region its host had set: among the public
+        /// crews, our own rooms and our Steam friends' rooms. Null if none.
+        /// </summary>
+        internal static string FindByCode(string code)
+        {
+            bool Same(string name) => name != null && string.Equals(RoomBrowser.Code(name), code, StringComparison.OrdinalIgnoreCase);
+            var known = directory.Rooms.Select(r => r.Name).Concat(Server.HostedRooms().Select(r => r.Name)).FirstOrDefault(Same);
+            if (known != null || !steamReady) return known;
+            try
+            {
+                int n = SteamFriends.GetFriendCount(EFriendFlags.k_EFriendFlagImmediate);
+                for (int i = 0; i < n; i++)
+                {
+                    var friend = SteamFriends.GetFriendByIndex(i, EFriendFlags.k_EFriendFlagImmediate);
+                    var parts = (SteamFriends.GetFriendRichPresence(friend, "connect") ?? "").Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+                    for (int j = 0; j < parts.Length - 1; j++)
+                        if (parts[j] == SteamIntegration.JoinArg && Same(parts[j + 1]))
+                            return parts[j + 1];
+                }
+            }
+            catch (Exception e)
+            {
+                Plugin.Log.LogWarning("Steam mode: friend lookup failed: " + e.Message);
+            }
+            return null;
+        }
+
         /// <summary>Find a friend whose rich presence advertises this room (private matches have no lobby).</summary>
         internal static bool ResolveFromFriends(string roomName)
         {
