@@ -19,9 +19,10 @@ namespace StbcRevival.Missions
     /// ready for the transporter a group at a time: scan the station, beam the group aboard, impulse to
     /// the transport and drop them off (within DeliverRange, as the game's own rescues "deliver survivors to
     /// safety"), then go back for the next group. [Revival] EvacuationMinutes sets the time (10 by default).
-    /// Centred on Perseph (in the Trench). Map stations don't all carry the SpaceStation tag or a cargo bay, so the
-    /// station is found by tag or name, and given a cargo bay for its people if it has none (on every player's
-    /// game: the host shares the station and count as a room property, "EVC"). Where there's a StarManager star
+    /// Centred on Perseph (in the Trench). The station is the loaded one near the ship (found by tag or name: the
+    /// map's tagged bodies elsewhere are unloaded placeholders). Each group waits in an escape pod by it (the
+    /// station can't be the transporter's target: the captain's order checks need ship data it hasn't got);
+    /// the pod's count is set on every player's game (the host shares it as a room property, "EVC"). Where there's a StarManager star
     /// (the E3 demo sector), the eruption is the E3 demo's own: that sector's star
     /// (tagged Star and Enemy) has a StarManager whose animation goes through "event1", "event2",
     /// "preCataclysm" and "cataclysm" (sent to every player), with the demo's warnings from the comms officer.
@@ -57,6 +58,7 @@ namespace StbcRevival.Missions
         private const float FinalCountdown = 60f;       // the game's eruption: a minute from the blast to the end
         private const string ExplosionPrefab = "Sector/System/Mission 02 Prefabs/StarExplosion";
         private const string Home = "Perseph";
+        private const string EscapePod = "Sector/Ships/Ship - EscapePodFull"; // the E3 demo's survivors' pods
 
         private static readonly string[] Freighters =
         {
@@ -64,7 +66,7 @@ namespace StbcRevival.Missions
         };
 
         private readonly System.Random random = new System.Random(Guid.NewGuid().GetHashCode());
-        private BodyRef player, station, transport;
+        private BodyRef player, station, transport, pod;
         private Map.SystemRoot system;
         private BodyRef quarantine; // the quarantine point (a placeholder: only its position is used)
         private int stationPeople;  // as last seen while the station was loaded
@@ -164,8 +166,8 @@ namespace StbcRevival.Missions
             Plugin.Log.LogInfo($"Stellar evacuation: {total} people on {stationName} in {systemName}, {minutes} minutes");
 
             string how = quarantine != null
-                ? $"Scan {stationName}, beam each group aboard, then impulse to Quarantine, where a transport takes them"
-                : $"Scan {stationName}, beam each group aboard, then impulse to the transport to drop them off";
+                ? $"At {stationName}, scan each escape pod and beam the people aboard, then impulse to Quarantine, where a transport takes them"
+                : $"At {stationName}, scan each escape pod and beam the people aboard, then impulse to the transport to drop them off";
             yield return Task.NECMCDDOFJB.AddSubDirectives(Directive, how);
             string status = Status(0);
             yield return Task.NECMCDDOFJB.AddSubDirectives(Directive, status);
@@ -186,21 +188,19 @@ namespace StbcRevival.Missions
                     break;
                 }
 
-                // The station's people, read only while it's loaded (you're there); if it unloaded and came back
-                // without them, they go back aboard.
+                // The current group's escape pod, read only while it's loaded (you're at the station); if it
+                // unloaded and came back without them, they go back aboard.
                 int aboard = Aboard();
                 bool atStation = Live(station);
-                if (atStation)
+                if (pod != null && Live(pod))
                 {
-                    var body = station.AHMPFHDGMKJ;
-                    if (lastLive != null && !ReferenceEquals(body, lastLive) && stationPeople > 0)
+                    var body = pod.AHMPFHDGMKJ;
+                    if (lastLive != null && !ReferenceEquals(body, lastLive) && stationPeople > 0 && People(pod) == 0)
                     {
-                        // A new body for the station: it was unloaded while you were away. Its people go back aboard.
-                        PutPeople(station, stationPeople);
-                        LifeSignsKnown(station);
-                        Plugin.Log.LogInfo($"Stellar evacuation: {stationPeople} people back on the reloaded station");
+                        PutPeople(pod, stationPeople);
+                        Plugin.Log.LogInfo($"Stellar evacuation: {stationPeople} people back in the reloaded escape pod");
                     }
-                    else stationPeople = People(station);
+                    else stationPeople = People(pod);
                     lastLive = body;
                 }
                 int onStation = stationPeople;
@@ -213,23 +213,28 @@ namespace StbcRevival.Missions
                         .AtAngleAndDistanceFromBody(player, random.Next(0, 360), 3000f).FaceOtherBody(player).OutputTo(transport);
                     yield return Task.KDNOMKAPDKG.TellAI(transport).ToDisable(); // holds position
                     yield return Task.BCJDEKKIHDD.AddMarker(new[] { transport });
-                    Plugin.Log.LogInfo("Stellar evacuation: transport waiting at the quarantine point");
+                    Plugin.Log.LogInfo($"Stellar evacuation: transport waiting at the quarantine point ({(transport.AHMPFHDGMKJ != null ? "spawned" : "not spawned")})");
                 }
 
-                // A group onto the station's transporter pad when the last one's been dropped off.
+                // The next group, in an escape pod by the station, once the last one's been dropped off. (The
+                // station itself can't be the transporter's target: the captain's order checks need ship data
+                // a station hasn't got, and break every crew order. The E3 demo beamed people from pods too.)
                 if (ready && atStation && onStation == 0 && aboard == 0 && placed < total && !erupting)
                 {
                     ready = false;
                     placedAt = UnityEngine.Time.time;
                     int group = Math.Min(total - placed, 10 + random.Next(0, 6));
                     placed += group;
-                    PutPeople(station, group);
+                    pod = new BodyRef();
+                    yield return Task.BFMBGDIDKEI.UsingSpawner(MakeSpawner(EscapePod, "Escape pod", Tag.Friendly))
+                        .AtAngleAndDistanceFromBody(station, random.Next(0, 360), 1500f).OutputTo(pod);
+                    PutPeople(pod, group);
                     stationPeople = group;
-                    lastLive = station.AHMPFHDGMKJ;
-                    yield return Task.CIAHOPCODGJ.WithTargets(station).SetShieldHealthPercent(0f);
-                    LifeSignsKnown(station);
-                    Plugin.Log.LogInfo($"Stellar evacuation: group of {group} ready ({placed}/{total} placed)");
-                    if (placed > group) foreach (var step in Say($"The next {group} people are ready to beam out of {stationName}")) yield return step;
+                    lastLive = pod.AHMPFHDGMKJ;
+                    yield return Task.BCJDEKKIHDD.RemoveAllMarkers();
+                    yield return Task.BCJDEKKIHDD.AddMarker(transport.AHMPFHDGMKJ != null ? new[] { pod, transport } : new[] { pod });
+                    Plugin.Log.LogInfo($"Stellar evacuation: group of {group} in an escape pod ({placed}/{total} placed), {Distance(player, pod) / 1000:0} km away");
+                    foreach (var step in Say($"{group} people waiting in an escape pod at {stationName}: scan it and beam them aboard")) yield return step;
                 }
 
                 // Survivors aboard and the transport close: hand them over.
@@ -247,7 +252,7 @@ namespace StbcRevival.Missions
                 if (!ready && !warnedEmpty && atStation && onStation == 0 && aboard == 0 && UnityEngine.Time.time - placedAt > 10f)
                 {
                     warnedEmpty = true; // the group never showed up on the station, or vanished without reaching us
-                    Plugin.Log.LogWarning($"Stellar evacuation: the station shows no people ({placed} placed, {saved} saved)");
+                    Plugin.Log.LogWarning($"Stellar evacuation: the escape pod shows no people ({placed} placed, {saved} saved)");
                 }
                 string now = Status(Aboard());
                 if (now != status)
@@ -422,28 +427,6 @@ namespace StbcRevival.Missions
         // ---- Helpers ----------------------------------------------------------------------------------
 
         private int Aboard() => People(player);
-
-        // The transporter only beams from a body whose life signs (or cargo) have been scanned, and a scan only
-        // reveals the subsystems the body lists. Map stations list no life signs, so they look fully scanned
-        // and still can't be beamed from: list them and make them known (to every player), as the game's
-        // own rescue set-up adds them to its targets.
-        private static void LifeSignsKnown(BodyRef body)
-        {
-            try
-            {
-                if (!(body?.AHMPFHDGMKJ?.GetDetectable() is Sector.TargetableComponent targetable))
-                {
-                    Plugin.Log.LogWarning("Stellar evacuation: the station has no scan target");
-                    return;
-                }
-                targetable.AddTargetableSubsystem(Sector.NHGGGDMADKM.Life);
-                if (!targetable.IsSubsystemKnown(Sector.NHGGGDMADKM.Life)) targetable.SetSubsystemKnown(Sector.NHGGGDMADKM.Life, true);
-            }
-            catch (Exception e)
-            {
-                Plugin.Log.LogWarning("Stellar evacuation: life signs: " + e.Message);
-            }
-        }
 
         // People onto a body: straight into its cargo bay, adding one if it has none (the game's own cargo task
         // does nothing without one), and shared with the crew's games (Update, "EVC").
