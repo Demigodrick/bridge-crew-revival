@@ -30,39 +30,108 @@ namespace StbcRevival
         private const int SampleRate = 16000;
         private const int MaxSeconds = 10;
 
-        // The words listened for (Vosk recognises any sequence of them; anything else comes back as "[unk]").
+        // The words listened for (Vosk recognises any sequence of them; anything else comes back as "[unk]"):
+        // everything the game's Watson commands covered (VoiceRecognitionManager's intent/entity table).
         private static readonly string[] Vocabulary =
         {
-            "shields", "shield", "up", "down", "raise", "lower", "drop", "on", "off", "modulate",
-            "fire", "phasers", "phaser", "torpedoes", "torpedo", "photon", "arm", "disarm", "cease", "hold",
-            "target", "engines", "weapons", "their", "the", "all", "speed", "full", "half", "quarter", "impulse",
-            "ahead", "stop", "reverse", "maximum", "scan", "enemy", "ship", "go",
+            // helm
+            "speed", "full", "half", "quarter", "impulse", "ahead", "stop", "reverse", "maximum", "go", "warp", "prepare",
+            "ready", "plot", "course", "set", "engage", "punch", "jump", "make", "it", "so", "approach", "intercept",
+            "close", "move", "away", "evade", "retreat", "avoid", "toward", "towards",
+            // tactical
+            "fire", "phasers", "phaser", "torpedoes", "torpedo", "photon", "arm", "disarm", "cease", "hold", "target",
+            "targeting", "clear", "engines", "engine", "weapons", "shields", "shield", "comms", "communications",
+            "disrupt", "hack", "scan", "probe", "analyze", "analyse", "beam", "transport", "survivors", "crew",
+            "stealth", "signature", "reduce", "quiet", "silent", "running", "cloak", "cloaked", "hunt",
+            // shields
+            "up", "down", "raise", "lower", "drop", "on", "off", "modulate",
+            // engineering
+            "power", "divert", "reroute", "balance", "balanced", "repair", "fix", "optimize", "optimise", "offense",
+            "offensive", "defense", "defensive", "rescue", "sensors", "scanners", "core", "warpcore", "computer",
+            "sickbay", "medical", "science", "lab", "transporter", "transporters", "everything", "systems",
+            // fillers
+            "the", "their", "them", "all", "enemy", "ship", "to", "our", "of",
         };
 
+        private static string lastPrepared; // "Warp" or "Impulse": what a bare "engage" / "make it so" engages
+
         // Words → the game's crew command (AI.BHPPPGKNAHK names), by key words as Watson's intents did:
-        // "lower the shields", "shields down" and "drop shields" all lower them. Null when nothing fits.
+        // "lower the shields", "shields down" and "drop shields" all lower them. Checked in an order that keeps
+        // "repair shields", "power to shields" and "target shields" from being plain shield orders. Null when
+        // nothing fits.
         internal static string Parse(string text)
         {
-            var words = new HashSet<string>((text ?? "").Split(' ').Where(w => w.Length > 0 && w != "[unk]"));
-            Func<string[], bool> any = list => list.Any(words.Contains);
-            if (words.Count == 0) return null;
-            if (any(new[] { "cease", "hold" })) return "CeaseFire";
-            if (words.Contains("target"))
-                return any(new[] { "engines" }) ? "TargetEngines" : any(new[] { "shields", "shield" }) ? "TargetShields"
-                    : any(new[] { "weapons", "phasers", "phaser" }) ? "TargetWeapons" : null;
-            if (any(new[] { "shields", "shield" }))
-                return words.Contains("modulate") ? "ModulateShields"
-                    : any(new[] { "down", "lower", "drop", "off" }) ? "LowerShields" : "RaiseShields";
-            if (words.Contains("disarm")) return "DisarmTorpedoes";
-            if (words.Contains("arm")) return "ArmTorpedoes";
-            if (words.Contains("fire")) return any(new[] { "torpedoes", "torpedo", "photon" }) ? "FireTorpedoes" : "FirePhasers";
-            if (words.Contains("scan")) return "ScanTarget";
-            if (words.Contains("stop")) return "SetSpeedStop";
-            if (words.Contains("reverse")) return "SetSpeedReverse";
-            if (words.Contains("half")) return "SetSpeedHalf";
-            if (words.Contains("quarter")) return "SetSpeedQuarter";
-            if (any(new[] { "full", "maximum", "impulse", "ahead", "speed", "go" })) return "SetSpeedFull";
+            var w = new HashSet<string>((text ?? "").Split(' ').Where(x => x.Length > 0 && x != "[unk]"));
+            if (w.Count == 0) return null;
+            Func<string[], bool> any = list => list.Any(w.Contains);
+            bool shields = any(new[] { "shields", "shield" }), engines = any(new[] { "engines", "engine" });
+            bool weapons = any(new[] { "weapons", "phasers", "phaser" }), torpedoes = any(new[] { "torpedoes", "torpedo", "photon" });
+            bool warp = any(new[] { "warp" }) && !w.Contains("core"), impulse = w.Contains("impulse");
+
+            if (any(new[] { "cease", "hold" })) return any(new[] { "target", "targeting" }) ? "CeaseTargeting" : "CeaseFire";
+            if (w.Contains("clear") && any(new[] { "target", "targeting" })) return "CeaseTargeting";
+
+            // Helm travel: prepare / engage warp or impulse.
+            if (any(new[] { "prepare", "ready", "plot", "course", "set" }) && (warp || impulse))
+                return Remember(warp ? "PrepareWarp" : "PrepareImpulse");
+            if (any(new[] { "engage", "punch", "jump" }) || (w.Contains("make") && w.Contains("so")))
+            {
+                if (warp) return "EngageWarp";
+                if (impulse) return "EngageImpulse";
+                if (any(new[] { "target", "enemy" })) return "EngageTarget";
+                return lastPrepared != null ? "Engage" + lastPrepared : "EngageTarget";
+            }
+            if (warp && !any(new[] { "repair", "fix", "power", "optimize", "optimise" })) return Remember("PrepareWarp");
+
+            // Engineering.
+            if (any(new[] { "repair", "fix" }))
+                return engines ? "RepairEngines" : shields ? "RepairShields" : torpedoes ? "RepairTorpedoes" : weapons ? "RepairPhasers"
+                    : any(new[] { "warpcore", "core" }) || w.Contains("warp") ? "RepairWarpcore" : any(new[] { "sensors", "scanners" }) ? "RepairSensors"
+                    : any(new[] { "science", "lab" }) ? "RepairScience" : any(new[] { "transporter", "transporters" }) ? "RepairTransporter"
+                    : w.Contains("computer") ? "RepairComputerCore" : any(new[] { "sickbay", "medical" }) ? "RepairSickbay" : "RepairBalanced";
+            if (any(new[] { "power", "divert", "reroute" }))
+                return engines ? "PowerToEngines" : shields ? "PowerToShields" : weapons ? "PowerToPhasers" : "PowerBalanced";
+            if (any(new[] { "optimize", "optimise" }))
+                return any(new[] { "offense", "offensive" }) || weapons || torpedoes ? "OptimizeWeapons"
+                    : any(new[] { "defense", "defensive" }) || shields ? "OptimizeShields" : engines ? "OptimizeEngines"
+                    : any(new[] { "rescue", "transporter", "transporters" }) ? "OptimizeTransporter"
+                    : any(new[] { "sensors", "scanners" }) ? "OptimizeScanners" : w.Contains("computer") ? "OptimzeComputerCore" : "OptimizeBalanced";
+            if (any(new[] { "balance", "balanced" })) return "PowerBalanced";
+
+            // Science and special orders.
+            if (any(new[] { "disrupt", "hack" }))
+                return engines ? "DisruptEngines" : shields ? "DisruptShields" : weapons ? "DisruptWeapons"
+                    : any(new[] { "comms", "communications" }) ? "DisruptComms" : null;
+            if (any(new[] { "target", "targeting" }))
+                return engines ? "TargetEngines" : shields ? "TargetShields" : weapons ? "TargetWeapons" : null;
+            if (any(new[] { "beam", "transport" })) return "TransportFromTarget";
+            if (any(new[] { "analyze", "analyse" })) return "AnalyseTarget";
+            if (any(new[] { "scan", "probe" })) return "ScanTarget";
+            if (any(new[] { "cloak", "cloaked", "hunt" })) return "CloakHunt";
+            if (any(new[] { "stealth", "signature", "quiet", "silent" })) return "ReduceSignature";
+
+            // Tactical.
+            if (shields)
+                return w.Contains("modulate") ? "ModulateShields" : any(new[] { "down", "lower", "drop", "off" }) ? "LowerShields" : "RaiseShields";
+            if (w.Contains("disarm")) return "DisarmTorpedoes";
+            if (w.Contains("arm")) return "ArmTorpedoes";
+            if (w.Contains("fire")) return torpedoes ? "FireTorpedoes" : "FirePhasers";
+
+            // Helm movement and speed.
+            if (any(new[] { "approach", "intercept", "close", "toward", "towards" })) return "MoveTo";
+            if (any(new[] { "away", "evade", "retreat", "avoid" })) return "MoveAwayFrom";
+            if (w.Contains("stop")) return "SetSpeedStop";
+            if (w.Contains("reverse")) return "SetSpeedReverse";
+            if (w.Contains("half")) return "SetSpeedHalf";
+            if (w.Contains("quarter")) return "SetSpeedQuarter";
+            if (any(new[] { "full", "maximum", "ahead", "speed", "go" }) || impulse) return "SetSpeedFull";
             return null;
+        }
+
+        private static string Remember(string prepare)
+        {
+            lastPrepared = prepare.Substring("Prepare".Length);
+            return prepare;
         }
 
         private static bool ready, failed, listening;
