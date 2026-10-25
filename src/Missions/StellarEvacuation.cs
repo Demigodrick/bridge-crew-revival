@@ -52,6 +52,7 @@ namespace StbcRevival.Missions
         private const string Directive = "Evacuate the station before the star erupts";
         private const string Escape = "Warp out before the star erupts";
         private const double DeliverRange = 5000;      // metres from the transport to hand the survivors over
+        private const double ArrivedRange = 100000;    // metres from the quarantine point's marker: you've impulsed there
         private const float TransportDistance = 35000f; // metres from the station to the transport
         private const float FinalCountdown = 60f;       // the game's eruption: a minute from the blast to the end
         private const string ExplosionPrefab = "Sector/System/Mission 02 Prefabs/StarExplosion";
@@ -65,10 +66,13 @@ namespace StbcRevival.Missions
         private readonly System.Random random = new System.Random(Guid.NewGuid().GetHashCode());
         private BodyRef player, station, transport;
         private Map.SystemRoot system;
+        private BodyRef quarantine; // the quarantine point (a placeholder: only its position is used)
+        private int stationPeople;  // as last seen while the station was loaded
         private UnityEngine.Component star; // the E3 star's StarManager (its eruption animation), if the system has it
         private static readonly Type StarManagerType = HarmonyLib.AccessTools.TypeByName("StarManager"); // internal to the game
         private int total, placed, saved, spawnCount;
-        private bool lost, erupting;
+        private bool lost, erupting, spawningTransport;
+        private object lastLive;   // the station's loaded body when last seen (a new one means it reloaded)
         private string notice;     // a short-lived line under the objective (group ready, people transferred)
         private float noticeUntil;
 
@@ -103,61 +107,66 @@ namespace StbcRevival.Missions
             yield return Task.KNMMMJOOBHC.WithTime(3f); // out of warp
             Plugin.Log.LogInfo($"Stellar evacuation: in {systemName}");
 
-            // The station and the transport.
+            // The countdown starts as you arrive (before anything else, so a hitch below can't hold it up).
+            star = CriticalStar(system);
+            Plugin.Log.LogInfo(star != null ? $"Stellar evacuation: the star's own eruption ({star.name})" : "Stellar evacuation: no erupting star here; the blast-wave effect stands in");
+            total = 10 * random.Next(6, 11); // 60-100 people
+            int minutes = Math.Max(3, Math.Min(30, Plugin.EvacuationMinutes.Value));
+            float end = UnityEngine.Time.time + minutes * 60f;
+            yield return Task.NECMCDDOFJB.WithDescriptionString(Directive).WithTimer(minutes * 60.0 - FinalCountdown);
+            yield return Task.CAJKAPALCCO.SendViewScreenMessage(ViewScreen.GCIOEGLLOLP.Warning, 5f, "Stellar eruption imminent: evacuate the station");
+            yield return Task.OKLDNLKLLFJ.WithGroup("State_Group_Mus_Dyn").WithState("Moderate_Tension");
+
+            // The station: one that's actually loaded here (the map's tagged bodies elsewhere in the system are
+            // placeholders, "attic" bodies, until you impulse there, and the transporter won't beam from those).
             DumpBodies();
-            station = FindStation();
-            string stationName = station == null ? null : Localized(station.AHMPFHDGMKJ.ALPAOOKFIEE.BaseName);
-            if (station == null)
+            var live = LiveStation();
+            string stationName;
+            if (live != null)
+            {
+                station = new BodyRef(live.ALPAOOKFIEE);
+                stationName = Localized(live.ALPAOOKFIEE.BaseName);
+                if (string.IsNullOrEmpty(stationName) || stationName.Contains("|")) stationName = "the station";
+            }
+            else
             {
                 // No station here after all: a crippled freighter stands in for it.
-                Plugin.Log.LogWarning($"Stellar evacuation: no station in {systemName}; using a freighter");
+                Plugin.Log.LogWarning($"Stellar evacuation: no station near the ship in {systemName}; using a freighter");
                 station = new BodyRef();
                 yield return Task.BFMBGDIDKEI.UsingSpawner(MakeSpawner(Freighters[random.Next(Freighters.Length)], "Colony ship", Tag.Friendly))
                     .AtAngleAndDistanceFromBody(player, random.Next(0, 360), 8000f).OutputTo(station);
                 yield return Task.KDNOMKAPDKG.TellAI(station).ToDisable();
                 stationName = "the colony ship";
             }
-            if (string.IsNullOrEmpty(stationName)) stationName = "the station";
             Plugin.Log.LogInfo($"Stellar evacuation: station {stationName}, {Distance(player, station) / 1000:0} km away");
-            star = CriticalStar(system);
-            Plugin.Log.LogInfo(star != null ? $"Stellar evacuation: the star's own eruption ({star.name})" : "Stellar evacuation: no erupting star here; the blast-wave effect stands in");
+            yield return Task.BCJDEKKIHDD.AddMarker(new[] { station });
 
-            // The transport, an impulse jump from the station: at the system's quarantine point if it has one
-            // (Perseph does), else TransportDistance out. Spawned as a step of its own and given ten seconds:
-            // if it can't be placed there, it goes by the ship instead.
-            var quarantine = AllBodies().FirstOrDefault(b => Named(b, "quarantine"));
-            Plugin.Log.LogInfo(quarantine != null ? $"Stellar evacuation: transport at the quarantine point, {Distance(station, quarantine) / 1000:0} km from the station"
-                                                  : "Stellar evacuation: no quarantine point here; transport placed out from the station");
+            // The drop-off: the system's quarantine point if it has one (Perseph does): an impulse jump away. The
+            // transport waits there, spawned when you first arrive (its area isn't loaded before). Without one,
+            // the transport waits TransportDistance from the station.
+            quarantine = AllBodies().FirstOrDefault(b => Named(b, "quarantine"));
             transport = new BodyRef();
-            string prefab = Freighters[random.Next(Freighters.Length)];
-            Objective.AddStep("transport", Task.BFMBGDIDKEI.UsingSpawner(MakeSpawner(prefab, "Transport", Tag.Friendly))
-                .AtAngleAndDistanceFromBody(quarantine ?? station, random.Next(0, 360), quarantine != null ? 3000f : TransportDistance)
-                .FaceOtherBody(station).OutputTo(transport));
-            yield return Task.KKALNAMJCNH.WithName("transport");
-            for (int i = 0; i < 10 && transport.AHMPFHDGMKJ == null; i++) yield return Task.KNMMMJOOBHC.WithTime(1f);
-            if (transport.AHMPFHDGMKJ == null)
+            string dropOff;
+            if (quarantine != null)
             {
-                Plugin.Log.LogWarning("Stellar evacuation: the transport couldn't be placed by the station; placing it by the ship");
-                yield return Task.CLNFMDFOFKL.WithName("transport");
-                transport = new BodyRef();
-                yield return Task.BFMBGDIDKEI.UsingSpawner(MakeSpawner(prefab, "Transport", Tag.Friendly))
-                    .AtAngleAndDistanceFromBody(player, random.Next(0, 360), TransportDistance).OutputTo(transport);
+                dropOff = "the quarantine point";
+                Plugin.Log.LogInfo($"Stellar evacuation: drop-off at the quarantine point, {Distance(player, quarantine) / 1000:0} km away");
             }
-            Plugin.Log.LogInfo($"Stellar evacuation: transport placed, {Distance(station, transport) / 1000:0} km from the station");
-            yield return Task.KDNOMKAPDKG.TellAI(transport).ToDisable(); // holds position
-            yield return Task.PAMPNJNPLCI.OfPOIChild(transport);          // an impulse destination
-            yield return Task.BCJDEKKIHDD.AddMarker(new[] { station, transport });
-            Plugin.Log.LogInfo("Stellar evacuation: marked");
+            else
+            {
+                dropOff = "the transport";
+                yield return Task.BFMBGDIDKEI.UsingSpawner(MakeSpawner(Freighters[random.Next(Freighters.Length)], "Transport", Tag.Friendly))
+                    .AtAngleAndDistanceFromBody(player, random.Next(0, 360), TransportDistance).OutputTo(transport);
+                yield return Task.KDNOMKAPDKG.TellAI(transport).ToDisable(); // holds position
+                yield return Task.BCJDEKKIHDD.AddMarker(new[] { station, transport });
+                Plugin.Log.LogInfo($"Stellar evacuation: transport {Distance(station, transport) / 1000:0} km from the station");
+            }
+            Plugin.Log.LogInfo($"Stellar evacuation: {total} people on {stationName} in {systemName}, {minutes} minutes");
 
-            total = 10 * random.Next(6, 11); // 60-100 people
-            int minutes = Math.Max(3, Math.Min(30, Plugin.EvacuationMinutes.Value));
-            float end = UnityEngine.Time.time + minutes * 60f;
-            Plugin.Log.LogInfo($"Stellar evacuation: {total} people on {stationName} in {systemName}, {minutes} minutes; transport {Distance(station, transport) / 1000:0} km away");
-
-            yield return Task.NECMCDDOFJB.WithDescriptionString(Directive).WithTimer(minutes * 60.0 - FinalCountdown);
-            string how = $"Scan {stationName}, beam each group aboard, then impulse to the transport to drop them off";
+            string how = quarantine != null
+                ? $"Scan {stationName}, beam each group aboard, then impulse to Quarantine, where a transport takes them"
+                : $"Scan {stationName}, beam each group aboard, then impulse to the transport to drop them off";
             yield return Task.NECMCDDOFJB.AddSubDirectives(Directive, how);
-            yield return Task.CAJKAPALCCO.SendViewScreenMessage(ViewScreen.GCIOEGLLOLP.Warning, 5f, "Stellar eruption imminent: evacuate the station");
             string status = Status(0);
             yield return Task.NECMCDDOFJB.AddSubDirectives(Directive, status);
 
@@ -177,15 +186,46 @@ namespace StbcRevival.Missions
                     break;
                 }
 
+                // The station's people, read only while it's loaded (you're there); if it unloaded and came back
+                // without them, they go back aboard.
+                int aboard = Aboard();
+                bool atStation = Live(station);
+                if (atStation)
+                {
+                    var body = station.AHMPFHDGMKJ;
+                    if (lastLive != null && !ReferenceEquals(body, lastLive) && stationPeople > 0)
+                    {
+                        // A new body for the station: it was unloaded while you were away. Its people go back aboard.
+                        PutPeople(station, stationPeople);
+                        LifeSignsKnown(station);
+                        Plugin.Log.LogInfo($"Stellar evacuation: {stationPeople} people back on the reloaded station");
+                    }
+                    else stationPeople = People(station);
+                    lastLive = body;
+                }
+                int onStation = stationPeople;
+
+                // The transport at the quarantine point, once you're there (its area is loaded then).
+                if (quarantine != null && transport.AHMPFHDGMKJ == null && !spawningTransport && Distance(player, quarantine) <= ArrivedRange)
+                {
+                    spawningTransport = true;
+                    yield return Task.BFMBGDIDKEI.UsingSpawner(MakeSpawner(Freighters[random.Next(Freighters.Length)], "Transport", Tag.Friendly))
+                        .AtAngleAndDistanceFromBody(player, random.Next(0, 360), 3000f).FaceOtherBody(player).OutputTo(transport);
+                    yield return Task.KDNOMKAPDKG.TellAI(transport).ToDisable(); // holds position
+                    yield return Task.BCJDEKKIHDD.AddMarker(new[] { transport });
+                    Plugin.Log.LogInfo("Stellar evacuation: transport waiting at the quarantine point");
+                }
+
                 // A group onto the station's transporter pad when the last one's been dropped off.
-                int onStation = People(station), aboard = Aboard();
-                if (ready && onStation == 0 && aboard == 0 && placed < total && !erupting)
+                if (ready && atStation && onStation == 0 && aboard == 0 && placed < total && !erupting)
                 {
                     ready = false;
                     placedAt = UnityEngine.Time.time;
                     int group = Math.Min(total - placed, 10 + random.Next(0, 6));
                     placed += group;
                     PutPeople(station, group);
+                    stationPeople = group;
+                    lastLive = station.AHMPFHDGMKJ;
                     yield return Task.CIAHOPCODGJ.WithTargets(station).SetShieldHealthPercent(0f);
                     LifeSignsKnown(station);
                     Plugin.Log.LogInfo($"Stellar evacuation: group of {group} ready ({placed}/{total} placed)");
@@ -193,10 +233,10 @@ namespace StbcRevival.Missions
                 }
 
                 // Survivors aboard and the transport close: hand them over.
-                if (aboard > 0 && Distance(player, transport) <= DeliverRange)
+                if (aboard > 0 && transport.AHMPFHDGMKJ != null && Distance(player, transport) <= DeliverRange)
                 {
                     saved += aboard;
-                    if (People(station) == 0) ready = true;
+                    if (stationPeople == 0) ready = true;
                     yield return Task.CIAHOPCODGJ.WithTargets(player).SetCargo(Sector.CargoTypes.People, 0);
                     Plugin.Log.LogInfo($"Stellar evacuation: {aboard} delivered, {saved}/{total} saved");
                     foreach (var step in Say(saved >= total ? "Everyone's off the station. Warp out!" : $"{aboard} people transferred to the transport")) yield return step;
@@ -204,7 +244,7 @@ namespace StbcRevival.Missions
 
                 if (notice != null && UnityEngine.Time.time > noticeUntil)
                     foreach (var step in Say(null)) yield return step;
-                if (!ready && !warnedEmpty && onStation == 0 && aboard == 0 && UnityEngine.Time.time - placedAt > 10f)
+                if (!ready && !warnedEmpty && atStation && onStation == 0 && aboard == 0 && UnityEngine.Time.time - placedAt > 10f)
                 {
                     warnedEmpty = true; // the group never showed up on the station, or vanished without reaching us
                     Plugin.Log.LogWarning($"Stellar evacuation: the station shows no people ({placed} placed, {saved} saved)");
@@ -459,6 +499,38 @@ namespace StbcRevival.Missions
             Plugin.Log.LogInfo($"Stellar evacuation: {count} people on {sector.name} (from the host)");
         }
 
+        private static bool Live(BodyRef body) => body?.AHMPFHDGMKJ is Sector.SectorBody sector && !(sector is Sector.AtticSectorBody);
+
+        // A loaded station near the ship: the nearest real body tagged SpaceStation or named like a station.
+        private Sector.SectorBody LiveStation()
+        {
+            try
+            {
+                var me = player.AHMPFHDGMKJ.ALPAOOKFIEE;
+                var near = UnityEngine.Object.FindObjectsOfType<Sector.SectorBody>()
+                    .Where(b => b != null && !(b is Sector.AtticSectorBody) && b.ALPAOOKFIEE != null && b.ALPAOOKFIEE != me
+                                && b.ALPAOOKFIEE.System == system && b.ALPAOOKFIEE.ContainerTransform == me.ContainerTransform)
+                    .Select(b => new { Body = b, Km = UnityEngine.Vector3d.Distance(b.ALPAOOKFIEE.Position, me.Position) / 1000 })
+                    .Where(x => x.Km < 200).OrderBy(x => x.Km).ToList();
+                foreach (var x in near.Take(25))
+                    Plugin.Log.LogInfo($"Stellar evacuation: nearby '{x.Body.name}' / '{x.Body.ALPAOOKFIEE.BaseName}' ({x.Body.GetType().Name}), {x.Km:0} km"
+                                       + $"{(SafeHasTag(x.Body.ALPAOOKFIEE, Tag.SpaceStation) ? ", SpaceStation" : "")}{(x.Body.GetCargo() != null ? ", cargo bay" : "")}");
+                return near.Select(x => x.Body).FirstOrDefault(b => SafeHasTag(b.ALPAOOKFIEE, Tag.SpaceStation)
+                                                                    || LooksLikeStation(b.name) || LooksLikeStation(b.ALPAOOKFIEE.BaseName));
+            }
+            catch (Exception e)
+            {
+                Plugin.Log.LogWarning("Stellar evacuation: finding the station: " + e.Message);
+                return null;
+            }
+        }
+
+        private static bool SafeHasTag(SystemTransform t, Tag tag)
+        {
+            try { return t.HasTag(tag); }
+            catch { return false; }
+        }
+
         // The station: tagged SpaceStation, else a body named like one; null if neither.
         private BodyRef FindStation()
         {
@@ -505,7 +577,7 @@ namespace StbcRevival.Missions
         {
             try
             {
-                foreach (var body in AllBodies())
+                foreach (var body in AllBodies().Where(b => !SafeHasTag(b.AHMPFHDGMKJ.ALPAOOKFIEE, Tag.SpawnPoint)))
                 {
                     var t = body.AHMPFHDGMKJ.ALPAOOKFIEE;
                     var tags = DumpTags.Where(tag => { try { return t.HasTag(tag); } catch { return false; } }).Select(tag => tag.ToString()).ToArray();
