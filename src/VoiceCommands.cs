@@ -51,6 +51,11 @@ namespace StbcRevival
             "sickbay", "medical", "science", "lab", "transporter", "transporters", "everything", "systems",
             // fillers
             "the", "their", "them", "all", "enemy", "ship", "to", "our", "of",
+            // Star Trek phrases (see Lore)
+            "alert", "red", "yellow", "battle", "stations", "general", "quarters", "stand", "cancel", "secure",
+            "evasive", "maneuvers", "manoeuvres", "pattern", "delta", "will", "at", "energize", "factor", "nine",
+            "eight", "seven", "six", "five", "four", "three", "two", "one", "hit", "take", "us", "out", "lets",
+            "let's", "lock", "away",
         };
 
         private static string lastPrepared; // "Warp" or "Impulse": what a bare "engage" / "make it so" engages
@@ -64,6 +69,7 @@ namespace StbcRevival
             var w = new HashSet<string>((text ?? "").Split(' ').Where(x => x.Length > 0 && x != "[unk]"));
             if (w.Count == 0) return null;
             Func<string[], bool> any = list => list.Any(w.Contains);
+            if (Lore(w, any) is string lore) return lore;
             bool shields = any(new[] { "shields", "shield" }), engines = any(new[] { "engines", "engine" });
             bool weapons = any(new[] { "weapons", "phasers", "phaser" }), torpedoes = any(new[] { "torpedoes", "torpedo", "photon" });
             bool warp = any(new[] { "warp" }) && !w.Contains("core"), impulse = w.Contains("impulse");
@@ -79,7 +85,7 @@ namespace StbcRevival
                 if (warp) return "EngageWarp";
                 if (impulse) return "EngageImpulse";
                 if (any(new[] { "target", "enemy" })) return "EngageTarget";
-                return lastPrepared != null ? "Engage" + lastPrepared : "EngageTarget";
+                return lastPrepared != null ? "Engage" + lastPrepared : "EngageWarp"; // Picard's "Engage": go to warp
             }
             if (warp && !any(new[] { "repair", "fix", "power", "optimize", "optimise" })) return Remember("PrepareWarp");
 
@@ -125,6 +131,28 @@ namespace StbcRevival
             if (w.Contains("half")) return "SetSpeedHalf";
             if (w.Contains("quarter")) return "SetSpeedQuarter";
             if (any(new[] { "full", "maximum", "ahead", "speed", "go" }) || impulse) return "SetSpeedFull";
+            return null;
+        }
+
+        // Orders from Star Trek that the game's Watson commands never had, as one or more crew commands
+        // (comma-separated): checked before the regular orders. Null: not one of these.
+        private static string Lore(HashSet<string> w, Func<string[], bool> any)
+        {
+            bool alert = w.Contains("alert") || (w.Contains("battle") && w.Contains("stations")) || (w.Contains("general") && w.Contains("quarters"));
+            if (any(new[] { "cancel", "secure" }) && alert || (w.Contains("stand") && w.Contains("down")))
+                return "LowerShields,DisarmTorpedoes";                           // "Stand down red alert"
+            if (alert && w.Contains("yellow")) return "RaiseShields";            // "Yellow alert"
+            if (alert) return "RaiseShields,ArmTorpedoes";                       // "Red alert", "Battle stations"
+            if (w.Contains("fire") && w.Contains("will")) return "FirePhasers,FireTorpedoes"; // "Fire at will"
+            if (w.Contains("evasive")) return "MoveAwayFrom";                    // "Evasive maneuvers, pattern delta"
+            if (w.Contains("energize")) return "TransportFromTarget";            // "Energize"
+            if (w.Contains("warp") && w.Contains("out") && any(new[] { "drop", "take" })) return "SetSpeedStop"; // "Drop out of warp"
+            if (w.Contains("warp") && (any(new[] { "factor", "maximum", "speed", "go", "nine", "eight", "seven", "six", "five", "four",
+                                                    "three", "two", "one" })))
+                return "EngageWarp";                                             // "Maximum warp", "Warp factor nine", "Go to warp"
+            if (w.Contains("hit") && w.Contains("it")) return lastPrepared != null ? "Engage" + lastPrepared : "EngageWarp"; // "Hit it"
+            if (w.Contains("take") && w.Contains("us") && w.Contains("out")) return "SetSpeedFull"; // "Take us out"
+            if (w.Contains("lock") && any(new[] { "phasers", "phaser", "torpedoes", "weapons", "target" })) return "EngageTarget"; // "Lock phasers"
             return null;
         }
 
@@ -250,12 +278,16 @@ namespace StbcRevival
                 AccessTools.Method(manager, "PlayInvalidCommandVO")?.Invoke(null, null);
                 return;
             }
-            // As after a Watson answer: refresh the crew's simple orders, then the command.
+            // As after a Watson answer: refresh the crew's simple orders, then the command(s).
             var roles = AccessTools.TypeByName("FLCHMJJDKDL");
             var update = AccessTools.Method(manager, "UpdateSimpleOrders");
-            foreach (var role in new[] { "Engineering", "Tactical", "Helm" })
-                update?.Invoke(null, new[] { Enum.Parse(roles, role) });
-            AccessTools.Method(manager, "TriggerCommand")?.Invoke(null, new[] { Enum.Parse(commands, command) });
+            var trigger = AccessTools.Method(manager, "TriggerCommand");
+            foreach (var one in command.Split(','))
+            {
+                foreach (var role in new[] { "Engineering", "Tactical", "Helm" })
+                    update?.Invoke(null, new[] { Enum.Parse(roles, role) });
+                trigger?.Invoke(null, new[] { Enum.Parse(commands, one) });
+            }
             Plugin.Log.LogInfo($"Voice commands: {command}");
         }
 
@@ -266,7 +298,7 @@ namespace StbcRevival
             string command = null;
             try
             {
-                var grammar = "[" + string.Join(",", Vocabulary.Select(w => "\"" + w + "\"").ToArray()) + ",\"[unk]\"]";
+                var grammar = "[" + string.Join(",", Vocabulary.Distinct().Select(w => "\"" + w + "\"").ToArray()) + ",\"[unk]\"]";
                 var recogniser = Vosk.RecognizerNewGrm(model, SampleRate, Vosk.Str(grammar));
                 if (recogniser == IntPtr.Zero) throw new Exception("the recogniser didn't start");
                 Vosk.AcceptWaveform(recogniser, pcm, pcm.Length);
