@@ -71,17 +71,27 @@ namespace StbcRevival
                 if (prop == null) continue;
                 bool changed = !prop.activeSelf;
                 if (changed) prop.SetActive(true);
-                // Its renderers may be switched off as well as the object.
-                foreach (var r in prop.GetComponentsInChildren<Renderer>(true).Where(r => !r.enabled))
+                // Its renderers may be switched off as well as the object, and it sits on a layer the players'
+                // cameras don't draw (13, kept for props shown only at certain moments): onto the side table's.
+                int layer = RoomLayer();
+                foreach (var r in prop.GetComponentsInChildren<Renderer>(true))
                 {
-                    r.enabled = true;
-                    changed = true;
+                    if (!r.enabled) { r.enabled = true; changed = true; }
+                    if (layer >= 0 && r.gameObject.layer != layer) { r.gameObject.layer = layer; changed = true; }
                 }
                 if (changed)
                     foreach (var r in prop.GetComponentsInChildren<Renderer>(true))
                         Plugin.Log.LogInfo($"Briefing room: {name} out: {r.name} at {r.bounds.center}, size {r.bounds.size}, "
                                            + $"scale {prop.transform.lossyScale}, layer {r.gameObject.layer}, material {(r.sharedMaterial != null ? r.sharedMaterial.name : "none")}");
             }
+        }
+
+        // The layer the room's own furniture is drawn on: the side table's (the props stand on one), -1 if not found.
+        private static int RoomLayer()
+        {
+            var table = FindInactive("BriefingRoom_SideTable (3)") ?? FindInactive("BriefingRoom_SideTable");
+            var renderer = table == null ? null : table.GetComponentsInChildren<Renderer>(true).FirstOrDefault();
+            return renderer != null ? renderer.gameObject.layer : -1;
         }
 
         // A root object of the briefing room scene by name, switched off or not (GameObject.Find skips inactive ones).
