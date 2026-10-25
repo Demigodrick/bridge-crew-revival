@@ -173,10 +173,11 @@ namespace StbcRevival
             try
             {
                 var grammar = "[" + string.Join(",", Phrases.Keys.Select(p => "\"" + p + "\"").ToArray()) + ",\"[unk]\"]";
-                var recogniser = Vosk.vosk_recognizer_new_grm(model, SampleRate, grammar);
-                Vosk.vosk_recognizer_accept_waveform(recogniser, pcm, pcm.Length);
-                var json = Utf8(Vosk.vosk_recognizer_final_result(recogniser));
-                Vosk.vosk_recognizer_free(recogniser);
+                var recogniser = Vosk.RecognizerNewGrm(model, SampleRate, Vosk.Str(grammar));
+                if (recogniser == IntPtr.Zero) throw new Exception("the recogniser didn't start");
+                Vosk.AcceptWaveform(recogniser, pcm, pcm.Length);
+                var json = Utf8(Vosk.FinalResult(recogniser));
+                Vosk.RecognizerFree(recogniser);
                 var text = Field(json, "text");
                 Phrases.TryGetValue(text ?? "", out command);
                 Plugin.Log.LogInfo($"Voice commands: heard \"{text}\" → {command ?? "nothing known"}");
@@ -199,17 +200,17 @@ namespace StbcRevival
                 var modelPath = Path.Combine(folder, "model");
                 if (!File.Exists(Path.Combine(folder, "libvosk.dll")) || !Directory.Exists(modelPath))
                     throw new FileNotFoundException("BepInEx/vosk (libvosk.dll and model) is missing");
-                // Load the native DLLs by full path first, and add the folder to the DLL search path, so the
-                // [DllImport("libvosk.dll")] below finds it (the game's Mono searches its own folders).
-                Vosk.SetDllDirectoryW(folder);
+                // Load the native DLLs by full path (dependencies first), then call libvosk through pointers.
+                IntPtr module = IntPtr.Zero;
                 foreach (var dll in new[] { "libwinpthread-1.dll", "libgcc_s_seh-1.dll", "libstdc++-6.dll", "libvosk.dll" })
                 {
                     var path = Path.Combine(folder, dll);
-                    if (File.Exists(path) && Vosk.LoadLibraryW(path) == IntPtr.Zero)
-                        throw new Exception($"couldn't load {dll} (error {Marshal.GetLastWin32Error()})");
+                    module = File.Exists(path) ? Vosk.LoadLibraryW(path) : IntPtr.Zero;
+                    if (module == IntPtr.Zero) throw new Exception($"couldn't load {dll} (error {Marshal.GetLastWin32Error()})");
                 }
-                Vosk.vosk_set_log_level(-1);
-                model = Vosk.vosk_model_new(modelPath);
+                Vosk.Bind(module); // the last one loaded: libvosk.dll
+                Vosk.SetLogLevel(-1);
+                model = Vosk.ModelNew(Vosk.Str(modelPath));
                 if (model == IntPtr.Zero) throw new Exception("couldn't load the model in " + modelPath);
                 ready = true;
                 Plugin.Log.LogInfo("Voice commands: offline recognition ready");
@@ -223,20 +224,49 @@ namespace StbcRevival
             }
         }
 
+        // libvosk, called through function pointers from the module loaded by full path: the game's Unity
+        // runtime only looks for [DllImport] libraries in its own folders (stbc_Data/Mono, /Plugins).
         private static class Vosk
         {
             [DllImport("kernel32", CharSet = CharSet.Unicode, SetLastError = true)]
             internal static extern IntPtr LoadLibraryW(string path);
 
-            [DllImport("kernel32", CharSet = CharSet.Unicode, SetLastError = true)]
-            internal static extern bool SetDllDirectoryW(string path);
+            [DllImport("kernel32", CharSet = CharSet.Ansi, SetLastError = true)]
+            private static extern IntPtr GetProcAddress(IntPtr module, string name);
 
-            [DllImport("libvosk.dll")] internal static extern void vosk_set_log_level(int level);
-            [DllImport("libvosk.dll")] internal static extern IntPtr vosk_model_new([MarshalAs(UnmanagedType.LPStr)] string path);
-            [DllImport("libvosk.dll")] internal static extern IntPtr vosk_recognizer_new_grm(IntPtr model, float sampleRate, [MarshalAs(UnmanagedType.LPStr)] string grammar);
-            [DllImport("libvosk.dll")] internal static extern int vosk_recognizer_accept_waveform(IntPtr recogniser, byte[] data, int length);
-            [DllImport("libvosk.dll")] internal static extern IntPtr vosk_recognizer_final_result(IntPtr recogniser);
-            [DllImport("libvosk.dll")] internal static extern void vosk_recognizer_free(IntPtr recogniser);
+            [UnmanagedFunctionPointer(CallingConvention.Cdecl)] internal delegate void SetLogLevelFn(int level);
+            [UnmanagedFunctionPointer(CallingConvention.Cdecl)] internal delegate IntPtr ModelNewFn(byte[] path);
+            [UnmanagedFunctionPointer(CallingConvention.Cdecl)] internal delegate IntPtr RecognizerNewGrmFn(IntPtr model, float sampleRate, byte[] grammar);
+            [UnmanagedFunctionPointer(CallingConvention.Cdecl)] internal delegate int AcceptWaveformFn(IntPtr recogniser, byte[] data, int length);
+            [UnmanagedFunctionPointer(CallingConvention.Cdecl)] internal delegate IntPtr FinalResultFn(IntPtr recogniser);
+            [UnmanagedFunctionPointer(CallingConvention.Cdecl)] internal delegate void RecognizerFreeFn(IntPtr recogniser);
+
+            internal static SetLogLevelFn SetLogLevel;
+            internal static ModelNewFn ModelNew;
+            internal static RecognizerNewGrmFn RecognizerNewGrm;
+            internal static AcceptWaveformFn AcceptWaveform;
+            internal static FinalResultFn FinalResult;
+            internal static RecognizerFreeFn RecognizerFree;
+
+            internal static void Bind(IntPtr module)
+            {
+                SetLogLevel = Fn<SetLogLevelFn>(module, "vosk_set_log_level");
+                ModelNew = Fn<ModelNewFn>(module, "vosk_model_new");
+                RecognizerNewGrm = Fn<RecognizerNewGrmFn>(module, "vosk_recognizer_new_grm");
+                AcceptWaveform = Fn<AcceptWaveformFn>(module, "vosk_recognizer_accept_waveform");
+                FinalResult = Fn<FinalResultFn>(module, "vosk_recognizer_final_result");
+                RecognizerFree = Fn<RecognizerFreeFn>(module, "vosk_recognizer_free");
+            }
+
+            private static T Fn<T>(IntPtr module, string name) where T : class
+            {
+                var address = GetProcAddress(module, name);
+                if (address == IntPtr.Zero) throw new EntryPointNotFoundException(name);
+                return (T)(object)Marshal.GetDelegateForFunctionPointer(address, typeof(T));
+            }
+
+            // C strings: UTF-8, null-terminated.
+            internal static byte[] Str(string s) => Encoding.UTF8.GetBytes(s + "\0");
         }
 
         // ---- Helpers ----------------------------------------------------------------------------------
