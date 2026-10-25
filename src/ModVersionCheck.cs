@@ -28,6 +28,20 @@ namespace StbcRevival
         private static string checkedRoom;
         private static float joinedAt;
 
+        /// <summary>Our version in our player properties now (out of a room: kept locally, sent with the join).</summary>
+        internal static void PublishOwn()
+        {
+            try
+            {
+                var me = Patches.PhotonNetworkType?.GetMethod("get_player", Static)?.Invoke(null, null);
+                if (me != null && Value(Props(me)) != Plugin.Version) Set(me, Plugin.Version);
+            }
+            catch (Exception e)
+            {
+                Plugin.Log.LogWarning("Mod version check: " + e.Message);
+            }
+        }
+
         internal static void Update()
         {
             if (Time.unscaledTime < nextCheck) return;

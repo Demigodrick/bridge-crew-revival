@@ -53,7 +53,11 @@ namespace StbcRevival
         private static bool steamReady;
 
         /// <summary>Steam ID of the host of the room we're connected to (ourselves when hosting).</summary>
-        internal static ulong CurrentHost { get; private set; }
+        // The host we're connected through: ourselves ("local", read live: our Steam ID is 0 until Steam is
+        // ready, which can be after the game connects), or a remote host's Steam ID.
+        internal static ulong CurrentHost => hostIsLocal ? MySteamId : remoteHost;
+        private static bool hostIsLocal;
+        private static ulong remoteHost;
 
         internal static ulong MySteamId => steamReady ? SteamUser.GetSteamID().m_SteamID : 0;
 
@@ -66,7 +70,9 @@ namespace StbcRevival
             Log.Sink = line => Plugin.Log.LogInfo("[server] " + line);
             Log.Level = LogLevel.Info;
 
-            Server = new LoadBalancingServer(new ServerConfig { Directory = directory });
+            // Two minutes before a silent player is dropped: Steam traffic only moves on the main thread, which
+            // stands still while a level loads (a slow PC's mission load can pass the usual 30 s).
+            Server = new LoadBalancingServer(new ServerConfig { Directory = directory, IdleTimeoutMs = 120000 });
             relayHost = new RelayHost(Server, () => new PhotonCrypto(), (to, p) => Enqueue(ToClientChannel, to, p));
             relayClient = new RelayClient((to, p) => Enqueue(ToHostChannel, to, p));
 
@@ -79,7 +85,7 @@ namespace StbcRevival
         {
             if (host == "local")
             {
-                CurrentHost = MySteamId;
+                hostIsLocal = true;
                 return LocalLink.Connect(Server, () => new PhotonCrypto(), "local:1", deliver, closed);
             }
             if (host.StartsWith("steam:") && ulong.TryParse(host.Substring(6), out var steamId))
@@ -89,7 +95,8 @@ namespace StbcRevival
                     Plugin.Log.LogWarning("Steam mode: Steam isn't ready; can't reach " + host);
                     return null;
                 }
-                CurrentHost = steamId;
+                hostIsLocal = false;
+                remoteHost = steamId;
                 Plugin.Log.LogInfo($"Steam mode: connecting to host {steamId} over Steam P2P");
                 // Closed from the host's end (their game went, or Steam lost them): the crew may regroup.
                 return relayClient.Connect(steamId, deliver, () => { HostHandoff.HostLinkLost(steamId); closed(); });
@@ -108,7 +115,9 @@ namespace StbcRevival
                 Poll(ToHostChannel, relayHost.OnPacket);
                 Poll(ToClientChannel, relayClient.OnPacket);
                 Flush();
+                PendingLobbyJoin();
             }
+            LongerClientTimeout();
             if (Time.realtimeSinceStartup >= nextTick)
             {
                 nextTick = Time.realtimeSinceStartup + 1f;
@@ -305,19 +314,80 @@ namespace StbcRevival
                 : "You're hosting · PUBLIC: publishing to Steam…";
         }
 
+        private static float nextTimeoutCheck;
+
+        // Our Photon client waits a minute before giving up on the host: the host's server is part of its game,
+        // and silent while the host loads a level (PUN's own default gives up after about ten seconds).
+        private static void LongerClientTimeout()
+        {
+            if (Time.realtimeSinceStartup < nextTimeoutCheck) return;
+            nextTimeoutCheck = Time.realtimeSinceStartup + 2f;
+            try
+            {
+                var photon = Patches.PhotonNetworkType;
+                var peerField = photon?.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)
+                    .FirstOrDefault(f => typeof(PhotonPeer).IsAssignableFrom(f.FieldType));
+                if (peerField?.GetValue(null) is PhotonPeer peer && peer.DisconnectTimeout < ClientTimeoutMs)
+                {
+                    peer.DisconnectTimeout = ClientTimeoutMs;
+                    Plugin.Log.LogInfo($"Steam mode: Photon disconnect timeout {ClientTimeoutMs / 1000} s");
+                }
+            }
+            catch (Exception e)
+            {
+                nextTimeoutCheck = float.MaxValue; // once is enough to know it won't work
+                Plugin.Log.LogWarning("Steam mode: couldn't lengthen the Photon timeout: " + e.Message);
+            }
+        }
+
+        private const int ClientTimeoutMs = 60000;
+
         // ---- Lobby join requests (Steam overlay "Invite to lobby" / "Join game" on a lobby) ------
 
         private static Steamworks.KAFDLCLDHJI<LobbyJoinRequested> lobbyJoinCallback;
+        private static Action<string, ulong> lobbyJoin;
+        private static CSteamID pendingLobby;
+        private static float pendingLobbyUntil;
 
+        // A lobby we haven't searched for has no data or owner yet: Steam fetches them on RequestLobbyData,
+        // and PendingLobbyJoin (in Update) joins once they're in, giving up after ten seconds.
         internal static void RegisterLobbyJoin(Action<string, ulong> join)
         {
+            lobbyJoin = join;
             lobbyJoinCallback = Steamworks.KAFDLCLDHJI<LobbyJoinRequested>.Create(r =>
             {
-                var room = SteamMatchmaking.GetLobbyData(r.m_steamIDLobby, "room");
-                var owner = SteamMatchmaking.GetLobbyOwner(r.m_steamIDLobby).m_SteamID;
-                Plugin.Log.LogInfo($"Steam mode: lobby join request for '{room}' hosted by {owner}");
-                if (!string.IsNullOrEmpty(room)) join(room, owner);
+                pendingLobby = r.m_steamIDLobby;
+                pendingLobbyUntil = Time.realtimeSinceStartup + 10f;
+                if (!TryLobbyJoin())
+                {
+                    SteamMatchmaking.RequestLobbyData(r.m_steamIDLobby);
+                    Plugin.Log.LogInfo($"Steam mode: lobby join request for {r.m_steamIDLobby.m_SteamID}; fetching its details");
+                }
             });
+        }
+
+        private static bool TryLobbyJoin()
+        {
+            var room = SteamMatchmaking.GetLobbyData(pendingLobby, "room");
+            var owner = SteamMatchmaking.GetLobbyOwner(pendingLobby).m_SteamID;
+            if (string.IsNullOrEmpty(room) || owner == 0) return false;
+            Plugin.Log.LogInfo($"Steam mode: lobby join request for '{room}' hosted by {owner}");
+            pendingLobbyUntil = 0;
+            lobbyJoin?.Invoke(room, owner);
+            return true;
+        }
+
+        private static void PendingLobbyJoin()
+        {
+            if (pendingLobbyUntil == 0) return;
+            if (Time.realtimeSinceStartup > pendingLobbyUntil)
+            {
+                pendingLobbyUntil = 0;
+                Plugin.Log.LogWarning("Steam mode: couldn't get the details of the lobby to join");
+                RoomBrowser.Show("Couldn't reach that crew's lobby on Steam. Try again, or join with their room code.");
+                return;
+            }
+            TryLobbyJoin();
         }
 
         // ---- Lobbies --------------------------------------------------------------------------
@@ -355,6 +425,14 @@ namespace StbcRevival
                 {
                     lock (sync)
                     {
+                        // Rooms known from an invite, a friend or a hand-off are only needed while joining: after
+                        // a while they'd be dead crews in the lists.
+                        foreach (var old in noted.Where(kv => DateTime.UtcNow - kv.Value > NoteLifetime).Select(kv => kv.Key).ToList())
+                        {
+                            noted.Remove(old);
+                            remembered.Remove(old);
+                            redirected.Remove(old);
+                        }
                         var all = lobbies.Where(r => !redirected.ContainsKey(r.Name)).ToList();
                         foreach (var kv in redirected)
                             all.Add(new ExternalRoom(kv.Key, $"steam:{kv.Value}:1", "", new PHashtable { [GameProp.IsOpen] = true }, 0));
@@ -367,9 +445,16 @@ namespace StbcRevival
                 }
             }
 
+            private static readonly TimeSpan NoteLifetime = TimeSpan.FromMinutes(10);
+            private readonly Dictionary<string, DateTime> noted = new Dictionary<string, DateTime>();
+
             public void Remember(string room, ulong host)
             {
-                lock (sync) remembered[room] = host;
+                lock (sync)
+                {
+                    remembered[room] = host;
+                    noted[room] = DateTime.UtcNow;
+                }
             }
 
             // Rooms that moved to a new host: these win over lobby search results (the old host's lobby can
@@ -378,7 +463,11 @@ namespace StbcRevival
 
             public void Redirect(string room, ulong host)
             {
-                lock (sync) redirected[room] = host;
+                lock (sync)
+                {
+                    redirected[room] = host;
+                    noted[room] = DateTime.UtcNow;
+                }
             }
 
             public void Tick(LoadBalancingServer server)
@@ -507,7 +596,9 @@ namespace StbcRevival
                 {
                     if (creating) return;
                     creating = true;
-                    var call = SteamMatchmaking.CreateLobby(ELobbyType.k_ELobbyTypePublic, 1);
+                    // Room for many members, though nobody joins it (players connect to the host, not the lobby): Steam's
+                    // lobby search leaves out full lobbies, so with room for only its owner it was never found.
+                    var call = SteamMatchmaking.CreateLobby(ELobbyType.k_ELobbyTypePublic, 250);
                     createResult = Steamworks.KLNNLNGKHKC<LobbyCreated>.Create((r, ioFailure) =>
                     {
                         creating = false;

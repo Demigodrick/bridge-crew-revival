@@ -73,6 +73,11 @@ namespace StbcRevival
 
         internal static void Join(string input)
         {
+            // Our mod version and Steam ID go with the join request: a crew's server refuses a join without the
+            // version, and the hand-off counts only players whose Steam ID it knows. They're otherwise set once
+            // a second, which a join right after connecting (a Steam invite at launch) can beat.
+            ModVersionCheck.PublishOwn();
+            HostHandoff.PublishOwn();
             var name = FullRoomName(input);
             if (name.Length == 0)
             {

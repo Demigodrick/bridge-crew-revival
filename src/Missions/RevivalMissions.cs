@@ -27,7 +27,9 @@ namespace StbcRevival.Missions
         {
             get
             {
-                if (Plugin.TestLastStand.Value) return typeof(LastStandSequence);
+                // The debug shortcut is your own setting, so only for you on your own or hosting: a crew member's
+                // must follow the host's choice (the room's), or they'd load another map than the host.
+                if (Plugin.TestLastStand.Value && RevivalBriefing.HostingOrAlone()) return typeof(LastStandSequence);
                 switch (RevivalBriefing.RoomSelection())
                 {
                     case LastStand: return typeof(LastStandSequence);

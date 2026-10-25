@@ -76,6 +76,10 @@ namespace StbcRevival.Missions
             return string.IsNullOrEmpty(value) ? null : value;
         }
 
+        /// <summary>Out of a room, or the room's host (master client).</summary>
+        internal static bool HostingOrAlone() =>
+            Room() == null || Patches.PhotonNetworkType?.GetMethod("get_isMasterClient", BindingFlags.Public | BindingFlags.Static)?.Invoke(null, null) is true;
+
         private static void SetRoomSelection(string mission)
         {
             var room = Room();

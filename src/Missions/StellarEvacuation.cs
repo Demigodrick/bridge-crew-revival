@@ -551,7 +551,10 @@ namespace StbcRevival.Missions
                 SetPeople(sector, count);
                 Plugin.Log.LogInfo($"Stellar evacuation: {count} people on {sector.name} ({(had ? "its cargo bay" : "a cargo bay added")}); reads back {People(body)}");
                 var room = Patches.PhotonNetworkType?.GetMethod("get_room", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static)?.Invoke(null, null);
-                if (room != null) PhotonProps.Set(room, RoomKey, $"{sector.FLOBHLBHLLJ}:{count}");
+                // Only for a body with an ID (GuidComponent): without one, the ID is blank and a client would put the
+                // people on whichever ID-less body it found first. Escape pods have their own cargo bay, which the
+                // game keeps in step anyway.
+                if (room != null && sector.FLOBHLBHLLJ != Guid.Empty) PhotonProps.Set(room, RoomKey, $"{sector.FLOBHLBHLLJ}:{count}");
             }
             catch (Exception e)
             {
@@ -582,10 +585,16 @@ namespace StbcRevival.Missions
             var value = props != null && props.Contains(RoomKey) ? props[RoomKey] as string : null;
             if (string.IsNullOrEmpty(value) || value == applied) return;
             var parts = value.Split(':');
-            if (parts.Length != 2 || !int.TryParse(parts[1], out var count)) return;
+            if (parts.Length != 2 || !int.TryParse(parts[1], out var count) || parts[0] == Guid.Empty.ToString()) return;
             var sector = UnityEngine.Object.FindObjectsOfType<Sector.SectorBody>().FirstOrDefault(b => b.FLOBHLBHLLJ.ToString() == parts[0]);
             if (sector == null) return; // not loaded yet: try again in a second
             SetPeople(sector, count);
+            // The life signs and cargo as targetable systems here too (the host's Beamable adds them only on its
+            // own copy; whether they're known is the game's RPC). Applied once per group: re-applying later would
+            // put back people a client engineer has already beamed off.
+            if (sector.GetDetectable() is Sector.TargetableComponent targetable)
+                foreach (var subsystem in new[] { Sector.NHGGGDMADKM.Life, Sector.NHGGGDMADKM.Cargo })
+                    targetable.AddTargetableSubsystem(subsystem);
             applied = value;
             Plugin.Log.LogInfo($"Stellar evacuation: {count} people on {sector.name} (from the host)");
         }

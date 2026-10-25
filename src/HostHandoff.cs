@@ -49,7 +49,7 @@ namespace StbcRevival
         internal static void HostLinkLost(ulong host)
         {
             var crew = last;
-            if (regroup != null || crew == null || crew.Host != host || Time.realtimeSinceStartup - crew.Seen > 5f) return;
+            if (regroup != null || crew == null || crew.Host != host || Time.realtimeSinceStartup - crew.Seen > 30f) return; // 30 s: a long level load stops the once-a-second note
             if (crew.Successor == 0)
             {
                 Plugin.Log.LogInfo("Host hand-off: the host dropped, but nobody's left to take over");
@@ -64,6 +64,22 @@ namespace StbcRevival
             RoomBrowser.Show(IAmNext
                 ? "The host dropped. You're the new host: regrouping the crew in the briefing room…"
                 : $"The host dropped. Regrouping with {crew.SuccessorName} as the new host…");
+        }
+
+        /// <summary>Our Steam ID in our player properties now (out of a room: kept locally, sent with the join).</summary>
+        internal static void PublishOwn()
+        {
+            try
+            {
+                if (!SteamMode.Enabled || SteamMode.MySteamId == 0) return;
+                var me = Patches.PhotonNetworkType?.GetMethod("get_player", Static)?.Invoke(null, null);
+                string mine = SteamMode.MySteamId.ToString();
+                if (me != null && !Equals(Props(me)?[SteamIdKey], mine)) PhotonProps.Set(me, SteamIdKey, mine);
+            }
+            catch (Exception e)
+            {
+                Plugin.Log.LogWarning("Host hand-off: " + e.Message);
+            }
         }
 
         internal static void Update()
@@ -152,12 +168,11 @@ namespace StbcRevival
 
             if (IAmNext)
             {
-                if (!reserved)
-                {
-                    reserved = true;
-                    bool made = SteamMode.Server.ReserveRoom(regroup.Room, regroup.Properties);
-                    Plugin.Log.LogInfo($"Host hand-off: {(made ? "recreated" : "already have")} {regroup.Room} on our server");
-                }
+                // Every attempt: the server drops an empty room once its last player leaves, so a failed join
+                // could otherwise leave nothing to join.
+                reserved = true;
+                bool made = SteamMode.Server.ReserveRoom(regroup.Room, regroup.Properties);
+                Plugin.Log.LogInfo($"Host hand-off: {(made ? "recreated" : "already have")} {regroup.Room} on our server");
             }
             else
             {
