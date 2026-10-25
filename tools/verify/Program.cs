@@ -319,5 +319,14 @@ Check("  menu state SetState(Main)", mainMenu?.GetField("CKGKIBEGPOA", Inst)?.Fi
 // Stellar Evacuation: the E3 star's eruption animation
 Check("StarManager.SetAnimTrigger (stellar evacuation)", game.GetType("StarManager")?.GetMethod("SetAnimTrigger", Inst));
 
+// Steam friend add (escape menu player options)
+var playerList = game.GetType("PlayerListUI");
+foreach (var m in new[] { "EOJBLIEBGKE", "IIGLKLICKDJ" })
+    Check($"PlayerListUI.{m} (steam friend add)", playerList?.GetMethod(m, Inst));
+foreach (var f in new[] { "PCPBPMKFJOE", "JEFHDNFCPLD" })
+    Check($"  PlayerListUI.{f}", playerList?.GetField(f, Inst));
+var novaInfo = game.GetType("NovaPlayerInfo");
+Check("  NovaPlayerInfo.PKIBEAIHJNE", (MemberInfo)novaInfo?.GetField("PKIBEAIHJNE", Inst) ?? novaInfo?.GetProperty("PKIBEAIHJNE", Inst));
+
 Console.WriteLine(failures == 0 ? "\nAll targets resolved." : $"\n{failures} target(s) missing.");
 return failures == 0 ? 0 : 1;
