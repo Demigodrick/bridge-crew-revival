@@ -26,6 +26,7 @@ using P2PSessionConnectFail = Steamworks.EBFAJMIDMJK;   // P2PSessionConnectFail
 using LobbyCreated = Steamworks.NHMJMIHGCEB;            // LobbyCreated_t (513)
 using LobbyMatchList = Steamworks.AHPJHOAIBHH;          // LobbyMatchList_t (510)
 using LobbyJoinRequested = Steamworks.NDAMNFEGBFF;      // GameLobbyJoinRequested_t (333)
+using P2PSessionState = Steamworks.JCPNDGFHCNC;          // P2PSessionState_t
 
 namespace StbcRevival
 {
@@ -116,6 +117,7 @@ namespace StbcRevival
                 Poll(ToClientChannel, relayClient.OnPacket);
                 Flush();
                 PendingLobbyJoin();
+                LinkReport();
             }
             LongerClientTimeout();
             if (Time.realtimeSinceStartup >= nextTick)
@@ -164,6 +166,7 @@ namespace StbcRevival
                 if (!SteamNetworking.ReadP2PPacket(receiveBuffer, size, out uint read, out CSteamID from, channel)) break;
                 var packet = new byte[read];
                 Buffer.BlockCopy(receiveBuffer, 0, packet, 0, (int)read);
+                Link(from.m_SteamID).Received(read);
                 try { handle(from.m_SteamID, packet, packet.Length); }
                 catch (Exception e) { Plugin.Log.LogError("Steam mode: packet handling failed: " + e); }
             }
@@ -191,6 +194,7 @@ namespace StbcRevival
                     }
                     if (!SteamNetworking.SendP2PPacket(new CSteamID(item.Key), item.Value, (uint)item.Value.Length, EP2PSend.k_EP2PSendReliable, channel))
                         Plugin.Log.LogWarning($"Steam mode: send to {item.Key} failed");
+                    else Link(item.Key).Sent(item.Value.Length);
                 }
             }
         }
@@ -312,6 +316,71 @@ namespace StbcRevival
             return directory.PublishedRoom == roomName && directory.MyLobby != 0
                 ? "You're hosting · PUBLIC: listed on Steam, Quick match players can join"
                 : "You're hosting · PUBLIC: publishing to Steam…";
+        }
+
+        // ---- Link quality (the log, for choppy voice and lag) ------------------------------------------
+        // Everything goes over Steam reliably and in order, so a delayed or lost packet holds up all behind it
+        // (voice too). Per player: direct or relayed by Steam's servers, traffic, and Steam's send queue (it
+        // grows while Steam re-sends or the link can't keep up); for a crew member, Photon's round trip.
+
+        private sealed class LinkStats
+        {
+            public int SentPackets, ReceivedPackets, PeakQueue;
+            public long SentBytes, ReceivedBytes;
+            public float LastSeen;
+            public bool? Relayed;
+            public void Sent(int bytes) { SentPackets++; SentBytes += bytes; LastSeen = Time.realtimeSinceStartup; }
+            public void Received(uint bytes) { ReceivedPackets++; ReceivedBytes += bytes; LastSeen = Time.realtimeSinceStartup; }
+        }
+
+        private static readonly Dictionary<ulong, LinkStats> links = new Dictionary<ulong, LinkStats>();
+        private static float nextLinkSample, nextLinkReport;
+        private const float LinkReportSeconds = 30f;
+
+        private static LinkStats Link(ulong peer)
+        {
+            if (!links.TryGetValue(peer, out var link)) links[peer] = link = new LinkStats();
+            return link;
+        }
+
+        private static void LinkReport()
+        {
+            float now = Time.realtimeSinceStartup;
+            if (now < nextLinkSample) return;
+            nextLinkSample = now + 2f;
+            bool report = now >= nextLinkReport;
+            if (report) nextLinkReport = now + LinkReportSeconds;
+            foreach (var kv in links.ToList())
+            {
+                var link = kv.Value;
+                if (now - link.LastSeen > LinkReportSeconds * 2) { links.Remove(kv.Key); continue; }
+                if (!SteamNetworking.GetP2PSessionState(new CSteamID(kv.Key), out P2PSessionState state)) continue;
+                link.PeakQueue = Math.Max(link.PeakQueue, state.m_nPacketsQueuedForSend);
+                bool relayed = state.m_bUsingRelay != 0;
+                if (link.Relayed != relayed)
+                {
+                    link.Relayed = relayed;
+                    Plugin.Log.LogInfo($"Steam link with {kv.Key}: {(relayed ? "relayed through Steam's servers" : "direct")}");
+                }
+                if (!report) continue;
+                string rtt = kv.Key == CurrentHost && !hostIsLocal ? $", Photon round trip {RoundTrip()}" : "";
+                Plugin.Log.LogInfo($"Steam link with {kv.Key}: {(relayed ? "relayed" : "direct")}, last {LinkReportSeconds:0} s "
+                                   + $"sent {link.SentPackets} packets ({link.SentBytes / 1024} KB), received {link.ReceivedPackets} ({link.ReceivedBytes / 1024} KB); "
+                                   + $"Steam send queue {state.m_nPacketsQueuedForSend} packets ({state.m_nBytesQueuedForSend / 1024} KB), peak {link.PeakQueue}{rtt}");
+                link.SentPackets = link.ReceivedPackets = link.PeakQueue = 0;
+                link.SentBytes = link.ReceivedBytes = 0;
+            }
+        }
+
+        private static string RoundTrip()
+        {
+            try
+            {
+                var peerField = Patches.PhotonNetworkType?.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)
+                    .FirstOrDefault(f => typeof(PhotonPeer).IsAssignableFrom(f.FieldType));
+                return peerField?.GetValue(null) is PhotonPeer peer ? $"{peer.RoundTripTime} ms ± {peer.RoundTripTimeVariance}" : "unknown";
+            }
+            catch (Exception) { return "unknown"; }
         }
 
         private static float nextTimeoutCheck;
