@@ -185,8 +185,10 @@ namespace StbcRevival.Missions
             bool ready = true;  // the next group can go onto the pad (the last one's been dropped off)
             float placedAt = 0; bool warnedEmpty = false;
             float said45 = 0, said30 = 0, said20 = 0, said10 = 0;
-            float nextRaid = UnityEngine.Time.time + random.Next(60, 120);
+            float nextRaid = UnityEngine.Time.time + random.Next(120, 180);
             int raids = 0;
+            var raiding = new List<BodyRef>(); // the last raid's ships
+            float raidAt = 0;
             for (;;)
             {
                 yield return Task.KNMMMJOOBHC.WithTime(1f);
@@ -216,7 +218,7 @@ namespace StbcRevival.Missions
                     lastLive = body;
                 }
                 // A pod lost to raiders takes its people with it; the next group gets a new one.
-                if (pod != null && stationPeople > 0 && atStation && UnityEngine.Time.time - placedAt > 10f && !LastStandWaves.Alive(pod, false))
+                if (pod != null && stationPeople > 0 && atStation && UnityEngine.Time.time - placedAt > 10f && PodDestroyed())
                 {
                     lostPeople += stationPeople;
                     Plugin.Log.LogInfo($"Stellar evacuation: escape pod destroyed, {stationPeople} lost");
@@ -227,13 +229,16 @@ namespace StbcRevival.Missions
                 }
                 int onStation = stationPeople;
 
-                // Now and then, raiders: around the ship, after it or (sometimes) the pod or transport near it.
-                // Bigger as the evacuation goes on; none once the star's going (everyone's running then).
-                if (!erupting && UnityEngine.Time.time >= nextRaid)
+                // Now and then a raider: around the ship, after it or (sometimes) the pod or transport near it.
+                // One at a time, now and then two from the third raid on; never while the last raid's ships are
+                // still about, and a good while after they're gone. None once the star's going.
+                bool raidersAbout = raiding.Any(r => Live(r) && LastStandWaves.Alive(r, UnityEngine.Time.time - raidAt < 10f));
+                if (raidersAbout) nextRaid = Math.Max(nextRaid, UnityEngine.Time.time + 90f);
+                if (!erupting && !raidersAbout && UnityEngine.Time.time >= nextRaid)
                 {
-                    nextRaid = UnityEngine.Time.time + random.Next(90, 180);
+                    nextRaid = UnityEngine.Time.time + random.Next(150, 240);
                     raids++;
-                    int count = Math.Min(4, 1 + raids / 2 + random.Next(0, 2));
+                    int count = raids >= 3 && random.Next(3) == 0 ? 2 : 1;
                     var prey = new List<BodyRef> { player };
                     if (pod != null && Live(pod) && Distance(player, pod) < 30000) prey.Add(pod);
                     if (transport.AHMPFHDGMKJ != null && Live(transport) && Distance(player, transport) < 30000) prey.Add(transport);
@@ -251,6 +256,8 @@ namespace StbcRevival.Missions
                         yield return Task.BFMBGDIDKEI.UsingSpawner(MakeSpawner(Raiders[random.Next(Raiders.Length)], "Raider", Tag.Enemy))
                             .AtAngleAndDistanceFromBody(player, angle, 12000f + random.Next(0, 6000)).FaceOtherBody(player).OutputTo(ship);
                     }
+                    raiding = spawned;
+                    raidAt = UnityEngine.Time.time;
                     foreach (var ship in spawned)
                         yield return Task.NDFEDBHFGFB.TellAI(ship).ToAddObjectives(random.Next(3) == 0 ? prey[random.Next(prey.Count)] : player)
                             .OfObjectiveType(AIObjective.Attack);
@@ -286,6 +293,7 @@ namespace StbcRevival.Missions
                     int group = Math.Min(total - placed, 10 + random.Next(0, 6));
                     placed += group;
                     pod = new BodyRef();
+                    podHullSeen = false;
                     yield return Task.BFMBGDIDKEI.UsingSpawner(MakeSpawner(EscapePod, "Escape pod", Tag.Friendly))
                         .AtAngleAndDistanceFromBody(station, random.Next(0, 360), 1500f).OutputTo(pod);
                     PutPeople(pod, group);
@@ -597,6 +605,28 @@ namespace StbcRevival.Missions
                     targetable.AddTargetableSubsystem(subsystem);
             applied = value;
             Plugin.Log.LogInfo($"Stellar evacuation: {count} people on {sector.name} (from the host)");
+        }
+
+        private bool podHullSeen; // the current pod has shown hull (so none left means destroyed)
+
+        // The escape pod gone: its body destroyed, or its hull down to nothing after having had some. (Not
+        // LastStandWaves.Alive: a pod isn't a ship, and may report no hull from the start.)
+        private bool PodDestroyed()
+        {
+            try
+            {
+                var body = pod.AHMPFHDGMKJ;
+                if (body == null || (body is UnityEngine.Object o && o == null)) return true;
+                var info = body.GetTargetInfo();
+                if (info == null) return false;
+                float hull = info.GBNCJMFFIDI;
+                if (hull > 0f) podHullSeen = true;
+                return podHullSeen && hull <= 0f;
+            }
+            catch (Exception)
+            {
+                return false; // unknown: assume it's still there
+            }
         }
 
         private static bool Live(BodyRef body) => body?.AHMPFHDGMKJ is Sector.SectorBody sector && !(sector is Sector.AtticSectorBody);
