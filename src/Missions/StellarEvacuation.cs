@@ -92,6 +92,7 @@ namespace StbcRevival.Missions
             }
             yield return Task.NECMCDDOFJB.RemoveSubDirective(Directive, travel);
             yield return Task.KNMMMJOOBHC.WithTime(3f); // out of warp
+            Plugin.Log.LogInfo($"Stellar evacuation: in {systemName}");
 
             // The station and the transport.
             station = Find(Tag.SpaceStation).OrderBy(_ => random.Next()).FirstOrDefault();
@@ -107,12 +108,29 @@ namespace StbcRevival.Missions
                 stationName = "the colony ship";
             }
             if (string.IsNullOrEmpty(stationName)) stationName = "the station";
+            Plugin.Log.LogInfo($"Stellar evacuation: station {stationName}, {Distance(player, station) / 1000:0} km away");
+
+            // The transport, an impulse jump from the station. Spawned as a step of its own and given ten seconds:
+            // if it can't be placed by the station, it goes by the ship instead.
             transport = new BodyRef();
-            yield return Task.BFMBGDIDKEI.UsingSpawner(MakeSpawner(Freighters[random.Next(Freighters.Length)], "Transport", Tag.Friendly))
-                .AtAngleAndDistanceFromBody(station, random.Next(0, 360), TransportDistance).FaceOtherBody(station).OutputTo(transport);
+            string prefab = Freighters[random.Next(Freighters.Length)];
+            Objective.AddStep("transport", Task.BFMBGDIDKEI.UsingSpawner(MakeSpawner(prefab, "Transport", Tag.Friendly))
+                .AtAngleAndDistanceFromBody(station, random.Next(0, 360), TransportDistance).FaceOtherBody(station).OutputTo(transport));
+            yield return Task.KKALNAMJCNH.WithName("transport");
+            for (int i = 0; i < 10 && transport.AHMPFHDGMKJ == null; i++) yield return Task.KNMMMJOOBHC.WithTime(1f);
+            if (transport.AHMPFHDGMKJ == null)
+            {
+                Plugin.Log.LogWarning("Stellar evacuation: the transport couldn't be placed by the station; placing it by the ship");
+                yield return Task.CLNFMDFOFKL.WithName("transport");
+                transport = new BodyRef();
+                yield return Task.BFMBGDIDKEI.UsingSpawner(MakeSpawner(prefab, "Transport", Tag.Friendly))
+                    .AtAngleAndDistanceFromBody(player, random.Next(0, 360), TransportDistance).OutputTo(transport);
+            }
+            Plugin.Log.LogInfo($"Stellar evacuation: transport placed, {Distance(station, transport) / 1000:0} km from the station");
             yield return Task.KDNOMKAPDKG.TellAI(transport).ToDisable(); // holds position
             yield return Task.PAMPNJNPLCI.OfPOIChild(transport);          // an impulse destination
             yield return Task.BCJDEKKIHDD.AddMarker(new[] { station, transport });
+            Plugin.Log.LogInfo("Stellar evacuation: marked");
 
             total = 10 * random.Next(6, 11); // 60-100 people
             int minutes = Math.Max(3, Math.Min(30, Plugin.EvacuationMinutes.Value));
@@ -152,6 +170,7 @@ namespace StbcRevival.Missions
                     placed += group;
                     yield return Task.CIAHOPCODGJ.WithTargets(station).SetCargo(Sector.CargoTypes.People, group);
                     yield return Task.CIAHOPCODGJ.WithTargets(station).SetShieldHealthPercent(0f);
+                    LifeSignsKnown(station);
                     Plugin.Log.LogInfo($"Stellar evacuation: group of {group} ready ({placed}/{total} placed)");
                     if (placed > group) foreach (var step in Say($"The next {group} people are ready to beam out of {stationName}")) yield return step;
                 }
@@ -278,6 +297,28 @@ namespace StbcRevival.Missions
         // ---- Helpers ----------------------------------------------------------------------------------
 
         private int Aboard() => People(player);
+
+        // The transporter only beams from a body whose life signs (or cargo) have been scanned, and a scan only
+        // reveals the subsystems the body lists. Map stations list no life signs, so they look fully scanned
+        // and still can't be beamed from: list them and make them known (to every player), as the game's
+        // own rescue set-up adds them to its targets.
+        private static void LifeSignsKnown(BodyRef body)
+        {
+            try
+            {
+                if (!(body?.AHMPFHDGMKJ?.GetDetectable() is Sector.TargetableComponent targetable))
+                {
+                    Plugin.Log.LogWarning("Stellar evacuation: the station has no scan target");
+                    return;
+                }
+                targetable.AddTargetableSubsystem(Sector.NHGGGDMADKM.Life);
+                if (!targetable.IsSubsystemKnown(Sector.NHGGGDMADKM.Life)) targetable.SetSubsystemKnown(Sector.NHGGGDMADKM.Life, true);
+            }
+            catch (Exception e)
+            {
+                Plugin.Log.LogWarning("Stellar evacuation: life signs: " + e.Message);
+            }
+        }
 
         private static int People(BodyRef body)
         {

@@ -110,8 +110,8 @@ namespace StbcRevival
                 return engines ? "DisruptEngines" : shields ? "DisruptShields" : weapons ? "DisruptWeapons"
                     : any(new[] { "comms", "communications" }) ? "DisruptComms" : null;
             if (any(new[] { "analyze", "analyse", "analysis", "examine", "identify" })) return "AnalyseTarget";
-            if (any(new[] { "target", "targeting" }))  // a bare "target" (or "analyse the target", with "analyse" lost): analyse it
-                return engines ? "TargetEngines" : shields ? "TargetShields" : weapons ? "TargetWeapons" : "AnalyseTarget";
+            bool target = any(new[] { "target", "targeting" });
+            if (target && (engines || shields || weapons)) return engines ? "TargetEngines" : shields ? "TargetShields" : "TargetWeapons";
             // Beaming: "beam the survivors aboard", "transport them", "evacuate the crew", "bring them aboard"...
             if (any(new[] { "beam", "transport", "evacuate", "energize" }) || (any(new[] { "survivors", "crew", "people", "lifeforms" })
                 && any(new[] { "rescue", "bring", "get", "aboard", "up", "save" })) || (w.Contains("aboard") && any(new[] { "bring", "get", "them" })))
@@ -135,7 +135,9 @@ namespace StbcRevival
             if (w.Contains("half")) return "SetSpeedHalf";
             if (w.Contains("quarter")) return "SetSpeedQuarter";
             if (any(new[] { "full", "maximum", "ahead", "speed", "go" }) || impulse) return "SetSpeedFull";
-            return null;
+            // A bare "target" (or "analyse the target", with "analyse" lost): analyse it. Last, so "approach the
+            // target", "scan the target" and the like get their own orders.
+            return target ? "AnalyseTarget" : null;
         }
 
         // Orders from Star Trek that the game's Watson commands never had, as one or more crew commands
