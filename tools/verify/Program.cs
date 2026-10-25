@@ -305,5 +305,8 @@ foreach (var f in new[] { "CKGKIBEGPOA", "_regionSelectButton", "_regionSelectGO
 Check("  menu state SetState(Main)", mainMenu?.GetField("CKGKIBEGPOA", Inst)?.FieldType.GetMethod("SetState", Inst) is MethodInfo set
     && Enum.GetNames(set.GetParameters()[0].ParameterType).Contains("Main") ? set : null);
 
+// Stellar Evacuation: the E3 star's eruption animation
+Check("StarManager.SetAnimTrigger (stellar evacuation)", game.GetType("StarManager")?.GetMethod("SetAnimTrigger", Inst));
+
 Console.WriteLine(failures == 0 ? "\nAll targets resolved." : $"\n{failures} target(s) missing.");
 return failures == 0 ? 0 : 1;

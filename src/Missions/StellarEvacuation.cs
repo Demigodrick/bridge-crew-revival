@@ -19,9 +19,12 @@ namespace StbcRevival.Missions
     /// ready for the transporter a group at a time: scan the station, beam the group aboard, impulse to
     /// the transport and drop them off (within DeliverRange, as the game's own rescues "deliver survivors to
     /// safety"), then go back for the next group. [Revival] EvacuationMinutes sets the time (10 by default).
-    /// The eruption is the game's own (its procedural rescue mission's): the science officer's three
-    /// warnings, then the blast wave at the star and a minute's countdown; still in the system at the end,
-    /// the ship is lost. Warping out with survivors aboard saves them too. Scored on people saved.
+    /// Played in the E3 demo sector, centred on Perseph. The eruption is the E3 demo's own: that sector's star
+    /// (tagged Star and Enemy) has a StarManager whose animation goes through "event1", "event2",
+    /// "preCataclysm" and "cataclysm" (sent to every player), with the demo's warnings from the comms officer.
+    /// Without that star (another map), the game's procedural rescue eruption stands in: the blast-wave
+    /// prefab at the star. Either way, a minute's countdown at the end; still in the system at zero, the ship
+    /// is lost. Warping out with survivors aboard saves them too. Scored on people saved.
     /// </summary>
     public sealed class StellarEvacuationSequence : MissionSequence
     {
@@ -49,6 +52,7 @@ namespace StbcRevival.Missions
         private const float TransportDistance = 35000f; // metres from the station to the transport
         private const float FinalCountdown = 60f;       // the game's eruption: a minute from the blast to the end
         private const string ExplosionPrefab = "Sector/System/Mission 02 Prefabs/StarExplosion";
+        private const string Home = "Perseph";
 
         private static readonly string[] Freighters =
         {
@@ -58,6 +62,8 @@ namespace StbcRevival.Missions
         private readonly System.Random random = new System.Random(Guid.NewGuid().GetHashCode());
         private BodyRef player, station, transport;
         private Map.SystemRoot system;
+        private UnityEngine.Component star; // the E3 star's StarManager (its eruption animation), if the system has it
+        private static readonly Type StarManagerType = HarmonyLib.AccessTools.TypeByName("StarManager"); // internal to the game
         private int total, placed, saved, spawnCount;
         private bool lost, erupting;
         private string notice;     // a short-lived line under the objective (group ready, people transferred)
@@ -109,6 +115,8 @@ namespace StbcRevival.Missions
             }
             if (string.IsNullOrEmpty(stationName)) stationName = "the station";
             Plugin.Log.LogInfo($"Stellar evacuation: station {stationName}, {Distance(player, station) / 1000:0} km away");
+            star = CriticalStar(system);
+            Plugin.Log.LogInfo(star != null ? $"Stellar evacuation: the star's own eruption ({star.name})" : "Stellar evacuation: no erupting star here; the blast-wave effect stands in");
 
             // The transport, an impulse jump from the station. Spawned as a step of its own and given ten seconds:
             // if it can't be placed by the station, it goes by the ship instead.
@@ -147,7 +155,7 @@ namespace StbcRevival.Missions
             bool warned1 = false, warned2 = false, warned3 = false;
             bool ready = true;  // the next group can go onto the pad (the last one's been dropped off)
             float placedAt = 0; bool warnedEmpty = false;
-            float said30 = 0, said20 = 0, said10 = 0;
+            float said45 = 0, said30 = 0, said20 = 0, said10 = 0;
             for (;;)
             {
                 yield return Task.KNMMMJOOBHC.WithTime(1f);
@@ -205,31 +213,53 @@ namespace StbcRevival.Missions
                 if (!warned1 && left - FinalCountdown < span * 0.5f)
                 {
                     warned1 = true;
-                    yield return Vo("PLAY_VO_CAMP_M02_OBJ02_SWARN_1ST_001_01ASCIO_DRY_1255");
-                    yield return Vo("PLAY_VO_CAMP_M02_OBJ02_SWARN_1ST_001_02ASCIO_DRY_1256");
+                    if (star != null)
+                    {
+                        Stage("event1");
+                        yield return Comms("PLAY_VO_E3CDD_E3RED_SCRIP_STAR_WARN1_001_02E3REDM_DRY_599");
+                        yield return Comms("PLAY_VO_E3CDD_E3RED_SCRIP_STAR_WARN1_001_03E3REDM_DRY_600");
+                    }
+                    else
+                    {
+                        yield return Vo("PLAY_VO_CAMP_M02_OBJ02_SWARN_1ST_001_01ASCIO_DRY_1255");
+                        yield return Vo("PLAY_VO_CAMP_M02_OBJ02_SWARN_1ST_001_02ASCIO_DRY_1256");
+                    }
                 }
                 if (!warned2 && left - FinalCountdown < span * 0.25f)
                 {
                     warned2 = true;
                     yield return Task.CAJKAPALCCO.SendViewScreenMessage(ViewScreen.GCIOEGLLOLP.Warning, 5f, "Stellar core unstable");
                     yield return Task.OKLDNLKLLFJ.WithGroup("State_Group_Mus_Dyn").WithState("Moderate_Tension");
-                    yield return Vo("PLAY_VO_CAMP_M02_OBJ02_SWARN_2ND_001_01ASCIO_DRY_1258");
-                    yield return Vo("PLAY_VO_CAMP_M02_OBJ02_SWARN_2ND_001_02ASCIO_DRY_1259");
+                    if (star != null)
+                    {
+                        Stage("event2");
+                        yield return Comms("PLAY_VO_E3CDD_E3RED_SCRIP_STAR_WARN2_001_02E3REDM_DRY_601");
+                    }
+                    else
+                    {
+                        yield return Vo("PLAY_VO_CAMP_M02_OBJ02_SWARN_2ND_001_01ASCIO_DRY_1258");
+                        yield return Vo("PLAY_VO_CAMP_M02_OBJ02_SWARN_2ND_001_02ASCIO_DRY_1259");
+                    }
                 }
                 if (!warned3 && left - FinalCountdown < 15f)
                 {
                     warned3 = true;
-                    yield return Vo("PLAY_VO_CAMP_M02_OBJ02_SWARN_3RD_001_01ASCIO_DRY_1263");
-                    yield return Vo("PLAY_VO_CAMP_M02_OBJ02_SWARN_3RD_001_02ASCIO_DRY_1264");
+                    if (star != null) yield return Comms("PLAY_VO_E3CDD_E3RED_SCRIP_STAR_WARN3_001_01E3REDM_DRY_594");
+                    else
+                    {
+                        yield return Vo("PLAY_VO_CAMP_M02_OBJ02_SWARN_3RD_001_01ASCIO_DRY_1263");
+                        yield return Vo("PLAY_VO_CAMP_M02_OBJ02_SWARN_3RD_001_02ASCIO_DRY_1264");
+                    }
                 }
                 if (!erupting && left <= FinalCountdown)
                 {
                     erupting = true;
                     foreach (var step in Erupt(status)) yield return step;
-                    said30 = said20 = said10 = 0;
+                    said45 = said30 = said20 = said10 = 0;
                 }
                 if (erupting)
                 {
+                    if (star != null && said45 == 0 && left <= 45f) { said45 = 1; yield return Comms("PLAY_VO_E3CDD_E3RED_SCRIP_STAR_FINAL_001_06E3REDM_DRY_598"); }
                     if (said30 == 0 && left <= 30f) { said30 = 1; yield return Vo("PLAY_VO_CAMP_M02_OBJ02_SWARN_COUNT_30S_001_01ASCIO_DRY_1328"); }
                     if (said20 == 0 && left <= 20f) { said20 = 1; yield return Vo("PLAY_VO_CAMP_M02_OBJ02_SWARN_COUNT_20S_001_01ASCIO_DRY_1330"); }
                     if (said10 == 0 && left <= 10f) { said10 = 1; yield return Vo("PLAY_VO_CAMP_M02_OBJ02_SWARN_COUNT_10S_001_01ASCIO_DRY_1332"); }
@@ -237,6 +267,7 @@ namespace StbcRevival.Missions
                     {
                         // Still here: the ship goes with the system, as in the game's mission.
                         lost = true;
+                        Stage("cataclysm");
                         Plugin.Log.LogInfo($"Stellar evacuation: caught by the eruption; {saved}/{total} saved");
                         yield return Task.ABHANLLBILL.WithEventID("Play_SFX_Exp_Star_Explosion_Full_E3").ContinueImmediately();
                         yield return Task.HHNFJKHGEPH.WithMissionResult($"Lost in the eruption. {saved} of {total} people were saved", false);
@@ -264,11 +295,15 @@ namespace StbcRevival.Missions
         private IEnumerable<Step> Erupt(string status)
         {
             Plugin.Log.LogInfo("Stellar evacuation: eruption");
-            var star = Find(Tag.StarEruption).FirstOrDefault() ?? Find(Tag.Star).FirstOrDefault();
-            var blast = Objective.MNKGANNGIKK.WithPrefab(ExplosionPrefab).InSystem(system).AssignName("explosion").AddTags(Tag.Enemy);
             yield return Task.ABHANLLBILL.WithEventID("Play_SFX_Exp_Star_Explosion_Initial_Boom_E3").ContinueImmediately();
-            if (star != null) yield return Task.BFMBGDIDKEI.UsingSpawner(blast).AtBody(star).OutputTo(new BodyRef());
-            else yield return Task.BFMBGDIDKEI.UsingSpawner(blast).AtAngleAndDistanceFromBody(station, random.Next(0, 360), 60000f).OutputTo(new BodyRef());
+            if (star != null) Stage("preCataclysm");
+            else
+            {
+                var body = Find(Tag.StarEruption).FirstOrDefault() ?? Find(Tag.Star).FirstOrDefault();
+                var blast = Objective.MNKGANNGIKK.WithPrefab(ExplosionPrefab).InSystem(system).AssignName("explosion").AddTags(Tag.Enemy);
+                if (body != null) yield return Task.BFMBGDIDKEI.UsingSpawner(blast).AtBody(body).OutputTo(new BodyRef());
+                else yield return Task.BFMBGDIDKEI.UsingSpawner(blast).AtAngleAndDistanceFromBody(station, random.Next(0, 360), 60000f).OutputTo(new BodyRef());
+            }
             yield return Task.OKLDNLKLLFJ.WithGroup("State_Group_Mus_Dyn").WithState("Tension");
             yield return Task.CAJKAPALCCO.SendViewScreenMessage(ViewScreen.GCIOEGLLOLP.Warning, 5f, "Stellar eruption: warp out now");
             if (notice != null) yield return Task.NECMCDDOFJB.RemoveSubDirective(Directive, notice);
@@ -276,11 +311,52 @@ namespace StbcRevival.Missions
             yield return Task.NECMCDDOFJB.RemoveSubDirective(Directive, status);
             yield return Task.NECMCDDOFJB.WithDescriptionString(Escape).WithTimer(FinalCountdown);
             yield return Task.NECMCDDOFJB.AddSubDirectives(Escape, status);
-            yield return Vo("PLAY_VO_CAMP_M02_OBJ02_SWARN_COUNT_60S_001_01ASCIO_DRY_1326");
+            if (star != null)
+            {
+                yield return Comms("PLAY_VO_E3CDD_E3RED_SCRIP_STAR_FINAL_001_01E3REDM_DRY_596");
+                yield return Comms("PLAY_VO_E3CDD_E3RED_SCRIP_STAR_FINAL_001_04E3REDM_DRY_597");
+            }
+            else yield return Vo("PLAY_VO_CAMP_M02_OBJ02_SWARN_COUNT_60S_001_01ASCIO_DRY_1326");
+        }
+
+        // A stage of the E3 star's eruption animation (sent to every player by the game).
+        private void Stage(string trigger)
+        {
+            if (star == null) return;
+            try
+            {
+                HarmonyLib.AccessTools.Method(StarManagerType, "SetAnimTrigger").Invoke(star, new object[] { trigger });
+                Plugin.Log.LogInfo($"Stellar evacuation: star stage {trigger}");
+            }
+            catch (Exception e)
+            {
+                Plugin.Log.LogWarning($"Stellar evacuation: star stage {trigger}: {e.Message}");
+            }
+        }
+
+        // The E3 demo's star: tagged Star and Enemy, with the StarManager that animates its eruption.
+        private UnityEngine.Component CriticalStar(Map.SystemRoot where)
+        {
+            if (StarManagerType == null) return null;
+            try
+            {
+                var bodies = new List<BodyRef>();
+                Objective.FindAllBodyWithTags(bodies, new[] { Tag.Star });
+                foreach (var body in bodies.Where(b => b?.AHMPFHDGMKJ?.ALPAOOKFIEE?.System == where))
+                    if ((body.AHMPFHDGMKJ as Sector.SectorBody)?.gameObject.GetComponent(StarManagerType) is UnityEngine.Component manager && manager != null)
+                        return manager;
+            }
+            catch (Exception e)
+            {
+                Plugin.Log.LogWarning("Stellar evacuation: finding the star: " + e.Message);
+            }
+            return null;
         }
 
         private string Status(int aboard) =>
             $"Saved: {saved} of {total}" + (aboard > 0 ? $" ({aboard} aboard, take them to the transport)" : "");
+
+        private Step Comms(string id) => Task.JJFBKBLIMCC.WithEventID(id).OnBridgeObject(BridgeObject.Comms_Officer_Mori).ContinueImmediately();
 
         private Step Vo(string id) => Task.JJFBKBLIMCC.WithEventID(id).OnBridgeObject(BridgeObject.Science_Officer_Velis).ContinueImmediately();
 
@@ -342,12 +418,20 @@ namespace StbcRevival.Missions
             }
         }
 
-        // A system with a space station, at random: preferably one whose star can erupt, and not this one.
+        // Perseph, if the map has it (the E3 sector). Otherwise a system with a space station, at random:
+        // preferably one whose star can erupt, and not this one.
         private Map.SystemRoot PickSystem()
         {
             var here = Objective.KALBLMGFNIN;
             try
             {
+                var all = (Objective.MLHNDAEKLHO ?? new List<Map.SystemRoot>()).Where(x => x != null).ToList();
+                var stars = all.Where(x => CriticalStar(x) != null).ToList();
+                Plugin.Log.LogInfo($"Stellar evacuation: systems {string.Join(", ", all.Select(SystemName).ToArray())}; "
+                                   + $"the E3 star in {(stars.Count == 0 ? "none" : string.Join(", ", stars.Select(SystemName).ToArray()))}");
+                var home = all.FirstOrDefault(x => (x.SystemName ?? "").IndexOf(Home, StringComparison.OrdinalIgnoreCase) >= 0);
+                if (home != null) return home;
+                if (stars.Count > 0) return stars[0];
                 List<Map.SystemRoot> With(Tag tag)
                 {
                     var bodies = new List<BodyRef>();

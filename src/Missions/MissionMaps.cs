@@ -12,7 +12,7 @@ namespace StbcRevival.Missions
     /// <summary>
     /// Which sector map a mission loads. The game always loads one map per mission (Loader.GetMapName, on
     /// every player's machine); Ongoing Voyages and the campaign use "The Trench". Here:
-    ///   - Last Stand is fought in the E3 demo sector.
+    ///   - Last Stand and Stellar Evacuation are played in the E3 demo sector.
     ///   - [Debug] MapOverride loads any map from the game's Resources ("Mission Data/Maps/...") for an
     ///     Ongoing Voyage, to look around the leftover test and demo sectors.
     /// The host's choice goes in the room ("RM"), so everyone loads the same map. Off the Trench there are no
@@ -46,7 +46,8 @@ namespace StbcRevival.Missions
             if (!string.IsNullOrEmpty(fromRoom)) return fromRoom;
             var own = Plugin.MapOverride.Value;
             if (!string.IsNullOrEmpty(own) && Room() == null) return own; // on your own, out of a room
-            return RevivalMissions.Selected == typeof(LastStandSequence) ? E3 : null;
+            var selected = RevivalMissions.Selected;
+            return selected == typeof(LastStandSequence) || selected == typeof(StellarEvacuationSequence) ? E3 : null;
         }
 
         private static void MapName_Postfix(ref string __result)
@@ -96,10 +97,10 @@ namespace StbcRevival.Missions
                 var selection = (BHNEPPPPMKH)AccessTools.Field(manager, "DJFMMNBHJPC").GetValue(__instance);
                 var sectorMap = AccessTools.Field(manager, "LFBBCGCLOKG").GetValue(__instance);
                 system = (Map.SystemRoot)AccessTools.Method(sectorMap.GetType(), "ChooseStartingSystem").Invoke(sectorMap, new object[] { map, selection, random });
-                // Patrol and Stellar Evacuation start anywhere: the game's choice always lands on the same system (on the Trench,
+                // Patrol starts anywhere: the game's choice always lands on the same system (on the Trench,
                 // Sarza, which has no spawn point, so Venov).
                 var selected = RevivalMissions.Selected;
-                bool anywhere = selected == typeof(StbcRevival.Missions.PatrolSequence) || selected == typeof(StbcRevival.Missions.StellarEvacuationSequence);
+                bool anywhere = selected == typeof(StbcRevival.Missions.PatrolSequence);
                 var spawn = FindSpawn(sectorMap, ref system, selection, random, anywhere);
 
                 // The mission's contract, with the table's encounter settings, as the game applies them.

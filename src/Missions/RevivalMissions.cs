@@ -78,7 +78,7 @@ namespace StbcRevival.Missions
                     return "A patrol that never ends: Starfleet sends you from system to system to hunt raiders, defend "
                            + "freighters and rescue survivors. Repair and restock at space stations between assignments.";
                 case Evacuation:
-                    return $"A star is about to erupt. Ferry the people off a space station a group at a time to a waiting "
+                    return $"Perseph's star is about to erupt. Ferry the people off the station a group at a time to a waiting "
                            + $"transport, then warp out before the blast. {Plugin.EvacuationMinutes.Value} minutes: how many can you save?";
                 case FreeRoam:
                     var map = Plugin.MapOverride.Value;
