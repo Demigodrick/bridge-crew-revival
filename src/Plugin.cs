@@ -133,7 +133,7 @@ namespace StbcRevival
                 "Hold to give a voice order as captain (as well as the game's own voice button, which depends on your controllers).");
             FleetBattleSize = Config.Bind("Revival", "FleetBattleSize", 30,
                 "Fleet Battle: ships on each side (1-60). Big battles are heavy on the host's computer; lower it if the game stutters.");
-            EvacuationMinutes = Config.Bind("Revival", "EvacuationMinutes", 10,
+            EvacuationMinutes = Config.Bind("Revival", "EvacuationMinutes", 15,
                 "Stellar Evacuation: minutes until the star erupts (3-30), the last of them to warp out.");
             MapOverride = Config.Bind("Debug", "MapOverride", "",
                 "Testing only: the sector map Free Roam and Ongoing Voyages load, as a path in the game's Resources, e.g. \"Mission Data/Maps/Sector - E3\" "

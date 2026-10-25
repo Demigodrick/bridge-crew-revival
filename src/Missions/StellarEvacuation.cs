@@ -19,7 +19,7 @@ namespace StbcRevival.Missions
     /// emptied. Warp there; a transport waits an impulse jump from the station. The station's people are
     /// ready for the transporter a group at a time: scan the station, beam the group aboard, impulse to
     /// the transport and drop them off (within DeliverRange, as the game's own rescues "deliver survivors to
-    /// safety"), then go back for the next group. [Revival] EvacuationMinutes sets the time (10 by default).
+    /// safety"), then go back for the next group. [Revival] EvacuationMinutes sets the time (15 by default).
     /// Centred on Perseph (in the Trench). The station is the loaded one near the ship (found by tag or name: the
     /// map's tagged bodies elsewhere are unloaded placeholders). Each group waits in an escape pod by it (the
     /// station can't be the transporter's target: the captain's order checks need ship data it hasn't got);
