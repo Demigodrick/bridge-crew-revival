@@ -96,9 +96,10 @@ namespace StbcRevival.Missions
                 var selection = (BHNEPPPPMKH)AccessTools.Field(manager, "DJFMMNBHJPC").GetValue(__instance);
                 var sectorMap = AccessTools.Field(manager, "LFBBCGCLOKG").GetValue(__instance);
                 system = (Map.SystemRoot)AccessTools.Method(sectorMap.GetType(), "ChooseStartingSystem").Invoke(sectorMap, new object[] { map, selection, random });
-                // Patrol starts anywhere: the game's choice always lands on the same system (on the Trench,
+                // Patrol and Stellar Evacuation start anywhere: the game's choice always lands on the same system (on the Trench,
                 // Sarza, which has no spawn point, so Venov).
-                bool anywhere = RevivalMissions.Selected == typeof(StbcRevival.Missions.PatrolSequence);
+                var selected = RevivalMissions.Selected;
+                bool anywhere = selected == typeof(StbcRevival.Missions.PatrolSequence) || selected == typeof(StbcRevival.Missions.StellarEvacuationSequence);
                 var spawn = FindSpawn(sectorMap, ref system, selection, random, anywhere);
 
                 // The mission's contract, with the table's encounter settings, as the game applies them.
