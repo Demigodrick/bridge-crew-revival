@@ -201,13 +201,13 @@ function Install-BridgeCrewRevival([string]$GameDir, [bool]$Uninstall, [string]$
         foreach ($name in "StbcRevival.dll", "StbcRevival.pdb", "StbcCore.dll", "StbcCore.pdb") {
             Remove-Item -LiteralPath (Join-Path $plugins $name) -ErrorAction SilentlyContinue
         }
-        Remove-Item -Recurse -Force (Join-Path $GameDir "BepInEx\vosk") -ErrorAction SilentlyContinue
         # Without winhttp.dll BepInEx doesn't load at all; the BepInEx folder is left for you to delete.
         foreach ($name in "winhttp.dll", "doorstop_config.ini", ".doorstop_version", "changelog.txt") {
             Remove-Item -LiteralPath (Join-Path $GameDir $name) -ErrorAction SilentlyContinue
         }
         Ok "Removed the mod and switched off its loader (BepInEx)"
-        Info "Your settings are left in `"$GameDir\BepInEx`"; delete that folder too if you like."
+        Info "Your settings and the voice-command files (BepInEx\vosk, so a reinstall needn't download them again)"
+        Info "are left in `"$GameDir\BepInEx`"; delete that folder too if you like."
         Write-Host ""
         Write-Host "Done. Star Trek: Bridge Crew is back to normal." -ForegroundColor Green
         return

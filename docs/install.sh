@@ -286,12 +286,12 @@ main() {
     step "2. Removing Bridge Crew Revival"
     rm -f "$game/BepInEx/plugins/StbcRevival.dll" "$game/BepInEx/plugins/StbcRevival.pdb" \
           "$game/BepInEx/plugins/StbcCore.dll" "$game/BepInEx/plugins/StbcCore.pdb"
-    rm -rf "$game/BepInEx/vosk"
     # Without winhttp.dll BepInEx doesn't load at all; the BepInEx folder is left for you to delete.
     rm -f "$game/winhttp.dll" "$game/doorstop_config.ini" "$game/.doorstop_version" "$game/changelog.txt"
     set_prefix_override "$game" off || true
     ok "Removed the mod and switched off its loader (BepInEx)"
-    info "Your settings are left in \"$game/BepInEx\"; delete that folder too if you like."
+    info "Your settings and the voice-command files (BepInEx/vosk, so a reinstall needn't download them again)"
+    info "are left in \"$game/BepInEx\"; delete that folder too if you like."
     info "If you ever set launch options for the game in Steam, you can clear them."
     say ""
     say "Done. Star Trek: Bridge Crew is back to normal."
