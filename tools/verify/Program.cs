@@ -285,7 +285,7 @@ foreach (var m in new[] { "get_ID", "get_name", "get_customProperties", "SetCust
 
 // Voice commands (prototype)
 var vrmType = game.GetType("VoiceRecognitionManager");
-foreach (var m in new[] { "get_UsingVoiceRecognition", "Update", "CurrentRoleIsCaptain" })
+foreach (var m in new[] { "get_UsingVoiceRecognition", "Update", "CurrentRoleIsCaptain", "IPEGCHGIGBI" })
     Check($"VoiceRecognitionManager.{m} (voice commands)", vrmType?.GetMethod(m, Inst));
 Check("  NKEPKEMCLNH(bool) (voice button event)", game.GetType("NKEPKEMCLNH")?.GetConstructors(Inst).FirstOrDefault(c => c.GetParameters().Length == 1));
 var commandManager = game.GetType("AI.CommandManager");

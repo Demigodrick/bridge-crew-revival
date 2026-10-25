@@ -140,9 +140,9 @@ namespace StbcRevival
         {
             bool alert = w.Contains("alert") || (w.Contains("battle") && w.Contains("stations")) || (w.Contains("general") && w.Contains("quarters"));
             if (any(new[] { "cancel", "secure" }) && alert || (w.Contains("stand") && w.Contains("down")))
-                return "LowerShields,DisarmTorpedoes";                           // "Stand down red alert"
+                return "RedAlertOff,LowerShields,DisarmTorpedoes";               // "Stand down red alert"
             if (alert && w.Contains("yellow")) return "RaiseShields";            // "Yellow alert"
-            if (alert) return "RaiseShields,ArmTorpedoes";                       // "Red alert", "Battle stations"
+            if (alert) return "RedAlertOn,RaiseShields,ArmTorpedoes";            // "Red alert", "Battle stations"
             if (w.Contains("fire") && w.Contains("will")) return "FirePhasers,FireTorpedoes"; // "Fire at will"
             if (w.Contains("evasive")) return "MoveAwayFrom";                    // "Evasive maneuvers, pattern delta"
             if (w.Contains("energize")) return "TransportFromTarget";            // "Energize"
@@ -284,6 +284,14 @@ namespace StbcRevival
             var trigger = AccessTools.Method(manager, "TriggerCommand");
             foreach (var one in command.Split(','))
             {
+                // Red alert isn't a crew command: it's the captain's own switch, which Watson's "red_alert" intents
+                // flipped through VoiceRecognitionManager.IPEGCHGIGBI(on) (the button's ToggleRedAlert, if needed).
+                if (one == "RedAlertOn" || one == "RedAlertOff")
+                {
+                    AccessTools.Method(typeof(VoiceRecognitionManager), "IPEGCHGIGBI")
+                        ?.Invoke(VoiceRecognitionManager.IEFBKOMBFGO, new object[] { one == "RedAlertOn" });
+                    continue;
+                }
                 foreach (var role in new[] { "Engineering", "Tactical", "Helm" })
                     update?.Invoke(null, new[] { Enum.Parse(roles, role) });
                 trigger?.Invoke(null, new[] { Enum.Parse(commands, one) });
