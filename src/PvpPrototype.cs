@@ -1,6 +1,9 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
+using System.Reflection;
+using System.Reflection.Emit;
 using HarmonyLib;
 using Sector;
 using Sector.Spacecraft;
@@ -25,6 +28,9 @@ namespace StbcRevival
     ///     swapped (their own ship Federation, the first one Klingon). The host's simulation sees the real
     ///     teams (the host is on the first ship), and the teams sent to other players are always the real ones.
     ///   - The targeting panel's category: another player ship is an enemy, yours is yours.
+    ///   - "Is it a player ship?" checks that mean "is it my ship" (the map's own-ship icon, which can't be
+    ///     selected; the viewscreen's target display; the engine and warp core's player-only sounds, such as
+    ///     the impulse loop, played to the whole bridge) are true only for your own ship (PlayerShipChecks).
     /// Only while the PvP test mission runs.
     /// </summary>
     internal static class PvpPrototype
@@ -97,6 +103,7 @@ namespace StbcRevival
             }
             var category = AccessTools.Method(typeof(TargetableComponent), "GetCategory");
             if (category != null) harmony.Patch(category, postfix: new HarmonyMethod(typeof(PvpPrototype), nameof(Category_Postfix)));
+            PatchPlayerShipChecks(harmony);
         }
 
         // A player ship spawned: the first ship always binds (as the game does); the second binds only for
@@ -173,6 +180,77 @@ namespace StbcRevival
         {
             serializing = false;
             return __exception;
+        }
+
+        // Types whose "is PlayerSpacecraft" checks mean "is it the ship I'm on".
+        private static readonly string[] PlayerShipChecks =
+        {
+            "MapIcon", "NavMapIcon", "UI.ViewscreenTargetingDisplay",
+            "Sector.Spacecraft.Subsystems.SimpleEngineClient", "Sector.Spacecraft.Subsystems.SimpleWarpCoreClient",
+        };
+
+        private static readonly MethodInfo OwnShipOrNullMethod = AccessTools.Method(typeof(PvpPrototype), nameof(OwnShipOrNull));
+
+        // Every method of those types with such a check: its "isinst PlayerSpacecraft" becomes OwnShipOrNull.
+        private static void PatchPlayerShipChecks(Harmony harmony)
+        {
+            var transpiler = new HarmonyMethod(typeof(PvpPrototype), nameof(PlayerShipCheck_Transpiler));
+            int patched = 0;
+            foreach (var name in PlayerShipChecks)
+            {
+                var type = AccessTools.TypeByName(name);
+                if (type == null)
+                {
+                    Plugin.Log.LogWarning($"PvP: {name} not found");
+                    continue;
+                }
+                foreach (var method in AccessTools.GetDeclaredMethods(type))
+                {
+                    if (method.IsAbstract || method.ContainsGenericParameters || !ChecksPlayerShip(method)) continue;
+                    try
+                    {
+                        harmony.Patch(method, transpiler: transpiler);
+                        patched++;
+                    }
+                    catch (Exception e)
+                    {
+                        Plugin.Log.LogWarning($"PvP: {name}.{method.Name}: {e.Message}");
+                    }
+                }
+            }
+            Plugin.Log.LogInfo($"PvP: {patched} player-ship checks now mean your own ship");
+        }
+
+        private static bool ChecksPlayerShip(MethodBase method)
+        {
+            try
+            {
+                return PatchProcessor.ReadMethodBody(method).Any(op => op.Key == OpCodes.Isinst && (op.Value as Type) == typeof(PlayerSpacecraft));
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static IEnumerable<CodeInstruction> PlayerShipCheck_Transpiler(IEnumerable<CodeInstruction> code)
+        {
+            foreach (var instruction in code)
+            {
+                if (instruction.opcode == OpCodes.Isinst && (instruction.operand as Type) == typeof(PlayerSpacecraft))
+                {
+                    instruction.opcode = OpCodes.Call;
+                    instruction.operand = OwnShipOrNullMethod;
+                }
+                yield return instruction;
+            }
+        }
+
+        /// <summary>"as PlayerSpacecraft", except that in the PvP test another player's ship isn't one.</summary>
+        public static PlayerSpacecraft OwnShipOrNull(object body)
+        {
+            var ship = body as PlayerSpacecraft;
+            return ship != null && IsOther(ship) ? null : ship;
         }
 
         private static void Category_Postfix(TargetableComponent __instance, ref Category __result)

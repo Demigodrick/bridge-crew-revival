@@ -344,6 +344,8 @@ Check("  TargetInfoComponent.DGGJOECIFAF (team)", targetInfo?.GetProperty("DGGJO
 Check("  TargetInfoComponent team backing field", targetInfo?.GetField("<BEJOMHEMMLD>k__BackingField", Inst));
 Check("  TargetInfoComponent.OnPhotonSerializeView", targetInfo?.GetMethod("OnPhotonSerializeView", Inst));
 Check("  TargetableComponent.GetCategory", game.GetType("Sector.TargetableComponent")?.GetMethod("GetCategory", Inst));
+foreach (var t in new[] { "MapIcon", "NavMapIcon", "UI.ViewscreenTargetingDisplay", "Sector.Spacecraft.Subsystems.SimpleEngineClient", "Sector.Spacecraft.Subsystems.SimpleWarpCoreClient" })
+    Check($"  {t} (own-ship checks)", game.GetType(t));
 foreach (var f in new[] { "_playerCraftPrefabPath", "_retroPlayerCraftPrefabPath", "_TNGPlayerCraftPrefabPath" })
     Check($"  MissionManager.{f}", missionManager?.GetField(f, Inst));
 
