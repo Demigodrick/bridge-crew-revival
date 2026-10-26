@@ -220,6 +220,7 @@ namespace StbcRevival
             Safely("briefing room decor", BriefingRoomDecor.Update);
             Safely("stellar evacuation", StbcRevival.Missions.StellarEvacuationObjective.Update);
             Safely("mission maps", StbcRevival.Missions.MissionMaps.Update);
+            Safely("pvp prototype", PvpPrototype.Update);
             Safely("mod version check", ModVersionCheck.Update);
             Safely("host hand-off", HostHandoff.Update);
             Safely("voice commands", StbcRevival.VoiceCommands.Update);

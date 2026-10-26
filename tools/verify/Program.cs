@@ -352,5 +352,15 @@ foreach (var t in new[] { "MapIcon", "NavMapIcon", "UI.ViewscreenTargetingDispla
 foreach (var f in new[] { "_playerCraftPrefabPath", "_retroPlayerCraftPrefabPath", "_TNGPlayerCraftPrefabPath" })
     Check($"  MissionManager.{f}", missionManager?.GetField(f, Inst));
 
+var targetUi = game.GetType("TacticalTargetUI");
+foreach (var m in new[] { "OPGMKEGJFIP", "FBNPCAFBGCH" })
+    Check($"  TacticalTargetUI.{m} (target details)", targetUi?.GetMethod(m, Inst));
+foreach (var f in new[] { "_originalBridgeMode", "_tosTargetShieldDisplay", "_shieldValueText", "_shieldValueTextTNG", "_hullValueText", "_hullValueTextTNG" })
+    Check($"  TacticalTargetUI.{f}", targetUi?.GetField(f, Inst));
+Check("  KHDFGIINMKJ.SetText(text, string, TNG text)", game.GetType("KHDFGIINMKJ")?.GetMethods(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic)
+    .FirstOrDefault(m => m.Name == "SetText" && m.GetParameters().Length == 3 && m.GetParameters()[1].ParameterType.FullName == "System.String"));
+Check("  ShipFX._explosionModel", game.GetType("ShipFX")?.GetField("_explosionModel", Inst));
+Check("  SimulationSpace.BALGCFOKIPN", game.GetType("SimulationSpace")?.GetProperty("BALGCFOKIPN", BindingFlags.Static | BindingFlags.Public));
+
 Console.WriteLine(failures == 0 ? "\nAll targets resolved." : $"\n{failures} target(s) missing.");
 return failures == 0 ? 0 : 1;

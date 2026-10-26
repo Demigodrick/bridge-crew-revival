@@ -33,6 +33,12 @@ namespace StbcRevival
     ///   - "Is it a player ship?" checks that mean "is it my ship" (the map's own-ship icon, which can't be
     ///     selected; the viewscreen's target display; the engine and warp core's player-only sounds, such as
     ///     the impulse loop, played to the whole bridge) are true only for your own ship (PlayerShipChecks).
+    ///   - One-per-game parts of a player ship (PlayerSpacecraftSoundManager, which music and crew sounds go
+    ///     through, and the like) take over when a ship is made (Awake): the other ship's are handed back to
+    ///     yours, so they don't go silent when it's destroyed.
+    ///   - The tactical target panel shows shields and hull only for AI ships: also for the other player ship.
+    ///   - A destroyed player ship doesn't explode (only AI ships do, AgentShip.OnHideShip): the other one does
+    ///     here, with its ShipFX's explosion, and disappears.
     /// Only while the PvP test mission runs.
     /// </summary>
     internal static class PvpPrototype
@@ -47,6 +53,9 @@ namespace StbcRevival
         private static int activeFrame = -1;
         private static bool active;
         private static readonly Dictionary<TargetableComponent, PlayerSpacecraft> shipOf = new Dictionary<TargetableComponent, PlayerSpacecraft>();
+        private static readonly HashSet<PlayerSpacecraft> others = new HashSet<PlayerSpacecraft>();
+        private static readonly HashSet<PlayerSpacecraft> exploded = new HashSet<PlayerSpacecraft>();
+        private const BindingFlags Statics = BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly;
         private static readonly AccessTools.FieldRef<TargetInfoComponent, Team> TeamField =
             AccessTools.FieldRefAccess<TargetInfoComponent, Team>("<BEJOMHEMMLD>k__BackingField"); // behind get_TeamID
 
@@ -108,6 +117,12 @@ namespace StbcRevival
             var selectable = AccessTools.Method(typeof(MapIcon), "ACAGOGEPCCE");
             if (selectable != null) harmony.Patch(selectable, postfix: new HarmonyMethod(typeof(PvpPrototype), nameof(Selectable_Postfix)));
             PatchPlayerShipChecks(harmony);
+            foreach (var name in new[] { "OPGMKEGJFIP", "FBNPCAFBGCH" }) // the target's details: TNG / Aegis, original series
+            {
+                var panel = AccessTools.Method(typeof(TacticalTargetUI), name);
+                if (panel == null) Plugin.Log.LogWarning($"PvP: TacticalTargetUI.{name} not found");
+                else harmony.Patch(panel, postfix: new HarmonyMethod(typeof(PvpPrototype), nameof(TargetPanel_Postfix)));
+            }
         }
 
         // A player ship spawned: the first ship always binds (as the game does); the second binds only for
@@ -132,13 +147,54 @@ namespace StbcRevival
         private static IEnumerator AnnounceAsBody(SectorBody body)
         {
             yield return new WaitForEndOfFrame();
-            if (body != null) CIFDOFLFGEA.Send(new JJKIHDENJCK(body));
+            if (body == null) yield break;
+            CIFDOFLFGEA.Send(new JJKIHDENJCK(body));
+            HandBackSingletons(body as PlayerSpacecraft);
+            yield return null; // and once more after Start
+            HandBackSingletons(body as PlayerSpacecraft);
+        }
+
+        // The other ship's components that made themselves the game's one instance (a static of their own type,
+        // set in Awake): that instance is your ship's again.
+        private static void HandBackSingletons(PlayerSpacecraft other)
+        {
+            if (other == null || Bound == null || other == Bound) return;
+            var handed = new List<string>();
+            foreach (var part in other.GetComponentsInChildren<MonoBehaviour>(true))
+            {
+                if (part == null) continue;
+                var own = Bound.GetComponentInChildren(part.GetType(), true);
+                if (own == null) continue;
+                for (var type = part.GetType(); type != null && type != typeof(MonoBehaviour); type = type.BaseType)
+                {
+                    foreach (var property in type.GetProperties(Statics))
+                    {
+                        try
+                        {
+                            if (!property.PropertyType.IsInstanceOfType(part) || property.GetIndexParameters().Length > 0) continue;
+                            var setter = property.GetSetMethod(true);
+                            if (setter == null || !ReferenceEquals(property.GetValue(null, null), part)) continue;
+                            setter.Invoke(null, new object[] { own });
+                            handed.Add(property.DeclaringType.Name);
+                        }
+                        catch (Exception) { } // a getter that can't run now: not a singleton we need
+                    }
+                    foreach (var field in type.GetFields(Statics))
+                    {
+                        if (field.IsLiteral || field.IsInitOnly || !field.FieldType.IsInstanceOfType(part) || !ReferenceEquals(field.GetValue(null), part)) continue;
+                        field.SetValue(null, own);
+                        handed.Add(field.DeclaringType.Name);
+                    }
+                }
+            }
+            if (handed.Count > 0) Plugin.Log.LogInfo($"PvP: handed back to your ship: {string.Join(", ", handed.ToArray())}");
         }
 
         private static void Bind(PlayerSpacecraft ship)
         {
             if (Bound != null && Bound != ship) Detach(Bound);
             Bound = ship;
+            others.Remove(ship);
             boundInfo = ship.GetTargetInfo() as TargetInfoComponent;
             shipOf.Clear();
             var crew = ship.GetComponent<AI.USSAegisCrew>();
@@ -150,6 +206,59 @@ namespace StbcRevival
         {
             var crew = ship.GetComponent<AI.USSAegisCrew>();
             if (crew != null) crew.enabled = false;
+            others.Add(ship);
+        }
+
+        /// <summary>Each frame: the other ship explodes when its hull is gone.</summary>
+        internal static void Update()
+        {
+            if (!Active)
+            {
+                if (others.Count > 0 || exploded.Count > 0)
+                {
+                    others.Clear();
+                    exploded.Clear();
+                }
+                return;
+            }
+            foreach (var ship in others)
+            {
+                if (ship == null || exploded.Contains(ship)) continue;
+                var info = ship.GetTargetInfo();
+                if (info == null || info.GBNCJMFFIDI > 0f) continue;
+                exploded.Add(ship);
+                Explode(ship);
+            }
+        }
+
+        // As an AI ship's (AgentShip.OnHideShip, ShipFX.OnExplodingAction): its explosion where it was, then
+        // nothing of it left to see or hit.
+        private static void Explode(PlayerSpacecraft ship)
+        {
+            var fx = ship.GetComponentInChildren<ShipFX>(true);
+            var model = fx == null ? null : AccessTools.Field(typeof(ShipFX), "_explosionModel").GetValue(fx) as GameObject;
+            string source = "its own";
+            if (model == null)
+            {
+                // The player ship's prefab may have none (the game never blows it up from outside).
+                var stand = Resources.Load<GameObject>("Sector/Ships/Ship - D5 Cruiser");
+                var standFx = stand == null ? null : stand.GetComponentInChildren<ShipFX>(true);
+                model = standFx == null ? null : AccessTools.Field(typeof(ShipFX), "_explosionModel").GetValue(standFx) as GameObject;
+                source = "a D5's";
+            }
+            var at = fx != null ? fx.transform : ship.transform;
+            if (model != null)
+            {
+                var parent = at.parent;
+                var boom = parent != null ? (GameObject)UnityEngine.Object.Instantiate(model, parent, false) : (GameObject)UnityEngine.Object.Instantiate(model, at.position, at.rotation);
+                var space = SimulationSpace.BALGCFOKIPN;
+                if (space != null) boom.transform.SetParent(space);
+                var debris = boom.GetComponent<ExplodedShipFX>();
+                if (debris != null) debris.enabled = true;
+            }
+            foreach (var renderer in ship.GetComponentsInChildren<Renderer>(true)) renderer.enabled = false;
+            foreach (var collider in ship.GetComponentsInChildren<Collider>(true)) collider.enabled = false;
+            Plugin.Log.LogInfo(model != null ? $"PvP: {ship.ALPAOOKFIEE?.BaseName ?? ship.name} exploded ({source} explosion)" : $"PvP: {ship.name} destroyed, no explosion found");
         }
 
         private static bool IsOther(PlayerSpacecraft ship) => Active && Bound != null && ship != Bound;
@@ -261,6 +370,36 @@ namespace StbcRevival
         private static void Selectable_Postfix(MapIcon __instance, ref bool __result)
         {
             if (__result && Active && Bound != null && __instance.AJHKBDCEKPH == Bound) __result = false;
+        }
+
+        // The target panel's shields and hull, as for an AI ship (its shields are its shield subsystem's health).
+        private static void TargetPanel_Postfix(TacticalTargetUI __instance)
+        {
+            if (!Active || Bound == null || !(__instance._selectedTarget?.AHMPFHDGMKJ is PlayerSpacecraft ship) || !IsOther(ship)) return;
+            var info = ship.GetTargetInfo();
+            var shields = ship.GetSubsystem(BaseSpacecraft.HGKJKJMPFMB.Shields);
+            float shield = shields == null || shields.HCHPFKBAIPJ <= 0f ? 0f : shields.AAHEMKKMKOH / shields.HCHPFKBAIPJ;
+            float hull = info == null || info.EHMGJDHIMCJ <= 0f ? 0f : info.GBNCJMFFIDI / info.EHMGJDHIMCJ;
+            bool original = (bool)AccessTools.Field(typeof(TacticalTargetUI), "_originalBridgeMode").GetValue(__instance);
+            if (original) SetPanelText(__instance, "_tosTargetShieldDisplay", null, shield);
+            else SetPanelText(__instance, "_shieldValueText", "_shieldValueTextTNG", shield);
+            SetPanelText(__instance, "_hullValueText", "_hullValueTextTNG", hull);
+        }
+
+        private static MethodInfo setText;
+
+        // KHDFGIINMKJ.SetText(TextMeshProUGUI, string, TextMeshPro): the panel's text, Aegis or TNG.
+        private static void SetPanelText(TacticalTargetUI panel, string field, string tngField, float fraction)
+        {
+            if (setText == null)
+                setText = AccessTools.GetDeclaredMethods(AccessTools.TypeByName("KHDFGIINMKJ"))
+                    .FirstOrDefault(m => m.Name == "SetText" && m.GetParameters().Length == 3 && m.GetParameters()[1].ParameterType == typeof(string));
+            var text = AccessTools.Field(typeof(TacticalTargetUI), field)?.GetValue(panel);
+            var tng = tngField == null ? null : AccessTools.Field(typeof(TacticalTargetUI), tngField)?.GetValue(panel);
+            if (setText == null || (text == null && tng == null)) return;
+            float percent = fraction * 100f;
+            if (percent > 0f && percent < 1f) percent = 1f;
+            setText.Invoke(null, new[] { text, $"{percent:F0} %", tng });
         }
 
         private static void Category_Postfix(TargetableComponent __instance, ref Category __result)
