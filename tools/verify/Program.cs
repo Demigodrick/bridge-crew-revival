@@ -333,5 +333,19 @@ Check("Valve.VR CVRSystem.PollNextEvent (vr keyboard)", game.GetType("Valve.VR.P
 Check("  CVROverlay.ShowKeyboard", game.GetType("Valve.VR.HADDNHEFDEE")?.GetMethod("ShowKeyboard", Inst));
 Check("  CVROverlay.GetKeyboardText", game.GetType("Valve.VR.HADDNHEFDEE")?.GetMethod("GetKeyboardText", Inst));
 
+// PvP test (two player ships)
+var spawnManager = game.GetType("Sector.SectorSpawnManager");
+Check("SectorSpawnManager.CJDNEDMKCJJ(SectorBody) (pvp ship announcement)", spawnManager?.GetMethod("CJDNEDMKCJJ", Inst, null, new[] { game.GetType("Sector.SectorBody") }, null));
+var playerShip = game.GetType("Sector.Spacecraft.PlayerSpacecraft");
+foreach (var m in new[] { "HCCIGJCMAKL", "BOAPPLHKHFP", "OPMBGEHIDBD", "NEBNOAFFOJP", "NDBKDBOMAJB", "NEPBADGDJBJ", "AEIHFBMCKMD", "GCLCHPJHNNK", "Multicast_SetThrottleAndPower" })
+    Check($"  PlayerSpacecraft.{m}", playerShip?.GetMethod(m, Inst));
+var targetInfo = game.GetType("Sector.TargetInfoComponent");
+Check("  TargetInfoComponent.DGGJOECIFAF (team)", targetInfo?.GetProperty("DGGJOECIFAF", Inst)?.GetGetMethod());
+Check("  TargetInfoComponent team backing field", targetInfo?.GetField("<BEJOMHEMMLD>k__BackingField", Inst));
+Check("  TargetInfoComponent.OnPhotonSerializeView", targetInfo?.GetMethod("OnPhotonSerializeView", Inst));
+Check("  TargetableComponent.GetCategory", game.GetType("Sector.TargetableComponent")?.GetMethod("GetCategory", Inst));
+foreach (var f in new[] { "_playerCraftPrefabPath", "_retroPlayerCraftPrefabPath", "_TNGPlayerCraftPrefabPath" })
+    Check($"  MissionManager.{f}", missionManager?.GetField(f, Inst));
+
 Console.WriteLine(failures == 0 ? "\nAll targets resolved." : $"\n{failures} target(s) missing.");
 return failures == 0 ? 0 : 1;

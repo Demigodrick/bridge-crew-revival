@@ -21,7 +21,7 @@ namespace StbcRevival.Missions
                 if (checkedFrame != Time.frameCount)
                 {
                     checkedFrame = Time.frameCount;
-                    try { var mission = RevivalMissions.Selected; locked = mission == typeof(LastStandSequence) || mission == typeof(FleetBattleSequence); }
+                    try { var mission = RevivalMissions.Selected; locked = mission == typeof(LastStandSequence) || mission == typeof(FleetBattleSequence) || mission == typeof(PvpTestSequence); }
                     catch { locked = false; }
                 }
                 return locked;

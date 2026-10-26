@@ -18,9 +18,13 @@ namespace StbcRevival.Missions
         internal const string Patrol = "Patrol";
         internal const string Evacuation = "Evacuation";
         internal const string FreeRoam = "FreeRoam"; // the developers' own exploration mission, as shipped
+        internal const string PvpTest = "PvpTest";   // debug: two player ships ([Debug] PvpTest)
 
         /// <summary>The Revival missions, in the order the briefing's next/previous buttons step through them.</summary>
-        internal static readonly string[] All = { LastStand, FleetBattle, Patrol, Evacuation, FreeRoam };
+        internal static string[] All => Plugin.PvpTest.Value ? WithPvp : Missions;
+
+        private static readonly string[] Missions = { LastStand, FleetBattle, Patrol, Evacuation, FreeRoam };
+        private static readonly string[] WithPvp = { LastStand, FleetBattle, Patrol, Evacuation, FreeRoam, PvpTest };
 
         /// <summary>The Revival mission the next launch should run, or null for the game's own missions.</summary>
         internal static Type Selected
@@ -37,6 +41,7 @@ namespace StbcRevival.Missions
                     case Patrol: return typeof(PatrolSequence);
                     case Evacuation: return typeof(StellarEvacuationSequence);
                     case FreeRoam: return typeof(Mission.DebugExplorationMode.DebugExplorationModeSequence);
+                    case PvpTest: return typeof(PvpTestSequence);
                     default: return null;
                 }
             }
@@ -64,7 +69,7 @@ namespace StbcRevival.Missions
         internal static string Name(string mission) =>
             mission == LastStand ? "LAST STAND" : mission == FleetBattle ? "FLEET BATTLE" : mission == Patrol ? "PATROL"
             : mission == Evacuation ? "STELLAR EVACUATION"
-            : mission == FreeRoam ? "FREE ROAM" : "REVIVAL MISSION";
+            : mission == FreeRoam ? "FREE ROAM" : mission == PvpTest ? "PVP TEST" : "REVIVAL MISSION";
 
         internal static string Description(string mission)
         {
@@ -87,6 +92,9 @@ namespace StbcRevival.Missions
                     return "No hostiles, no objectives: fly, scan and warp around a sector at your own pace "
                            + "(the developers' own exploration mission, left in the game). Sector: "
                            + (string.IsNullOrEmpty(map) ? "The Trench." : map.Substring(map.LastIndexOf('/') + 1) + ".");
+                case PvpTest:
+                    return "Testing player vs player: a second player ship, PvP B, appears ahead of yours as an enemy. "
+                           + "Destroy it to win. A player whose [Debug] PvpTestShip is B crews it instead.";
                 default:
                     return "";
             }
