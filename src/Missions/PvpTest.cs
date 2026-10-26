@@ -81,7 +81,11 @@ namespace StbcRevival.Missions
             {
                 if (ship == null || !(ship.GetDetectable() is TargetableComponent targetable)) continue;
                 targetable.SetAttackable(true);
+                // Every station's map: a player ship is untargetable by them (it's normally only your own).
+                targetable.SetTargetableByCaptain(true);
+                targetable.SetTargetableByHelm(true);
                 targetable.SetTargetableByTactical(true);
+                targetable.SetTargetableByEngineering(true);
             }
             Plugin.Log.LogInfo($"PvP test: {Describe(a)} and {Describe(b)} spawned");
 
@@ -115,7 +119,8 @@ namespace StbcRevival.Missions
                 var info = ship.GetTargetInfo();
                 var target = ship.GetDetectable() as TargetableComponent;
                 var team = info is TargetInfoComponent t ? PvpPrototype.RawTeam(t).ToString() : "?";
-                return $"{ship.ALPAOOKFIEE?.BaseName ?? ship.name} ({team}, hull {info?.GBNCJMFFIDI:F0}, {(target != null && target.KODEOPDPGJH ? "attackable" : "not attackable")})";
+                return $"{ship.ALPAOOKFIEE?.BaseName ?? ship.name} ({team}, hull {info?.GBNCJMFFIDI:F0}, {(target != null && target.KODEOPDPGJH ? "attackable" : "not attackable")}, targetable by "
+                       + $"{(target == null ? "nobody" : (target.IBJCLAGDNAH ? "C" : "") + (target.NFAACJCEHJL ? "H" : "") + (target.HDELICIMMOE ? "T" : "") + (target.IIIBGCMJBJA ? "E" : ""))})";
             }
             catch (Exception e)
             {

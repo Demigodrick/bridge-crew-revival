@@ -28,6 +28,8 @@ namespace StbcRevival
     ///     swapped (their own ship Federation, the first one Klingon). The host's simulation sees the real
     ///     teams (the host is on the first ship), and the teams sent to other players are always the real ones.
     ///   - The targeting panel's category: another player ship is an enemy, yours is yours.
+    ///   - Map icons: both player ships are targetable by every station (the mission sets it, for the other
+    ///     crew's maps), but your own ship's icon still can't be selected on yours.
     ///   - "Is it a player ship?" checks that mean "is it my ship" (the map's own-ship icon, which can't be
     ///     selected; the viewscreen's target display; the engine and warp core's player-only sounds, such as
     ///     the impulse loop, played to the whole bridge) are true only for your own ship (PlayerShipChecks).
@@ -103,6 +105,8 @@ namespace StbcRevival
             }
             var category = AccessTools.Method(typeof(TargetableComponent), "GetCategory");
             if (category != null) harmony.Patch(category, postfix: new HarmonyMethod(typeof(PvpPrototype), nameof(Category_Postfix)));
+            var selectable = AccessTools.Method(typeof(MapIcon), "ACAGOGEPCCE");
+            if (selectable != null) harmony.Patch(selectable, postfix: new HarmonyMethod(typeof(PvpPrototype), nameof(Selectable_Postfix)));
             PatchPlayerShipChecks(harmony);
         }
 
@@ -251,6 +255,12 @@ namespace StbcRevival
         {
             var ship = body as PlayerSpacecraft;
             return ship != null && IsOther(ship) ? null : ship;
+        }
+
+        // Both player ships are targetable by every station (for the other crew's maps): not your own on yours.
+        private static void Selectable_Postfix(MapIcon __instance, ref bool __result)
+        {
+            if (__result && Active && Bound != null && __instance.AJHKBDCEKPH == Bound) __result = false;
         }
 
         private static void Category_Postfix(TargetableComponent __instance, ref Category __result)
