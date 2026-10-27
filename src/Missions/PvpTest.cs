@@ -98,7 +98,8 @@ namespace StbcRevival.Missions
                 if (++ticks % 10 == 0) Plugin.Log.LogInfo($"PvP test: {Describe(a)}; {Describe(b)}; bound to {PvpPrototype.Bound?.name ?? "nothing"}; target panel {PvpPrototype.PanelShows}");
             }
 
-            Plugin.Log.LogInfo("PvP test: PvP B destroyed");
+            var body = other.AHMPFHDGMKJ;
+            Plugin.Log.LogInfo($"PvP test: PvP B destroyed: {(body == null || (body is UnityEngine.Object o && o == null) ? "gone" : body is UnityEngine.Component c && !c.gameObject.activeInHierarchy ? "inactive" : Describe(body as PlayerSpacecraft))}");
             yield return Task.OKLDNLKLLFJ.WithGroup("State_Group_Mus_Dyn").WithState("Explore");
             yield return Task.NECMCDDOFJB.CompleteSubDirective(directive, target);
             yield return Task.HHNFJKHGEPH.WithMissionResult("PvP B destroyed", true);

@@ -60,8 +60,10 @@ namespace StbcRevival
                 new Hook(bindConsole, nameof(Bind_Prefix), true),
                 new Hook(AccessTools.Method(typeof(Bridge), "MBCIEEJDGBB"), nameof(BridgeConsole_Prefix), true),
                 new Hook(AccessTools.Method(AccessTools.TypeByName("NovaSpawnManager"), "NJHADEBHMNN"), nameof(Seat_Prefix), true),
+                new Hook(AccessTools.Method(AccessTools.TypeByName("NovaSpawnManager"), "CFLMIFGGHEB"), nameof(Seat_Prefix), true), // players with a custom avatar
                 new Hook(AccessTools.Method(typeof(UnmannedStationSync), "NetworkSerialize"), nameof(UnmannedSend_Prefix), true),
                 new Hook(AccessTools.Method(typeof(Bridge), "SendConsoleMessage"), nameof(Message_Prefix), true),
+                new Hook(AccessTools.Method(typeof(NovaPlayerInfo), "NetworkDeserialize"), nameof(PlayerState_Prefix), true),
                 new Hook(AccessTools.Method(typeof(UnmannedStationSync), "NetworkDeserialize"), nameof(UnmannedReceive_Prefix), true),
             };
             if (targets.Any(t => t.Method == null) || consoleData == null || consoleParent == null || loaderQueue == null || stationList == null || unloadedList == null)
@@ -75,6 +77,7 @@ namespace StbcRevival
                 if (target.Prefix) harmony.Patch(target.Method, prefix: hook);
                 else harmony.Patch(target.Method, postfix: hook);
             }
+            harmony.Patch(AccessTools.Method(typeof(NovaPlayerInfo), "NetworkDeserialize"), finalizer: new HarmonyMethod(typeof(PvpConsoles), nameof(PlayerState_Finalizer)));
         }
 
         private sealed class Hook
@@ -218,6 +221,35 @@ namespace StbcRevival
             if (index < 0) return;
             Plugin.Log.LogInfo($"PvP: {__0.FAJABLKBGHN} (ship B) seated at station {index} instead of {__4}");
             __4 = index;
+        }
+
+        // ---- Safety net -----------------------------------------------------------------------------
+
+        private static readonly AccessTools.FieldRef<NovaPlayerInfo, ConsoleBase> PlayerConsole =
+            AccessTools.FieldRefAccess<NovaPlayerInfo, ConsoleBase>("KHDENOMKIJE");
+        private static readonly HashSet<string> warnedMismatch = new HashSet<string>();
+
+        // A player's console state applied to a console of the other ship would drive that ship with their
+        // input (and its engine with their ship's position). With the console left out for that one packet, the
+        // game skips the state, as for a player with no console yet.
+        private static void PlayerState_Prefix(NovaPlayerInfo __instance, out ConsoleBase __state)
+        {
+            __state = null;
+            if (!Active || copies.Count == 0 || __instance == null || __instance.AOMGCCGDJJC) return;
+            var console = PlayerConsole(__instance);
+            if (console == null) return;
+            bool playerOnB = PvpShips.Of(PvpShips.Player(__instance.NJNHJKEPFAK)) == "B";
+            if (IsCopy(console) == playerOnB) return;
+            __state = console;
+            PlayerConsole(__instance) = null;
+            if (warnedMismatch.Add(__instance.FAJABLKBGHN ?? "?"))
+                Plugin.Log.LogWarning($"PvP: {__instance.FAJABLKBGHN} is on ship {(playerOnB ? "B" : "A")} but sits at the other ship's console; their console state is ignored");
+        }
+
+        private static Exception PlayerState_Finalizer(NovaPlayerInfo __instance, ConsoleBase __state, Exception __exception)
+        {
+            if (__state != null && __instance != null) PlayerConsole(__instance) = __state;
+            return __exception;
         }
 
         // ---- Unmanned stations --------------------------------------------------------------------
