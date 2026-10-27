@@ -4,7 +4,7 @@
     <AssemblyName>StbcRevival</AssemblyName>
     <RootNamespace>StbcRevival</RootNamespace>
     <LangVersion>latest</LangVersion>
-    <Version>0.7.9</Version>
+    <Version>0.7.10</Version>
     <!-- Point this at your install, or pass -p:GameDir=... -->
     <GameDir Condition="'$(GameDir)' == ''">$(HOME)/.local/share/Steam/steamapps/common/Star Trek Bridge Crew</GameDir>
     <ManagedDir>$(GameDir)/stbc_Data/Managed</ManagedDir>
