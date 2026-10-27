@@ -255,8 +255,79 @@
         <dt>Voice commands</dt>
         <dd>The captain's spoken orders are back, recognised on your PC instead of IBM's
           discontinued Watson service. As captain, hold V (or the voice button) and say "Red alert!", "Make it
-          so" or "Beam the survivors aboard". Turn it off with <code>VoiceCommands = false</code> in <code>BepInEx/config/stbc.revival.cfg</code>, the mod's
+          so" or "Beam the survivors aboard" (<a href="#voice">every command</a>). Turn it off with <code>VoiceCommands = false</code> in <code>BepInEx/config/stbc.revival.cfg</code>, the mod's
           settings.</dd>
+      </dl>
+    </section>
+
+    <section id="voice">
+      <h2>Voice commands</h2>
+      <p>As captain, hold V (or the voice button) and give an order. The mod listens for key words, so word
+        order doesn't matter much and the phrases below are examples, not scripts. If it can't make out an
+        order, the crew says they didn't catch that.</p>
+      <h3>Helm</h3>
+      <dl class="modes">
+        <dt>Speed</dt>
+        <dd>"Full impulse", "Full speed", "Ahead", "Go"; "Half impulse"; "Quarter impulse"; "All stop";
+          "Reverse".</dd>
+        <dt>Close in</dt>
+        <dd>"Approach the target", "Intercept", "Close on them", "Head toward the target".</dd>
+        <dt>Get away</dt>
+        <dd>"Evade", "Retreat", "Move away", "Evasive maneuvers, pattern delta".</dd>
+        <dt>Prepare</dt>
+        <dd>"Prepare for warp", "Plot a course", "Set course for warp"; "Prepare impulse".</dd>
+        <dt>Engage</dt>
+        <dd>"Engage", "Make it so", "Punch it", "Hit it": engages whatever was last prepared (warp if
+          nothing was). "Engage warp", "Maximum warp", "Warp factor nine", "Go to warp" go straight to warp.</dd>
+        <dt>Leave warp</dt>
+        <dd>"Drop out of warp" stops the ship; "Take us out" goes to full speed.</dd>
+      </dl>
+      <h3>Tactical</h3>
+      <dl class="modes">
+        <dt>Fire</dt>
+        <dd>"Fire phasers", "Fire torpedoes", "Fire at will" (both).</dd>
+        <dt>Stop firing</dt>
+        <dd>"Cease fire", "Hold fire"; "Cease targeting", "Clear target".</dd>
+        <dt>Torpedoes</dt>
+        <dd>"Arm torpedoes", "Disarm torpedoes".</dd>
+        <dt>Shields</dt>
+        <dd>"Raise shields", "Shields up"; "Lower shields", "Shields down", "Drop shields"; "Modulate
+          shields".</dd>
+        <dt>Targeting</dt>
+        <dd>"Target their engines / shields / weapons"; "Lock phasers", "Engage the target"; "Analyse the
+          target", "Identify the target", or just "Target".</dd>
+        <dt>Scan</dt>
+        <dd>"Scan the target", "Probe".</dd>
+        <dt>Hack</dt>
+        <dd>"Disrupt their engines / shields / weapons / comms", "Hack their shields".</dd>
+        <dt>Transporter</dt>
+        <dd>"Beam the survivors aboard", "Transport them", "Evacuate the crew", "Bring them aboard",
+          "Energize".</dd>
+        <dt>Cloak</dt>
+        <dd>On a ship with a cloak: "Cloak", "Hunt"; "Reduce our signature", "Run silent".</dd>
+      </dl>
+      <h3>Engineering</h3>
+      <dl class="modes">
+        <dt>Power</dt>
+        <dd>"Power to engines / shields / weapons", "Divert power to shields", "Reroute power";
+          "Balance power".</dd>
+        <dt>Repair</dt>
+        <dd>"Repair the engines / shields / phasers / torpedoes / warp core / sensors / science lab /
+          transporter / computer / sickbay". "Repair" alone spreads repairs evenly.</dd>
+        <dt>Optimise</dt>
+        <dd>"Optimize for offense" (weapons), "Optimize for defense" (shields), "Optimize engines /
+          transporter / scanners / computer"; balanced if nothing is named.</dd>
+      </dl>
+      <h3>Alerts</h3>
+      <dl class="modes">
+        <dt>Red alert</dt>
+        <dd>"Red alert", "Battle stations", "General quarters": red alert on, shields up, torpedoes
+          armed.</dd>
+        <dt>Yellow alert</dt>
+        <dd>"Yellow alert": shields up.</dd>
+        <dt>Stand down</dt>
+        <dd>"Stand down", "Cancel red alert", "Secure from red alert": red alert off, shields down,
+          torpedoes disarmed.</dd>
       </dl>
     </section>
 
