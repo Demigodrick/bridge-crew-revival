@@ -223,6 +223,7 @@ namespace StbcRevival
             Safely("briefing room decor", BriefingRoomDecor.Update);
             Safely("stellar evacuation", StbcRevival.Missions.StellarEvacuationObjective.Update);
             Safely("mission maps", StbcRevival.Missions.MissionMaps.Update);
+            Safely("restock sync", StbcRevival.Missions.RestockSync.Update);
             if (PvpTest.Value) Safely("pvp prototype", PvpPrototype.Update);
             Safely("mod version check", ModVersionCheck.Update);
             Safely("host hand-off", HostHandoff.Update);

@@ -176,6 +176,7 @@ namespace StbcRevival.Missions
                      })
                 repair = repair.SetSubsystemHealthPercent(system, 100f);
             Plugin.Log.LogInfo($"{who}: repaired; torpedoes " + Restock());
+            RestockSync.Announce();
             return repair;
         }
 
@@ -184,7 +185,7 @@ namespace StbcRevival.Missions
 
         // The fore and aft launcher groups back to their starting reserve, as when the ship was built
         // (LauncherGroup.Init). Torpedoes already loaded in the tubes stay loaded.
-        private static string Restock()
+        internal static string Restock()
         {
             try
             {
