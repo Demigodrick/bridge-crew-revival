@@ -164,6 +164,61 @@ public sealed class LoadBalancingServer : IPeerHandler
     public List<RoomSnapshot> HostedRooms() => SnapshotRooms();
 
     /// <summary>
+    /// Sets (or with null/empty clears) a hosted room's password: joiners must then send it as the player
+    /// property <see cref="ModProp.Password"/>. False if there's no such room.
+    /// </summary>
+    public bool SetRoomPassword(string roomName, string? password)
+    {
+        lock (sync)
+        {
+            if (!rooms.TryGetValue(roomName, out var room)) return false;
+            room.Password = string.IsNullOrEmpty(password) ? null : password;
+            Log.Info($"room '{roomName}': password {(room.Password == null ? "removed" : "set")}");
+            return true;
+        }
+    }
+
+    /// <summary>Whether a hosted room has a password.</summary>
+    public bool IsPassworded(string roomName)
+    {
+        lock (sync) return rooms.TryGetValue(roomName, out var room) && room.Password != null;
+    }
+
+    // Wrong passwords per joiner (their Steam ID, or connection): a few tries, then a minute's wait.
+    private sealed class Failures
+    {
+        public int Count;
+        public DateTime Since;
+    }
+
+    private readonly Dictionary<string, Failures> passwordFailures = new();
+    private const int PasswordTries = 5;
+    private static readonly TimeSpan PasswordLockout = TimeSpan.FromMinutes(1);
+
+    // Null when they may join; otherwise why not.
+    private string? PasswordRefusal(Connection connection, Room room, OperationRequest req)
+    {
+        if (room.Password == null) return null;
+        var who = connection.ToString();
+        int slash = who.IndexOf('/');
+        if (slash > 0) who = who.Substring(0, slash); // "p2p <steam id>/<link>": per player, not per attempt
+        var now = DateTime.UtcNow;
+        if (passwordFailures.TryGetValue(who, out var f) && now - f.Since > PasswordLockout) passwordFailures.Remove(who);
+        if (passwordFailures.TryGetValue(who, out f) && f.Count >= PasswordTries) return "too many wrong passwords, try again in a minute";
+        object? given = null;
+        (req[Param.PlayerProperties] as PHashtable)?.TryGetValue(ModProp.Password, out given);
+        if (given is not string text || text.Length == 0) return "password required";
+        if (text == room.Password)
+        {
+            passwordFailures.Remove(who);
+            return null;
+        }
+        if (passwordFailures.TryGetValue(who, out f)) f.Count++;
+        else passwordFailures[who] = new Failures { Count = 1, Since = now };
+        return "wrong password";
+    }
+
+    /// <summary>
     /// Create an empty room, ready to be joined like any other: the first to join becomes its master. For a
     /// crew whose host dropped: the next host recreates the room under the same name and settings, and the
     /// rest of the crew joins it. Without an app version or lobby, those of a player connected to this server
@@ -513,10 +568,10 @@ public sealed class LoadBalancingServer : IPeerHandler
         // Candidates as (name, address, created): local rooms first-come, then external ones.
         var candidates = new List<KeyValuePair<string, string>>();
         foreach (var r in rooms.Values
-                     .Where(r => r.Lobby == lobby && r.AppVersion == s.AppVersion && r.IsVisible && JoinError(r) == 0 && Matches(r.Properties))
+                     .Where(r => r.Lobby == lobby && r.AppVersion == s.AppVersion && r.IsVisible && r.Password == null && JoinError(r) == 0 && Matches(r.Properties))
                      .OrderBy(r => r.Created))
             candidates.Add(new KeyValuePair<string, string>(r.Name, GameServerAddress(connection)));
-        foreach (var r in External(s.AppVersion).Where(r => r.Joinable && Matches(r.Properties)).OrderBy(r => r.Seen))
+        foreach (var r in External(s.AppVersion).Where(r => r.Joinable && r.Properties.GetOrDefault(ModProp.Locked) is not true && Matches(r.Properties)).OrderBy(r => r.Seen))
             candidates.Add(new KeyValuePair<string, string>(r.Name, r.Address));
 
         if (candidates.Count == 0)
@@ -610,6 +665,12 @@ public sealed class LoadBalancingServer : IPeerHandler
                 connection.SendResponse(new OperationResponse(OpCode.JoinGame, ErrorCode.GameClosed, "different Bridge Crew Revival version"));
                 return;
             }
+            if (PasswordRefusal(connection, room, req) is string refusal)
+            {
+                Log.Info($"room '{name}': {connection} refused: {refusal}");
+                connection.SendResponse(new OperationResponse(OpCode.JoinGame, ErrorCode.GameClosed, refusal));
+                return;
+            }
         }
         EnterRoom(connection, s, room, req, OpCode.JoinGame);
     }
@@ -635,6 +696,7 @@ public sealed class LoadBalancingServer : IPeerHandler
     {
         Unsubscribe(connection, s);
         var props = req[Param.PlayerProperties] is PHashtable p ? new PHashtable(p) : new PHashtable();
+        props.Remove(ModProp.Password); // never passed on to the crew
         if (room.PublishUserId) props[ActorProp.UserId] = s.UserId;
 
         var actor = new Actor(room.TakeActorNr(), connection, s, props);
@@ -758,6 +820,7 @@ public sealed class LoadBalancingServer : IPeerHandler
             connection.SendResponse(new OperationResponse(OpCode.SetProperties, ErrorCode.InvalidOperation, "missing properties"));
             return;
         }
+        props.Remove(ModProp.Password); // a crew password is only ever for the join
         int targetActor = req[Param.ActorNr] is int n ? n : 0;
         PHashtable target;
         if (targetActor > 0)

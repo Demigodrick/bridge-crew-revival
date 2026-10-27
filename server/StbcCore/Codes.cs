@@ -47,6 +47,10 @@ public static class ActorProp
 public static class ModProp
 {
     public const string Version = "MV";
+    /// <summary>Player property: the crew password a joiner sends (stripped before anyone else sees it).</summary>
+    public const string Password = "PW";
+    /// <summary>Listed room property: the crew has a password (Quick Match skips it).</summary>
+    public const string Locked = "LK";
 }
 
 public static class ErrorCode

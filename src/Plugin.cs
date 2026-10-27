@@ -247,7 +247,11 @@ namespace StbcRevival
 
         private void OnApplicationQuit() => Safely("local save on quit", StbcRevival.LocalSave.OnQuit);
 
-        private void OnGUI() => Safely("room browser window", RoomBrowser.OnGUI);
+        private void OnGUI()
+        {
+            Safely("room browser window", RoomBrowser.OnGUI);
+            Safely("text prompt", TextPrompt.OnGUI);
+        }
     }
 
     /// <summary>

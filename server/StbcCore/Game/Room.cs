@@ -89,6 +89,9 @@ public sealed class Room
     public bool SuppressRoomEvents { get; set; }
     public bool PublishUserId { get; set; }
 
+    /// <summary>The crew password (set by the host's mod; never sent to anyone). Null: none.</summary>
+    public string? Password { get; set; }
+
     public int TakeActorNr() => nextActorNr++;
 
     public byte MaxPlayers => MaxPlayersOf(Properties);

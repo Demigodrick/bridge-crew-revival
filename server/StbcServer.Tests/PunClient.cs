@@ -187,10 +187,14 @@ public sealed class PunClient : IPhotonPeerListener, IDisposable
     /// <summary>The Bridge Crew Revival version this client sends with its joins (none when null), as the mod does.</summary>
     public string? ModVersion { get; set; }
 
+    /// <summary>The crew password this client sends with its joins (none when null), as the mod does.</summary>
+    public string? Password { get; set; }
+
     private PhotonHashtable PlayerProps()
     {
         var props = new PhotonHashtable { [(byte)255] = Name };
         if (ModVersion != null) props["MV"] = ModVersion;
+        if (Password != null) props["PW"] = Password;
         return props;
     }
 

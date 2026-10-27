@@ -182,6 +182,7 @@ namespace StbcRevival
             VoiceCommands.Patch(harmony);
             ControllerGrace.Patch(harmony);
             VoiceJitter.Patch(harmony);
+            if (SteamMode.Enabled) CrewPassword.Patch(harmony);
             if (Plugin.Diagnostics.Value)
                 StbcRevival.Diagnostics.Apply(harmony, photonNetwork);
         }

@@ -253,7 +253,7 @@ namespace StbcRevival
         {
             Name = name,
             Code = Code(name),
-            Mode = ModeName(Int(props, "C3")),
+            Mode = ModeName(Int(props, "C3")) + (props != null && props.Contains(StbcServer.ModProp.Locked) && props[StbcServer.ModProp.Locked] is true ? " · password" : ""),
             Phase = PhaseName(Int(props, "C6")),
             Players = players,
             MaxPlayers = max,

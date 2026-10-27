@@ -781,6 +781,7 @@ namespace StbcRevival
                     ["players"] = room.Players.ToString(),
                     ["max"] = room.MaxPlayers.ToString(),
                     ["open"] = room.Open ? "1" : "0",
+                    ["lock"] = server.IsPassworded(room.Name) ? "1" : "0", // a crew password (Quick Match skips it)
                     // Who to connect to: Steam only tells a lobby's members who owns it, and nobody joins these.
                     ["host"] = MySteamId.ToString(),
                 };
@@ -838,6 +839,7 @@ namespace StbcRevival
                         int.TryParse(SteamMatchmaking.GetLobbyData(lobby, "players"), out int players);
                         props[GameProp.MaxPlayers] = (byte)Math.Max(0, Math.Min(max, 255));
                         props[GameProp.IsOpen] = SteamMatchmaking.GetLobbyData(lobby, "open") != "0";
+                        if (SteamMatchmaking.GetLobbyData(lobby, "lock") == "1") props[ModProp.Locked] = true;
                         props[GameProp.PropsListedInLobby] = props.Keys.OfType<string>().ToArray();
                         found.Add(new ExternalRoom(name, $"steam:{owner}:1", SteamMatchmaking.GetLobbyData(lobby, "ver"), props, players));
                     }

@@ -394,6 +394,13 @@ Check("VoIpManager.GetLocalMicrophoneInputDevice (voice commands)", game.GetType
 Check("  UnityMicrophoneInputDevice.FJNHDGFAOLB (device)", game.GetType("DaikonForge.VoIP.UnityMicrophoneInputDevice")?.GetField("FJNHDGFAOLB", Inst));
 Check("  AudioInputDeviceBase.EALMEBPADKI (recording source)", game.GetType("DaikonForge.VoIP.AudioInputDeviceBase")?.GetField("EALMEBPADKI", Inst));
 
+// Crew passwords
+var briefingConsole = game.GetType("ConsoleBriefingRoom");
+foreach (var m in new[] { "CIBAPNHJCIF", "OKIKIKEHPPC", "IACKCMNEEKK" })
+    Check($"ConsoleBriefingRoom.{m} (crew password)", briefingConsole?.GetMethod(m, Inst));
+Check("  ConsoleBriefingRoom.FEFMKFOMEPA (open-room button)", briefingConsole?.GetField("FEFMKFOMEPA", Inst));
+Check("  SVR.Network.PBGHGLIFLAE(string) (join event)", game.GetType("SVR.Network.PBGHGLIFLAE")?.GetConstructors().FirstOrDefault(c => c.GetParameters().Length == 1 && c.GetParameters()[0].ParameterType.FullName == "System.String"));
+
 // Voice jitter buffer
 var voicePlayer = game.GetType("WwiseAudioPlayer");
 foreach (var m in new[] { "BufferAudio", "BatchUpdate" })

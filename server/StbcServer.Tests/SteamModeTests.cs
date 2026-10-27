@@ -87,6 +87,7 @@ public sealed class SteamModeTests : IDisposable
         {
             var props = new PHashtable { [GameProp.MaxPlayers] = (byte)r.MaxPlayers, [GameProp.IsOpen] = r.Open, [GameProp.PropsListedInLobby] = LobbyProps };
             foreach (var kv in r.CustomProperties) props[kv.Key] = kv.Value;
+            if (hostServer.IsPassworded(r.Name)) props[ModProp.Locked] = true; // the mod's "lock" lobby data
             return new ExternalRoom(r.Name, $"steam:{HostSteamId}:1", r.AppVersion, props, r.Players);
         }).ToList());
     }
@@ -150,6 +151,38 @@ public sealed class SteamModeTests : IDisposable
         // The host's Steam connection drops: the joiner's Photon client gets a disconnect.
         relayClient.PeerLost(HostSteamId);
         joiner.WaitStatus(ExitGames.Client.Photon.StatusCode.DisconnectByServer);
+    }
+
+    [Fact]
+    public void PasswordedCrewTakesOnlyTheRightPasswordAndKeepsItFromTheCrew()
+    {
+        var host = Player("local-A:1", "janeway");
+        host.JoinLobby("NovaLobby", 2);
+        Assert.Equal(0, host.CreateRoom("eu|LOCK01", GameProps("eu|LOCK01"), LobbyProps, 4, lobbyName: "NovaLobby", lobbyType: 2).ReturnCode);
+        Assert.True(hostServer.SetRoomPassword("eu|LOCK01", "tea-earl-grey"));
+        PublishHostRooms();
+
+        var none = Player("local-B:1", "neelix");
+        var refused = none.JoinRoom("eu|LOCK01");
+        Assert.Equal(ErrorCode.GameClosed, refused.ReturnCode);
+        Assert.Equal("password required", refused.DebugMessage);
+
+        var wrong = Player("local-B:1", "kes");
+        wrong.Password = "coffee";
+        Assert.Equal("wrong password", wrong.JoinRoom("eu|LOCK01").DebugMessage);
+
+        var right = Player("local-B:1", "chakotay");
+        right.Password = "tea-earl-grey";
+        Assert.Equal(0, right.JoinRoom("eu|LOCK01").ReturnCode);
+        // The host sees the new player, without the password among their properties.
+        var joined = host.WaitEvent(255, e => (int)e[254] == right.ActorNr);
+        Assert.False(((PhotonHashtable)joined[249]).ContainsKey("PW"));
+
+        // Quick Match never offers a passworded crew.
+        var lister = Player("local-B:1", "tuvok");
+        lister.JoinLobby("NovaLobby", 2);
+        lister.WaitEvent(230);
+        Assert.Equal(ErrorCode.NoRandomMatchFound, lister.JoinRandom("C0 = 8", "NovaLobby", 2).ReturnCode);
     }
 
     [Fact]
