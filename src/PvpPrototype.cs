@@ -20,7 +20,7 @@ namespace StbcRevival
     ///   - Binding: every machine announces a newly spawned player ship (SectorSpawnManager.CJDNEDMKCJJ sends
     ///     "player ship spawned", INPOODEDFLG) and some fifteen systems (bridge, consoles, camera, nav map...)
     ///     take the last one announced as theirs. The second ship ("PvP B") is announced as an ordinary ship
-    ///     instead, unless you're on it ([Debug] PvpTestShip = B), when it's announced after the first.
+    ///     instead, unless you're on it (PvpShips: the first player to join after the host), when it's announced after the first.
     ///   - The other ship's own crew logic (USSAegisCrew, which acts through the bridge's consoles, so on your
     ///     ship) is switched off, as are its replies to ship-wide events (subsystem messages, mission warps,
     ///     probe launches) and its throttle's hold on the helm's slider.
@@ -81,7 +81,7 @@ namespace StbcRevival
             }
         }
 
-        private static bool OnShipB => string.Equals(Plugin.PvpTestShip.Value?.Trim(), "B", StringComparison.OrdinalIgnoreCase);
+        private static bool OnShipB => PvpShips.Mine == "B";
 
         internal static Team RawTeam(TargetInfoComponent info) => TeamField(info);
 
@@ -117,6 +117,9 @@ namespace StbcRevival
             var selectable = AccessTools.Method(typeof(MapIcon), "ACAGOGEPCCE");
             if (selectable != null) harmony.Patch(selectable, postfix: new HarmonyMethod(typeof(PvpPrototype), nameof(Selectable_Postfix)));
             PatchPlayerShipChecks(harmony);
+            var consoleAI = AccessTools.Method(typeof(AI.USSAegisCrew), "IsConsoleAI");
+            if (consoleAI == null) Plugin.Log.LogWarning("PvP: USSAegisCrew.IsConsoleAI not found");
+            else harmony.Patch(consoleAI, postfix: new HarmonyMethod(typeof(PvpPrototype), nameof(ConsoleAI_Postfix)));
             foreach (var name in new[] { "OPGMKEGJFIP", "FBNPCAFBGCH" }) // the target's details: TNG / Aegis, original series
             {
                 var panel = AccessTools.Method(typeof(TacticalTargetUI), name);
@@ -219,7 +222,14 @@ namespace StbcRevival
                     others.Clear();
                     exploded.Clear();
                 }
+                if (hiddenAvatars.Count > 0) ShowAllAvatars();
                 return;
+            }
+            PvpShips.Update();
+            if (Time.unscaledTime >= nextAvatarCheck)
+            {
+                nextAvatarCheck = Time.unscaledTime + 0.5f;
+                HideOtherShipsAvatars();
             }
             foreach (var ship in others)
             {
@@ -229,6 +239,67 @@ namespace StbcRevival
                 exploded.Add(ship);
                 Explode(ship);
             }
+        }
+
+        // The AI crew's consoles, by station (Captain has none: the AI never captains).
+        private static readonly Dictionary<FLCHMJJDKDL, FieldInfo> crewConsoles = new Dictionary<FLCHMJJDKDL, FieldInfo>
+        {
+            [FLCHMJJDKDL.Tactical] = AccessTools.Field(typeof(AI.USSAegisCrew), "GELDBDOEIBN"),
+            [FLCHMJJDKDL.Helm] = AccessTools.Field(typeof(AI.USSAegisCrew), "IJFDAJGLKLF"),
+            [FLCHMJJDKDL.Engineering] = AccessTools.Field(typeof(AI.USSAegisCrew), "LMFOFJEALLE"),
+        };
+
+        /// <summary>"A" or "B": which of the two player ships this is.</summary>
+        internal static string Letter(PlayerSpacecraft ship) =>
+            (ship?.ALPAOOKFIEE?.BaseName ?? "").StartsWith(ShipBName, StringComparison.Ordinal) ? "B" : "A";
+
+        // Stations are shared: one console per station on every game's bridge, holding whichever player chose
+        // it, whatever their ship. For a ship's AI crew, a station held by a player on the other ship is empty,
+        // so its bot works it (IsConsoleAI: no player, or a bot, and a bot assigned).
+        private static void ConsoleAI_Postfix(AI.USSAegisCrew __instance, FLCHMJJDKDL __0, ref bool __result)
+        {
+            if (__result || !Active || !crewConsoles.TryGetValue(__0, out var field) || field == null) return;
+            if (!(field.GetValue(__instance) is ConsoleBase console) || console.BJLCFFKCFFN == null || console.LPMMGGIAOCL == null) return;
+            var player = console.FKKJLMLCKJI;
+            if (player == null || player.AOMGCCGDJJC) return;
+            var crewShip = __instance.GetComponent<PlayerSpacecraft>();
+            if (PvpShips.Of(PvpShips.Player(player.NJNHJKEPFAK)) != Letter(crewShip)) __result = true;
+        }
+
+        private static readonly HashSet<NovaPlayerInfo> hiddenAvatars = new HashSet<NovaPlayerInfo>();
+        private static float nextAvatarCheck;
+
+        // Every game has one bridge, where every player in the room is seated at their station: players on the
+        // other ship aren't drawn on yours (NJNHJKEPFAK: their actor number; AOLEJMABHPE: you; AOMGCCGDJJC: a bot).
+        private static void HideOtherShipsAvatars()
+        {
+            if (Bound == null) return;
+            string mine = PvpShips.Mine;
+            foreach (var player in UnityEngine.Object.FindObjectsOfType<NovaPlayerInfo>())
+            {
+                if (player == null || player.AOLEJMABHPE || player.AOMGCCGDJJC) continue;
+                bool other = PvpShips.Of(PvpShips.Player(player.NJNHJKEPFAK)) != mine;
+                if (other) SetAvatarVisible(player, false); // every time: the game may switch renderers back on
+                if (other == hiddenAvatars.Contains(player)) continue;
+                if (!other) SetAvatarVisible(player, true);
+                if (other) hiddenAvatars.Add(player);
+                else hiddenAvatars.Remove(player);
+                Plugin.Log.LogInfo($"PvP: {player.FAJABLKBGHN} (actor {player.NJNHJKEPFAK}) is {(other ? "on the other ship: hidden" : "on your ship: shown")}");
+            }
+        }
+
+        private static void ShowAllAvatars()
+        {
+            foreach (var player in hiddenAvatars)
+                if (player != null) SetAvatarVisible(player, true);
+            hiddenAvatars.Clear();
+        }
+
+        private static void SetAvatarVisible(NovaPlayerInfo player, bool visible)
+        {
+            foreach (var pawn in new[] { player.VisualPawnObject, player.PawnObject })
+                if (pawn != null)
+                    foreach (var renderer in pawn.GetComponentsInChildren<Renderer>(true)) renderer.enabled = visible;
         }
 
         // As an AI ship's (AgentShip.OnHideShip, ShipFX.OnExplodingAction): its explosion where it was, then

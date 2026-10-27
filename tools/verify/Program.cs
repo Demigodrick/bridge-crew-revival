@@ -362,6 +362,19 @@ Check("  KHDFGIINMKJ.SetText(text, string, TNG text)", game.GetType("KHDFGIINMKJ
 Check("  ShipFX._explosionModel", game.GetType("ShipFX")?.GetField("_explosionModel", Inst));
 Check("  SimulationSpace.BALGCFOKIPN", game.GetType("SimulationSpace")?.GetProperty("BALGCFOKIPN", BindingFlags.Static | BindingFlags.Public));
 
+var aegisCrew = game.GetType("AI.USSAegisCrew");
+Check("  USSAegisCrew.IsConsoleAI (pvp: stations of the other ship's players)", aegisCrew?.GetMethod("IsConsoleAI", Inst));
+foreach (var f in new[] { "GELDBDOEIBN", "IJFDAJGLKLF", "LMFOFJEALLE" })
+    Check($"  USSAegisCrew.{f} (station console)", aegisCrew?.GetField(f, Inst));
+var console = game.GetType("ConsoleBase");
+foreach (var prop in new[] { "FKKJLMLCKJI", "LPMMGGIAOCL", "BJLCFFKCFFN" })
+    Check($"  ConsoleBase.{prop}", console?.GetProperty(prop, Inst));
+var novaPlayer = game.GetType("NovaPlayerInfo");
+foreach (var prop in new[] { "NJNHJKEPFAK", "AOLEJMABHPE", "AOMGCCGDJJC", "FAJABLKBGHN" })
+    Check($"  NovaPlayerInfo.{prop}", novaPlayer?.GetProperty(prop, Inst));
+foreach (var f in new[] { "VisualPawnObject", "PawnObject" })
+    Check($"  NovaPlayerInfo.{f}", novaPlayer?.GetField(f, Inst));
+
 // VR controller grace
 var inputManager = game.GetType("SVR.InputManager");
 Check("SVR.InputManager.AADJJIOIJJA(bool) (controller check)", inputManager?.GetMethods(Inst).FirstOrDefault(m => m.Name == "AADJJIOIJJA" && m.GetParameters().Length == 1));

@@ -16,8 +16,8 @@ namespace StbcRevival.Missions
     /// <summary>
     /// PvP test (phase 1 of player-vs-player, a debug mission: [Debug] PvpTest shows it in the briefing): a second
     /// player ship, "PvP B", spawns ahead of yours on the Klingon team, both ships targetable and attackable by
-    /// phasers and torpedoes. Each player's game stays on its own ship (PvpPrototype); [Debug] PvpTestShip = B
-    /// puts you on the second one instead. Won when PvP B is destroyed; lost, as always, if the first ship is.
+    /// phasers and torpedoes. Each player's game stays on its own ship (PvpPrototype); the first
+    /// player to join after the host crews the second (PvpShips). Won when PvP B is destroyed; lost, as always, if the first ship is.
     /// </summary>
     public sealed class PvpTestSequence : MissionSequence
     {

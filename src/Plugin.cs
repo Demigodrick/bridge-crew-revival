@@ -146,8 +146,8 @@ namespace StbcRevival
                 "Testing only: every Ongoing Voyage you host runs the Revival mission Last Stand instead.");
             PvpTest = Config.Bind("Debug", "PvpTest", false,
                 "Testing only: adds the PvP test mission to the Revival missions in the briefing room (two player ships, one per player).");
-            PvpTestShip = Config.Bind("Debug", "PvpTestShip", "A",
-                "Testing only, the PvP test mission: the player ship you crew, A (the first, the host's) or B (the second, PvP B).");
+            PvpTestShip = Config.Bind("Debug", "PvpTestShip", "Auto",
+                "Testing only, the PvP test mission: the player ship you crew. Auto: the host crews A (the first ship), the first player to join after the host crews B (PvP B), anyone else A. A or B: that ship.");
             CheckForUpdates = Config.Bind("Updates", "CheckForUpdates", true,
                 "Once per launch, on the shuttle, check the website for a newer version and offer to open it. Nothing is downloaded; if the check fails, nothing is shown.");
             UpdateUrl = Config.Bind("Updates", "VersionUrl", "",

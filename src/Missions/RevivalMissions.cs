@@ -94,7 +94,7 @@ namespace StbcRevival.Missions
                            + (string.IsNullOrEmpty(map) ? "The Trench." : map.Substring(map.LastIndexOf('/') + 1) + ".");
                 case PvpTest:
                     return "Testing player vs player: a second player ship, PvP B, appears ahead of yours as an enemy. "
-                           + "Destroy it to win. A player whose [Debug] PvpTestShip is B crews it instead.";
+                           + "Destroy it to win. The first player to join after the host crews it.";
                 default:
                     return "";
             }
