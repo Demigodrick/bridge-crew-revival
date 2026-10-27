@@ -79,11 +79,14 @@ namespace StbcRevival.Missions
             yield return Task.NECMCDDOFJB.WithDescriptionString(directive);
             yield return Task.HHNFJKHGEPH.WithMissionString(Title);
             yield return Task.OKLDNLKLLFJ.WithGroup("State_Group_Mus_Dyn").WithState("Moderate_Tension");
-            Plugin.Log.LogInfo($"Fleet battle: {size} Starfleet ships against {size} {EnemyNames[empire]} ships");
+            // Two allies for every three enemies: at one for one the allied fleet won by itself (Romulans: 4 allies
+            // lost to about 46 enemies).
+            int allyCount = Math.Max(1, size * 2 / 3);
+            Plugin.Log.LogInfo($"Fleet battle: {allyCount} Starfleet ships against {size} {EnemyNames[empire]} ships");
 
             // Allies: a loose formation around and behind you, all facing the way you do.
             var allies = new List<BodyRef>();
-            for (int i = 0; i < size; i++)
+            for (int i = 0; i < allyCount; i++)
             {
                 var ship = new BodyRef();
                 allies.Add(ship);
@@ -111,8 +114,8 @@ namespace StbcRevival.Missions
                 yield return Task.NDFEDBHFGFB.TellAI(ally).ToAddObjectives(enemies[random.Next(enemies.Count)]).OfObjectiveType(AIObjective.Attack);
             int reinforcements = 0;
             foreach (var ship in allies.Concat(enemies)) spawnedAt[ship] = UnityEngine.Time.time;
-            // Battle-worn: the allied fleet starts at three-quarters hull.
-            yield return Task.CIAHOPCODGJ.WithTargets(allies.ToArray()).SetHullHealthPercent(75f);
+            // Battle-worn: the allied fleet starts at 60% hull, its phasers at 60%.
+            yield return Task.CIAHOPCODGJ.WithTargets(allies.ToArray()).SetHullHealthPercent(60f).SetSubsystemHealthPercent(Sector.Spacecraft.BaseSpacecraft.HGKJKJMPFMB.Phasers, 60f);
 
             // The fight: re-order idle ships at the survivors, report the count as it changes.
             int enemiesLeft = enemies.Count, alliesLeft = allies.Count;
@@ -137,16 +140,16 @@ namespace StbcRevival.Missions
                         yield return Task.NDFEDBHFGFB.TellAI(liveEnemies[i]).ToAddObjectives(EnemyTarget(i, liveAllies))
                             .OfObjectiveType(AIObjective.Attack);
 
-                // Reinforcements when the enemy is down to half, and again to a third: a third as many again each
-                // time, warping in ahead.
-                if (liveEnemies.Count > 0 && reinforcements < 2 && liveEnemies.Count <= (reinforcements == 0 ? size / 2 : size / 3))
+                // Reinforcements whenever the enemy is down to half, up to three times: half as many again each time,
+                // warping in ahead.
+                if (liveEnemies.Count > 0 && reinforcements < 3 && liveEnemies.Count <= size / 2)
                 {
                     reinforcements++;
                     string arriving = $"{EnemyNames[empire]} reinforcements arriving";
                     yield return Task.NECMCDDOFJB.AddSubDirectives(directive, arriving);
                     yield return Task.ABHANLLBILL.WithEventID("PLAY_SND_INCOMING_CLOAK_ALARM_LP").ContinueImmediately();
                     yield return Task.ABHANLLBILL.WithEventID("STOP_SND_INCOMING_CLOAK_ALARM_LP").WithDelay(6f);
-                    int extra = Math.Max(1, size / 3);
+                    int extra = Math.Max(1, size / 2);
                     Plugin.Log.LogInfo($"Fleet battle: {extra} enemy reinforcements");
                     var more = new List<BodyRef>();
                     foreach (var step in SpawnEnemies(extra, empire, more, liveAllies.Count > 0 ? liveAllies : allies)) yield return step;

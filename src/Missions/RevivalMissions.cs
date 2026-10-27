@@ -114,6 +114,7 @@ namespace StbcRevival.Missions
             harmony.Patch(generate, postfix: new HarmonyMethod(typeof(RevivalMissions), nameof(Generated_Postfix)));
             RevivalBriefing.Patch(harmony);
             LastStandLocks.Patch(harmony);
+            FleetBattleNoCloak.Patch(harmony);
             LastStandBridgeRepair.Patch(harmony);
             MissionMaps.Patch(harmony);
         }
