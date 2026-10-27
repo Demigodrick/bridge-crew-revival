@@ -95,7 +95,7 @@ namespace StbcRevival.Missions
             while (LastStandWaves.Alive(other, UnityEngine.Time.time - spawned < 10f))
             {
                 yield return Task.KNMMMJOOBHC.WithTime(2f);
-                if (++ticks % 10 == 0) Plugin.Log.LogInfo($"PvP test: {Describe(a)}; {Describe(b)}; bound to {PvpPrototype.Bound?.name ?? "nothing"}");
+                if (++ticks % 10 == 0) Plugin.Log.LogInfo($"PvP test: {Describe(a)}; {Describe(b)}; bound to {PvpPrototype.Bound?.name ?? "nothing"}; target panel {PvpPrototype.PanelShows}");
             }
 
             Plugin.Log.LogInfo("PvP test: PvP B destroyed");
@@ -122,7 +122,8 @@ namespace StbcRevival.Missions
                 var info = ship.GetTargetInfo();
                 var target = ship.GetDetectable() as TargetableComponent;
                 var team = info is TargetInfoComponent t ? PvpPrototype.RawTeam(t).ToString() : "?";
-                return $"{ship.ALPAOOKFIEE?.BaseName ?? ship.name} ({team}, hull {info?.GBNCJMFFIDI:F0}, {(target != null && target.KODEOPDPGJH ? "attackable" : "not attackable")}, targetable by "
+                var points = info as TargetInfoComponent;
+                return $"{ship.ALPAOOKFIEE?.BaseName ?? ship.name} ({team}, hull {info?.GBNCJMFFIDI:F0}/{points?.EHMGJDHIMCJ:F0}, shields {points?.ICOKADECALG:F0}/{points?.ENKDCAEBMIH:F0}, {(target != null && target.KODEOPDPGJH ? "attackable" : "not attackable")}, targetable by "
                        + $"{(target == null ? "nobody" : (target.IBJCLAGDNAH ? "C" : "") + (target.NFAACJCEHJL ? "H" : "") + (target.HDELICIMMOE ? "T" : "") + (target.IIIBGCMJBJA ? "E" : ""))})";
             }
             catch (Exception e)

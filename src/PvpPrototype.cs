@@ -372,19 +372,23 @@ namespace StbcRevival
             if (__result && Active && Bound != null && __instance.AJHKBDCEKPH == Bound) __result = false;
         }
 
-        // The target panel's shields and hull, as for an AI ship (its shields are its shield subsystem's health).
+        // The target panel's shields and hull, as for an AI ship: the ship's target info (shield points of the
+        // shield bubble, hull points), not the shield subsystem's own health (the system, not the bubble).
         private static void TargetPanel_Postfix(TacticalTargetUI __instance)
         {
             if (!Active || Bound == null || !(__instance._selectedTarget?.AHMPFHDGMKJ is PlayerSpacecraft ship) || !IsOther(ship)) return;
-            var info = ship.GetTargetInfo();
-            var shields = ship.GetSubsystem(BaseSpacecraft.HGKJKJMPFMB.Shields);
-            float shield = shields == null || shields.HCHPFKBAIPJ <= 0f ? 0f : shields.AAHEMKKMKOH / shields.HCHPFKBAIPJ;
-            float hull = info == null || info.EHMGJDHIMCJ <= 0f ? 0f : info.GBNCJMFFIDI / info.EHMGJDHIMCJ;
+            if (!(ship.GetTargetInfo() is TargetInfoComponent info)) return;
+            float shield = info.ENKDCAEBMIH <= 0f ? 0f : info.ICOKADECALG / info.ENKDCAEBMIH;
+            float hull = info.EHMGJDHIMCJ <= 0f ? 0f : info.GBNCJMFFIDI / info.EHMGJDHIMCJ;
+            PanelShows = $"shields {shield * 100f:F0}%, hull {hull * 100f:F0}%";
             bool original = (bool)AccessTools.Field(typeof(TacticalTargetUI), "_originalBridgeMode").GetValue(__instance);
             if (original) SetPanelText(__instance, "_tosTargetShieldDisplay", null, shield);
             else SetPanelText(__instance, "_shieldValueText", "_shieldValueTextTNG", shield);
             SetPanelText(__instance, "_hullValueText", "_hullValueTextTNG", hull);
         }
+
+        /// <summary>What the target panel last showed for the other ship, for the PvP test's log.</summary>
+        internal static string PanelShows { get; private set; } = "nothing yet";
 
         private static MethodInfo setText;
 
