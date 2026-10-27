@@ -63,6 +63,7 @@ namespace StbcRevival
         internal static ConfigEntry<string> UpdateUrl;
         internal static ConfigEntry<bool> ShuttleWasd;
         internal static ConfigEntry<float> ControllerGraceSeconds;
+        internal static ConfigEntry<int> VoiceJitterBufferMs;
         internal static ConfigEntry<float> ShuttleSpeed;
         internal static ConfigEntry<float> ShuttleTurnSpeed;
         internal static Plugin Instance { get; private set; }
@@ -152,6 +153,8 @@ namespace StbcRevival
                 "Once per launch, on the shuttle, check the website for a newer version and offer to open it. Nothing is downloaded; if the check fails, nothing is shown.");
             UpdateUrl = Config.Bind("Updates", "VersionUrl", "",
                 "Where to read the latest version number. Empty = the official website's version.txt.");
+            VoiceJitterBufferMs = Config.Bind("Voice", "JitterBufferMs", 120,
+                "How much of a crewmate's voice is waiting before it plays (milliseconds), so small delays on the way don't make it choppy. More is smoother but later; 0 = the game's own (it starts after two packets).");
             ControllerGraceSeconds = Config.Bind("VR", "ControllerGraceSeconds", 30f,
                 "How long a VR controller the headset stops reporting (resting controllers often go to sleep) still counts as connected before the game's \"controllers disconnected\" warning shows. 0 = the game's own behaviour (at once).");
             ShuttleWasd = Config.Bind("Shuttle", "WasdControls", false,

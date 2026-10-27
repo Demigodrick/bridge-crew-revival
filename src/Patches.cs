@@ -181,6 +181,7 @@ namespace StbcRevival
             RomulanFace.Patch(harmony);
             VoiceCommands.Patch(harmony);
             ControllerGrace.Patch(harmony);
+            VoiceJitter.Patch(harmony);
             if (Plugin.Diagnostics.Value)
                 StbcRevival.Diagnostics.Apply(harmony, photonNetwork);
         }

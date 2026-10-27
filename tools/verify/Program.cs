@@ -389,6 +389,14 @@ Check("  NovaSpawnManager.NJHADEBHMNN (seats a player)", game.GetType("NovaSpawn
 foreach (var m in new[] { "NetworkSerialize", "NetworkDeserialize" })
     Check($"  UnmannedStationSync.{m}", game.GetType("UnmannedStationSync")?.GetMethod(m, Inst));
 
+// Voice jitter buffer
+var voicePlayer = game.GetType("DaikonForge.VoIP.UnityAudioPlayer");
+foreach (var m in new[] { "BufferAudio", "BatchUpdate" })
+    Check($"DaikonForge.VoIP.UnityAudioPlayer.{m} (voice)", voicePlayer?.GetMethod(m, Inst));
+foreach (var f in new[] { "NIPDKJAKHCO", "KGHBBCEOLGA", "LECNEIIHLJM", "OKBOHDOHKOI", "BJKDPMLNKKG" })
+    Check($"  AudioPlayerBase.{f}", game.GetType("DaikonForge.VoIP.AudioPlayerBase")?.GetField(f, Inst));
+Check("  VoiceControllerBase.PLHMCJMKMOC (missing frames)", game.GetType("DaikonForge.VoIP.VoiceControllerBase")?.GetField("PLHMCJMKMOC", Inst));
+
 // VR controller grace
 var inputManager = game.GetType("SVR.InputManager");
 Check("SVR.InputManager.AADJJIOIJJA(bool) (controller check)", inputManager?.GetMethods(Inst).FirstOrDefault(m => m.Name == "AADJJIOIJJA" && m.GetParameters().Length == 1));
