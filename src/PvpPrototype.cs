@@ -117,6 +117,7 @@ namespace StbcRevival
             var selectable = AccessTools.Method(typeof(MapIcon), "ACAGOGEPCCE");
             if (selectable != null) harmony.Patch(selectable, postfix: new HarmonyMethod(typeof(PvpPrototype), nameof(Selectable_Postfix)));
             PatchPlayerShipChecks(harmony);
+            PvpConsoles.Patch(harmony);
             var consoleAI = AccessTools.Method(typeof(AI.USSAegisCrew), "IsConsoleAI");
             if (consoleAI == null) Plugin.Log.LogWarning("PvP: USSAegisCrew.IsConsoleAI not found");
             else harmony.Patch(consoleAI, postfix: new HarmonyMethod(typeof(PvpPrototype), nameof(ConsoleAI_Postfix)));
@@ -152,6 +153,7 @@ namespace StbcRevival
             yield return new WaitForEndOfFrame();
             if (body == null) yield break;
             CIFDOFLFGEA.Send(new JJKIHDENJCK(body));
+            if (body is PlayerSpacecraft other && Letter(other) == "B") PvpConsoles.BindCopies(other);
             HandBackSingletons(body as PlayerSpacecraft);
             yield return null; // and once more after Start
             HandBackSingletons(body as PlayerSpacecraft);
@@ -226,6 +228,7 @@ namespace StbcRevival
                 return;
             }
             PvpShips.Update();
+            PvpConsoles.Update();
             if (Time.unscaledTime >= nextAvatarCheck)
             {
                 nextAvatarCheck = Time.unscaledTime + 0.5f;

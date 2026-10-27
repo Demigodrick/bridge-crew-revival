@@ -375,6 +375,20 @@ foreach (var prop in new[] { "NJNHJKEPFAK", "AOLEJMABHPE", "AOMGCCGDJJC", "FAJAB
 foreach (var f in new[] { "VisualPawnObject", "PawnObject" })
     Check($"  NovaPlayerInfo.{f}", novaPlayer?.GetField(f, Inst));
 
+Check("  NovaStation.Awake (pvp: second console set)", game.GetType("NovaStation")?.GetMethod("Awake", Inst));
+Check("  NovaStation._consoleData", game.GetType("NovaStation")?.GetField("_consoleData", Inst));
+Check("  GGPMPCDFHAK.RegisterStation", game.GetType("GGPMPCDFHAK")?.GetMethod("RegisterStation", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic));
+foreach (var f in new[] { "NAIGHOOPLNL", "EKHOODMFJNG" })
+    Check($"  GGPMPCDFHAK.{f} (station lists)", game.GetType("GGPMPCDFHAK")?.GetField(f, BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic));
+Check("  ConsoleLoader.Awake", game.GetType("ConsoleLoader")?.GetMethod("Awake", Inst));
+Check("  ConsoleLoader.BGJAFEBKCPD (load queue)", game.GetType("ConsoleLoader")?.GetField("BGJAFEBKCPD", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic));
+Check("  ConsoleBase.ILKCJBGLJPI (binds to a ship)", console?.GetMethod("ILKCJBGLJPI", Inst));
+Check("  Bridge.MBCIEEJDGBB (console loaded)", game.GetType("Bridge")?.GetMethod("MBCIEEJDGBB", Inst));
+Check("  Bridge.SendConsoleMessage / NewConsoleMessageRPC", game.GetType("Bridge")?.GetMethod("NewConsoleMessageRPC", Inst) != null ? game.GetType("Bridge")?.GetMethod("SendConsoleMessage", Inst) : null);
+Check("  NovaSpawnManager.NJHADEBHMNN (seats a player)", game.GetType("NovaSpawnManager")?.GetMethod("NJHADEBHMNN", Inst));
+foreach (var m in new[] { "NetworkSerialize", "NetworkDeserialize" })
+    Check($"  UnmannedStationSync.{m}", game.GetType("UnmannedStationSync")?.GetMethod(m, Inst));
+
 // VR controller grace
 var inputManager = game.GetType("SVR.InputManager");
 Check("SVR.InputManager.AADJJIOIJJA(bool) (controller check)", inputManager?.GetMethods(Inst).FirstOrDefault(m => m.Name == "AADJJIOIJJA" && m.GetParameters().Length == 1));
