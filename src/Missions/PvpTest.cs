@@ -88,14 +88,14 @@ namespace StbcRevival.Missions
                 targetable.SetTargetableByTactical(true);
                 targetable.SetTargetableByEngineering(true);
             }
-            Plugin.Log.LogInfo($"PvP test: {Describe(a)} and {Describe(b)} spawned");
+            Plugin.Log.LogInfo($"PvP test: {Describe(a)} and {Describe(b)} spawned, {Apart(a, b)}");
             yield return Task.OKLDNLKLLFJ.WithGroup("State_Group_Mus_Dyn").WithState("Tension");
 
             int ticks = 0;
             while (LastStandWaves.Alive(other, UnityEngine.Time.time - spawned < 10f))
             {
                 yield return Task.KNMMMJOOBHC.WithTime(2f);
-                if (++ticks % 10 == 0) Plugin.Log.LogInfo($"PvP test: {Describe(a)}; {Describe(b)}; bound to {PvpPrototype.Bound?.name ?? "nothing"}; target panel {PvpPrototype.PanelShows}");
+                if (++ticks % 10 == 0) Plugin.Log.LogInfo($"PvP test: {Describe(a)}; {Describe(b)}; {Apart(a, b)}; bound to {PvpPrototype.Bound?.name ?? "nothing"}; target panel {PvpPrototype.PanelShows}");
             }
 
             var body = other.AHMPFHDGMKJ;
@@ -104,6 +104,21 @@ namespace StbcRevival.Missions
             yield return Task.NECMCDDOFJB.CompleteSubDirective(directive, target);
             yield return Task.HHNFJKHGEPH.WithMissionResult("PvP B destroyed", true);
             yield return Task.KNMMMJOOBHC.WithTime(10f);
+        }
+
+        // "3012 m apart (A at (x, y, z), B at (x, y, z))": where the two ships are, in the sector.
+        private static string Apart(PlayerSpacecraft a, PlayerSpacecraft b)
+        {
+            try
+            {
+                var pa = a.ALPAOOKFIEE.Position;
+                var pb = b.ALPAOOKFIEE.Position;
+                return $"{UnityEngine.Vector3d.Distance(pa, pb):F0} m apart (A at {pa}, B at {pb})";
+            }
+            catch (Exception e)
+            {
+                return "positions unknown (" + e.GetType().Name + ")";
+            }
         }
 
         // The ship the game gave the crew (MissionManager.NJHADEBHMNN's choice): retro, TNG or the Aegis.
