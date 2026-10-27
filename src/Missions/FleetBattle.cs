@@ -79,9 +79,9 @@ namespace StbcRevival.Missions
             yield return Task.NECMCDDOFJB.WithDescriptionString(directive);
             yield return Task.HHNFJKHGEPH.WithMissionString(Title);
             yield return Task.OKLDNLKLLFJ.WithGroup("State_Group_Mus_Dyn").WithState("Moderate_Tension");
-            // Two allies for every three enemies: at one for one the allied fleet won by itself (Romulans: 4 allies
-            // lost to about 46 enemies).
-            int allyCount = Math.Max(1, size * 2 / 3);
+            // Four allies for every five enemies: at one for one the allied fleet won by itself (Romulans: 4 allies
+            // lost to about 46 enemies); two for three was too hard.
+            int allyCount = Math.Max(1, size * 4 / 5);
             Plugin.Log.LogInfo($"Fleet battle: {allyCount} Starfleet ships against {size} {EnemyNames[empire]} ships");
 
             // Allies: a loose formation around and behind you, all facing the way you do.
@@ -114,8 +114,8 @@ namespace StbcRevival.Missions
                 yield return Task.NDFEDBHFGFB.TellAI(ally).ToAddObjectives(enemies[random.Next(enemies.Count)]).OfObjectiveType(AIObjective.Attack);
             int reinforcements = 0;
             foreach (var ship in allies.Concat(enemies)) spawnedAt[ship] = UnityEngine.Time.time;
-            // Battle-worn: the allied fleet starts at 60% hull, its phasers at 60%.
-            yield return Task.CIAHOPCODGJ.WithTargets(allies.ToArray()).SetHullHealthPercent(60f).SetSubsystemHealthPercent(Sector.Spacecraft.BaseSpacecraft.HGKJKJMPFMB.Phasers, 60f);
+            // Battle-worn: the allied fleet starts at 70% hull, its phasers at 80%.
+            yield return Task.CIAHOPCODGJ.WithTargets(allies.ToArray()).SetHullHealthPercent(70f).SetSubsystemHealthPercent(Sector.Spacecraft.BaseSpacecraft.HGKJKJMPFMB.Phasers, 80f);
 
             // The fight: re-order idle ships at the survivors, report the count as it changes.
             int enemiesLeft = enemies.Count, alliesLeft = allies.Count;
@@ -140,9 +140,9 @@ namespace StbcRevival.Missions
                         yield return Task.NDFEDBHFGFB.TellAI(liveEnemies[i]).ToAddObjectives(EnemyTarget(i, liveAllies))
                             .OfObjectiveType(AIObjective.Attack);
 
-                // Reinforcements whenever the enemy is down to half, up to three times: half as many again each time,
+                // Reinforcements whenever the enemy is down to half, up to twice: half as many again each time,
                 // warping in ahead.
-                if (liveEnemies.Count > 0 && reinforcements < 3 && liveEnemies.Count <= size / 2)
+                if (liveEnemies.Count > 0 && reinforcements < 2 && liveEnemies.Count <= size / 2)
                 {
                     reinforcements++;
                     string arriving = $"{EnemyNames[empire]} reinforcements arriving";
