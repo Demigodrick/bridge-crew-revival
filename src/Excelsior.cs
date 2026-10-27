@@ -13,7 +13,7 @@ namespace StbcRevival
     /// Test: the crew flies an Excelsior. Until it has a bridge of its own, the bridge is the training holodeck
     /// (the game's Bridge_scene_Holodeck, with the Aegis consoles), and outside the player ship wears the
     /// game's own Excelsior-class model (from whichever Starfleet ship prefab carries it).
-    ///   - [Ships] Excelsior (REVIVAL SETTINGS): the host's choice, put on the room as "SHP" so the whole crew
+    ///   - [Ships] Excelsior (the config file only, for testing): the host's choice, put on the room as "SHP" so the whole crew
     ///     agrees; every game picks its bridge itself (Loader.get_CurrentBridgeScene), so all read the room.
     ///   - On the holodeck the game behaves a little as in training (a few console messages are skipped).
     ///   - The model swap: when a player ship is announced (SectorSpawnManager.CJDNEDMKCJJ), the Excelsior's
