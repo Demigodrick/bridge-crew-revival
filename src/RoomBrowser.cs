@@ -87,11 +87,11 @@ namespace StbcRevival
             // Steam mode: the room must be a public Steam lobby, from an invite, or a friend's room.
             if (SteamMode.Enabled && !SteamMode.Knows(name) && !SteamMode.ResolveFromFriends(name))
             {
-                // By its code alone: private crews and crews on another version are found this way too.
+                // By its code alone, any version: to say so when it's on another one.
                 var byCode = SteamMode.FindByCodeAnyVersion(Code(name), out var version);
                 if (byCode == null)
                 {
-                    Show($"Room {Code(name)} not found. Check the code; if it's right, the crew may have closed, or its host is on a Revival version from before 0.7.10 and the crew is private (a Steam friend in it can still let you in).");
+                    Show($"Room {Code(name)} not found: it isn't public, and none of your Steam friends are in it. A private crew's host can invite you on Steam (you need to be Steam friends), or make the crew public.");
                     return;
                 }
                 if (version != Plugin.Version)
