@@ -52,6 +52,7 @@ namespace StbcRevival.Missions
 
         private IEnumerator<Step> Fight()
         {
+            foreach (var step in MissionAudio.Start(Task)) yield return step; // crew voices up, music on
             const string directive = "PvP test", target = "Destroy PvP B, the other player ship";
             yield return Task.NECMCDDOFJB.WithDescriptionString(directive);
             yield return Task.NECMCDDOFJB.AddSubDirectives(directive, target);
@@ -88,6 +89,7 @@ namespace StbcRevival.Missions
                 targetable.SetTargetableByEngineering(true);
             }
             Plugin.Log.LogInfo($"PvP test: {Describe(a)} and {Describe(b)} spawned");
+            yield return Task.OKLDNLKLLFJ.WithGroup("State_Group_Mus_Dyn").WithState("Tension");
 
             int ticks = 0;
             while (LastStandWaves.Alive(other, UnityEngine.Time.time - spawned < 10f))
@@ -97,6 +99,7 @@ namespace StbcRevival.Missions
             }
 
             Plugin.Log.LogInfo("PvP test: PvP B destroyed");
+            yield return Task.OKLDNLKLLFJ.WithGroup("State_Group_Mus_Dyn").WithState("Explore");
             yield return Task.NECMCDDOFJB.CompleteSubDirective(directive, target);
             yield return Task.HHNFJKHGEPH.WithMissionResult("PvP B destroyed", true);
             yield return Task.KNMMMJOOBHC.WithTime(10f);
