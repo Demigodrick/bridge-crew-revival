@@ -362,5 +362,10 @@ Check("  KHDFGIINMKJ.SetText(text, string, TNG text)", game.GetType("KHDFGIINMKJ
 Check("  ShipFX._explosionModel", game.GetType("ShipFX")?.GetField("_explosionModel", Inst));
 Check("  SimulationSpace.BALGCFOKIPN", game.GetType("SimulationSpace")?.GetProperty("BALGCFOKIPN", BindingFlags.Static | BindingFlags.Public));
 
+// VR controller grace
+var inputManager = game.GetType("SVR.InputManager");
+Check("SVR.InputManager.AADJJIOIJJA(bool) (controller check)", inputManager?.GetMethods(Inst).FirstOrDefault(m => m.Name == "AADJJIOIJJA" && m.GetParameters().Length == 1));
+Check("  SVR.InputManager.OMHIFCDEJLK (controllers connected)", inputManager?.GetField("OMHIFCDEJLK", Inst));
+
 Console.WriteLine(failures == 0 ? "\nAll targets resolved." : $"\n{failures} target(s) missing.");
 return failures == 0 ? 0 : 1;

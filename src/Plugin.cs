@@ -62,6 +62,7 @@ namespace StbcRevival
         internal static ConfigEntry<UnityEngine.KeyCode> PushToTalkKey;
         internal static ConfigEntry<string> UpdateUrl;
         internal static ConfigEntry<bool> ShuttleWasd;
+        internal static ConfigEntry<float> ControllerGraceSeconds;
         internal static ConfigEntry<float> ShuttleSpeed;
         internal static ConfigEntry<float> ShuttleTurnSpeed;
         internal static Plugin Instance { get; private set; }
@@ -151,6 +152,8 @@ namespace StbcRevival
                 "Once per launch, on the shuttle, check the website for a newer version and offer to open it. Nothing is downloaded; if the check fails, nothing is shown.");
             UpdateUrl = Config.Bind("Updates", "VersionUrl", "",
                 "Where to read the latest version number. Empty = the official website's version.txt.");
+            ControllerGraceSeconds = Config.Bind("VR", "ControllerGraceSeconds", 30f,
+                "How long a VR controller the headset stops reporting (resting controllers often go to sleep) still counts as connected before the game's \"controllers disconnected\" warning shows. 0 = the game's own behaviour (at once).");
             ShuttleWasd = Config.Bind("Shuttle", "WasdControls", false,
                 "Experimental, doesn't work yet: fly the main-menu shuttle with the keyboard (W/S forward/back, A/D turn, Q/E down/up, Shift faster).");
             ShuttleSpeed = Config.Bind("Shuttle", "Speed", 20f, "Shuttle keyboard speed (scene units per second).");

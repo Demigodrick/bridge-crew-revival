@@ -180,6 +180,7 @@ namespace StbcRevival
             VrKeyboard.Patch(harmony);
             RomulanFace.Patch(harmony);
             VoiceCommands.Patch(harmony);
+            ControllerGrace.Patch(harmony);
             if (Plugin.Diagnostics.Value)
                 StbcRevival.Diagnostics.Apply(harmony, photonNetwork);
         }
