@@ -182,6 +182,7 @@ namespace StbcRevival
             RomulanFace.Patch(harmony);
             VoiceCommands.Patch(harmony);
             ControllerGrace.Patch(harmony);
+            Excelsior.Patch(harmony);
             VoiceJitter.Patch(harmony);
             if (SteamMode.Enabled) CrewPassword.Patch(harmony);
             if (Plugin.Diagnostics.Value)

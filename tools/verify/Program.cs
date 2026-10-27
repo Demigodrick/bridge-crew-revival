@@ -419,6 +419,10 @@ foreach (var f in new[] { "_next", "_previous" })
 
 Check("AI.AgentShip.CPMKGMJPINE (cloak, fleet battle)", game.GetType("AI.AgentShip")?.GetMethod("CPMKGMJPINE", Inst));
 
+// Excelsior test: holodeck bridge
+foreach (var m in new[] { "get_CurrentBridgeScene", "get_HolodeckBridgeScene" })
+    Check($"Loader.{m} (excelsior)", game.GetType("Loader")?.GetMethod(m, BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic));
+
 // VR controller grace
 var inputManager = game.GetType("SVR.InputManager");
 Check("SVR.InputManager.AADJJIOIJJA(bool) (controller check)", inputManager?.GetMethods(Inst).FirstOrDefault(m => m.Name == "AADJJIOIJJA" && m.GetParameters().Length == 1));
