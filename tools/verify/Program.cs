@@ -389,6 +389,11 @@ Check("  NovaSpawnManager.NJHADEBHMNN (seats a player)", game.GetType("NovaSpawn
 foreach (var m in new[] { "NetworkSerialize", "NetworkDeserialize" })
     Check($"  UnmannedStationSync.{m}", game.GetType("UnmannedStationSync")?.GetMethod(m, Inst));
 
+// Voice commands listen in on voice chat's recording
+Check("VoIpManager.GetLocalMicrophoneInputDevice (voice commands)", game.GetType("VoIpManager")?.GetMethod("GetLocalMicrophoneInputDevice", Inst));
+Check("  UnityMicrophoneInputDevice.FJNHDGFAOLB (device)", game.GetType("DaikonForge.VoIP.UnityMicrophoneInputDevice")?.GetField("FJNHDGFAOLB", Inst));
+Check("  AudioInputDeviceBase.EALMEBPADKI (recording source)", game.GetType("DaikonForge.VoIP.AudioInputDeviceBase")?.GetField("EALMEBPADKI", Inst));
+
 // Voice jitter buffer
 var voicePlayer = game.GetType("WwiseAudioPlayer");
 foreach (var m in new[] { "BufferAudio", "BatchUpdate" })

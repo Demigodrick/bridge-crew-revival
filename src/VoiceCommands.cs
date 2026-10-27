@@ -235,16 +235,113 @@ namespace StbcRevival
                 Plugin.Log.LogWarning("Voice commands: no microphone");
                 return;
             }
-            clip = Microphone.Start(micDevice, false, MaxSeconds, SampleRate);
+            // Voice chat records the mic all the time; starting or ending a recording here would take the mic
+            // from it (one recording per microphone), so crewmates stopped hearing you. Listen in on its
+            // recording instead, and record ourselves only when voice chat isn't (playing alone).
+            tap = VoiceChatRecording();
+            if (tap != null)
+            {
+                micDevice = tap.Device;
+                tapStart = Microphone.GetPosition(micDevice);
+                clip = null;
+            }
+            else clip = Microphone.Start(micDevice, false, MaxSeconds, SampleRate);
             listening = true;
             SendUiEvent("GEJIEIDGDBO"); // the game's "listening" indicator
-            Plugin.Log.LogInfo($"Voice commands: listening ({micDevice})");
+            Plugin.Log.LogInfo($"Voice commands: listening ({micDevice}{(tap != null ? ", from voice chat's recording" : "")})");
+        }
+
+        private sealed class ChatRecording
+        {
+            public string Device;
+            public AudioClip Clip;
+        }
+
+        private static ChatRecording tap;
+        private static int tapStart;
+
+        // The voice chat's own recording of your microphone (UnityMicrophoneInputDevice: a looping 5 s clip on
+        // its AudioSource), if it's recording.
+        private static ChatRecording VoiceChatRecording()
+        {
+            try
+            {
+                var input = VoIpManager.IEFBKOMBFGO == null ? null : VoIpManager.IEFBKOMBFGO.GetLocalMicrophoneInputDevice() as DaikonForge.VoIP.UnityMicrophoneInputDevice;
+                if (input == null) return null;
+                var device = AccessTools.Field(input.GetType(), "FJNHDGFAOLB")?.GetValue(input) as string;
+                var source = AccessTools.Field(input.GetType(), "EALMEBPADKI")?.GetValue(input) as AudioSource;
+                if (source == null || source.clip == null || !Microphone.IsRecording(device)) return null;
+                return new ChatRecording { Device = device, Clip = source.clip };
+            }
+            catch (Exception e)
+            {
+                Plugin.Log.LogWarning("Voice commands: voice chat's recording: " + e.Message);
+                return null;
+            }
+        }
+
+        // What was said since the button went down, from the voice chat's looping recording, as 16 kHz mono.
+        private static float[] FromChatRecording()
+        {
+            var source = tap.Clip;
+            int length = source.samples, channels = source.channels;
+            int end = Microphone.GetPosition(tap.Device);
+            int count = (end - tapStart + length) % length;
+            if (count <= 0) return new float[0];
+            var raw = new float[count * channels];
+            int first = Math.Min(count, length - tapStart);
+            var part = new float[first * channels];
+            source.GetData(part, tapStart);
+            Array.Copy(part, raw, part.Length);
+            if (first < count)
+            {
+                var rest = new float[(count - first) * channels];
+                source.GetData(rest, 0);
+                Array.Copy(rest, 0, raw, part.Length, rest.Length);
+            }
+            // Mono, then to the recogniser's rate (linear).
+            int outCount = (int)((long)count * SampleRate / source.frequency);
+            var mono = new float[outCount];
+            for (int i = 0; i < outCount; i++)
+            {
+                double at = (double)i * source.frequency / SampleRate;
+                int a = Math.Min((int)at, count - 1), b = Math.Min(a + 1, count - 1);
+                float t = (float)(at - a);
+                mono[i] = raw[a * channels] * (1 - t) + raw[b * channels] * t;
+            }
+            return mono;
         }
 
         private static void Stop()
         {
             if (!listening) return;
             listening = false;
+            if (tap != null)
+            {
+                float[] heard;
+                try { heard = FromChatRecording(); }
+                catch (Exception e)
+                {
+                    Plugin.Log.LogWarning("Voice commands: reading voice chat's recording: " + e.Message);
+                    heard = new float[0];
+                }
+                tap = null;
+                SendUiEvent("MJNNGHIKMIO"); // "processing"
+                if (heard.Length <= SampleRate / 10)
+                {
+                    Finish(null);
+                    return;
+                }
+                var pcm16 = new byte[heard.Length * 2];
+                for (int i = 0; i < heard.Length; i++)
+                {
+                    short s = (short)Mathf.Clamp(heard[i] * 32767f, -32768f, 32767f);
+                    pcm16[2 * i] = (byte)s;
+                    pcm16[2 * i + 1] = (byte)(s >> 8);
+                }
+                new Thread(() => Recognise(pcm16)) { IsBackground = true, Name = "Voice commands" }.Start();
+                return;
+            }
             int samples = Microphone.GetPosition(micDevice);
             Microphone.End(micDevice);
             SendUiEvent("MJNNGHIKMIO"); // "processing"
