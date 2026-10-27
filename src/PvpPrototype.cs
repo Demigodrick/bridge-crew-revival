@@ -246,19 +246,40 @@ namespace StbcRevival
                 model = standFx == null ? null : AccessTools.Field(typeof(ShipFX), "_explosionModel").GetValue(standFx) as GameObject;
                 source = "a D5's";
             }
-            var at = fx != null ? fx.transform : ship.transform;
-            if (model != null)
+            // Where the ship is seen: the middle of its visible model (its transform may be elsewhere, in the
+            // simulation's own space), facing the way its biggest piece does.
+            var visible = ship.GetComponentsInChildren<Renderer>(false).Where(r => r.enabled && !(r is ParticleSystemRenderer)).ToArray();
+            Vector3 position;
+            Quaternion rotation;
+            if (visible.Length > 0)
             {
-                var parent = at.parent;
-                var boom = parent != null ? (GameObject)UnityEngine.Object.Instantiate(model, parent, false) : (GameObject)UnityEngine.Object.Instantiate(model, at.position, at.rotation);
-                var space = SimulationSpace.BALGCFOKIPN;
-                if (space != null) boom.transform.SetParent(space);
-                var debris = boom.GetComponent<ExplodedShipFX>();
-                if (debris != null) debris.enabled = true;
+                var bounds = visible[0].bounds;
+                foreach (var r in visible) bounds.Encapsulate(r.bounds);
+                position = bounds.center;
+                rotation = visible.OrderByDescending(r => r.bounds.size.sqrMagnitude).First().transform.rotation;
+            }
+            else
+            {
+                var at = fx != null ? fx.transform : ship.transform;
+                position = at.position;
+                rotation = at.rotation;
             }
             foreach (var renderer in ship.GetComponentsInChildren<Renderer>(true)) renderer.enabled = false;
             foreach (var collider in ship.GetComponentsInChildren<Collider>(true)) collider.enabled = false;
-            Plugin.Log.LogInfo(model != null ? $"PvP: {ship.ALPAOOKFIEE?.BaseName ?? ship.name} exploded ({source} explosion)" : $"PvP: {ship.name} destroyed, no explosion found");
+            if (model == null)
+            {
+                Plugin.Log.LogInfo($"PvP: {ship.name} destroyed, no explosion found");
+                return;
+            }
+            var boom = (GameObject)UnityEngine.Object.Instantiate(model, position, rotation);
+            var space = SimulationSpace.BALGCFOKIPN;
+            if (space != null) boom.transform.SetParent(space, true); // moves with the floating origin, as AI ships' do
+            var debris = boom.GetComponent<ExplodedShipFX>();
+            if (debris != null) debris.enabled = true;
+            var camera = Camera.main;
+            Plugin.Log.LogInfo($"PvP: {ship.ALPAOOKFIEE?.BaseName ?? ship.name} exploded ({source} explosion, ship FX {(fx != null ? "found" : "none")}) at {position}"
+                + $" from {visible.Length} visible parts, {(camera != null ? Vector3.Distance(camera.transform.position, position).ToString("F0") : "?")} from the main camera,"
+                + $" in {(space != null ? space.name : "the scene root")}");
         }
 
         private static bool IsOther(PlayerSpacecraft ship) => Active && Bound != null && ship != Bound;
