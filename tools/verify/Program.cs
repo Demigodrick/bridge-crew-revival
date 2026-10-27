@@ -224,7 +224,7 @@ foreach (var f in new[] { "_persistentDamageEffectObjects", "_damageThresholds",
 Check("PersistentBridgeDamageEffect._meshesToDisable / Stop", game.GetType("PersistentBridgeDamageEffect") is { } pbde
     && pbde.GetField("_meshesToDisable", Inst) is not null && pbde.GetMethod("Stop", Inst) is not null ? pbde : null);
 
-Check("NPCHailingView._characterPrefab (avatar dump)", game.GetType("NPCHailingView")?.GetField("_characterPrefab", Inst));
+Check("NPCHailingView._characterPrefab (game dump)", game.GetType("NPCHailingView")?.GetField("_characterPrefab", Inst));
 Check("  NPCHailingManager._hailingViews", game.GetType("NPCHailingManager")?.GetField("_hailingViews", Inst));
 
 var faceCustomization = game.GetType("FaceCustomization");

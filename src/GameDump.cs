@@ -10,33 +10,33 @@ using UnityEngine;
 namespace StbcRevival
 {
     /// <summary>
-    /// [Debug] AvatarDumpKey (F9, on the bridge): describe the hail-screen characters (Romulan captain and the
-    /// rest, from the bridge's NPCHailingManager) and the player avatar presets (CharacterProfile.VisualPrefab, plus any
-    /// avatars in the scene) to BepInEx/avatar-dump.txt, with a head-by-head comparison in the log. For
-    /// working out whether an NPC head can be fitted to a player avatar: same skeleton, same mesh layout,
-    /// same face shapes?
+    /// [Debug] GameDumpKey (F9): describe the game's state to BepInEx/game-dump.txt, with a summary in the log:
+    /// the hail-screen characters (Romulan captain and the rest, from the bridge's NPCHailingManager), the
+    /// player avatar presets (CharacterProfile.VisualPrefab, plus any avatars in the scene), the sound objects
+    /// and the scene, with a head-by-head comparison (could an NPC head fit a player avatar: same skeleton,
+    /// same mesh layout, same face shapes?).
     /// </summary>
-    internal static class AvatarDump
+    internal static class GameDump
     {
         private static float lastRun = -10f;
 
         internal static void Update()
         {
-            if (!Input.GetKeyDown(Plugin.AvatarDumpKey.Value) || Time.realtimeSinceStartup - lastRun < 3f) return;
+            if (!Input.GetKeyDown(Plugin.GameDumpKey.Value) || Time.realtimeSinceStartup - lastRun < 3f) return;
             lastRun = Time.realtimeSinceStartup;
-            var path = Path.Combine(Paths.BepInExRootPath, "avatar-dump.txt");
+            var path = Path.Combine(Paths.BepInExRootPath, "game-dump.txt");
             try
             {
                 var report = new StringBuilder();
                 var summary = Run(report);
                 File.WriteAllText(path, report.ToString());
-                foreach (var line in summary) Plugin.Log.LogInfo("Avatar dump: " + line);
-                Plugin.Log.LogInfo($"Avatar dump: full details in {path}");
-                RoomBrowser.Show("Avatar dump saved: BepInEx/avatar-dump.txt");
+                foreach (var line in summary) Plugin.Log.LogInfo("Game dump: " + line);
+                Plugin.Log.LogInfo($"Game dump: full details in {path}");
+                RoomBrowser.Show("Game dump saved: BepInEx/game-dump.txt");
             }
             catch (Exception e)
             {
-                Plugin.Log.LogWarning("Avatar dump failed: " + e);
+                Plugin.Log.LogWarning("Game dump failed: " + e);
             }
         }
 

@@ -53,7 +53,7 @@ namespace StbcRevival
         internal static ConfigEntry<CrewContent> CrewContentFilter;
         internal static ConfigEntry<bool> PlayerJoinedAlert;
         internal static ConfigEntry<UnityEngine.KeyCode> BugReportKey;
-        internal static ConfigEntry<UnityEngine.KeyCode> AvatarDumpKey;
+        internal static ConfigEntry<UnityEngine.KeyCode> GameDumpKey;
         internal static ConfigEntry<bool> RomulanFace;
         internal static ConfigEntry<string> MapOverride;
         internal static ConfigEntry<int> FleetBattleSize;
@@ -125,8 +125,8 @@ namespace StbcRevival
                 "Saves the logs and settings needed for a bug report as one zip in the game folder.");
             RomulanFace = Config.Bind("Avatar", "RomulanFace", false,
                 "Wear the Romulan captain's face. Female Vulcan character presets only; crewmates with the mod see it too.");
-            AvatarDumpKey = Config.Bind("Debug", "AvatarDumpKey", UnityEngine.KeyCode.F9,
-                "Testing only: describes the hail-screen characters and the player avatars to BepInEx/avatar-dump.txt.");
+            GameDumpKey = Config.Bind("Debug", "GameDumpKey", UnityEngine.KeyCode.F9,
+                "Testing only: describes the game's state (hail-screen characters, player avatars, sound, the scene) to BepInEx/game-dump.txt.");
             VoiceCommands = Config.Bind("Voice", "VoiceCommands", true,
                 "Experimental: the captain's spoken orders without IBM Watson, recognised offline on this PC. Hold the game's voice "
                 + "command button (or PushToTalkKey) as captain and give an order, as with the original Watson voice commands: "
@@ -216,7 +216,7 @@ namespace StbcRevival
             Safely("update check", UpdateCheck.Update);
             Safely("player joined alert", StbcRevival.PlayerJoinedAlert.Update);
             Safely("bug report", BugReport.Update);
-            Safely("avatar dump", AvatarDump.Update);
+            Safely("game dump", GameDump.Update);
             Safely("romulan face", StbcRevival.RomulanFace.Update);
             Safely("romulan creator choice", StbcRevival.RomulanCreatorOption.Update);
             Safely("revival settings", RevivalSettings.Update);
