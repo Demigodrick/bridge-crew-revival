@@ -74,6 +74,7 @@ namespace StbcRevival
             // Two minutes before a silent player is dropped: Steam traffic only moves on the main thread, which
             // stands still while a level loads (a slow PC's mission load can pass the usual 30 s).
             Server = new LoadBalancingServer(new ServerConfig { Directory = directory, IdleTimeoutMs = 120000 });
+            Server.IsBlocked = Blocklist.IsBlocked; // players you've blocked (here or in Steam) can't join your crews
             relayHost = new RelayHost(Server, () => new PhotonCrypto(), (to, p) => Enqueue(ToClientChannel, to, p));
             relayClient = new RelayClient((to, p) => Enqueue(ToHostChannel, to, p));
 

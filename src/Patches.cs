@@ -177,6 +177,7 @@ namespace StbcRevival
             RomulanCreatorOption.Patch(harmony);
             RevivalSettings.Patch(harmony);
             SteamFriendAdd.Patch(harmony);
+            if (SteamMode.Enabled) Blocklist.Patch(harmony);
             VrKeyboard.Patch(harmony);
             RomulanFace.Patch(harmony);
             VoiceCommands.Patch(harmony);

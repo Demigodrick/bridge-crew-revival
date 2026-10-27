@@ -64,6 +64,7 @@ namespace StbcRevival
         internal static ConfigEntry<bool> ShuttleWasd;
         internal static ConfigEntry<float> ControllerGraceSeconds;
         internal static ConfigEntry<int> VoiceJitterBufferMs;
+        internal static ConfigEntry<string> BlockedPlayers;
         internal static ConfigEntry<float> ShuttleSpeed;
         internal static ConfigEntry<float> ShuttleTurnSpeed;
         internal static Plugin Instance { get; private set; }
@@ -114,6 +115,8 @@ namespace StbcRevival
                 "One run only (the installer sets this): log in to Ubisoft, copy your Ubisoft cloud save into the local save, then quit. Needs Ubisoft Connect signed in. Switches itself off afterwards.");
             SkipMicCheck = Config.Bind("Startup", "SkipMicCheck", false,
                 "Skip the microphone check the game shows when you start. Your mic still works; set it up in the game's options.");
+            BlockedPlayers = Config.Bind("Players", "Blocked", "",
+                "Players kept out of crews you host (Steam IDs, as steamid=name;...). Added when you kick someone and choose to block them; players you've blocked or ignored in Steam are kept out too.");
             HideFullCrews = Config.Bind("Rooms", "HideFullCrews", false,
                 "Crew lists (shuttle, escape menu, F7): leave out crews with no free seat.");
             HideCrewsInMission = Config.Bind("Rooms", "HideCrewsInMission", false,

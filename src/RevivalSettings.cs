@@ -71,6 +71,12 @@ namespace StbcRevival
             Switch("Hide crews on a mission", () => Plugin.HideCrewsInMission),
             Switch("Show my crew in Steam", () => Plugin.SteamPresence),
             Switch("Check for updates", () => Plugin.CheckForUpdates),
+            new Entry
+            {
+                Text = () => Blocklist.Count == 0 ? "Blocked players: none (block someone after kicking them)" : $"Blocked players: {Blocklist.Count}",
+                Button = () => Blocklist.Count == 0 ? "-" : "Unblock all",
+                Press = () => { if (Blocklist.Count > 0) Blocklist.Clear(); },
+            },
         };
 
         private static string ContentName(CrewContent content) =>

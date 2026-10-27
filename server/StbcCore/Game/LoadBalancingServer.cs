@@ -195,13 +195,39 @@ public sealed class LoadBalancingServer : IPeerHandler
     private const int PasswordTries = 5;
     private static readonly TimeSpan PasswordLockout = TimeSpan.FromMinutes(1);
 
+    /// <summary>The Steam ID of a player connected over the relay ("p2p &lt;steam id&gt;/&lt;link&gt;"), or null (local).</summary>
+    public static string? PeerOf(Connection connection)
+    {
+        var d = connection.Description ?? "";
+        if (!d.StartsWith("p2p ")) return null;
+        int slash = d.IndexOf('/');
+        return slash > 4 ? d.Substring(4, slash - 4) : d.Substring(4);
+    }
+
+    /// <summary>
+    /// Set by the host's mod: whether a relayed player (by Steam ID) is blocked from its crews. They're refused
+    /// on joining ("blocked").
+    /// </summary>
+    public Func<string, bool>? IsBlocked { get; set; }
+
+    /// <summary>Disconnects every connection of a relayed player (by Steam ID); the number closed.</summary>
+    public int DisconnectPeer(string steamId)
+    {
+        List<Connection> theirs;
+        lock (sync) theirs = connections.Where(c => PeerOf(c) == steamId).ToList();
+        foreach (var c in theirs)
+        {
+            Log.Info($"{c} disconnected (blocked)");
+            c.Close();
+        }
+        return theirs.Count;
+    }
+
     // Null when they may join; otherwise why not.
     private string? PasswordRefusal(Connection connection, Room room, OperationRequest req)
     {
         if (room.Password == null) return null;
-        var who = connection.ToString();
-        int slash = who.IndexOf('/');
-        if (slash > 0) who = who.Substring(0, slash); // "p2p <steam id>/<link>": per player, not per attempt
+        var who = PeerOf(connection) ?? connection.ToString(); // per player, not per connection
         var now = DateTime.UtcNow;
         if (passwordFailures.TryGetValue(who, out var f) && now - f.Since > PasswordLockout) passwordFailures.Remove(who);
         if (passwordFailures.TryGetValue(who, out f) && f.Count >= PasswordTries) return "too many wrong passwords, try again in a minute";
@@ -663,6 +689,12 @@ public sealed class LoadBalancingServer : IPeerHandler
             {
                 Log.Info($"room '{name}': refused a player on {mismatch}");
                 connection.SendResponse(new OperationResponse(OpCode.JoinGame, ErrorCode.GameClosed, "different Bridge Crew Revival version"));
+                return;
+            }
+            if (PeerOf(connection) is string peer && IsBlocked != null && IsBlocked(peer))
+            {
+                Log.Info($"room '{name}': {connection} refused: blocked");
+                connection.SendResponse(new OperationResponse(OpCode.JoinGame, ErrorCode.GameClosed, "blocked"));
                 return;
             }
             if (PasswordRefusal(connection, room, req) is string refusal)

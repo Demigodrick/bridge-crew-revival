@@ -154,6 +154,9 @@ namespace StbcRevival
                     if (room != null) known.Remove(room);
                     Later(() => Question("Wrong password. Try again?", yes => { if (yes) AskAndRetry(room); }));
                     break;
+                case "blocked":
+                    Later(() => Notify("This crew's host has blocked you."));
+                    break;
                 case "different Bridge Crew Revival version":
                     Later(() => Notify($"This crew is on a different Bridge Crew Revival version than yours ({Plugin.Version}). Everyone in a crew needs the same version: update from the website."));
                     break;

@@ -76,7 +76,7 @@ namespace StbcRevival
         }
 
         // NovaPlayerInfo → its network player (PKIBEAIHJNE) → the "SID" player property.
-        private static ulong SteamIdOf(object info)
+        internal static ulong SteamIdOf(object info)
         {
             var player = info == null ? null : AccessTools.Field(info.GetType(), "PKIBEAIHJNE")?.GetValue(info)
                                                 ?? AccessTools.Property(info.GetType(), "PKIBEAIHJNE")?.GetValue(info, null);

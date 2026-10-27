@@ -186,6 +186,29 @@ public sealed class SteamModeTests : IDisposable
     }
 
     [Fact]
+    public void BlockedPlayerIsRefusedAndDisconnected()
+    {
+        var host = Player("local-A:1", "picard");
+        Assert.Equal(0, host.CreateRoom("eu|BLOCK1", GameProps("eu|BLOCK1"), LobbyProps, 4).ReturnCode);
+        PublishHostRooms();
+
+        var joiner = Player("local-B:1", "q");
+        Assert.Equal(0, joiner.JoinRoom("eu|BLOCK1").ReturnCode);
+        host.WaitEvent(255, e => (int)e[254] == 2);
+
+        // Blocked while aboard: their connection to the host closes, and they're gone from the crew.
+        hostServer.IsBlocked = id => id == JoinerSteamId.ToString();
+        Assert.Equal(1, hostServer.DisconnectPeer(JoinerSteamId.ToString()));
+        host.WaitEvent(254, e => (int)e[254] == 2);
+
+        // And can't come back.
+        var again = Player("local-B:1", "q-again");
+        var refused = again.JoinRoom("eu|BLOCK1");
+        Assert.Equal(ErrorCode.GameClosed, refused.ReturnCode);
+        Assert.Equal("blocked", refused.DebugMessage);
+    }
+
+    [Fact]
     public void HostServerTimesOutSilentJoiners()
     {
         var server = new LoadBalancingServer(new ServerConfig { IdleTimeoutMs = 200 });

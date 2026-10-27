@@ -401,6 +401,10 @@ foreach (var m in new[] { "CIBAPNHJCIF", "OKIKIKEHPPC", "IACKCMNEEKK" })
 Check("  ConsoleBriefingRoom.FEFMKFOMEPA (open-room button)", briefingConsole?.GetField("FEFMKFOMEPA", Inst));
 Check("  SVR.Network.PBGHGLIFLAE(string) (join event)", game.GetType("SVR.Network.PBGHGLIFLAE")?.GetConstructors().FirstOrDefault(c => c.GetParameters().Length == 1 && c.GetParameters()[0].ParameterType.FullName == "System.String"));
 
+// Blocking after a kick
+Check("PlayerListUI.HIMNNIBCBPA (kick confirmed)", game.GetType("PlayerListUI")?.GetMethod("HIMNNIBCBPA", Inst));
+Check("  PlayerListUI.PCPBPMKFJOE (selected player)", game.GetType("PlayerListUI")?.GetField("PCPBPMKFJOE", Inst));
+
 // Voice jitter buffer
 var voicePlayer = game.GetType("WwiseAudioPlayer");
 foreach (var m in new[] { "BufferAudio", "BatchUpdate" })
