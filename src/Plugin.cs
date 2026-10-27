@@ -153,8 +153,8 @@ namespace StbcRevival
                 "Once per launch, on the shuttle, check the website for a newer version and offer to open it. Nothing is downloaded; if the check fails, nothing is shown.");
             UpdateUrl = Config.Bind("Updates", "VersionUrl", "",
                 "Where to read the latest version number. Empty = the official website's version.txt.");
-            VoiceJitterBufferMs = Config.Bind("Voice", "JitterBufferMs", 120,
-                "How much of a crewmate's voice is waiting before it plays (milliseconds), so small delays on the way don't make it choppy. More is smoother but later; 0 = the game's own (it starts after two packets).");
+            VoiceJitterBufferMs = Config.Bind("Voice", "JitterBufferMs", 100,
+                "Voice chat: how much of a crewmate's speech is held before it starts playing (milliseconds, up to about 85-250 depending on their microphone), so small delays on the way don't make it choppy. More is smoother but later; 0 = the game's own (plays each piece as it arrives).");
             ControllerGraceSeconds = Config.Bind("VR", "ControllerGraceSeconds", 30f,
                 "How long a VR controller the headset stops reporting (resting controllers often go to sleep) still counts as connected before the game's \"controllers disconnected\" warning shows. 0 = the game's own behaviour (at once).");
             ShuttleWasd = Config.Bind("Shuttle", "WasdControls", false,

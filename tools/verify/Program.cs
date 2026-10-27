@@ -390,10 +390,10 @@ foreach (var m in new[] { "NetworkSerialize", "NetworkDeserialize" })
     Check($"  UnmannedStationSync.{m}", game.GetType("UnmannedStationSync")?.GetMethod(m, Inst));
 
 // Voice jitter buffer
-var voicePlayer = game.GetType("DaikonForge.VoIP.UnityAudioPlayer");
+var voicePlayer = game.GetType("WwiseAudioPlayer");
 foreach (var m in new[] { "BufferAudio", "BatchUpdate" })
-    Check($"DaikonForge.VoIP.UnityAudioPlayer.{m} (voice)", voicePlayer?.GetMethod(m, Inst));
-foreach (var f in new[] { "NIPDKJAKHCO", "KGHBBCEOLGA", "LECNEIIHLJM", "OKBOHDOHKOI", "BJKDPMLNKKG" })
+    Check($"WwiseAudioPlayer.{m} (voice chat)", voicePlayer?.GetMethod(m, Inst));
+foreach (var f in new[] { "NIPDKJAKHCO", "BOAFPOJBLCN" })
     Check($"  AudioPlayerBase.{f}", game.GetType("DaikonForge.VoIP.AudioPlayerBase")?.GetField(f, Inst));
 Check("  VoiceControllerBase.PLHMCJMKMOC (missing frames)", game.GetType("DaikonForge.VoIP.VoiceControllerBase")?.GetField("PLHMCJMKMOC", Inst));
 
