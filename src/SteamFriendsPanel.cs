@@ -275,7 +275,9 @@ namespace StbcRevival
         {
             if (!(NBHDALBLHHF is Friend friend) || !info.TryGetValue(friend, out var steam)) return true;
             __result = SteamAvatar(steam.Id);
-            BOJMJANONMK = __result != null;
+            // "Turn it over": the game sets it for Ubisoft's pictures, loaded top-down, and AvatarIcon flips the
+            // image for them. Steam's are already turned the right way up (SteamAvatar), as is the default icon.
+            BOJMJANONMK = false;
             if (__result == null) __result = NetworkCore.CNJOBBMNDMC; // the game's default icon
             return false;
         }
