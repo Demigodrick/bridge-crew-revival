@@ -173,7 +173,7 @@ namespace StbcRevival
             PauseMenuTweaks.Patch(harmony);
             VrRoomPanels.Patch(harmony);
             Missions.RevivalMissions.Patch(harmony);
-            PvpPrototype.Patch(harmony);
+            if (Plugin.PvpTest.Value) PvpPrototype.Patch(harmony); // testing only: no PvP patches for players
             RomulanCreatorOption.Patch(harmony);
             RevivalSettings.Patch(harmony);
             SteamFriendAdd.Patch(harmony);

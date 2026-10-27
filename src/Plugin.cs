@@ -26,7 +26,7 @@ namespace StbcRevival
     {
         public const string Guid = "stbc.revival";
         public const string Name = "Bridge Crew Revival";
-        public const string Version = "0.7.7";
+        public const string Version = "0.7.8";
 
         internal static ManualLogSource Log;
 
@@ -223,7 +223,7 @@ namespace StbcRevival
             Safely("briefing room decor", BriefingRoomDecor.Update);
             Safely("stellar evacuation", StbcRevival.Missions.StellarEvacuationObjective.Update);
             Safely("mission maps", StbcRevival.Missions.MissionMaps.Update);
-            Safely("pvp prototype", PvpPrototype.Update);
+            if (PvpTest.Value) Safely("pvp prototype", PvpPrototype.Update);
             Safely("mod version check", ModVersionCheck.Update);
             Safely("host hand-off", HostHandoff.Update);
             Safely("voice commands", StbcRevival.VoiceCommands.Update);
