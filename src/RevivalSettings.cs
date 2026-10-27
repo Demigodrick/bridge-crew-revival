@@ -48,7 +48,7 @@ namespace StbcRevival
             {
                 Text = () => VrKeyboard.Status ?? "Join a crew by its room code",
                 Button = () => "Type code",
-                Press = () => VrKeyboard.Open("Room code", 12, code => RoomBrowser.Join(code)),
+                Press = () => VrKeyboard.Open("Room or share code", 24, code => RoomBrowser.Join(code)),
             },
             Switch("Skip intro videos", () => Plugin.SkipIntro, restart: true),
             Switch("Skip mic check", () => Plugin.SkipMicCheck, restart: true),

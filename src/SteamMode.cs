@@ -209,6 +209,47 @@ namespace StbcRevival
 
         private static string CodeKey(string code) => (code ?? "").Trim().ToUpperInvariant();
 
+        // ---- Share codes ---------------------------------------------------------------------------
+        // A room code with its region and host: "YZZDK9-EU-1Q2W3E4". Whoever has it connects to that host
+        // directly, so a private crew needs no Steam listing and no Steam friendship; nothing about it is
+        // published. (The host part is the Steam account number in Crockford base 32.)
+
+        private const ulong IndividualBase = 76561197960265728UL; // Steam IDs of individual accounts start here
+        private const string Base32 = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+
+        /// <summary>The code to share for a room this player is in (hosting or not), or its plain code.</summary>
+        internal static string ShareCode(string roomName)
+        {
+            var code = RoomBrowser.Code(roomName);
+            ulong host = Server.HostedRooms().Any(r => r.Name == roomName) ? MySteamId : CurrentHost;
+            if (host <= IndividualBase || host - IndividualBase > uint.MaxValue || !roomName.Contains("|")) return code;
+            var region = roomName.Substring(0, roomName.IndexOf('|'));
+            uint account = (uint)(host - IndividualBase);
+            var digits = new char[7];
+            for (int i = 6; i >= 0; i--, account >>= 5) digits[i] = Base32[(int)(account & 31)];
+            return $"{code}-{region.ToUpperInvariant()}-{new string(digits)}";
+        }
+
+        /// <summary>A share code's room name and host; false if it isn't one.</summary>
+        internal static bool ParseShareCode(string input, out string roomName, out ulong host)
+        {
+            roomName = null;
+            host = 0;
+            var parts = (input ?? "").Trim().ToUpperInvariant().Split('-');
+            if (parts.Length != 3 || parts[0].Length == 0 || parts[1].Length == 0 || parts[2].Length != 7) return false;
+            ulong account = 0;
+            foreach (var c in parts[2].Replace('O', '0').Replace('I', '1').Replace('L', '1'))
+            {
+                int digit = Base32.IndexOf(c);
+                if (digit < 0) return false;
+                account = (account << 5) | (uint)digit;
+            }
+            if (account > uint.MaxValue) return false;
+            host = IndividualBase + account;
+            roomName = parts[1].ToLowerInvariant() + "|" + parts[0];
+            return true;
+        }
+
         /// <summary>
         /// A public crew found by its room code in the last Steam search, on any mod version: its
         /// full room name and host are remembered for joining when it's on our version. Null if none.
@@ -329,7 +370,7 @@ namespace StbcRevival
                 return $"Hosted by {(string.IsNullOrEmpty(host) ? "another player" : host)} · {(visible ? "public" : "private")}";
             }
             if (!visible)
-                return "You're hosting · PRIVATE: only Steam invites, Join Game and this code (from your Steam friends) get in";
+                return "You're hosting · PRIVATE: only Steam invites, Join Game and your share code get in";
             return directory.PublishedRoom == roomName && directory.MyLobby != 0
                 ? "You're hosting · PUBLIC: listed on Steam, Quick match players can join"
                 : "You're hosting · PUBLIC: publishing to Steam…";

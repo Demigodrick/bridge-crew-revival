@@ -78,6 +78,15 @@ namespace StbcRevival
             // a second, which a join right after connecting (a Steam invite at launch) can beat.
             ModVersionCheck.PublishOwn();
             HostHandoff.PublishOwn();
+            // A share code ("YZZDK9-EU-1Q2W3E4") names its host: straight there, public or private.
+            if (SteamMode.Enabled && SteamMode.ParseShareCode(input, out var shared, out var sharedHost))
+            {
+                SteamMode.RememberRoom(shared, sharedHost);
+                CIFDOFLFGEA.Send(new SVR.Network.PBGHGLIFLAE(shared));
+                status = $"Joining {Code(shared)}…";
+                Plugin.Log.LogInfo($"Join requested: {shared} (share code, host {sharedHost})");
+                return;
+            }
             var name = FullRoomName(input);
             if (name.Length == 0)
             {
@@ -91,7 +100,7 @@ namespace StbcRevival
                 var byCode = SteamMode.FindByCodeAnyVersion(Code(name), out var version);
                 if (byCode == null)
                 {
-                    Show($"Room {Code(name)} not found: it isn't public, and none of your Steam friends are in it. A private crew's host can invite you on Steam (you need to be Steam friends), or make the crew public.");
+                    Show($"Room {Code(name)} not found: it isn't public, and none of your Steam friends are in it. For a private crew, ask for its share code (like {Code(name)}-EU-1Q2W3E4, in the F7 window): it works without being Steam friends.");
                     return;
                 }
                 if (version != Plugin.Version)
@@ -172,16 +181,16 @@ namespace StbcRevival
             string current = CurrentRoomName();
 
             GUILayout.Label(current != null
-                ? $"You are in room  {Code(current)}   (share this code with your crew)"
+                ? (SteamMode.Enabled ? $"You are in room  {Code(current)}   share code: {SteamMode.ShareCode(current)}" : $"You are in room  {Code(current)}   (share this code with your crew)")
                 : InLobby() ? "Connected. Pick a room or enter a code." : "Not connected to the server yet.");
             if (current != null)
             {
                 if (SteamMode.Enabled) GUILayout.Label(SteamMode.RoomStatus(current, CurrentRoomVisible()));
                 GUILayout.BeginHorizontal();
-                if (GUILayout.Button("Copy my room code", GUILayout.Width(180)))
+                if (GUILayout.Button(SteamMode.Enabled ? "Copy share code" : "Copy my room code", GUILayout.Width(180)))
                 {
-                    GUIUtility.systemCopyBuffer = Code(current);
-                    status = "Room code copied.";
+                    GUIUtility.systemCopyBuffer = SteamMode.Enabled ? SteamMode.ShareCode(current) : Code(current);
+                    status = SteamMode.Enabled ? "Share code copied: anyone with it can join, Steam friends or not." : "Room code copied.";
                 }
                 if (Plugin.SteamPresence.Value && SteamIntegration.Joinable && GUILayout.Button("Invite Steam friends", GUILayout.Width(180)))
                 {
