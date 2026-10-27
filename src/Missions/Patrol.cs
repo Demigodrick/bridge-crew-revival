@@ -180,7 +180,7 @@ namespace StbcRevival.Missions
             yield return Task.NECMCDDOFJB.AddSubDirectives(Directive, line);
             var freighter = new BodyRef();
             yield return Task.BFMBGDIDKEI.UsingSpawner(MakeSpawner(Freighters[random.Next(Freighters.Length)], "Freighter", Tag.Friendly))
-                .AtAngleAndDistanceFromBody(site, random.Next(0, 360), site == player ? 4000f : 3000f).OutputTo(freighter);
+                .AtAngleAndDistanceFromBody(site, random.Next(0, 360), site == player ? 4000f : OffSurface(site, 3000f)).OutputTo(freighter);
             yield return Task.JPLFLPFBCDJ.TellAI(freighter).ToSetTeam(Sector.DGGJOECIFAF.Federation); // the prefab's team shows as an enemy
             yield return Task.KDNOMKAPDKG.TellAI(freighter).ToDisable();
             yield return Task.BCJDEKKIHDD.AddMarker(new[] { freighter });
@@ -211,7 +211,7 @@ namespace StbcRevival.Missions
             yield return Task.NECMCDDOFJB.AddSubDirectives(Directive, line);
             var wreck = new BodyRef();
             yield return Task.BFMBGDIDKEI.UsingSpawner(MakeSpawner(Freighters[random.Next(Freighters.Length)], "Freighter", Tag.Friendly))
-                .AtAngleAndDistanceFromBody(site, random.Next(0, 360), site != player ? 3000f : ambush ? 20000f : 6000f).OutputTo(wreck);
+                .AtAngleAndDistanceFromBody(site, random.Next(0, 360), site != player ? OffSurface(site, 3000f) : ambush ? 20000f : 6000f).OutputTo(wreck);
             yield return Task.OFNIKPPKOGI.TellAI(wreck).ToSetShieldStrength(AI.IDCAFFBNKFO.Weak);
             yield return Task.JPLFLPFBCDJ.TellAI(wreck).ToSetTeam(Sector.DGGJOECIFAF.Federation); // as the campaign's disabled freighters
             yield return Task.KDNOMKAPDKG.TellAI(wreck).ToDisable();
@@ -304,7 +304,7 @@ namespace StbcRevival.Missions
                 spawned.Add(ship);
                 angle += 360f / count + random.Next(-20, 20);
                 yield return Task.BFMBGDIDKEI.UsingSpawner(MakeSpawner(pool[random.Next(pool.Length)], "Raider", Tag.Enemy))
-                    .AtAngleAndDistanceFromBody(around, angle, distance + random.Next(0, spread)).FaceOtherBody(around).OutputTo(ship);
+                    .AtAngleAndDistanceFromBody(around, angle, OffSurface(around, distance + random.Next(0, spread))).FaceOtherBody(around).OutputTo(ship);
             }
             if (attack)
                 foreach (var step in Attack(spawned, target)) yield return step;
@@ -324,6 +324,25 @@ namespace StbcRevival.Missions
             double d;
             while (!Abandoned() && (d = Distance(player, body)) > EngageRange && d != double.MaxValue) // MaxValue: unknown, go ahead
                 yield return Task.KNMMMJOOBHC.WithTime(2f);
+        }
+
+        // A distance from a body's surface, not its centre (3 km from a planet's or asteroid's centre is inside it).
+        private static float OffSurface(BodyRef site, float clearance)
+        {
+            try
+            {
+                double radius = site?.AHMPFHDGMKJ?.ALPAOOKFIEE?.Radius ?? 0;
+                if (radius > 0 && radius < 1e7)
+                {
+                    if (radius > 1000) Plugin.Log.LogInfo($"Patrol: spawning {clearance / 1000:0.#} km off a body of radius {radius / 1000:0.#} km");
+                    return (float)(radius + clearance);
+                }
+            }
+            catch (Exception e)
+            {
+                Plugin.Log.LogWarning("Patrol: site radius: " + e.Message);
+            }
+            return clearance;
         }
 
         // The assignment's site: a planet, moon, station (...) of this system, preferably one at least MinTravel
