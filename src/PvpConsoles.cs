@@ -41,6 +41,10 @@ namespace StbcRevival
         private static float nextHide;
 
         private static FieldInfo consoleData, consoleParent, loaderQueue, stationList, unloadedList;
+        private static MethodInfo getStationByRole;
+        private static readonly FieldInfo NextStation = AccessTools.Field(typeof(NovaStation), "_next");
+        private static readonly FieldInfo PreviousStation = AccessTools.Field(typeof(NovaStation), "_previous");
+        private static bool linked;
         private static MethodInfo bindConsole;
 
         internal static void Patch(Harmony harmony)
@@ -78,6 +82,12 @@ namespace StbcRevival
                 else harmony.Patch(target.Method, postfix: hook);
             }
             harmony.Patch(AccessTools.Method(typeof(NovaPlayerInfo), "NetworkDeserialize"), finalizer: new HarmonyMethod(typeof(PvpConsoles), nameof(PlayerState_Finalizer)));
+            // The swap to a player's role station (after the mission's fade, NKILJLNGDHM): ship B's copy for them.
+            getStationByRole = AccessTools.Method(registry, "GetStation", new[] { typeof(FLCHMJJDKDL) });
+            var swap = AccessTools.Method(AccessTools.TypeByName("NovaSpawnManager"), "NKILJLNGDHM");
+            if (swap != null && getStationByRole != null)
+                harmony.Patch(swap, transpiler: new HarmonyMethod(typeof(PvpConsoles), nameof(Swap_Transpiler)));
+            else Plugin.Log.LogWarning("PvP: the role station swap wasn't found; ship B's players may be moved to ship A's consoles");
         }
 
         private sealed class Hook
@@ -174,7 +184,48 @@ namespace StbcRevival
             int dead = copies.RemoveWhere(st => st == null);
             foreach (var gone in twinOf.Keys.Where(st => st == null).ToList()) twinOf.Remove(gone);
             foreach (var gone in sceneOf.Keys.Where(st => st == null).ToList()) sceneOf.Remove(gone);
-            if (dead > 0 || copies.Count == 0) handedBack = false;
+            if (dead > 0 || copies.Count == 0) handedBack = linked = false;
+        }
+
+        // ---- Role stations -------------------------------------------------------------------------
+
+        // NKILJLNGDHM(role, player, ...) looks up "the station for this role" (GGPMPCDFHAK.GetStation(role):
+        // always ship A's): for a ship B player, the call becomes StationForRole(role, player).
+        private static IEnumerable<HarmonyLib.CodeInstruction> Swap_Transpiler(IEnumerable<HarmonyLib.CodeInstruction> code)
+        {
+            var mine = AccessTools.Method(typeof(PvpConsoles), nameof(StationForRole));
+            foreach (var instruction in code)
+            {
+                if ((instruction.opcode == System.Reflection.Emit.OpCodes.Call || instruction.opcode == System.Reflection.Emit.OpCodes.Callvirt)
+                    && instruction.operand as MethodInfo == getStationByRole)
+                {
+                    yield return new HarmonyLib.CodeInstruction(System.Reflection.Emit.OpCodes.Ldarg_2); // the player
+                    yield return new HarmonyLib.CodeInstruction(System.Reflection.Emit.OpCodes.Call, mine);
+                    continue;
+                }
+                yield return instruction;
+            }
+        }
+
+        public static NovaStation StationForRole(FLCHMJJDKDL role, NovaPlayerInfo player)
+        {
+            var station = getStationByRole.Invoke(null, new object[] { role }) as NovaStation;
+            if (!Active || station == null || player == null || player.AOMGCCGDJJC) return station;
+            if (PvpShips.Of(PvpShips.Player(player.NJNHJKEPFAK)) != "B") return station;
+            return twinOf.TryGetValue(station, out var copy) && copy != null ? copy : station;
+        }
+
+        // The copies' next/previous stations (station cycling) pointed at the originals: link them to each other.
+        private static void LinkCopies()
+        {
+            if (linked || NextStation == null || PreviousStation == null) return;
+            foreach (var copy in copies)
+            {
+                if (copy == null || !twinOf.TryGetValue(copy, out var original) || original == null) return;
+                if (NextStation.GetValue(original) is NovaStation next && twinOf.TryGetValue(next, out var nextCopy)) NextStation.SetValue(copy, nextCopy);
+                if (PreviousStation.GetValue(original) is NovaStation previous && twinOf.TryGetValue(previous, out var previousCopy)) PreviousStation.SetValue(copy, previousCopy);
+            }
+            linked = true;
         }
 
         // ---- Binding to ships -------------------------------------------------------------------
@@ -337,6 +388,7 @@ namespace StbcRevival
         {
             if (!Active || copies.Count == 0 || Time.unscaledTime < nextHide) return;
             nextHide = Time.unscaledTime + 1f;
+            LinkCopies();
             bool onB = OnB;
             var others = twinOf.Keys.Where(s => s != null && copies.Contains(s) != onB).ToList();
             if (others.Count == 0) return;

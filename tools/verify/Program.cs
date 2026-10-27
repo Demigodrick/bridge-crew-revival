@@ -413,6 +413,10 @@ foreach (var f in new[] { "NIPDKJAKHCO", "BOAFPOJBLCN" })
     Check($"  AudioPlayerBase.{f}", game.GetType("DaikonForge.VoIP.AudioPlayerBase")?.GetField(f, Inst));
 Check("  VoiceControllerBase.PLHMCJMKMOC (missing frames)", game.GetType("DaikonForge.VoIP.VoiceControllerBase")?.GetField("PLHMCJMKMOC", Inst));
 
+Check("  NovaSpawnManager.NKILJLNGDHM (role station swap)", game.GetType("NovaSpawnManager")?.GetMethod("NKILJLNGDHM", Inst));
+foreach (var f in new[] { "_next", "_previous" })
+    Check($"  NovaStation.{f} (station cycling)", game.GetType("NovaStation")?.GetField(f, Inst));
+
 // VR controller grace
 var inputManager = game.GetType("SVR.InputManager");
 Check("SVR.InputManager.AADJJIOIJJA(bool) (controller check)", inputManager?.GetMethods(Inst).FirstOrDefault(m => m.Name == "AADJJIOIJJA" && m.GetParameters().Length == 1));
