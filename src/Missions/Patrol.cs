@@ -181,6 +181,7 @@ namespace StbcRevival.Missions
             var freighter = new BodyRef();
             yield return Task.BFMBGDIDKEI.UsingSpawner(MakeSpawner(Freighters[random.Next(Freighters.Length)], "Freighter", Tag.Friendly))
                 .AtAngleAndDistanceFromBody(site, random.Next(0, 360), site == player ? 4000f : 3000f).OutputTo(freighter);
+            yield return Task.JPLFLPFBCDJ.TellAI(freighter).ToSetTeam(Sector.DGGJOECIFAF.Federation); // the prefab's team shows as an enemy
             yield return Task.KDNOMKAPDKG.TellAI(freighter).ToDisable();
             yield return Task.BCJDEKKIHDD.AddMarker(new[] { freighter });
             yield return Task.KNMMMJOOBHC.WithTime(5f);
@@ -209,9 +210,10 @@ namespace StbcRevival.Missions
             string line = $"Scan the disabled freighter{Near()} for life signs, then beam the survivors aboard";
             yield return Task.NECMCDDOFJB.AddSubDirectives(Directive, line);
             var wreck = new BodyRef();
-            yield return Task.BFMBGDIDKEI.UsingSpawner(MakeSpawner(Freighters[random.Next(Freighters.Length)], "Freighter", Tag.Friendly) /* neutral shows as hostile: no beaming */)
+            yield return Task.BFMBGDIDKEI.UsingSpawner(MakeSpawner(Freighters[random.Next(Freighters.Length)], "Freighter", Tag.Friendly))
                 .AtAngleAndDistanceFromBody(site, random.Next(0, 360), site != player ? 3000f : ambush ? 20000f : 6000f).OutputTo(wreck);
             yield return Task.OFNIKPPKOGI.TellAI(wreck).ToSetShieldStrength(AI.IDCAFFBNKFO.Weak);
+            yield return Task.JPLFLPFBCDJ.TellAI(wreck).ToSetTeam(Sector.DGGJOECIFAF.Federation); // as the campaign's disabled freighters
             yield return Task.KDNOMKAPDKG.TellAI(wreck).ToDisable();
             // The survivors: the game's rescue encounters load them as "People" cargo; a plain spawn has none,
             // which leaves no life signs to find and nothing to beam.
