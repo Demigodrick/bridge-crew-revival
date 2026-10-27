@@ -207,6 +207,31 @@ namespace StbcRevival
         /// <summary>This room is now hosted by this Steam user, whatever the lobby search still says (host hand-off).</summary>
         internal static void RedirectRoom(string roomName, ulong host) => directory.Redirect(roomName, host);
 
+        /// <summary>A short hash of a room code (upper case): what a private crew's Steam listing shows instead of it.</summary>
+        internal static string CodeHash(string code)
+        {
+            using (var sha = System.Security.Cryptography.SHA256.Create())
+            {
+                var bytes = sha.ComputeHash(System.Text.Encoding.UTF8.GetBytes("stbc-room:" + (code ?? "").Trim().ToUpperInvariant()));
+                return BitConverter.ToString(bytes, 0, 10).Replace("-", "");
+            }
+        }
+
+        /// <summary>
+        /// A crew found by its room code in the last Steam search, public or private and on any mod version: its
+        /// full room name and host are remembered for joining when it's on our version. Null if none.
+        /// </summary>
+        internal static string FindByCodeAnyVersion(string code, out string version)
+        {
+            version = null;
+            var entry = steamReady ? directory.ByCode(code) : null;
+            if (entry == null) return null;
+            version = string.IsNullOrEmpty(entry.Mod) ? "an older version" : entry.Mod;
+            var name = entry.Name ?? (string.IsNullOrEmpty(entry.Region) ? code.Trim().ToUpperInvariant() : entry.Region + "|" + code.Trim().ToUpperInvariant());
+            if (entry.Mod == Plugin.Version) RememberRoom(name, entry.Host);
+            return name;
+        }
+
         internal static bool Knows(string roomName) => directory.Rooms.Any(r => r.Name == roomName) || Server.HostedRooms().Any(r => r.Name == roomName);
 
         /// <summary>
@@ -285,7 +310,7 @@ namespace StbcRevival
             var list = new List<Listing>();
             if (directory == null) return list;
             var mine = directory.PublishedRoom;
-            if (mine != null && Server.HostedRooms().FirstOrDefault(r => r.Name == mine) is { } own)
+            if (mine != null && Server.HostedRooms().FirstOrDefault(r => r.Name == mine && r.Visible) is { } own) // private: listed for its code only
                 list.Add(new Listing
                 {
                     Name = own.Name,
@@ -312,7 +337,7 @@ namespace StbcRevival
                 return $"Hosted by {(string.IsNullOrEmpty(host) ? "another player" : host)} · {(visible ? "public" : "private")}";
             }
             if (!visible)
-                return "You're hosting · PRIVATE: only Steam invites, Join Game and this code get in";
+                return "You're hosting · PRIVATE: only Steam invites, Join Game and this room code get in (anyone on 0.7.10+ with the code can join)";
             return directory.PublishedRoom == roomName && directory.MyLobby != 0
                 ? "You're hosting · PUBLIC: listed on Steam, Quick match players can join"
                 : "You're hosting · PUBLIC: publishing to Steam…";
@@ -525,6 +550,20 @@ namespace StbcRevival
                 }
             }
 
+            internal sealed class CodeEntry
+            {
+                public string Name, Region, Mod;
+                public ulong Host;
+            }
+
+            private Dictionary<string, CodeEntry> codeIndex = new Dictionary<string, CodeEntry>();
+
+            /// <summary>A crew by room code from the last search (any version, public or private), or null.</summary>
+            public CodeEntry ByCode(string code)
+            {
+                lock (sync) return codeIndex.TryGetValue(CodeHash(code), out var entry) ? entry : null;
+            }
+
             private static readonly TimeSpan NoteLifetime = TimeSpan.FromMinutes(10);
             private readonly Dictionary<string, DateTime> noted = new Dictionary<string, DateTime>();
 
@@ -659,7 +698,9 @@ namespace StbcRevival
 
             private void Publish(LoadBalancingServer server)
             {
-                var room = server.HostedRooms().Where(r => r.Visible && r.Players > 0).OrderBy(r => r.Created).FirstOrDefault();
+                // Private crews are listed too, but only for their room code: no name, just a hash of the code
+                // (and the region, to rebuild the name), so nobody can list them, and a code still finds them.
+                var room = server.HostedRooms().Where(r => r.Players > 0).OrderBy(r => r.Visible ? 0 : 1).ThenBy(r => r.Created).FirstOrDefault();
                 if (room == null)
                 {
                     if (MyLobby != 0)
@@ -698,7 +739,6 @@ namespace StbcRevival
                 var data = new Dictionary<string, string>
                 {
                     [LobbyTag] = LobbyProtocol,
-                    ["room"] = room.Name,
                     ["ver"] = room.AppVersion,
                     ["mod"] = Plugin.Version, // searches only find crews on the searcher's mod version
                     ["players"] = room.Players.ToString(),
@@ -707,8 +747,18 @@ namespace StbcRevival
                     // Who to connect to: Steam only tells a lobby's members who owns it, and nobody joins these.
                     ["host"] = MySteamId.ToString(),
                 };
-                foreach (var kv in room.CustomProperties)
-                    if (kv.Key.Length <= 4 && Encode(kv.Value) is string v) data[kv.Key] = v;
+                if (room.Visible)
+                {
+                    data["room"] = room.Name;
+                    foreach (var kv in room.CustomProperties)
+                        if (kv.Key.Length <= 4 && Encode(kv.Value) is string v) data[kv.Key] = v;
+                }
+                else
+                {
+                    data["vis"] = "0";
+                    data["ch"] = CodeHash(RoomBrowser.Code(room.Name));
+                    data["rg"] = room.Name.Contains("|") ? room.Name.Substring(0, room.Name.IndexOf('|')) : "";
+                }
                 var signature = string.Join(";", data.OrderBy(kv => kv.Key).Select(kv => kv.Key + "=" + kv.Value).ToArray());
                 if (signature == lastData) return;
                 var lobby = new CSteamID(MyLobby);
@@ -724,22 +774,34 @@ namespace StbcRevival
             private void RequestList()
             {
                 listing = true;
+                // Every version (lists show only crews on ours; room codes find the rest, to say why they can't join).
                 SteamMatchmaking.AddRequestLobbyListStringFilter(LobbyTag, LobbyProtocol, ELobbyComparison.k_ELobbyComparisonEqual);
-                SteamMatchmaking.AddRequestLobbyListStringFilter("mod", Plugin.Version, ELobbyComparison.k_ELobbyComparisonEqual);
                 SteamMatchmaking.AddRequestLobbyListDistanceFilter(ELobbyDistanceFilter.k_ELobbyDistanceFilterWorldwide);
+                SteamMatchmaking.AddRequestLobbyListResultCountFilter(200);
                 var call = SteamMatchmaking.RequestLobbyList();
                 listResult = Steamworks.KLNNLNGKHKC<LobbyMatchList>.Create((r, ioFailure) =>
                 {
                     listing = false;
                     if (ioFailure) return;
                     var found = new List<ExternalRoom>();
+                    var codes = new Dictionary<string, CodeEntry>();
                     ulong me = MySteamId;
                     for (int i = 0; i < r.m_nLobbiesMatching; i++)
                     {
                         var lobby = SteamMatchmaking.GetLobbyByIndex(i);
                         var owner = LobbyHost(lobby);
+                        if (owner == 0 || owner == me) continue; // 0: a host we can't reach
+                        var mod = SteamMatchmaking.GetLobbyData(lobby, "mod");
                         var name = SteamMatchmaking.GetLobbyData(lobby, "room");
-                        if (owner == 0 || owner == me || string.IsNullOrEmpty(name)) continue; // 0: a host we can't reach
+                        if (string.IsNullOrEmpty(name))
+                        {
+                            var hash = SteamMatchmaking.GetLobbyData(lobby, "ch");
+                            if (!string.IsNullOrEmpty(hash))
+                                codes[hash] = new CodeEntry { Region = SteamMatchmaking.GetLobbyData(lobby, "rg"), Host = owner, Mod = mod };
+                            continue;
+                        }
+                        codes[CodeHash(RoomBrowser.Code(name))] = new CodeEntry { Name = name, Host = owner, Mod = mod };
+                        if (mod != Plugin.Version) continue; // lists: only crews on our version
                         var props = new PHashtable();
                         int count = SteamMatchmaking.GetLobbyDataCount(lobby);
                         for (int k = 0; k < count; k++)
@@ -758,7 +820,11 @@ namespace StbcRevival
                         props[GameProp.PropsListedInLobby] = props.Keys.OfType<string>().ToArray();
                         found.Add(new ExternalRoom(name, $"steam:{owner}:1", SteamMatchmaking.GetLobbyData(lobby, "ver"), props, players));
                     }
-                    lock (sync) lobbies = found;
+                    lock (sync)
+                    {
+                        lobbies = found;
+                        codeIndex = codes;
+                    }
                 });
                 listResult.Set(call, null);
             }

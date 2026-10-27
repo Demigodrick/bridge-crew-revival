@@ -87,8 +87,19 @@ namespace StbcRevival
             // Steam mode: the room must be a public Steam lobby, from an invite, or a friend's room.
             if (SteamMode.Enabled && !SteamMode.Knows(name) && !SteamMode.ResolveFromFriends(name))
             {
-                Show($"Room {Code(name)} not found: it isn't public, and none of your Steam friends are in it.");
-                return;
+                // By its code alone: private crews and crews on another version are found this way too.
+                var byCode = SteamMode.FindByCodeAnyVersion(Code(name), out var version);
+                if (byCode == null)
+                {
+                    Show($"Room {Code(name)} not found. Check the code; if it's right, the crew may have closed, or its host is on a Revival version from before 0.7.10 and the crew is private (a Steam friend in it can still let you in).");
+                    return;
+                }
+                if (version != Plugin.Version)
+                {
+                    Show($"Crew {Code(name)} is on Bridge Crew Revival {version}; you have {Plugin.Version}. Everyone in a crew needs the same version: update from the website.");
+                    return;
+                }
+                name = byCode;
             }
             // Same event Uplay invites and the friends list send; GamePhaseManager handles the rest
             // (ignores the room you're already in, otherwise GPMTransitionManager.LeaveAndJoinRoom).
