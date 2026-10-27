@@ -115,6 +115,28 @@ namespace StbcRevival
                         + string.Join(", ", sounds.GroupBy(m => m.GetType().Name).OrderBy(g => g.Key)
                             .Select(g => $"{g.Key} {g.Count(m => m.isActiveAndEnabled)}/{g.Count()} active").ToArray()));
 
+            // Ship prefabs and the models they use (which one is the Excelsior, and so on): loaded, not spawned.
+            report.AppendLine("==== SHIPS ====");
+            foreach (var ship in new[] { "Aegis", "Enterprise", "Enterprise 1701D", "Raleigh", "Raleigh TNG", "Huxley", "Huxley TNG", "Saladin",
+                         "Saladin TNG", "Nicholson", "Kobayashi Maru", "Science A", "Science B", "Science C", "Science D", "Class J" })
+            {
+                try
+                {
+                    var prefab = Resources.Load<GameObject>("Sector/Ships/Ship - " + ship);
+                    if (prefab == null) { report.AppendLine($" {ship}: not found"); continue; }
+                    var meshes = prefab.GetComponentsInChildren<MeshFilter>(true).Where(f => f.sharedMesh != null).Select(f => f.sharedMesh.name)
+                        .Concat(prefab.GetComponentsInChildren<SkinnedMeshRenderer>(true).Where(r => r.sharedMesh != null).Select(r => r.sharedMesh.name))
+                        .Distinct().ToArray();
+                    var line = $"{ship}: {string.Join(", ", meshes)}";
+                    report.AppendLine(" " + line);
+                    if (meshes.Any(m => m.IndexOf("Excelsior", StringComparison.OrdinalIgnoreCase) >= 0)) summary.Add("Excelsior model: " + line);
+                }
+                catch (Exception e)
+                {
+                    report.AppendLine($" {ship}: {e.Message}");
+                }
+            }
+
             // The waiting areas (the briefing room, the shuttle): what's there, where, and what moves. For
             // dressing up the view (out of warp, a starbase, ships coming and going).
             foreach (var sceneName in new[] { "Aegis_Briefing_Room", "Lobby_Shuttle" })
