@@ -82,6 +82,25 @@ namespace StbcRevival
                 else harmony.Patch(target.Method, postfix: hook);
             }
             harmony.Patch(AccessTools.Method(typeof(NovaPlayerInfo), "NetworkDeserialize"), finalizer: new HarmonyMethod(typeof(PvpConsoles), nameof(PlayerState_Finalizer)));
+            // The other ship's consoles keep running (their state is that ship's), but their warnings are about
+            // that ship: its captain console's "Shield Collapse Imminent", the ship computer's voice and the like.
+            var otherSet = new HarmonyMethod(typeof(PvpConsoles), nameof(OtherSet_Prefix));
+            var otherSetEnd = new HarmonyMethod(typeof(PvpConsoles), nameof(OtherSet_Finalizer));
+            foreach (var method in new[]
+            {
+                AccessTools.Method(typeof(ConsoleCaptain), "UpdateManually"), AccessTools.Method(typeof(ConsoleHelm), "UpdateManually"),
+                AccessTools.Method(typeof(ConsoleTactical), "UpdateManually"), AccessTools.Method(typeof(ConsoleEngineering), "UpdateManually"),
+                AccessTools.Method(typeof(ConsoleBase), "ConsoleDeserialize"),
+            })
+            {
+                if (method == null) Plugin.Log.LogWarning("PvP: a console update wasn't found; the other ship's warnings may show on your bridge");
+                else harmony.Patch(method, prefix: otherSet, finalizer: otherSetEnd);
+            }
+            foreach (var name in new[] { "Play", "PlayNetworked" })
+            {
+                var play = AccessTools.Method(typeof(ShipComputerVOManager), name);
+                if (play != null) harmony.Patch(play, prefix: new HarmonyMethod(typeof(PvpConsoles), nameof(ComputerVO_Prefix)));
+            }
             // The swap to a player's role station (after the mission's fade, NKILJLNGDHM): ship B's copy for them.
             getStationByRole = AccessTools.Method(registry, "GetStation", new[] { typeof(FLCHMJJDKDL) });
             var swap = AccessTools.Method(AccessTools.TypeByName("NovaSpawnManager"), "NKILJLNGDHM");
@@ -368,6 +387,27 @@ namespace StbcRevival
         // ---- Messages -----------------------------------------------------------------------------
 
         private static MethodInfo showMessage;
+        private static int otherSetDepth; // inside a console of the other ship's set
+        private static readonly HashSet<string> keptOff = new HashSet<string>();
+
+        private static void OtherSet_Prefix(ConsoleBase __instance, out bool __state)
+        {
+            __state = Active && copies.Count > 0 && IsCopy(__instance) != OnB;
+            if (__state) otherSetDepth++;
+        }
+
+        private static Exception OtherSet_Finalizer(bool __state, Exception __exception)
+        {
+            if (__state) otherSetDepth--;
+            return __exception;
+        }
+
+        private static bool ComputerVO_Prefix(ref string __result)
+        {
+            if (otherSetDepth == 0) return true;
+            __result = string.Empty;
+            return false;
+        }
 
         // Bridge.SendConsoleMessage tells every bridge, with no ship in it. Each game's messages are about its
         // own ship (the host's are ship A's), so they stay on that game for now. (With crews of several, a
@@ -375,6 +415,11 @@ namespace StbcRevival
         private static bool Message_Prefix(Bridge __instance, object __0, string __1, float __2, bool __3, bool __4, string[] __5)
         {
             if (!Active) return true;
+            if (otherSetDepth > 0)
+            {
+                if (keptOff.Add(__1)) Plugin.Log.LogInfo($"PvP: the other ship's console message '{__1}' kept off your bridge");
+                return false;
+            }
             if (showMessage == null) showMessage = AccessTools.Method(typeof(Bridge), "NewConsoleMessageRPC");
             if (showMessage == null) return true;
             showMessage.Invoke(__instance, new object[] { Convert.ToInt32(__0), __1, __2, __3, __4, __5 });
