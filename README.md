@@ -1,265 +1,200 @@
-# Bridge Crew Revival (proof of concept)
+# Bridge Crew Revival
 
-A BepInEx 5 plugin for the **Steam PC** version of *Star Trek: Bridge Crew* that keeps
-multiplayer working without Ubisoft's servers:
+**Online multiplayer for *Star Trek: Bridge Crew* on PC, back for good. No Uplay, no Ubisoft account, no server to run.**
 
-- **Skips Uplay / Ubisoft online services entirely** by switching on the game's own
-  developer "no-platform" login mode.
-- **Plays over Steam with no server (default, `Mode = Steam`):** each game runs a Photon-compatible
-  server in-process. Public rooms are listed worldwide as Steam lobbies, friends join through Steam,
-  and game traffic goes peer-to-peer through Steam's networking and relays.
-- Alternatively redirects Photon to a dedicated server ([`server/`](server/README.md), Linux/Docker)
-  or to Photon Cloud with your own App ID.
+Ubisoft's online services were what held Bridge Crew's multiplayer together. Bridge Crew Revival replaces
+them with Steam: crews find each other, join each other and fly together exactly as before, in VR or on a
+monitor. And while we were in there, we added new missions, voice commands that work again, and a pile of
+quality-of-life fixes.
 
-Status: tested in-game with the dedicated server (menus, matchmaking, a full mission, joining by
-code, Steam launch-joins). Steam mode passes end-to-end tests with the game's real Photon client
-library (relayed joins, events, host loss) but **hasn't run between two real players yet.**
+👉 **Website and one-line installer: https://demigodrick.github.io/bridge-crew-revival/**
 
-## How it works
+## What you get
 
-`Assembly-CSharp.dll` is obfuscated (scrambled names plus uncalled decoy methods), but the
-developers' internal tooling is still in the retail build:
+### Your crew, back together
+- **Quick match** drops you into any public crew with a free seat, worldwide. If there isn't one, you host
+  a crew the next player finds.
+- **Play with friends over Steam.** Your Steam friends show up on the shuttle console in VR: join their crew
+  or invite them to yours. Steam's Join Game and invites work too.
+- **Share codes.** Give anyone your crew's code (like `YZZDK9-EU-1Q2W3E4`) and they can join, even a
+  private crew, even if they're not on your friends list.
+- **Nothing to host.** Whoever starts the crew hosts it on their own PC, and everyone connects through
+  Steam's network. No ports to open, no accounts, no monthly server bill.
+- **Host left? No problem.** If the host drops, the crew regroups in the briefing room under the next
+  player instead of everyone landing back at the main menu.
+- **Voice chat** between crewmates, smoothed out so it doesn't stutter on a shaky connection.
+- **Passwords and blocking.** Lock a public crew with a password from the briefing room. Kick a troublemaker
+  and you can block them from your crews; anyone you've blocked on Steam can't join either.
 
-| Game code | Retail behaviour | What the plugin does |
-|---|---|---|
-| `NetworkCore.GetLoginMethod()` reads `BuildStamp.UbiLoginMethod` (`PCApp`) | Uplay start, Ubisoft ticket login, account sync before Photon | Returns `None`. `ConnectionManager` then queues only the Photon connect step, and `NetworkStatus` counts "connected to Photon" as online. |
-| `SVR.ConfigFile` dev config (`server`, `serverport`, `protocol`, `region`, `name`, …) | File loader is compiled out, so nothing is ever set | Answers `GetValueString`/`ContainsKey` for those keys. The game's own connect step then switches `PhotonServerSettings` to `SelfHosted`. |
-| `PhotonNetwork.ConnectUsingSettings` / `ConnectToRegion` | Ubisoft's Photon App ID, Steam ticket as custom auth | In `Cloud` mode, sets your App ID. Optionally clears the Steam auth type so servers without a Steam auth provider accept the client. |
-| `NetworkingPeer.Connect(address, GameServer)` | Connects to the game server address the master hands out | `SelfHosted`: connects to `Server:Port` instead, so Docker/NAT setups work (`RewriteGameServerAddress`). |
-| `PhotonNetwork.SwitchToProtocol` (UDP to TCP) | Disconnects the old, never-connected UDP peer, which still reports `Disconnect`, and the game shows `LostConnectionToPhoton` | Drops `Disconnect` statuses from peers that never connected. |
-| `PhotonNetwork.SwitchToProtocol` (UDP to TCP) | The new peer starts with an empty actor table and PhotonView registry, so the local player spawns as "(remote)" with no camera and the main menu stays on LOADING | Copies the actors and PhotonViews from the old peer and re-registers the local actor (`ChangeLocalID`). |
-| Photon's `SocketTcp` (Steam mode) | TCP sockets only | For `local:1` and `steam:<id>:1` addresses, routes the client's bytes to the in-game server or over Steam P2P (`shared/VirtualSockets.cs`). |
-| `Uplay.OnApplicationQuit` → `UplayQuit()` | Native call into Uplay on exit | Sets the game's own `s_skipQuit` flag, because Uplay was never started. |
+### New missions
+A new **Revival Missions** category in the briefing room, next to Campaign and Ongoing Voyages:
 
-The plugin only patches PhotonNetwork after the first frame. Patching it from plugin load runs
-PhotonNetwork's static constructor (`Resources.Load`) before Unity is ready, which crashes.
+- **Last Stand:** endless, growing waves of Klingons, pirates and Romulans, with a flagship every fifth
+  wave. How long can your crew hold out?
+- **Fleet Battle:** lead a battle-worn Starfleet fleet against a Klingon or Romulan armada, with
+  reinforcements on both sides.
+- **Patrol:** a mission that never ends. Hunt raiders, escort freighters, rescue survivors and restock at
+  space stations as Starfleet sends you from system to system.
+- **Stellar Evacuation:** a star is about to erupt. Beam people out of escape pods, ferry them to safety and
+  get out before the blast.
+- **Free Roam:** the developers' own exploration mission, left in the game. No enemies, just space.
 
-Player names come from `PlayerName`, then your Steam persona name, then the OS user name.
-Under Proton the OS user name is `steamuser`, so set a name if Steam isn't ready yet.
+### Voice commands are back
+The captain's spoken orders used IBM Watson, which shut down years ago. They now run offline on your own PC.
+Hold **V** (or the voice button) and say *"Red alert!"*, *"Fire at will"*, *"Engage"* or *"Beam the
+survivors aboard"*. [Full list of commands](https://demigodrick.github.io/bridge-crew-revival/#voice).
 
-## Build
-
-Requires the .NET SDK (8+) and the game installed. Game DLLs are referenced, not shipped.
-
-```bash
-dotnet build src -c Release
-```
-
-If the game isn't in the default Steam library, add `-p:GameDir="/path/to/Star Trek Bridge Crew"`.
-The output is `src/bin/Release/net35/StbcRevival.dll`.
-
-To check patch targets against an install:
-
-```bash
-dotnet run --project tools/verify -- "/path/to/Star Trek Bridge Crew"
-```
+### Everything else
+- **Your avatar and settings are kept on your PC.** The game only ever saved them on Ubisoft's servers; the
+  installer can copy them across once.
+- **Skip the launch videos** and the mic check, get a chime when someone joins, and a heads-up on the
+  shuttle when a new version is out.
+- **A Romulan option** for female characters in the character creator.
+- **F10** saves a bug report in one keypress.
+- Most of it can be switched on and off from **REVIVAL SETTINGS** on the shuttle console.
 
 ## Install
 
-Website: **https://demigodrick.github.io/bridge-crew-revival/**
+Quit the game first.
 
-Windows (PowerShell):
+**Windows**: paste this into PowerShell:
 
 ```powershell
 irm https://demigodrick.github.io/bridge-crew-revival/install.ps1 | iex
 ```
 
-Linux:
+**Linux (Proton)**: paste this into a terminal:
 
 ```bash
 curl -fsSL https://demigodrick.github.io/bridge-crew-revival/install.sh | bash
 ```
 
-On Linux the installer switches BepInEx on in the game's Proton prefix, so no Steam launch option is
-needed. That needs the prefix to exist: if the game has never been started under Proton, start it once
-and quit, or set the launch options to `WINEDLLOVERRIDES="winhttp=n,b" %command%` instead.
+Then launch the game from Steam as normal. The installer finds the game, sets up the BepInEx mod loader,
+installs the latest release and downloads the small offline speech model for voice commands. Run the same
+command again any time to update or uninstall. Prefer a download? Grab the zip from the
+[releases page](https://github.com/Demigodrick/bridge-crew-revival/releases/latest) and run `install.cmd`
+(Windows) or `install.sh` (Linux).
 
-The installers live in `docs/` (the GitHub Pages site) and download the latest GitHub release.
+**Everyone in a crew needs the mod, on the same version.** The game will tell you when a crew is on a
+different one.
 
-### Keeping your avatar and settings (Ubisoft save import)
+## Questions
 
-Bridge Crew only ever saved your avatar, options and progress flags on Ubisoft's servers. The mod keeps
-them in a local file (`BepInEx/config/stbc.revival.save.json`), and the installer offers to copy your
-Ubisoft save into it once, while Ubisoft's servers are still up:
+**Do I need Ubisoft Connect or a Ubisoft account?** No. The mod skips Ubisoft's login completely.
 
-1. Make sure Ubisoft Connect is installed and signed in, then answer **y** when the installer asks
-   "Copy your avatar and settings from your Ubisoft save?" (or run it with `--import-save` on Linux,
-   `-ImportSave` on Windows).
-2. The installer starts the game through Steam. The game hands over to Ubisoft Connect, which restarts it.
-3. **At the controller selection prompt, choose your controller.** The game only connects to Ubisoft
-   after that, so the import waits for you here. Put your headset on if you're playing in VR.
-4. Your save is copied as soon as it arrives. The game shows a message and closes by itself, and on
-   Linux the installer also closes Ubisoft Connect. The installer prints how many settings were imported.
+**Does it work in VR?** Yes. Quick match, the friends panel, invites, joining by code and passwords all
+work from inside the headset. The F7 room browser is a desktop window, handy if you're playing on a monitor.
 
-It takes a minute or two after the controller prompt. If nothing has arrived after 7 minutes, the
-installer stops waiting and says so. Run it again later the same way. After the import, the game no
-longer uses Ubisoft at all.
+**Can I play with PlayStation VR or Quest players?** No, consoles and standalone headsets can't load mods.
+It's PC with PC.
 
-### Releases and the zip
+**Can I get banned on Steam?** Bridge Crew has no anti-cheat, and the mod only uses Steam's ordinary
+friends, lobbies and networking.
 
-`tools/release.sh` builds locally (the mod compiles against the game's own DLLs, so CI can't) and
-publishes a GitHub release with `BridgeCrewRevival.zip` and its `.sha256`; keep those asset names,
-the installers fetch `releases/latest/download/BridgeCrewRevival.zip`. `tools/package.sh` only
-builds the zip: the plugin, `install.sh` (Linux), `install.cmd` / `install.ps1` (Windows) and a short
-README. From the zip, players run:
+**Something broke.** [Open an issue](https://github.com/Demigodrick/bridge-crew-revival/issues) and attach
+`BepInEx/LogOutput.log` from the game folder (or press F10 in game to save a report).
 
-- **Windows:** double-click `install.cmd`.
-- **Linux:** `./install.sh`. It switches BepInEx on in the game's Proton prefix (backing up the
-  prefix's `user.reg` first) instead of needing a Steam launch option.
+More answers on the [website](https://demigodrick.github.io/bridge-crew-revival/).
 
-Both scripts find the game through Steam's `libraryfolders.vdf` (on Linux: native, Flatpak and Snap
-Steam), or take the game folder as an argument. They download BepInEx 5.4.23.5 from its GitHub
-release and check its SHA-256, set the `Type = MonoBehaviour` entrypoint (step 4 below), and copy
-the plugin. They refuse to run while the game is running. Run again to update. Then they offer the
-Ubisoft save import above (`--no-import` / `-NoImport` skips the question). `--uninstall`
-(Linux) or `-Uninstall` (Windows) removes the plugin and BepInEx's `winhttp.dll`/doorstop files
-(and, on Linux, the prefix setting), which disables BepInEx, and leaves `BepInEx/` and your config in place.
+## Settings
 
-## Install by hand (Linux / Proton)
-
-1. Download **BepInEx 5.4.x, Windows x64** from the BepInEx GitHub releases. Extract it into the
-   game folder, so `winhttp.dll` and `BepInEx/` sit next to `stbc.exe`.
-2. In Steam, open the game's Properties and set its launch options to:
-   `WINEDLLOVERRIDES="winhttp=n,b" %command%`
-3. Launch once so BepInEx creates its folders, then quit.
-4. **Required for this game:** in `BepInEx/config/BepInEx.cfg`, under `[Preloader.Entrypoint]`,
-   change `Type = Application` to `Type = MonoBehaviour` and leave `Assembly = UnityEngine.dll`
-   and `Method = .cctor` as they are. With the default entrypoint, BepInEx starts in the middle
-   of Unity 5.4's script-domain reload. The plugin then loads `Assembly-CSharp` too early, every
-   game script fails to bind ("The referenced script on this Behaviour is missing!"), and you
-   get an endless black screen.
-5. Copy `StbcRevival.dll` and `StbcCore.dll` into `BepInEx/plugins/`.
-6. Launch again. This creates `BepInEx/config/stbc.revival.cfg`. Edit it, then restart.
-7. Logs are in `BepInEx/LogOutput.log`. Look for `Bridge Crew Revival` and the
-   `ConnectUsingSettings: host=...` line.
-
-On Windows, skip step 2.
-
-## Rooms: browser, join by code, short codes
-
-Uplay invites are gone, so the mod replaces them:
-
-- **Room browser (F7):** a desktop window listing public rooms (Steam lobbies in Steam mode, the
-  server's rooms otherwise: code, mode, phase, players), with Join buttons. It shows your own room's code with a copy button, and has a
-  code field with Paste/Join. In Steam mode it also says whether you're hosting, and whether your room
-  is private (invite only) or public and listed on Steam; your own listed room appears at the top as
-  "(you)". It's drawn with Unity IMGUI on the desktop window, so it isn't visible
-  inside a VR headset; use it from the monitor, or the web page below.
-- **Join by code:** type or paste a code like `K7QX2M` (or a full room name such as `eu|K7QX2M`).
-  It sends the same game event Uplay invites used, so the game's own join flow handles it.
-- **Short room codes:** new rooms get 6-character codes instead of GUIDs (`ShortRoomCodes`).
-  For a private match, the host opens F7 and shares the code.
-- **Web page (dedicated server):** stbc-server serves its list at `http://<server>:8080/`.
-- **Steam mode:** a public room you host is published as a Steam lobby automatically; private
-  matches aren't. A code typed into F7 is looked up among public lobbies, then among your Steam
-  friends' rooms (via their rich presence).
-
-Private matches stay hidden from both lists; only the code lets people join.
-
-### Steam friends
-
-Bridge Crew never used Steam for multiplayer (friends and invites were Uplay). The mod adds it
-using the game's bundled Steamworks.NET:
-
-- **Shuttle friends panel (VR):** the console's "Ubisoft Club friends" panel lists your online Steam
-  friends instead, with Steam avatars. Friends in a joinable crew get the game's "playing" icon and a
-  working **Join**; **Invite** sends a Steam game invite for your current crew (Steam gives friends
-  without the game running a launch link).
-- **Rich presence:** while you're in a crew, the mod sets a `connect` string, so friends get **Join
-  Game** on you in their Steam friends list, plus Steam's party keys, which group crewmates together.
-  Steam only displays status text the publisher registered, and Bridge Crew has none, so friends see
-  "Playing Star Trek Bridge Crew"; the mod's "In crew K7QX2M · Briefing room · 2/4" status shows in
-  the shuttle friends panel.
-- **Invites:** F7 → **Invite Steam friends** opens the Steam overlay; right-click a friend →
-  **Invite to Game**.
-- **Joining:** accepting an invite or clicking Join Game joins the room by code. If the game isn't
-  running, Steam starts it with `+stbc_join <room> +stbc_host <steamid>` and the mod joins once you
-  reach the shuttle. In Steam mode, F7's invite button opens Steam's lobby invite dialog when you
-  host a public room.
-- Everyone needs the mod. With a dedicated server everyone also needs the same server: set
-  `[Steam] PublicServerAddress` so friends on a different server get told which one to use.
-- Friends can see and join your room code this way, private matches included.
-  `[Steam] Presence = false` turns it all off.
-
-## Configure
-
-`BepInEx/config/stbc.revival.cfg`:
+Everything lives in `BepInEx/config/stbc.revival.cfg` in the game folder (created on first launch), and the
+everyday options are in REVIVAL SETTINGS in game. A few you might want:
 
 ```ini
-[Photon]
-Mode = Steam             # Steam | SelfHosted | Cloud | Default
-Server = 192.168.1.10    # SelfHosted
-Port = 4530
-Protocol = Tcp           # Tcp for stbc-server; Udp | Tcp for Photon Server
-RewriteGameServerAddress = true
-AppId =                  # Cloud: your PUN App ID
-Region =                 # Cloud: eu | us | asia | jp | au
-StripSteamAuth = true
-MatchmakingTag =         # optional; only players with the same tag see each other
-
 [Login]
-SkipUplay = true
-PlayerName = Picard
+PlayerName = Picard      # otherwise your Steam name
 
 [Startup]
-SkipIntro = true         # skip the logo and title screens, straight to the shuttle
+SkipIntro = true         # straight to the shuttle
 
-[Game]
-ExtraDevConfig =         # e.g. maxnumplayers=5;mutevoip=false;hideNameTag=true
+[Voice]
+VoiceCommands = true
 
 [Rooms]
 BrowserKey = F7
-ShortRoomCodes = true
-
-[Steam]
-Presence = true
-PublicServerAddress =    # e.g. 203.0.113.10:4530
 ```
 
-### Steam (default, nothing to host)
+---
 
-`Mode = Steam`. That's it: host from the shuttle as usual (Quick or Private match), and others
-find public rooms in F7 / Quick match, or join you through Steam. The host's game is the server,
-so the session ends when the host quits. Steam's relays handle NAT; no ports to open.
+## For communities and developers
 
-### Option A: stbc-server in Docker (always-on community server)
+<details>
+<summary><b>Running an always-on dedicated server</b></summary>
+
+Steam mode needs no server, but a community can run one in Docker instead:
 
 ```bash
 cd server
 docker compose up -d --build
 ```
 
-Set `Mode = SelfHosted`, `Server` = the machine running the container, `Port = 4530`,
-`Protocol = Tcp`. See [server/README.md](server/README.md).
+Players then set, in `stbc.revival.cfg`:
 
-### Option B: Photon Cloud
+```ini
+[Photon]
+Mode = SelfHosted
+Server = your.server.address
+Port = 4530
+Protocol = Tcp
+```
 
-Create a free account at dashboard.photonengine.com and create a **PUN** application. Put its
-App ID in `AppId`, set `Mode = Cloud`, and give every player the same config. The free tier
-caps concurrent users, which is plenty for a group of friends. Note that an App ID shipped in
-a mod can be read by anyone who has the mod.
+See [server/README.md](server/README.md). Steam-mode players and dedicated-server players can't see each
+other. Photon Cloud with your own PUN App ID also works (`Mode = Cloud`, `AppId = ...`).
 
-### Option C: Official Photon Server (Windows)
+</details>
 
-Exit Games' Photon Server SDK, **LoadBalancing** instance; v4 is the closest match for PUN 1.71.
+<details>
+<summary><b>How it works</b></summary>
 
-## Known gaps / next steps
+It's a [BepInEx 5](https://github.com/BepInEx/BepInEx) plugin that patches the game at runtime with
+HarmonyX. The retail build still contains the developers' internal "no platform" login and self-hosted
+Photon settings, so the mod switches those on instead of Ubisoft's login. In Steam mode each game also runs
+a small Photon-compatible server in-process ([`server/StbcCore`](server/StbcCore)); the host's game serves
+the crew, and Photon's traffic is carried over Steam's peer-to-peer networking and relays
+([`shared/VirtualSockets.cs`](shared/VirtualSockets.cs)). Crews are listed as Steam lobbies.
 
-- **Steam mode untested between two real players.** Next test: two Steam accounts with the mod;
-  one hosts a Quick match, the other finds it in F7 / Quick match or joins through Steam.
-- Modes don't mix: Steam-mode players and dedicated-server players can't see each other.
-- Steam P2P adds the Unity frame time (~10-15 ms) to relayed traffic (packets are sent and read
-  once per frame).
-- Ubisoft's native services library is still initialised at startup (`Conveyor.StartUbiServices`).
-  It's expected to fail quietly offline. If it hangs or errors, stub it next.
-- Uplay friends and invites don't work; the shuttle friends panel, room codes and Steam invites replace them.
-- The room browser (public lobbies, join by code) is a desktop overlay, not a VR-console UI; in VR,
-  use Quick match, the shuttle friends panel or the Steam overlay.
-- Photon `UserId` falls back to the player name, so give each player a unique `PlayerName`.
-- Progress saves and anything synced to Ubisoft's servers stay local.
-- PC only. PSVR and Quest can't load mods.
+Save data that used to live on Ubisoft's servers is kept in `BepInEx/config/stbc.revival.save.json`.
+Voice commands use [Vosk](https://alphacephei.com/vosk/) for offline speech recognition.
+
+</details>
+
+<details>
+<summary><b>Building from source</b></summary>
+
+Needs the .NET SDK (8 or later) and the game installed; the game's DLLs are referenced, never shipped.
+
+```bash
+dotnet build src -c Release
+```
+
+If the game isn't in the default Steam library, add `-p:GameDir="/path/to/Star Trek Bridge Crew"`. The
+plugin lands in `src/bin/Release/net35/`. Check the patch targets against an install with
+`dotnet run --project tools/verify -- "/path/to/Star Trek Bridge Crew"`, and run the server tests with
+`dotnet test server/StbcServer.Tests`.
+
+Releases are built locally with `tools/release.sh` (the mod compiles against the game's own DLLs, so CI
+can't), which publishes `BridgeCrewRevival.zip` and its `.sha256`. The installers fetch
+`releases/latest/download/BridgeCrewRevival.zip`, so keep those names.
+
+</details>
+
+<details>
+<summary><b>Installing by hand</b></summary>
+
+1. Extract **BepInEx 5.4.x, Windows x64** into the game folder, next to `stbc.exe`.
+2. Linux only: set the game's Steam launch options to `WINEDLLOVERRIDES="winhttp=n,b" %command%`.
+3. Launch once so BepInEx creates its folders, then quit.
+4. **Required:** in `BepInEx/config/BepInEx.cfg`, under `[Preloader.Entrypoint]`, change
+   `Type = Application` to `Type = MonoBehaviour`. Without it the game hangs on a black screen.
+5. Copy `StbcRevival.dll` and `StbcCore.dll` into `BepInEx/plugins/` and launch.
+
+The log is `BepInEx/LogOutput.log`.
+
+</details>
 
 ## Legal
 
-This repository contains no game code or assets, only patches applied at runtime to a copy
-you own. Don't redistribute the game's DLLs.
+Bridge Crew Revival is an unofficial fan project, not affiliated with or endorsed by Ubisoft, Red Storm
+Entertainment, CBS Studios or Paramount. Star Trek is a trademark of CBS Studios. You need your own copy of
+the game on Steam; this repository contains no game code or assets, only patches applied at runtime.
