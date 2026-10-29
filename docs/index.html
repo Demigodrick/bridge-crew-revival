@@ -338,8 +338,9 @@
       <h2>Questions</h2>
       <details>
         <summary>How do I update?</summary>
-        <p>When a new version is out, the mod tells you on the shuttle. Quit the game, then run the same
-          command you installed with. Windows, in PowerShell:</p>
+        <p>From 0.7.12 the mod updates itself: when a new version is out, it downloads it on the shuttle and
+          asks you to restart the game. To update by hand (or from an older version), quit the game, then run the
+          same command you installed with. Windows, in PowerShell:</p>
         <div class="cmd ps"><code id="cmd-update-win">irm https://demigodrick.github.io/bridge-crew-revival/install.ps1 | iex</code><button class="copy" data-copy="cmd-update-win">Copy</button></div>
         <p>Linux, in a terminal:</p>
         <div class="cmd"><code id="cmd-update-linux">curl -fsSL https://demigodrick.github.io/bridge-crew-revival/install.sh | bash</code><button class="copy" data-copy="cmd-update-linux">Copy</button></div>
@@ -366,6 +367,13 @@
       <details>
         <summary>Can I play with PlayStation VR or Quest players?</summary>
         <p>No. Consoles and standalone headsets can't load mods, so it's PC with PC only.</p>
+      </details>
+      <details>
+        <summary>The game crashes on startup in VR (Quest with Virtual Desktop).</summary>
+        <p>The game tries the Oculus runtime first, which crashes with some headsets that aren't Oculus Rifts.
+          In Steam, right-click Star Trek: Bridge Crew, choose Properties, and add <code>-vrmode openvr</code>
+          to the Launch Options. The mod then starts SteamVR instead. To always use SteamVR, set
+          <code>Device = SteamVR</code> under <code>[VR]</code> in <code>BepInEx/config/stbc.revival.cfg</code>.</p>
       </details>
       <details>
         <summary>Can I get banned on Steam for this?</summary>
