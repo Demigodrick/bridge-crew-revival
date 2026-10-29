@@ -256,7 +256,8 @@
         <dt>Small things</dt>
         <dd>Skip the launch videos and the mic check, a chime when someone joins your crew, crew filters, an
           update notice when a new version is out, and F10 to save a bug report. Switch them on and off in
-          REVIVAL SETTINGS on the shuttle console (where Select Region used to be).</dd>
+          REVIVAL SETTINGS on the shuttle console (where Select Region used to be). After a crash, the mod saves
+          a crash report for you.</dd>
         <dt>Voice commands</dt>
         <dd>The captain's spoken orders are back, recognised on your PC instead of IBM's
           discontinued Watson service. As captain, hold V (or the voice button) and say "Red alert!", "Make it
@@ -281,6 +282,10 @@
         <dd>"Evade", "Retreat", "Move away", "Evasive maneuvers, pattern delta".</dd>
         <dt>Prepare</dt>
         <dd>"Prepare for warp", "Plot a course", "Set course for warp"; "Prepare impulse".</dd>
+        <dt>Destination</dt>
+        <dd>"Set course for Theta Novae", "Warp to …", "Plot a course to the nearest system": picks that
+          system on the helm's warp map, by the name the map shows, and prepares warp. Add "engage" or "make it
+          so" to go at once.</dd>
         <dt>Engage</dt>
         <dd>"Engage", "Make it so", "Punch it", "Hit it": engages whatever was last prepared (warp if
           nothing was). "Engage warp", "Maximum warp", "Warp factor nine", "Go to warp" go straight to warp.</dd>
@@ -332,6 +337,13 @@
         <dd>"Stand down", "Cancel red alert", "Secure from red alert": red alert off, shields down,
           torpedoes disarmed.</dd>
       </dl>
+      <h3>Captain</h3>
+      <dl class="modes">
+        <dt>Hails</dt>
+        <dd>"Answer the hail", "On screen", "Open a channel", "Open hailing frequencies".</dd>
+        <dt>Status</dt>
+        <dd>"Status report", "Damage report": your ship's status panel.</dd>
+      </dl>
     </section>
 
     <section id="faq">
@@ -374,6 +386,14 @@
           In Steam, right-click Star Trek: Bridge Crew, choose Properties, and add <code>-vrmode openvr</code>
           to the Launch Options. The mod then starts SteamVR instead. To always use SteamVR, set
           <code>Device = SteamVR</code> under <code>[VR]</code> in <code>BepInEx/config/stbc.revival.cfg</code>.</p>
+      </details>
+      <details>
+        <summary>The game crashed. What should I send?</summary>
+        <p>Start the game again: when it reaches the shuttle, the mod says it saved a crash report, a zip in
+          <code>BepInEx\crash-reports</code> in the game folder. Attach the newest one to an
+          <a href="https://github.com/Demigodrick/bridge-crew-revival/issues">issue on GitHub</a>. It holds
+          that run's log, the game's own crash files if it wrote any, Windows' record of the crash, SteamVR's
+          logs and your settings, with your Steam ID and names blanked.</p>
       </details>
       <details>
         <summary>Can I get banned on Steam for this?</summary>
