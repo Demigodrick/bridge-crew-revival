@@ -64,6 +64,7 @@ namespace StbcRevival
         internal static ConfigEntry<string> UpdateUrl;
         internal static ConfigEntry<bool> ShuttleWasd;
         internal static ConfigEntry<float> ControllerGraceSeconds;
+        internal static ConfigEntry<VrDeviceChoice> VrDevice;
         internal static ConfigEntry<int> VoiceJitterBufferMs;
         internal static ConfigEntry<string> BlockedPlayers;
         internal static ConfigEntry<bool> ExcelsiorTest;
@@ -167,6 +168,8 @@ namespace StbcRevival
                 "Voice chat: how much of a crewmate's speech is held before it starts playing (milliseconds, up to about 85-250 depending on their microphone), so small delays on the way don't make it choppy. More is smoother but later; 0 = the game's own (plays each piece as it arrives).");
             ControllerGraceSeconds = Config.Bind("VR", "ControllerGraceSeconds", 30f,
                 "How long a VR controller the headset stops reporting (resting controllers often go to sleep) still counts as connected before the game's \"controllers disconnected\" warning shows. 0 = the game's own behaviour (at once).");
+            VrDevice = Config.Bind("VR", "Device", VrDeviceChoice.Auto,
+                "Which VR runtime the game starts: the game tries Oculus first, which crashes some headsets that aren't Oculus Rifts (a Quest through Virtual Desktop). SteamVR = try SteamVR first; Oculus = the game's own order; Auto = SteamVR first when the game is launched with -vrmode openvr.");
             ShuttleWasd = Config.Bind("Shuttle", "WasdControls", false,
                 "Experimental, doesn't work yet: fly the main-menu shuttle with the keyboard (W/S forward/back, A/D turn, Q/E down/up, Shift faster).");
             ShuttleSpeed = Config.Bind("Shuttle", "Speed", 20f, "Shuttle keyboard speed (scene units per second).");

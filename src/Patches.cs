@@ -30,6 +30,7 @@ namespace StbcRevival
                 prefix: nameof(ContainsKey_Prefix));
 
             IntroSkip.Patch(harmony);
+            VrDevice.Patch(harmony);
             LocalSave.Patch(harmony);
             UbisoftSaveImport.Patch(harmony);
 

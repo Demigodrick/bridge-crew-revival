@@ -428,5 +428,11 @@ var inputManager = game.GetType("SVR.InputManager");
 Check("SVR.InputManager.AADJJIOIJJA(bool) (controller check)", inputManager?.GetMethods(Inst).FirstOrDefault(m => m.Name == "AADJJIOIJJA" && m.GetParameters().Length == 1));
 Check("  SVR.InputManager.OMHIFCDEJLK (controllers connected)", inputManager?.GetField("OMHIFCDEJLK", Inst));
 
+// VR device order
+var selectVr = game.GetType("InitialLoader")?.GetNestedTypes(BindingFlags.NonPublic).FirstOrDefault(t => t.Name.StartsWith("<SelectVRMode>"));
+Check("InitialLoader/<SelectVRMode>.MoveNext (VR device)", selectVr?.GetMethod("MoveNext", Inst));
+foreach (var (f, what) in new[] { ("DBNIHIBHOLC", "state"), ("EONPCBMAPBK", "VR wanted"), ("DIHFOIJGJBK", "device list"), ("ILLBDLPMFPB", "current") })
+    Check($"  <SelectVRMode>.{f} ({what})", selectVr?.GetField(f, Inst));
+
 Console.WriteLine(failures == 0 ? "\nAll targets resolved." : $"\n{failures} target(s) missing.");
 return failures == 0 ? 0 : 1;
