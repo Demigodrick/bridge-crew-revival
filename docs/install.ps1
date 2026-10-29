@@ -163,6 +163,35 @@ function Import-UbisoftSave([string]$GameDir) {
     }
 }
 
+# Beta mode (the update question's unlisted B): the PvP test, [Debug] PvpTest in the mod's config.
+function Get-PvpTest([string]$GameDir) {
+    $cfg = Join-Path $GameDir "BepInEx\config\stbc.revival.cfg"
+    if (-not (Test-Path $cfg)) { return $false }
+    $section = ""
+    foreach ($line in Get-Content $cfg) {
+        if ($line -match '^\[(.*)\]') { $section = $Matches[1] }
+        elseif ($section -eq "Debug" -and $line -match '^PvpTest = (\w+)') { return $Matches[1] -eq "true" }
+    }
+    return $false
+}
+
+function Set-PvpTest([string]$GameDir, [bool]$On) {
+    $configDir = Join-Path $GameDir "BepInEx\config"
+    New-Item -ItemType Directory -Force -Path $configDir | Out-Null
+    $cfg = Join-Path $configDir "stbc.revival.cfg"
+    $value = if ($On) { "true" } else { "false" }
+    $section = ""; $found = $false
+    $lines = @(if (Test-Path $cfg) {
+        foreach ($line in Get-Content $cfg) {
+            if ($line -match '^\[(.*)\]') { $section = $Matches[1] }
+            if ($section -eq "Debug" -and $line -match '^PvpTest = ') { $found = $true; "PvpTest = $value" } else { $line }
+        }
+    })
+    # BepInEx reads a section named twice as one, and tidies the file when the game starts.
+    if (-not $found) { $lines += @("", "[Debug]", "", "PvpTest = $value") }
+    Set-Content -Path $cfg -Value $lines -Encoding UTF8
+}
+
 function Install-BridgeCrewRevival([string]$GameDir, [bool]$Uninstall, [string]$Here, [string]$Import) {
     [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
 
@@ -184,6 +213,7 @@ function Install-BridgeCrewRevival([string]$GameDir, [bool]$Uninstall, [string]$
     if (Get-Process -Name "stbc" -ErrorAction SilentlyContinue) { Fail "Star Trek: Bridge Crew is running. Quit it, then run the installer again." }
 
     $plugins = Join-Path $GameDir "BepInEx\plugins"
+    $beta = $null
 
     # Already installed, and not told to uninstall: update (Enter), or remove?
     $installed = Join-Path $plugins "StbcRevival.dll"
@@ -192,6 +222,7 @@ function Install-BridgeCrewRevival([string]$GameDir, [bool]$Uninstall, [string]$
         Info "Bridge Crew Revival $have is installed."
         $answer = try { Read-Host "       Update it, or remove it? [U]pdate / [R]emove (Enter = update)" } catch { "" }
         if ($answer -match '^\s*[rR]') { $Uninstall = $true }
+        elseif ($answer -match '^\s*[bB]') { $beta = -not (Get-PvpTest $GameDir) }
     }
 
     # ---- Uninstall --------------------------------------------------------------------------
@@ -295,6 +326,11 @@ function Install-BridgeCrewRevival([string]$GameDir, [bool]$Uninstall, [string]$
     }
     $versionText = if ($version) { " $version" } else { "" }
     Ok "Bridge Crew Revival$versionText installed"
+    if ($null -ne $beta) {
+        Set-PvpTest $GameDir $beta
+        if ($beta) { Ok "Beta mode on: the PvP test mission is in the Revival missions (choose B again to turn it off)" }
+        else { Ok "Beta mode off: the PvP test mission is gone again" }
+    }
     Info "Voice commands: as captain, hold V (or the voice button) and give an order, e.g. `"red alert`"."
 
     # ---- Ubisoft save -------------------------------------------------------------------------

@@ -86,6 +86,25 @@ find_game() {
 
 # ---- Ubisoft save import ------------------------------------------------------------------------
 
+# Beta mode (the update question's unlisted B): the PvP test, [Debug] PvpTest in the mod's config.
+pvp_test() { # game -> "true" / "false" (unset: false)
+  local cfg="$1/BepInEx/config/stbc.revival.cfg"
+  [ -f "$cfg" ] && sed -n '/^\[Debug\]/,/^\[/ s/^PvpTest = \([a-z]*\).*/\1/p' "$cfg" | head -n1 | grep -q true \
+    && echo true || echo false
+}
+
+set_pvp_test() { # game, true|false
+  local cfg="$1/BepInEx/config/stbc.revival.cfg"
+  mkdir -p "$1/BepInEx/config"
+  if [ -f "$cfg" ] && sed -n '/^\[Debug\]/,/^\[/p' "$cfg" | grep -q '^PvpTest = '; then
+    # Only the key inside [Debug]; keeps BepInEx's CRLF line endings.
+    sed -i "/^\[Debug\]/,/^\[/ s/^PvpTest = [^\r]*/PvpTest = $2/" "$cfg"
+  else
+    # BepInEx reads a section named twice as one, and tidies the file when the game starts.
+    printf '\n[Debug]\n\nPvpTest = %s\n' "$2" >> "$cfg"
+  fi
+}
+
 ask() { # question -> 0 for yes; reads the terminal even when the script is piped into bash
   local answer=""
   { : < /dev/tty; } 2>/dev/null || return 1   # no terminal (automated run): don't ask
@@ -241,7 +260,7 @@ import_save() { # game -> prints the outcome
 }
 
 main() {
-  local uninstall=0 game="" import="" arg
+  local uninstall=0 game="" import="" beta="" arg
   for arg in "$@"; do
     case "$arg" in
       --uninstall) uninstall=1 ;;
@@ -277,7 +296,10 @@ main() {
     info "Bridge Crew Revival is installed."
     printf '       Update it, or remove it? [U]pdate / [R]emove (Enter = update) ' > /dev/tty
     read -r answer < /dev/tty || answer=""
-    case "$answer" in [rR]*) uninstall=1 ;; esac
+    case "$answer" in
+      [rR]*) uninstall=1 ;;
+      [bB]*) if [ "$(pvp_test "$game")" = true ]; then beta=false; else beta=true; fi ;;
+    esac
   fi
 
   # ---- Uninstall ------------------------------------------------------------------------------
@@ -372,6 +394,14 @@ main() {
   cp "$plugins/"Stbc*.dll "$game/BepInEx/plugins/"
   cp "$plugins/"Stbc*.pdb "$game/BepInEx/plugins/" 2>/dev/null || true
   ok "Bridge Crew Revival${version:+ $version} installed"
+  if [ -n "$beta" ]; then
+    set_pvp_test "$game" "$beta"
+    if [ "$beta" = true ]; then
+      ok "Beta mode on: the PvP test mission is in the Revival missions (choose B again to turn it off)"
+    else
+      ok "Beta mode off: the PvP test mission is gone again"
+    fi
+  fi
   if [ -f "$game/BepInEx/vosk/libvosk.dll" ] && [ -d "$game/BepInEx/vosk/model" ]; then
     ok "Voice recognition (Vosk) already installed"
   elif (install_vosk "$game" "$tmp"); then
