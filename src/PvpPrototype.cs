@@ -350,10 +350,11 @@ namespace StbcRevival
         // menu read its missing blackboard (CurrentTacticalTarget threw) and its tactical officer never fired.
         // Run with that ship's view on, as it reads the bridge's consoles and the crew order board, and only once
         // all three stations have their crew bot seated (it reaches for their hands). Done when its ready flag
-        // (OEACLEGCMNJ, the setup's last step) is set.
+        // (OEACLEGCMNJ, the setup's last step) is set. Ship B only: ship A, the game's own, gets set up by the
+        // game (set up here first, its crew never raised shields or fought).
         private static void SetUpCrew(AI.USSAegisCrew crew, string letter)
         {
-            if (crew == null || crewSetUp == null || crewReady == null || (bool)crewReady.GetValue(crew)) return;
+            if (letter != "B" || crew == null || crewSetUp == null || crewReady == null || (bool)crewReady.GetValue(crew)) return;
             foreach (ConsoleBase console in new ConsoleBase[] { Bridge.KHFJCHHMFHN, Bridge.AGAFPEFMEGB, Bridge.LJFGEPOKONO })
                 if (console == null || console.LPMMGGIAOCL == null || console.LPMMGGIAOCL.PawnObject == null) return;
             try
