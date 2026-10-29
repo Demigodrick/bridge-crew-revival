@@ -116,6 +116,9 @@ namespace StbcRevival
             if (category != null) harmony.Patch(category, postfix: new HarmonyMethod(typeof(PvpPrototype), nameof(Category_Postfix)));
             var selectable = AccessTools.Method(typeof(MapIcon), "ACAGOGEPCCE");
             if (selectable != null) harmony.Patch(selectable, postfix: new HarmonyMethod(typeof(PvpPrototype), nameof(Selectable_Postfix)));
+            var cameras = AccessTools.GetDeclaredMethods(typeof(CameraManager)).FirstOrDefault(m => m.Name == "ILKCJBGLJPI");
+            if (cameras == null) Plugin.Log.LogWarning("PvP: CameraManager.ILKCJBGLJPI not found; a second bound ship's viewscreen draws over the first's");
+            else harmony.Patch(cameras, prefix: new HarmonyMethod(typeof(PvpPrototype), nameof(Cameras_Prefix)));
             var heading = AccessTools.Method(typeof(NavMapIcon), "GICLGFHINDB");
             if (heading == null) Plugin.Log.LogWarning("PvP: NavMapIcon.GICLGFHINDB not found; the other ship's map icon turns with yours");
             else harmony.Patch(heading, postfix: new HarmonyMethod(typeof(PvpPrototype), nameof(Heading_Postfix)));
@@ -529,6 +532,27 @@ namespace StbcRevival
         private static void Selectable_Postfix(MapIcon __instance, ref bool __result)
         {
             if (__result && Active && Bound != null && __instance.AJHKBDCEKPH == Bound) __result = false;
+        }
+
+        // A game on ship B binds ship A first (it spawns first), then its own: the camera manager wires each
+        // announced ship's viewscreen camera rig in and adds two 3D-skybox copies of its cameras, and never
+        // unwires the last. Before it takes the new ship: the old ship's rig off, its copies gone.
+        private static void Cameras_Prefix(CameraManager __instance, object __0)
+        {
+            if (!Active) return;
+            var traverse = Traverse.Create(__instance);
+            var old = traverse.Field("PFHOOFGPFMM").GetValue<PlayerSpacecraft>();
+            var next = Traverse.Create(__0).Field("playerShip").GetValue<PlayerSpacecraft>();
+            if (old == null || next == null || old == next) return;
+            var rig = traverse.Property("MGBMPOJIOEI").GetValue<GameObject>();
+            var skyRig = traverse.Property("CCCAMMNGFLI").GetValue<GameObject>();
+            var overlays = traverse.Property("GGICPOGHJLO").GetValue<Camera>();
+            var skyOverlays = traverse.Property("ABHIJPHHDNG").GetValue<Camera>();
+            if (rig != null) rig.SetActive(false);
+            if (overlays != null) overlays.enabled = false;
+            if (skyRig != null) UnityEngine.Object.Destroy(skyRig);
+            if (skyOverlays != null) UnityEngine.Object.Destroy(skyOverlays.gameObject);
+            Plugin.Log.LogInfo($"PvP: {old.ALPAOOKFIEE?.BaseName ?? old.name}'s viewscreen cameras off for {next.ALPAOOKFIEE?.BaseName ?? next.name}'s");
         }
 
         // The nav map turns an icon by its ship's heading unless it's a player ship (yours sits under the map's

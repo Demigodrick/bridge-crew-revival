@@ -84,6 +84,9 @@ namespace StbcRevival
             foreach (var name in new[] { "set_POITarget", "set_WarpTarget", "SetTarget" })
                 PatchEntry(harmony, helm == null ? null : AccessTools.Method(helm, name), part, leave, "ConsoleHelmShipInterface." + name);
             PatchEntry(harmony, AccessTools.Method(typeof(BaseSpacecraft), "KMHNOKFDFAB"), part, leave, "BaseSpacecraft.KMHNOKFDFAB");
+            // A player ship's sound manager (its ship computer's subsystem warnings: a game on ship B also
+            // bound ship A's, which went on calling out A's damage).
+            PatchEntry(harmony, AccessTools.Method(typeof(PlayerSpacecraftSoundManager), "BatchUpdate"), part, leave, "PlayerSpacecraftSoundManager.BatchUpdate");
             // Damage: what a player ship's hull and systems announce as it's hit is about that ship (your crew
             // and the bridge's alarms took the other ship's hits for yours).
             foreach (var hit in AccessTools.GetDeclaredMethods(typeof(BaseSpacecraft)).Concat(AccessTools.GetDeclaredMethods(typeof(PlayerSpacecraft)))
