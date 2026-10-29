@@ -81,6 +81,7 @@ namespace StbcRevival
                 if (target.Prefix) harmony.Patch(target.Method, prefix: hook);
                 else harmony.Patch(target.Method, postfix: hook);
             }
+            harmony.Patch(AccessTools.Method(registry, "RegisterStation"), postfix: new HarmonyMethod(typeof(PvpConsoles), nameof(Order_Postfix)));
             harmony.Patch(AccessTools.Method(typeof(NovaPlayerInfo), "NetworkDeserialize"), finalizer: new HarmonyMethod(typeof(PvpConsoles), nameof(PlayerState_Finalizer)));
             PvpRouting.Patch(harmony);
             // The swap to a player's role station (after the mission's fade, NKILJLNGDHM): ship B's copy for them.
@@ -189,6 +190,20 @@ namespace StbcRevival
             list.Insert(index, __0);
             unloaded.Add(__0);
             return false;
+        }
+
+        // Each copy is made as its original wakes, so an original waking later was sorted in among the copies
+        // (by role): station numbers then depended on load order, a ship B Captain sat at 3. After every
+        // registration: originals in role order, then copies in role order, the same on every game.
+        private static void Order_Postfix()
+        {
+            if (copies.Count == 0 || !(stationList.GetValue(null) is IList list)) return;
+            var stations = list.Cast<object>().ToList();
+            var sorted = stations.OrderBy(s => s is NovaStation st && copies.Contains(st) ? 1 : 0)
+                .ThenBy(s => s is NovaStation st ? (int)st.OGBAPMIPPID : int.MaxValue).ToList(); // stable: ties keep their order
+            if (sorted.SequenceEqual(stations)) return;
+            list.Clear();
+            foreach (var station in sorted) list.Add(station);
         }
 
         // Which loaded copy of a console scene belongs to which station (both copies have the same name).
