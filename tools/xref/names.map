@@ -159,3 +159,15 @@ Valve.VR.PJLFDHPDDMC = VREvent_t
 SVR.Network.IOGFEJEOLBA = Preferences
 SVR.Network.Utilities.MHCFEEJDKJM = Json
 SVR.Network.HPJNFNEKGNJ = Friend
+
+# ---- Voice and warp map --------------------------------------------------------------------------------------
+VoiceRecognitionManager::IPEGCHGIGBI = SetRedAlert
+VoiceRecognitionManager::CBNKANAPHCI = AnswerHail       # ConsoleCaptain.ReplyToHail
+VoiceRecognitionManager::OAJJFCNDHJK = ShowStatus       # ConsoleCaptain.OnShowOurShipInfoPanel
+VoiceRecognitionManager::HCHNIHCKCLO = IntentToCommand  # Watson intent + entities -> crew command
+AI.BHPPPGKNAHK = CrewCommand
+WarpPanel::JBDJGIKEICO = Locations                      # by system ID
+WarpPanel::KHDENOMKIJE = Console
+WarpPanel::HBKEIMBBMHI = CurrentLocation
+WarpMapLocation::PBCKCOJGAEI = System
+WarpMapLocation::KGPNEONLCJN = Pickable?

@@ -57,6 +57,11 @@ namespace StbcRevival
             "evasive", "maneuvers", "manoeuvres", "pattern", "delta", "will", "at", "energize", "factor", "nine",
             "eight", "seven", "six", "five", "four", "three", "two", "one", "hit", "take", "us", "out", "lets",
             "let's", "lock", "away",
+            // the captain's console: hails and the ship's status (Watson's answer_hail and toggle_status)
+            "hail", "hails", "hailing", "answer", "respond", "reply", "channel", "frequencies", "open", "screen",
+            "status", "report", "damage",
+            // destinations: "set course for <system>" (the warp map's names are added when you press the button)
+            "for", "destination", "nearest", "closest", "system",
         };
 
         private static string lastPrepared; // "Warp" or "Impulse": what a bare "engage" / "make it so" engages
@@ -70,6 +75,7 @@ namespace StbcRevival
             var w = new HashSet<string>((text ?? "").Split(' ').Where(x => x.Length > 0 && x != "[unk]"));
             if (w.Count == 0) return null;
             Func<string[], bool> any = list => list.Any(w.Contains);
+            if (Course(w, any) is string course) return course; // before "warp factor four" and the like: a named place wins
             if (Lore(w, any) is string lore) return lore;
             bool shields = any(new[] { "shields", "shield" }), engines = any(new[] { "engines", "engine" });
             bool weapons = any(new[] { "weapons", "phasers", "phaser" }), torpedoes = any(new[] { "torpedoes", "torpedo", "photon" });
@@ -153,6 +159,11 @@ namespace StbcRevival
             if (w.Contains("fire") && w.Contains("will")) return "FirePhasers,FireTorpedoes"; // "Fire at will"
             if (w.Contains("evasive")) return "MoveAwayFrom";                    // "Evasive maneuvers, pattern delta"
             if (w.Contains("energize")) return "TransportFromTarget";            // "Energize"
+            if (any(new[] { "hail", "hails", "hailing", "frequencies", "channel" }) || (w.Contains("on") && w.Contains("screen"))
+                || (any(new[] { "answer", "respond", "reply" }) && !any(new[] { "fire", "shields", "shield" })))
+                return "AnswerHail";                                             // "Answer the hail", "On screen", "Open a channel"
+            if (any(new[] { "status", "report" }) && !any(new[] { "scan", "analyze", "analyse" }))
+                return "StatusReport";                                           // "Status report", "Damage report"
             if (w.Contains("warp") && w.Contains("out") && any(new[] { "drop", "take" })) return "SetSpeedStop"; // "Drop out of warp"
             if (w.Contains("warp") && (any(new[] { "factor", "maximum", "speed", "go", "nine", "eight", "seven", "six", "five", "four",
                                                     "three", "two", "one" })))
@@ -161,6 +172,133 @@ namespace StbcRevival
             if (w.Contains("take") && w.Contains("us") && w.Contains("out")) return "SetSpeedFull"; // "Take us out"
             if (w.Contains("lock") && any(new[] { "phasers", "phaser", "torpedoes", "weapons", "target" })) return "EngageTarget"; // "Lock phasers"
             return null;
+        }
+
+        // ---- Destinations: "set course for <system>" ------------------------------------------------------
+        // Watson never had these: its warp orders went wherever the map already pointed. The names come from the
+        // helm's warp map (WarpPanel) when the button goes down, and Vosk listens for their words too.
+
+        private sealed class Destination
+        {
+            public object Location;   // the map's WarpMapLocation
+            public string Name;       // as the map shows it
+            public string[] Words;    // the name's words Vosk can listen for
+            public float Distance;    // on the map, from where you are
+        }
+
+        private static List<Destination> destinations = new List<Destination>(); // taken on the main thread
+        private static readonly string[] CourseWords = { "course", "plot", "set", "destination", "head", "warp", "go", "take", "fly" };
+
+        // The destination named (or the nearest one), as "Course:<index>" plus warp prepared; with "engage" or
+        // "make it so" in the same breath, warp engaged too. Null: no destination heard.
+        private static string Course(HashSet<string> w, Func<string[], bool> any)
+        {
+            var list = destinations;
+            if (list.Count == 0 || !any(CourseWords) && !w.Contains("for")) return null;
+            int best = -1;
+            if (any(new[] { "nearest", "closest" }))
+            {
+                for (int i = 0; i < list.Count; i++)
+                    if (best < 0 || list[i].Distance < list[best].Distance) best = i;
+            }
+            else
+            {
+                // Most of a name's words heard wins (a number alone, "four" for "IV", isn't enough); a tie between two
+                // names is no answer.
+                double top = 0;
+                bool tie = false;
+                for (int i = 0; i < list.Count; i++)
+                {
+                    if (!list[i].Words.Any(x => w.Contains(x) && !Numbers.Contains(x))) continue;
+                    double score = (double)list[i].Words.Count(w.Contains) / list[i].Words.Length;
+                    if (score > top) { top = score; best = i; tie = false; }
+                    else if (score == top && score > 0) tie = true;
+                }
+                if (top == 0 || tie) return null;
+            }
+            if (best < 0) return null;
+            lastPrepared = "Warp";
+            bool engage = any(new[] { "engage", "punch", "jump" }) || (w.Contains("so") && any(new[] { "make", "it" }));
+            return $"Course:{best},PrepareWarp" + (engage ? ",EngageWarp" : "");
+        }
+
+        // The helm's warp map: your ship's helm console's (PvP has two), else any.
+        private static object WarpMap()
+        {
+            var helm = Bridge.AGAFPEFMEGB;
+            var panels = UnityEngine.Object.FindObjectsOfType<WarpPanel>();
+            return panels.FirstOrDefault(p => helm != null && ReferenceEquals(Traverse.Create(p).Field("KHDENOMKIJE").GetValue(), helm))
+                   ?? panels.FirstOrDefault();
+        }
+
+        // Main thread, button down: the map's systems you can plot a course to (not where you are).
+        private static void TakeDestinations()
+        {
+            var found = new List<Destination>();
+            try
+            {
+                var map = WarpMap();
+                if (map != null && Traverse.Create(map).Field("JBDJGIKEICO").GetValue() is System.Collections.IDictionary locations)
+                {
+                    var here = Traverse.Create(map).Method("HBKEIMBBMHI").GetValue() as Component;
+                    foreach (var location in locations.Values)
+                    {
+                        var l = Traverse.Create(location);
+                        var system = l.Field("<JOEKIOLDNAF>k__BackingField").GetValue() as Map.SystemRoot;
+                        if (system == null || ReferenceEquals(location, here) || !(l.Property("KGPNEONLCJN").GetValue() is true)) continue;
+                        string name;
+                        try { name = SVR.Localization.GetLocalizedText(system.SystemName); }
+                        catch { name = system.SystemName; }
+                        if (string.IsNullOrEmpty(name)) continue;
+                        var spot = ((Component)location).transform.position;
+                        found.Add(new Destination
+                        {
+                            Location = location,
+                            Name = name,
+                            Words = NameWords(name),
+                            Distance = here == null ? 0f : Vector3.Distance(spot, here.transform.position),
+                        });
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                Plugin.Log.LogWarning("Voice commands: the warp map's systems: " + e.Message);
+            }
+            destinations = found;
+            Plugin.Log.LogInfo($"Voice commands: destinations: {(found.Count == 0 ? "none" : string.Join(", ", found.Select(d => $"{d.Name} ({string.Join(" ", d.Words)})").ToArray()))}");
+        }
+
+        private static readonly HashSet<string> Numbers = new HashSet<string> { "one", "two", "three", "four", "five", "six", "seven", "eight", "nine" };
+
+        // "Theta Novae IV" → theta, novae, four: lower case, letters only, Roman and Arabic numerals as words.
+        private static string[] NameWords(string name)
+        {
+            var numbers = new Dictionary<string, string>
+            {
+                { "i", "one" }, { "ii", "two" }, { "iii", "three" }, { "iv", "four" }, { "v", "five" }, { "vi", "six" },
+                { "vii", "seven" }, { "viii", "eight" }, { "ix", "nine" }, { "1", "one" }, { "2", "two" }, { "3", "three" },
+                { "4", "four" }, { "5", "five" }, { "6", "six" }, { "7", "seven" }, { "8", "eight" }, { "9", "nine" },
+            };
+            var words = new List<string>();
+            foreach (var raw in name.ToLowerInvariant().Split(' ', '-', '\'', '.', ','))
+            {
+                if (raw.Length == 0) continue;
+                if (numbers.TryGetValue(raw, out var number)) words.Add(number);
+                else if (raw.All(c => c >= 'a' && c <= 'z') && raw != "system") words.Add(raw);
+            }
+            return words.Distinct().ToArray();
+        }
+
+        // As a click on that system: WarpPanel.SetWarpDestination (it refuses while warping or moving fast,
+        // and for systems not open yet; when it takes it, the bridge shows "Warp Course Plotted").
+        private static void PlotCourse(int index)
+        {
+            var list = destinations;
+            var map = WarpMap();
+            if (index < 0 || index >= list.Count || map == null) return;
+            AccessTools.Method(typeof(WarpPanel), "SetWarpDestination")?.Invoke(map, new[] { list[index].Location, true });
+            Plugin.Log.LogInfo($"Voice commands: course for {list[index].Name}");
         }
 
         private static string Remember(string prepare)
@@ -246,6 +384,7 @@ namespace StbcRevival
                 clip = null;
             }
             else clip = Microphone.Start(micDevice, false, MaxSeconds, SampleRate);
+            TakeDestinations();
             listening = true;
             SendUiEvent("GEJIEIDGDBO"); // the game's "listening" indicator
             Plugin.Log.LogInfo($"Voice commands: listening ({micDevice}{(tap != null ? ", from voice chat's recording" : "")})");
@@ -396,6 +535,19 @@ namespace StbcRevival
                         ?.Invoke(VoiceRecognitionManager.IEFBKOMBFGO, new object[] { one == "RedAlertOn" });
                     continue;
                 }
+                // So are answering a hail and the ship's status panel (Watson's answer_hail and toggle_status):
+                // ConsoleCaptain.ReplyToHail and OnShowOurShipInfoPanel, through the same helpers.
+                if (one == "AnswerHail" || one == "StatusReport")
+                {
+                    AccessTools.Method(typeof(VoiceRecognitionManager), one == "AnswerHail" ? "CBNKANAPHCI" : "OAJJFCNDHJK")
+                        ?.Invoke(VoiceRecognitionManager.IEFBKOMBFGO, null);
+                    continue;
+                }
+                if (one.StartsWith("Course:", StringComparison.Ordinal))
+                {
+                    PlotCourse(int.Parse(one.Substring("Course:".Length)));
+                    continue;
+                }
                 foreach (var role in new[] { "Engineering", "Tactical", "Helm" })
                     update?.Invoke(null, new[] { Enum.Parse(roles, role) });
                 // The helm menu has several Move To orders (to the captain's target, the closest contact, a cloaked
@@ -464,7 +616,8 @@ namespace StbcRevival
             string command = null;
             try
             {
-                var grammar = "[" + string.Join(",", Vocabulary.Distinct().Select(w => "\"" + w + "\"").ToArray()) + ",\"[unk]\"]";
+                var words = Vocabulary.Concat(destinations.SelectMany(d => d.Words)).Distinct();
+                var grammar = "[" + string.Join(",", words.Select(w => "\"" + w + "\"").ToArray()) + ",\"[unk]\"]";
                 var recogniser = Vosk.RecognizerNewGrm(model, SampleRate, Vosk.Str(grammar));
                 if (recogniser == IntPtr.Zero) throw new Exception("the recogniser didn't start");
                 Vosk.AcceptWaveform(recogniser, pcm, pcm.Length);

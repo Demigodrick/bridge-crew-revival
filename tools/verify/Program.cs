@@ -285,8 +285,16 @@ foreach (var m in new[] { "get_ID", "get_name", "get_customProperties", "SetCust
 
 // Voice commands (prototype)
 var vrmType = game.GetType("VoiceRecognitionManager");
-foreach (var m in new[] { "get_UsingVoiceRecognition", "Update", "CurrentRoleIsCaptain", "IPEGCHGIGBI" })
+foreach (var m in new[] { "get_UsingVoiceRecognition", "Update", "CurrentRoleIsCaptain", "IPEGCHGIGBI", "CBNKANAPHCI", "OAJJFCNDHJK" })
     Check($"VoiceRecognitionManager.{m} (voice commands)", vrmType?.GetMethod(m, Inst));
+// Voice "set course for <system>": the helm's warp map
+var warpPanel = game.GetType("WarpPanel");
+var warpLocation = game.GetType("WarpMapLocation");
+Check("  WarpPanel.SetWarpDestination (voice course)", warpPanel?.GetMethod("SetWarpDestination", Inst));
+Check("  WarpPanel.HBKEIMBBMHI (current location)", warpPanel?.GetMethod("HBKEIMBBMHI", Inst));
+foreach (var f in new[] { "JBDJGIKEICO", "KHDENOMKIJE" }) Check($"  WarpPanel.{f} (locations, console)", warpPanel?.GetField(f, Inst));
+Check("  WarpMapLocation.<JOEKIOLDNAF>k__BackingField (system)", warpLocation?.GetField("<JOEKIOLDNAF>k__BackingField", Inst));
+Check("  WarpMapLocation.KGPNEONLCJN (pickable)", warpLocation?.GetProperty("KGPNEONLCJN", Inst));
 Check("  NKEPKEMCLNH(bool) (voice button event)", game.GetType("NKEPKEMCLNH")?.GetConstructors(Inst).FirstOrDefault(c => c.GetParameters().Length == 1));
 var commandManager = game.GetType("AI.CommandManager");
 foreach (var m in new[] { "TriggerCommand", "UpdateSimpleOrders", "PlayInvalidCommandVO" })
