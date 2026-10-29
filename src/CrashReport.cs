@@ -17,7 +17,9 @@ namespace StbcRevival
     /// both logs are rewritten before the mod loads again (Unity's output_log.txt at engine start, BepInEx's
     /// LogOutput.log before any plugin). So:
     ///   - every launch writes its own log as it goes, BepInEx/sessions/&lt;date-time&gt;.log, flushed line by line,
-    ///     everything BepInEx hears (the mod, other plugins, Unity's messages); the last 5 are kept;
+    ///     everything BepInEx hears (the mod, other plugins, the game's own messages); the last 5 are kept;
+    ///   - and copies the engine's log (stbc_Data/output_log.txt: its native lines, stack traces and crash details,
+    ///     most of which never reach BepInEx) to &lt;date-time&gt;.unity.txt, following it four times a second;
     ///   - a marker (BepInEx/sessions/running.txt) lives for as long as the game runs, removed on a clean quit;
     ///   - found at launch, the last run didn't close properly: its session log, Unity's crash folder, Windows'
     ///     "Application Error" entries for stbc.exe, SteamVR's logs and the mod's settings go into
@@ -56,9 +58,11 @@ namespace StbcRevival
                 sessionName = DateTime.Now.ToString("yyyy-MM-dd_HHmmss") + ".log";
                 session = new SessionLog(Path.Combine(SessionsDir, sessionName));
                 BepInEx.Logging.Logger.Listeners.Add(session);
+                FollowEngineLog(Path.Combine(Application.dataPath, "output_log.txt"), Path.Combine(SessionsDir, EngineCopy(sessionName)));
                 WriteMarker();
-                foreach (var old in Directory.GetFiles(SessionsDir, "*.log").OrderByDescending(f => f).Skip(SessionsKept))
-                    TryDelete(old);
+                foreach (var pattern in new[] { "*.log", "*.unity.txt" })
+                    foreach (var old in Directory.GetFiles(SessionsDir, pattern).OrderByDescending(f => f).Skip(SessionsKept))
+                        TryDelete(old);
                 if (last != null)
                 {
                     Plugin.Log.LogWarning($"Crash report: the last run (from {last.Started.ToLocalTime():yyyy-MM-dd HH:mm}) didn't close properly; saving a report");
@@ -170,9 +174,11 @@ namespace StbcRevival
                     files.Add(new KeyValuePair<string, byte[]>(name, text ? Encoding.UTF8.GetBytes(Redact(Encoding.UTF8.GetString(data), last)) : data));
                 }
 
-                // This mod's record of that run.
-                if (last.Log != null) Add("session.log", Path.Combine(SessionsDir, last.Log));
-                if (last.Log == null || !File.Exists(Path.Combine(SessionsDir, last.Log))) notes.AppendLine("No session log for that run.");
+                // This mod's record of that run: its log (what LogOutput.log had) and the engine's (output_log.txt).
+                if (last.Log != null) Add("LogOutput.log", Path.Combine(SessionsDir, last.Log));
+                if (last.Log == null || !File.Exists(Path.Combine(SessionsDir, last.Log))) notes.AppendLine("No mod log for that run.");
+                if (last.Log != null) Add("output_log.txt", Path.Combine(SessionsDir, EngineCopy(last.Log)));
+                if (last.Log == null || !File.Exists(Path.Combine(SessionsDir, EngineCopy(last.Log)))) notes.AppendLine("No copy of the engine's log for that run.");
 
                 // Unity's crash folder (<date>_<time> in the game folder), if it caught the crash.
                 var since = last.Started.AddMinutes(-1);
@@ -288,6 +294,36 @@ namespace StbcRevival
         }
 
         // ---- Helpers ----------------------------------------------------------------------------------------
+
+        private static string EngineCopy(string sessionLog) => Path.GetFileNameWithoutExtension(sessionLog) + ".unity.txt";
+
+        // The engine rewrites output_log.txt at start, before any mod loads, and it holds what a crash needs most:
+        // so it's copied as it grows (a background thread; the last quarter second before a hard crash can be lost).
+        private static void FollowEngineLog(string source, string copy)
+        {
+            new Thread(() =>
+            {
+                try
+                {
+                    using (var from = new FileStream(source, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+                    using (var to = new FileStream(copy, FileMode.Create, FileAccess.Write, FileShare.ReadWrite | FileShare.Delete))
+                    {
+                        var buffer = new byte[64 * 1024];
+                        while (true)
+                        {
+                            int n;
+                            while ((n = from.Read(buffer, 0, buffer.Length)) > 0) to.Write(buffer, 0, n);
+                            to.Flush();
+                            Thread.Sleep(250);
+                        }
+                    }
+                }
+                catch (Exception e)
+                {
+                    Plugin.Log.LogInfo("Crash report: stopped copying the engine's log: " + e.Message);
+                }
+            }) { IsBackground = true, Name = "Engine log copy" }.Start();
+        }
 
         private static bool? wine;
 
