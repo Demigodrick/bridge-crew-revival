@@ -134,6 +134,12 @@ namespace StbcRevival
             var crewVoice = AccessTools.Method(typeof(AI.USSAegisCrew), "CrewbotPlayVO");
             if (crewVoice == null) Plugin.Log.LogWarning("PvP: USSAegisCrew.CrewbotPlayVO not found; the other ship's crew calls out its status on your bridge");
             else harmony.Patch(crewVoice, prefix: new HarmonyMethod(typeof(PvpPrototype), nameof(CrewVoice_Prefix)));
+            var menuOpen = AccessTools.Method(typeof(GazeTargetCrewBotUI), "PHOLDPOOFBM", Type.EmptyTypes);
+            var menuClose = AccessTools.Method(typeof(GazeTargetCrewBotUI), "FOCGMOJKBFF");
+            var lookAt = AccessTools.Method(typeof(LookAtSelection), "JLOHKOALPFF");
+            if (menuOpen != null) harmony.Patch(menuOpen, postfix: new HarmonyMethod(typeof(PvpPrototype), nameof(MenuOpen_Postfix)));
+            if (menuClose != null) harmony.Patch(menuClose, postfix: new HarmonyMethod(typeof(PvpPrototype), nameof(MenuClose_Postfix)));
+            if (lookAt != null) harmony.Patch(lookAt, postfix: new HarmonyMethod(typeof(PvpPrototype), nameof(LookAt_Postfix)));
             if (consoleAI == null) Plugin.Log.LogWarning("PvP: USSAegisCrew.IsConsoleAI not found");
             else harmony.Patch(consoleAI, postfix: new HarmonyMethod(typeof(PvpPrototype), nameof(ConsoleAI_Postfix)));
             foreach (var name in new[] { "OPGMKEGJFIP", "FBNPCAFBGCH" }) // the target's details: TNG / Aegis, original series
@@ -281,6 +287,7 @@ namespace StbcRevival
                 camerasDumpedFor = Bound;
                 boundAt = Time.unscaledTime;
                 cameraDumps = 0;
+                menuEventsLogged = 0;
             }
             float[] at = { 5f, 30f };
             if (cameraDumps >= at.Length || Time.unscaledTime - boundAt < at[cameraDumps]) return;
@@ -307,9 +314,58 @@ namespace StbcRevival
                 var f = Traverse.Create(menu);
                 lines.Append($"\n   menu {path} [{menu.gameObject.scene.name}] on {menu.isActiveAndEnabled} station {f.Field("OHMLDNCIJBJ").GetValue()} shown {f.Field("LKGIEDEECIC").GetValue()}"
                              + $" open {f.Field("ABLOCMKECPH").GetValue()} closeNext {f.Field("BHFBHBGGGKB").GetValue()} commands {(f.Field("FCPHALDHADK").GetValue() == null ? "none" : "set")}"
-                             + $" captainHeader {f.Field("JHDAGMGDKAO").GetValue()}");
+                             + $" captainHeader {f.Field("JHDAGMGDKAO").GetValue()} gazed {f.Field("FBHMKAIJHGE").GetValue()} bot {(f.Field("IGDLADOLMAL").GetValue() as GameObject)?.name ?? "none"}");
+            }
+            // The Aegis crew menus open only while you look at the crew bot: a ray from Camera.main against each
+            // look-at target's collider (LookAtSelection).
+            var main = Camera.main;
+            lines.Append($"\n   Camera.main {(main == null ? "none" : PathOf(main.transform) + " pos " + main.transform.position + " fwd " + main.transform.forward)}");
+            foreach (var selection in UnityEngine.Object.FindObjectsOfType<LookAtSelection>())
+            {
+                var s = Traverse.Create(selection);
+                lines.Append($"\n   look-at {PathOf(selection.transform)} selected {(s.Field("FODMLDIILAF").GetValue() as GameObject)?.name ?? "none"}");
+                if (s.Field("NAAIKEPDFAE").GetValue() is System.Collections.IEnumerable targets)
+                    foreach (var target in targets)
+                    {
+                        var e = Traverse.Create(target);
+                        var collider = e.Field("Collider").GetValue() as Collider;
+                        lines.Append($"\n     target {(e.Field("Object").GetValue() as GameObject)?.name ?? "none"} collider {(collider == null ? "none" : $"on {collider.enabled && collider.gameObject.activeInHierarchy} at {collider.bounds.center}")}"
+                                     + $" looked at {e.Field("BeingLookedAt").GetValue()}");
+                    }
             }
             Plugin.Log.LogInfo(lines.ToString());
+        }
+
+        private static string PathOf(Transform t)
+        {
+            var path = t.name;
+            for (var p = t.parent; p != null; p = p.parent) path = p.name + "/" + path;
+            return $"{path} [{t.gameObject.scene.name}]";
+        }
+
+        // Testing the crew menus: when each opens and closes, and what you're looking at.
+        private static int menuEventsLogged;
+
+        private static void MenuOpen_Postfix(GazeTargetCrewBotUI __instance) => LogMenuEvent(__instance, "opened");
+        private static void MenuClose_Postfix(GazeTargetCrewBotUI __instance) => LogMenuEvent(__instance, "closed");
+
+        private static void LogMenuEvent(GazeTargetCrewBotUI menu, string what)
+        {
+            if (!Active || menuEventsLogged >= 60) return;
+            menuEventsLogged++;
+            Plugin.Log.LogInfo($"PvP: crew menu {PathOf(menu.transform)} {what} at {Time.unscaledTime:F1} s (station {Traverse.Create(menu).Field("OHMLDNCIJBJ").GetValue()})");
+        }
+
+        private static GameObject lookedAt;
+
+        private static void LookAt_Postfix(LookAtSelection __instance)
+        {
+            if (!Active || menuEventsLogged >= 60) return;
+            var now = Traverse.Create(__instance).Field("FODMLDIILAF").GetValue() as GameObject;
+            if (now == lookedAt) return;
+            lookedAt = now;
+            menuEventsLogged++;
+            Plugin.Log.LogInfo($"PvP: looking at {(now == null ? "nothing" : PathOf(now.transform))} at {Time.unscaledTime:F1} s");
         }
 
         private static float nextCrewCheck;
