@@ -228,6 +228,7 @@ namespace StbcRevival
                     exploded.Clear();
                 }
                 if (hiddenAvatars.Count > 0) ShowAllAvatars();
+                PvpScope.Reset();
                 return;
             }
             PvpShips.Update();
@@ -243,7 +244,45 @@ namespace StbcRevival
                 var info = ship.GetTargetInfo();
                 if (info == null || info.GBNCJMFFIDI > 0f) continue;
                 exploded.Add(ship);
+                var crew = ship.GetComponent<AI.USSAegisCrew>();
+                if (crew != null) crew.enabled = false;
                 Explode(ship);
+            }
+            if (Time.unscaledTime >= nextCrewCheck)
+            {
+                nextCrewCheck = Time.unscaledTime + 1f;
+                CrewTheOtherShip();
+            }
+        }
+
+        private static float nextCrewCheck;
+        private static readonly string[] CrewConsoleCaches = { "LMFOFJEALLE", "GELDBDOEIBN", "IJFDAJGLKLF", "BMOOIDNEGJD" };
+
+        /// <summary>The player ship with that letter, while the PvP test runs.</summary>
+        internal static PlayerSpacecraft ShipOf(string letter)
+        {
+            if (Bound != null && Letter(Bound) == letter) return Bound;
+            return others.FirstOrDefault(s => s != null && Letter(s) == letter);
+        }
+
+        // The AI crew runs on the master client (the game's crew logic checks it). There the other ship's crew is
+        // switched on with that ship's view on (PvpScope), its console caches cleared so it finds that ship's.
+        private static void CrewTheOtherShip()
+        {
+            if (!PvpScope.Ready || !(Patches.PhotonNetworkType?.GetMethod("get_isMasterClient", BindingFlags.Public | BindingFlags.Static)?.Invoke(null, null) is bool master) || !master) return;
+            foreach (var ship in others)
+            {
+                if (ship == null || exploded.Contains(ship)) continue;
+                var crew = ship.GetComponent<AI.USSAegisCrew>();
+                if (crew == null || crew.enabled) continue;
+                var letter = Letter(ship);
+                if (PvpConsoles.Twin(Bridge.AGAFPEFMEGB) == null) continue; // the other set isn't loaded yet
+                PvpScope.Run(letter, () =>
+                {
+                    foreach (var name in CrewConsoleCaches) AccessTools.Field(typeof(AI.USSAegisCrew), name)?.SetValue(crew, null);
+                    crew.enabled = true;
+                });
+                Plugin.Log.LogInfo($"PvP: ship {letter}'s AI crew on ({ship.ALPAOOKFIEE?.BaseName ?? ship.name})");
             }
         }
 

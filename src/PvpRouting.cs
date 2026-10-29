@@ -33,6 +33,13 @@ namespace StbcRevival
         /// <summary>The ship the running code is for ("A", "B"), or null when it isn't known.</summary>
         internal static string Context { get; private set; }
 
+        // The context, and with it the ship view the handles show (PvpScope).
+        private static void SetContext(string ship)
+        {
+            Context = ship;
+            PvpScope.Switch(ship);
+        }
+
         private static FieldInfo listeners, dispatching, deferred;
         private static MethodInfo cleanup;
         private static readonly Dictionary<Type, FieldInfo> innerListener = new Dictionary<Type, FieldInfo>();
@@ -87,6 +94,7 @@ namespace StbcRevival
             var graphEntry = new HarmonyMethod(typeof(PvpRouting), nameof(Graph_Prefix));
             foreach (var name in new[] { "SendDistributionUpdate", "ADKNCMHHNMK", "KLICDPIAFHF" })
                 PatchEntry(harmony, graph == null || gridGraph == null ? null : AccessTools.Method(graph, name), graphEntry, leave, "power graph " + name);
+            PatchEntry(harmony, AccessTools.Method(typeof(AI.USSAegisCrew), "BatchUpdate"), part, leave, "USSAegisCrew.BatchUpdate");
             int parts = 0;
             foreach (var type in typeof(ConsoleBase).Assembly.GetTypes())
             {
@@ -126,13 +134,13 @@ namespace StbcRevival
         private static void Console_Prefix(ConsoleBase __instance, out string __state)
         {
             __state = Context;
-            if (Routing) Context = PvpConsoles.SetOf(__instance) ?? Context;
+            if (Routing) SetContext(PvpConsoles.SetOf(__instance) ?? Context);
         }
 
         private static void Part_Prefix(Component __instance, out string __state)
         {
             __state = Context;
-            if (Routing) Context = Owner(__instance) ?? Context;
+            if (Routing) SetContext(Owner(__instance) ?? Context);
         }
 
         private static void PatchEntry(Harmony harmony, MethodBase method, HarmonyMethod prefix, HarmonyMethod finalizer, string what)
@@ -161,12 +169,12 @@ namespace StbcRevival
                 }
                 gridOf.TryGetValue(__instance, out grid);
             }
-            Context = Owner(grid) ?? Context;
+            SetContext(Owner(grid) ?? Context);
         }
 
         private static Exception Leave_Finalizer(string __state, Exception __exception)
         {
-            Context = __state;
+            if (Context != __state) SetContext(__state);
             return __exception;
         }
 
@@ -209,7 +217,7 @@ namespace StbcRevival
                     if (!(list[i] is Delegate wrapper)) continue;
                     string owner = Owner(Listener(wrapper)?.Target);
                     if (eventShip != null ? (owner ?? Mine) != eventShip : sender != null && (owner ?? Mine) != sender) continue;
-                    Context = owner ?? sender;
+                    SetContext(owner ?? sender);
                     try
                     {
                         wrapper.DynamicInvoke(__0);
@@ -220,7 +228,7 @@ namespace StbcRevival
                     }
                     finally
                     {
-                        Context = sender;
+                        SetContext(sender);
                     }
                 }
                 dispatching.SetValue(__instance, null);

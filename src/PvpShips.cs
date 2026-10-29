@@ -18,14 +18,19 @@ namespace StbcRevival
         private const BindingFlags Static = BindingFlags.Public | BindingFlags.Static;
         private const BindingFlags All = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
 
-        /// <summary>"A" or "B": the ship this game crews.</summary>
+        private static int mineFrame = -1;
+        private static string mine;
+
+        /// <summary>"A" or "B": the ship this game crews (worked out once a frame: event routing asks often).</summary>
         internal static string Mine
         {
             get
             {
+                if (mineFrame == UnityEngine.Time.frameCount) return mine;
                 var setting = Plugin.PvpTestShip.Value?.Trim().ToUpperInvariant();
-                if (setting == "A" || setting == "B") return setting;
-                return Auto(Me);
+                mine = setting == "A" || setting == "B" ? setting : Auto(Me);
+                mineFrame = UnityEngine.Time.frameCount;
+                return mine;
             }
         }
 

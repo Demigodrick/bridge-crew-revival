@@ -111,6 +111,33 @@ namespace StbcRevival
 
         internal static bool IsCopy(ConsoleBase console) => copies.Any(s => s != null && s.GHJLPNMIOAJ == console);
 
+        /// <summary>The same console in the other set (ship A's for ship B's, and back), or null.</summary>
+        internal static T Twin<T>(T console) where T : ConsoleBase
+        {
+            if (console == null) return null;
+            foreach (var pair in twinOf)
+                if (pair.Key != null && pair.Key.GHJLPNMIOAJ == console) return pair.Value == null ? null : pair.Value.GHJLPNMIOAJ as T;
+            return null;
+        }
+
+        private static readonly MethodInfo SetAI = AccessTools.Method(typeof(ConsoleBase), "set_AI");
+
+        // The game seats its crew bots at the original stations only: the copies get their twins' (the crew
+        // counts a console with a bot and no player as an AI station).
+        private static void ShareBots()
+        {
+            if (SetAI == null) return;
+            foreach (var copy in copies)
+            {
+                var console = copy == null ? null : copy.GHJLPNMIOAJ;
+                if (console == null || console.LPMMGGIAOCL != null || !twinOf.TryGetValue(copy, out var original) || original == null) continue;
+                var bot = original.GHJLPNMIOAJ == null ? null : original.GHJLPNMIOAJ.LPMMGGIAOCL;
+                if (bot == null) continue;
+                SetAI.Invoke(console, new object[] { bot });
+                Plugin.Log.LogInfo($"PvP: ship B's {copy.OGBAPMIPPID} console crewed by {bot.FAJABLKBGHN}");
+            }
+        }
+
         private static readonly Dictionary<Transform, string> setRoots = new Dictionary<Transform, string>();
         private static float nextRoots;
 
@@ -426,6 +453,7 @@ namespace StbcRevival
             if (!Active || copies.Count == 0 || Time.unscaledTime < nextHide) return;
             nextHide = Time.unscaledTime + 1f;
             LinkCopies();
+            ShareBots();
             bool onB = OnB;
             var others = twinOf.Keys.Where(s => s != null && copies.Contains(s) != onB).ToList();
             if (others.Count == 0) return;
