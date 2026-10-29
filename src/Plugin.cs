@@ -44,6 +44,7 @@ namespace StbcRevival
         internal static ConfigEntry<bool> LocalSave;
         internal static ConfigEntry<bool> FetchUbisoftSave;
         internal static ConfigEntry<bool> CheckForUpdates;
+        internal static ConfigEntry<bool> AutoUpdate;
         internal static ConfigEntry<bool> TestLastStand;
         internal static ConfigEntry<bool> PvpTest;
         internal static ConfigEntry<string> PvpTestShip;
@@ -83,6 +84,7 @@ namespace StbcRevival
         {
             Log = Logger;
             Instance = this;
+            UpdateCheck.CleanUp();
 
             Mode = Config.Bind("Photon", "Mode", PhotonMode.Steam,
                 "Steam = no server needed: play with anyone over Steam (rooms listed as Steam lobbies, friends join via Steam). " +
@@ -156,7 +158,9 @@ namespace StbcRevival
             PvpTestShip = Config.Bind("Debug", "PvpTestShip", "Auto",
                 "Testing only, the PvP test mission: the player ship you crew. Auto: the host crews A (the first ship), the first player to join after the host crews B (PvP B), anyone else A. A or B: that ship.");
             CheckForUpdates = Config.Bind("Updates", "CheckForUpdates", true,
-                "Once per launch, on the shuttle, check the website for a newer version and offer to open it. Nothing is downloaded; if the check fails, nothing is shown.");
+                "Once per launch, on the shuttle, check the website for a newer version (and with AutoUpdate, install it). If the check fails, nothing is shown.");
+            AutoUpdate = Config.Bind("Updates", "AutoUpdate", true,
+                "When a newer version is out, download it from GitHub, check it and install it; it runs from the next launch. Off: offer to open the website instead.");
             UpdateUrl = Config.Bind("Updates", "VersionUrl", "",
                 "Where to read the latest version number. Empty = the official website's version.txt.");
             VoiceJitterBufferMs = Config.Bind("Voice", "JitterBufferMs", 100,

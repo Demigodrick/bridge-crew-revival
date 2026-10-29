@@ -4,6 +4,8 @@
 # Builds locally (the mod compiles against the game's own DLLs, which can't go in the repo or CI),
 # then uploads BridgeCrewRevival.zip and its .sha256. The installers fetch
 # releases/latest/download/BridgeCrewRevival.zip, so the asset names must stay fixed.
+# The two DLLs and their SHA256SUMS go up too: the in-game updater (UpdateCheck.cs) fetches those, as
+# Unity 5.4's .NET can't open a zip.
 # It also updates docs/version.txt (the in-game update check reads it from the website), commits and
 # pushes that, so the site announces the new version once the release exists.
 set -euo pipefail
@@ -16,8 +18,11 @@ out="$root/dist/release"
 rm -rf "$out" && mkdir -p "$out"
 cp "$zip" "$out/BridgeCrewRevival.zip"
 (cd "$out" && sha256sum BridgeCrewRevival.zip > BridgeCrewRevival.zip.sha256)
+cp "$root/dist/BridgeCrewRevival-$version/plugins/StbcRevival.dll" "$root/dist/BridgeCrewRevival-$version/plugins/StbcCore.dll" "$out/"
+(cd "$out" && sha256sum StbcRevival.dll StbcCore.dll > SHA256SUMS)
 
 gh release create "v$version" "$out/BridgeCrewRevival.zip" "$out/BridgeCrewRevival.zip.sha256" \
+  "$out/StbcRevival.dll" "$out/StbcCore.dll" "$out/SHA256SUMS" \
   --title "Bridge Crew Revival $version" --notes "$notes"
 
 # Announce it to players' games only after the release (and its download) exists.
