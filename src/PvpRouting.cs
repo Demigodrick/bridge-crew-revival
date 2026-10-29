@@ -18,7 +18,8 @@ namespace StbcRevival
     ///     its player's state, a ship part while it takes console state, and an event listener of either ship
     ///     while it handles an event. Listeners belong to the ship they're part of, or to the set of consoles
     ///     they're in; anything else (the bridge, the mission, music) belongs to no ship.
-    ///   - An event sent for one ship skips the other ship's listeners. Impulse and warp phase events name
+    ///   - An event sent for one ship skips the other ship's listeners; one sent by the other ship's code reaches
+    ///     only that ship's (not the bridge's: its captain console's "Hull down to" warning). Impulse and warp phase events name
     ///     their ship, and go to that ship's listeners only (bridge-wide ones count as your ship's: no warp
     ///     effects on your viewscreen when the other ship warps).
     ///   - What code for the other ship says to the bridge (console messages, crew and computer voice) is
@@ -207,7 +208,7 @@ namespace StbcRevival
                 {
                     if (!(list[i] is Delegate wrapper)) continue;
                     string owner = Owner(Listener(wrapper)?.Target);
-                    if (eventShip != null ? (owner ?? Mine) != eventShip : owner != null && sender != null && owner != sender) continue;
+                    if (eventShip != null ? (owner ?? Mine) != eventShip : sender != null && (owner ?? Mine) != sender) continue;
                     Context = owner ?? sender;
                     try
                     {

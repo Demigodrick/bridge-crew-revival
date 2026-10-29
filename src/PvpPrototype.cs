@@ -116,6 +116,9 @@ namespace StbcRevival
             if (category != null) harmony.Patch(category, postfix: new HarmonyMethod(typeof(PvpPrototype), nameof(Category_Postfix)));
             var selectable = AccessTools.Method(typeof(MapIcon), "ACAGOGEPCCE");
             if (selectable != null) harmony.Patch(selectable, postfix: new HarmonyMethod(typeof(PvpPrototype), nameof(Selectable_Postfix)));
+            var heading = AccessTools.Method(typeof(NavMapIcon), "GICLGFHINDB");
+            if (heading == null) Plugin.Log.LogWarning("PvP: NavMapIcon.GICLGFHINDB not found; the other ship's map icon turns with yours");
+            else harmony.Patch(heading, postfix: new HarmonyMethod(typeof(PvpPrototype), nameof(Heading_Postfix)));
             PatchPlayerShipChecks(harmony);
             PvpConsoles.Patch(harmony);
             var consoleAI = AccessTools.Method(typeof(AI.USSAegisCrew), "IsConsoleAI");
@@ -340,6 +343,7 @@ namespace StbcRevival
             }
             foreach (var renderer in ship.GetComponentsInChildren<Renderer>(true)) renderer.enabled = false;
             foreach (var collider in ship.GetComponentsInChildren<Collider>(true)) collider.enabled = false;
+            DropContact(ship);
             if (model == null)
             {
                 Plugin.Log.LogInfo($"PvP: {ship.name} destroyed, no explosion found");
@@ -354,6 +358,27 @@ namespace StbcRevival
             Plugin.Log.LogInfo($"PvP: {ship.ALPAOOKFIEE?.BaseName ?? ship.name} exploded ({source} explosion, ship FX {(fx != null ? "found" : "none")}) at {position}"
                 + $" from {visible.Length} visible parts, {(camera != null ? Vector3.Distance(camera.transform.position, position).ToString("F0") : "?")} from the main camera,"
                 + $" in {(space != null ? space.name : "the scene root")}");
+        }
+
+        // Off the sensors, as a removed body (SectorMap.LIPOCCLEEGM: out of its system's detectables and
+        // targetables, so off every map, with the game's "lost contact").
+        private static void DropContact(PlayerSpacecraft ship)
+        {
+            try
+            {
+                var map = UnityEngine.Object.FindObjectOfType<SectorMap>();
+                var drop = AccessTools.Method(typeof(SectorMap), "LIPOCCLEEGM", new[] { typeof(SectorBody) });
+                if (map == null || drop == null)
+                {
+                    Plugin.Log.LogWarning("PvP: the sector map wasn't found; the destroyed ship stays on the maps");
+                    return;
+                }
+                drop.Invoke(map, new object[] { ship });
+            }
+            catch (Exception e)
+            {
+                Plugin.Log.LogWarning("PvP: couldn't take the destroyed ship off the maps: " + (e.InnerException ?? e).Message);
+            }
         }
 
         private static bool IsOther(PlayerSpacecraft ship) => Active && Bound != null && ship != Bound;
@@ -465,6 +490,13 @@ namespace StbcRevival
         private static void Selectable_Postfix(MapIcon __instance, ref bool __result)
         {
             if (__result && Active && Bound != null && __instance.AJHKBDCEKPH == Bound) __result = false;
+        }
+
+        // The nav map turns an icon by its ship's heading unless it's a player ship (yours sits under the map's
+        // own rotation, which is your heading): the other player ship turns by its own, as an AI ship does.
+        private static void Heading_Postfix(MapIcon __instance, ref bool __result)
+        {
+            if (!__result && __instance.AJHKBDCEKPH is PlayerSpacecraft ship && IsOther(ship)) __result = true;
         }
 
         // The target panel's shields and hull, as for an AI ship: the ship's target info (shield points of the
