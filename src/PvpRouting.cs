@@ -16,7 +16,7 @@ namespace StbcRevival
     /// cores, and the other set's consoles raised contacts and hails on your bridge. Here:
     ///   - Each piece of code runs "for" a ship (the context): a console of either set while it updates or takes
     ///     its player's state, a ship part while it takes console state, and an event listener of either ship
-    ///     while it handles an event. Listeners belong to the ship they're part of, or to the set of consoles
+    ///     while it handles an event, a player ship while it takes a hit. Listeners belong to the ship they're part of, or to the set of consoles
     ///     they're in; anything else (the bridge, the mission, music) belongs to no ship.
     ///   - An event sent for one ship skips the other ship's listeners; one sent by the other ship's code reaches
     ///     only that ship's (not the bridge's: its captain console's "Hull down to" warning). Impulse and warp phase events name
@@ -84,6 +84,10 @@ namespace StbcRevival
             foreach (var name in new[] { "set_POITarget", "set_WarpTarget", "SetTarget" })
                 PatchEntry(harmony, helm == null ? null : AccessTools.Method(helm, name), part, leave, "ConsoleHelmShipInterface." + name);
             PatchEntry(harmony, AccessTools.Method(typeof(BaseSpacecraft), "KMHNOKFDFAB"), part, leave, "BaseSpacecraft.KMHNOKFDFAB");
+            // Damage: what a player ship's hull and systems announce as it's hit is about that ship (your crew
+            // and the bridge's alarms took the other ship's hits for yours).
+            PatchEntry(harmony, AccessTools.Method(typeof(BaseSpacecraft), "takeHit"), part, leave, "BaseSpacecraft.takeHit");
+            PatchEntry(harmony, AccessTools.Method(typeof(BaseSpacecraft), "JOKMKFDGBIE"), part, leave, "BaseSpacecraft.JOKMKFDGBIE");
             var graph = AccessTools.TypeByName("Sector.Spacecraft.Subsystems.CIMNOCCODAC");
             gridGraph = AccessTools.Field(typeof(EngineerPowerGrid), "CFPJPPMLGKH");
             var graphEntry = new HarmonyMethod(typeof(PvpRouting), nameof(Graph_Prefix));
