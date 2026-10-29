@@ -289,6 +289,8 @@ namespace StbcRevival
                              + $" depth {cam.depth} clear {cam.clearFlags} target {(cam.targetTexture != null ? cam.targetTexture.name + " " + cam.targetTexture.width : "screen")}"
                              + $" eye {cam.stereoTargetEye} scale {cam.transform.lossyScale} pos {cam.transform.position} layers {layers}");
             }
+            foreach (var root in Resources.FindObjectsOfTypeAll<Transform>().Where(t => t.parent == null && t.name == "OcclusionProxyRoot" && t.gameObject.scene.name != null))
+                lines.Append($"\n   {root.name} [{root.gameObject.scene.name}] active {root.gameObject.activeInHierarchy} rot {root.rotation.eulerAngles}");
             Plugin.Log.LogInfo(lines.ToString());
         }
 
@@ -586,6 +588,10 @@ namespace StbcRevival
             __state = rig != null ? rig.GetComponent<OrientExternalCamera>() : null;
             if (rig != null) rig.SetActive(false);
             if (overlays != null) overlays.enabled = false;
+            // The sky copy's occlusion proxy hangs off a root of its own (DetachOcclusionProxy): left behind, it
+            // keeps masking the skybox where ship A's viewscreen faced, and the last frame shows through there.
+            var skyProxy = skyRig != null ? proxyRoot.GetValue(skyRig.GetComponent<OrientExternalCamera>()) as Transform : null;
+            if (skyProxy != null) UnityEngine.Object.Destroy(skyProxy.gameObject);
             if (skyRig != null) UnityEngine.Object.Destroy(skyRig);
             if (skyOverlays != null) UnityEngine.Object.Destroy(skyOverlays.gameObject);
             Plugin.Log.LogInfo($"PvP: {old.ALPAOOKFIEE?.BaseName ?? old.name}'s viewscreen cameras off for {next.ALPAOOKFIEE?.BaseName ?? next.name}'s");
@@ -614,6 +620,7 @@ namespace StbcRevival
         private static readonly MethodInfo seatRig = AccessTools.Method(typeof(OrientExternalCamera), "ODAGBFEIGPE");
         private static readonly FieldInfo seatPlayer = AccessTools.Field(typeof(OrientExternalCamera), "HAMOMEFCFNB");
         private static readonly FieldInfo viewMode = AccessTools.Field(typeof(OrientExternalCamera), "EBDIIHHOPLO");
+        private static readonly FieldInfo proxyRoot = AccessTools.Field(typeof(OrientExternalCamera), "IOEPFJFAPMG");
 
         // The nav map turns an icon by its ship's heading unless it's a player ship (yours sits under the map's
         // own rotation, which is your heading): the other player ship turns by its own, as an AI ship does.
