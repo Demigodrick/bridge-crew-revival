@@ -476,13 +476,16 @@ namespace StbcRevival
                 foreach (var root in scene.GetRootGameObjects()) yield return root;
         }
 
+        // Not the crew bots' mouse targets (NonVRCrewBotManager parents one to each bot's station, the original set's):
+        // the bots are shared, and those stations sit where yours do, so they're how you pick a bot without a headset.
         private static void SetVisible(IEnumerable<GameObject> roots, bool visible)
         {
             foreach (var root in roots)
             {
                 if (root == null) continue;
                 foreach (var r in root.GetComponentsInChildren<Renderer>(true)) r.enabled = visible;
-                foreach (var c in root.GetComponentsInChildren<Collider>(true)) c.enabled = visible;
+                foreach (var c in root.GetComponentsInChildren<Collider>(true))
+                    if (visible || !c.name.EndsWith("_NonVRCrewBotCollider", StringComparison.Ordinal)) c.enabled = visible;
                 foreach (var c in root.GetComponentsInChildren<Canvas>(true)) c.enabled = visible;
             }
         }
