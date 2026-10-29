@@ -1,0 +1,161 @@
+# Readable names for the game's obfuscated ones (xref src and dump apply them; nothing from the game is here).
+#   Type = Name                 a type (a dot in Name also sets a top-level type's namespace)
+#   Type::member = Name         every field, method, property and event of that name in that type (the
+#                               obfuscator reuses names across types, so a name is only ever mapped per type)
+#   ... = Name?                 a guess: it comes out as Name_maybe
+# Type is a full name (Nested types: Outer/Inner) or a plain name if that's unique. Add what each session works out.
+
+# ---- Shared types --------------------------------------------------------------------------------------------
+FLCHMJJDKDL = Station                                   # Captain, Engineering, Helm, Tactical, COUNT
+Sector.DGGJOECIFAF = Team
+KFLPAPJAAGO = CrewVoice                                 # who speaks a VO line (Crewbot_Tac_Hoyle, ...)
+Sector.HOLJLCLENCA = SectorBody
+FAMOMDAAPCH = TargetInfo                                # SectorBody.GetTargetInfo()
+Sector.HHHDDNLEDBN = Category
+Sector.NHGGGDMADKM = ShipSystem
+Sector.Spacecraft.BaseSpacecraft/HGKJKJMPFMB = Subsystem
+UI.CAJKAPALCCO = ViewScreenMessages
+AI.CPLIILIDJKG = AIObjective
+BLECEHNPNBH = Tag
+BHNEPPPPMKH = StartSystemSelection
+CIFDOFLFGEA = Events                                    # the event bus: Send, AddListener
+FOMLMDGCIAF = BatchUpdates                              # RegisterForUpdate / UnregisterForUpdate
+KPDEBLABPAG = Yield                                     # cached WaitForEndOfFrame / WaitForSeconds
+
+# ---- Events (sent on Events) ---------------------------------------------------------------------------------
+ANFLCDMNNBN = LevelLoadedEvent                          # NetworkLoadLevel, while loading
+DGEMHMBBHKO = PhaseLevelLoadedEvent                     # a game phase's reply to LevelLoadedEvent
+CJDAICJCJLB = VRModeChangedEvent                        # CameraManager.SetVRActive
+NAJABGEGGID = PawnSpawnedEvent                          # Info, IsNPC, IsLocal
+LLPJLPJIDAN = LookedAtEvent                             # LookAtSelection: a new look-at target
+LAGIFMCIJKH = CrewHoverEvent                            # NonVRCrewBotManager: hovered and picked station
+EEFNPEDDGFI = MissionOverEvent
+
+# ---- Mission scripting ---------------------------------------------------------------------------------------
+Mission.Scripting.KOOLIJPNDOH = BodyRef
+Mission.Scripting.KOOLIJPNDOH::AHMPFHDGMKJ = SectorBody
+Mission.Scripting.KOOLIJPNDOH::ECDJPNMAKOM = SystemTransform
+Mission.Scripting.MNFBGALLEAJ = MissionSequence
+Mission.Scripting.MJHDDKANLEC = MissionObjective
+Mission.Scripting.FFPNMKADDPK = Spawner
+Mission.Scripting.Framework.Tasks.KAPOBAJDOEJ = TaskStep
+Mission.Scripting.Framework.Tasks.FNICGFPIEOL = TaskBuilders
+Mission.GPJGLFHMNJO = MissionStatus                     # running, success, failure, aborted, captainLeft
+HHJAGACLBKA = MissionRunner                             # runs the sequence: Update, Halt, OnMissionSuccess/Failure
+
+Mission.MissionManager::IEFBKOMBFGO = Instance
+Mission.MissionManager::JNFHBOKLFIE = MonitorPlayerHealth   # on from Awake: at no hull, halts the script and fails
+Mission.MissionManager::HKMMKFJNJBJ = Status
+Mission.MissionManager::ENGIPFEKJAK = Runner
+Mission.MissionManager::FFKKADIEOGP = PlayerShip
+Mission.MissionManager::AIPPOIGCJPN = UpdateMission     # the ScenarioBase override run each frame
+Mission.MissionManager::OCCFFLMCBCP = PlayerDeathMissionEnd
+Mission.MissionManager::MHABPDIJBCK = EndMission        # -> Multicast_MissionOver
+
+GamePhase_Bridge::PEDKKHLJHKE = OnLevelLoaded
+NetworkLoadLevel::MMMDBOOILME = OnSceneLoaded
+
+# ---- Loader, players -----------------------------------------------------------------------------------------
+Loader::IOMGCNMDDCK = IsTNG
+Loader::JCEFNOJHCKO = IsTOS
+NovaPlayerManager::IEFBKOMBFGO = Instance
+NovaPlayerManager::AJPNCBOKCLC = LocalPlayer
+NovaPlayerInfo::FJMHMOOJNJG = Role
+NovaPlayerInfo::GHJLPNMIOAJ = Console
+PlayerInfo::AOLEJMABHPE = IsLocal
+PlayerInfo::AOMGCCGDJJC = IsAI?
+PlayerInfo::FAJABLKBGHN = DisplayName
+PlayerManager::IEFBKOMBFGO = Instance
+NovaStation::OGBAPMIPPID = Role
+NovaStation::GHJLPNMIOAJ = Console
+
+# ---- Bridge and consoles -------------------------------------------------------------------------------------
+Bridge::KHFJCHHMFHN = Tactical
+Bridge::AGAFPEFMEGB = Helm
+Bridge::LJFGEPOKONO = Engineering
+Bridge::PKCFGMELINM = Captain
+ConsoleBase::LPMMGGIAOCL = AI                           # the crew bot working it (set_AI)
+ConsoleCaptain/EGJLFAIFPGC = ViewScreenMode
+
+# ---- AI crew -------------------------------------------------------------------------------------------------
+AI.USSAegisCrew::GEFJIDCHAGC = SetUp                    # blackboards, trees, schedulers (on warp arrival)
+AI.USSAegisCrew::OEACLEGCMNJ = IsSetUp
+AI.USSAegisCrew::NPKHBJCCMAE = TacticalBlackboard
+AI.USSAegisCrew::CFPEAEOGMII = HelmBlackboard
+AI.USSAegisCrew::DPGAEMENBFP = EngineeringBlackboard
+AI.USSAegisCrew::CHOEJJNNFPO = TacticalTree
+AI.USSAegisCrew::MCODMMNLFHL = HelmTree
+AI.USSAegisCrew::OOIGKDCGMAA = EngineeringTree
+AI.USSAegisCrew::BCCLPBBHKIF = BuildTacticalTree
+AI.USSAegisCrew::LNFHNLIBBHI = BuildHelmTree
+AI.USSAegisCrew::LHDPDMDADMA = BuildEngineeringTree
+AI.USSAegisCrew::EBDKDONAMNM = Schedulers
+
+# ---- Crew menus ----------------------------------------------------------------------------------------------
+GazeTargetCrewBotUI::OHMLDNCIJBJ = MenuStation          # Captain: the crew-wide menu
+GazeTargetCrewBotUI::BGBCLIFDOEO = HoverStation?
+GazeTargetCrewBotUI::LKGIEDEECIC = Shown
+GazeTargetCrewBotUI::ABLOCMKECPH = Open
+GazeTargetCrewBotUI::BHFBHBGGGKB = CloseOnNextUpdate
+GazeTargetCrewBotUI::FCPHALDHADK = Commands
+GazeTargetCrewBotUI::JHDAGMGDKAO = CaptainHeader
+GazeTargetCrewBotUI::FBHMKAIJHGE = Gazed
+GazeTargetCrewBotUI::IGDLADOLMAL = BotPawn
+GazeTargetCrewBotUI::JPHDHJONCEB = LocalPlayer
+GazeTargetCrewBotUI::PHOLDPOOFBM = OpenMenu
+GazeTargetCrewBotUI::FOCGMOJKBFF = CloseMenu
+GazeTargetCrewBotUI::NPIMFNINENI = UpdateStationButtons # off for stations a human holds
+GazeTargetCrewBotUI::GAODHGDMMOB = OnCrewHover
+GazeTargetCrewBotUI::DEMKINPBGDG = OnLookedAt
+
+LookAtSelection::NAAIKEPDFAE = Targets                  # VR only (enabled while VR is active)
+LookAtSelection::AMLCEDNEJPI = RemotePlayers
+LookAtSelection::FODMLDIILAF = Selected
+LookAtSelection::CECADBCNGLC = NextIndex
+LookAtSelection::HFKHNJAICBD = CheckNextTarget
+LookAtSelection::JLOHKOALPFF = SelectLookedAt
+LookAtSelection::LFNPKMLNCEG = OnPawnSpawned
+LookAtSelection::INPPANAMABJ = OnPhaseLevelLoaded       # clears the targets
+LookAtSelection::KCJBFKAILPM = OnVRModeChanged
+LookAtSelection/KFIKAEDHPEC = LookTarget
+
+NonVRCrewBotManager::IEFBKOMBFGO = Instance
+NonVRCrewBotManager::GLBPIGKNLKM = AIStation            # per Station: no human there, so its bot can be picked
+NonVRCrewBotManager::HNNNDKIEONM = StationColliders     # mouse targets; bots' are parented to their station
+NonVRCrewBotManager::JNPLPHHLEFD = BotMouseColliders
+NonVRCrewBotManager::GEGIJPGHBAA = Hovered
+NonVRCrewBotManager::BBPBOOILNCM = Picked
+NonVRCrewBotManager::EPNNHHDEIJE = BotHovered
+NonVRCrewBotManager::LBPKNADGCJJ = LocalRole
+NonVRCrewBotManager::EMCNACOHBAB = Ready
+NonVRCrewBotManager::MGHOCFAFPGE = AIStationsDirty
+NonVRCrewBotManager::LALBCOEECDL = UpdateAIStations
+NonVRCrewBotManager::BGNJBHLOFJF = OnPawnSpawned        # makes the bot's mouse target
+NonVRCrewBotManager::HAALKENMJEK = OnStationChanged
+NonVRCrewBotManager::JMPIFLCBNBO = UseStationColliders
+NonVRCrewBotManager::JLCPFINKNPJ = OnCycleStation
+NonVRCrewBotManager::BLNNCFFGMGJ = OnCrewMenuToggled
+NonVRCrewBotManager::KCJBFKAILPM = OnVRModeChanged
+
+# ---- Cameras -------------------------------------------------------------------------------------------------
+CameraManager::EDPLGHHIGNF = VRActive
+CameraManager::ALADFALKLDP = SetVRActive
+CameraManager::EBDIIHHOPLO = ViewScreenMode
+OrientExternalCamera::IOEPFJFAPMG = OcclusionProxyRoot
+OrientExternalCamera::EBDIIHHOPLO = ViewMode
+OrientExternalCamera::HAMOMEFCFNB = SeatPlayer?
+OrientExternalCamera::ODAGBFEIGPE = SetUpForSeat?
+
+# ---- Steam, VR (the mod's own aliases) -----------------------------------------------------------------------
+Steamworks.GJMOCKOJNPH = SteamFriends
+Steamworks.CFJCNLNHFMD = SteamMatchmaking
+Steamworks.KFPNOEDJHAI = SteamUser
+Steamworks.IKEEMFCPMGL = SteamUtils
+Steamworks.IJILPGFHMJG = SteamNetworking
+Steamworks.IMHJDCPKKHM = CSteamID
+Valve.VR.MHCAEAFAOGC = OpenVR
+Valve.VR.PBMLFENDPMG = CVRSystem
+Valve.VR.PJLFDHPDDMC = VREvent_t
+SVR.Network.IOGFEJEOLBA = Preferences
+SVR.Network.Utilities.MHCFEEJDKJM = Json
+SVR.Network.HPJNFNEKGNJ = Friend

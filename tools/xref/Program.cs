@@ -15,6 +15,10 @@
 //   returns <Type>                 live parameterless methods returning it, and fields of that type
 //   names <regex>                  identifiers (types, members) matching a regex
 //   dump [dir]                     every type decompiled to <dir>/<namespace>/<type>.cs (default decompiled/, gitignored)
+//
+// names.map (next to this file) gives obfuscated names readable ones, per type; src and dump decompile with it
+// applied, so a name reads the same where it's declared and everywhere it's used. See the comment at its top.
+using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
 using ICSharpCode.Decompiler;
 using ICSharpCode.Decompiler.CSharp;
@@ -56,6 +60,63 @@ string L(MethodDefinition m) => $"{(live.Contains(m) ? "LIVE" : "dead")} {m.Decl
 TypeDefinition? T(string name) => types.FirstOrDefault(t => t.FullName == name) ?? types.FirstOrDefault(t => t.Name == name);
 IEnumerable<MethodDefinition> M(string type, string name) => T(type)?.Methods.Where(m => m.Name == name) ?? Enumerable.Empty<MethodDefinition>();
 
+
+// ---- names.map --------------------------------------------------------------------------------------------
+var renamed = new Dictionary<TypeDefinition, List<string>>(); // per type, "new (was OLD)" for the dump's headers
+
+// The map applied to the loaded assembly, which is written to a temp folder and decompiled from there.
+CSharpDecompiler Decompiler()
+{
+    var path = dll;
+    var mapFile = Path.Combine(Here(), "names.map");
+    if (File.Exists(mapFile))
+    {
+        ApplyMap(File.ReadAllLines(mapFile));
+        var dir = Path.Combine(Path.GetTempPath(), "stbc-xref");
+        Directory.CreateDirectory(dir);
+        path = Path.Combine(dir, "Assembly-CSharp.dll");
+        asm.Write(path); // gives every definition its token in the copy
+    }
+    var resolver = new UniversalAssemblyResolver(path, false, null);
+    resolver.AddSearchDirectory(Path.GetDirectoryName(dll)!);
+    return new CSharpDecompiler(path, resolver, new DecompilerSettings { ThrowOnAssemblyResolveErrors = false });
+}
+
+void ApplyMap(string[] lines)
+{
+    var todo = new List<(Action rename, TypeDefinition owner, string note)>();
+    for (int n = 0; n < lines.Length; n++)
+    {
+        var line = lines[n].Split('#')[0].Trim();
+        if (line == "") continue;
+        var parts = line.Split('=');
+        if (parts.Length != 2) { Console.Error.WriteLine($"names.map:{n + 1}: expected 'Type = Name' or 'Type::member = Name'"); continue; }
+        string lhs = parts[0].Trim(), name = parts[1].Trim();
+        if (name.EndsWith("?")) name = name.TrimEnd('?') + "_maybe"; // a guess, and it reads like one
+        var at = lhs.IndexOf("::", StringComparison.Ordinal);
+        var type = T(at < 0 ? lhs : lhs.Substring(0, at));
+        if (type == null) { Console.Error.WriteLine($"names.map:{n + 1}: no type {lhs}"); continue; }
+        if (at < 0)
+        {
+            var t = type;
+            todo.Add((() => { if (name.Contains('.') && !t.IsNested) { t.Namespace = name.Substring(0, name.LastIndexOf('.')); t.Name = name.Substring(name.LastIndexOf('.') + 1); } else t.Name = name; },
+                t, $"type {name} (was {t.Name})"));
+            continue;
+        }
+        var old = lhs.Substring(at + 2);
+        var members = type.Fields.Where(f => f.Name == old).Cast<IMemberDefinition>()
+            .Concat(type.Methods.Where(m => m.Name == old)).Concat(type.Properties.Where(p => p.Name == old)).Concat(type.Events.Where(e => e.Name == old)).ToList();
+        if (members.Count == 0) { Console.Error.WriteLine($"names.map:{n + 1}: {type.FullName} has no {old}"); continue; }
+        foreach (var member in members) { var m = member; todo.Add((() => m.Name = name, type, $"{name} (was {old})")); }
+    }
+    foreach (var (rename, owner, note) in todo)
+    {
+        if (!renamed.TryGetValue(owner, out var list)) renamed[owner] = list = new();
+        list.Add(note);
+    }
+    foreach (var (rename, _, _) in todo) rename(); // after every lookup: a renamed type changes full names
+}
+
 switch (args[0])
 {
     case "find":
@@ -75,8 +136,10 @@ switch (args[0])
     {
         var t = T(args[1]);
         if (t == null) { Console.WriteLine("no such type"); break; }
-        var decompiler = new CSharpDecompiler(dll, new UniversalAssemblyResolver(dll, false, null), new DecompilerSettings { ThrowOnAssemblyResolveErrors = false });
-        foreach (var m in t.Methods.Where(m => (args.Length > 2 ? m.Name == args[2] : live.Contains(m)) && m.HasBody))
+        var picked = t.Methods.Where(m => (args.Length > 2 ? m.Name == args[2] : live.Contains(m)) && m.HasBody).ToList(); // before renaming
+        var decompiler = Decompiler();
+        if (args.Length > 2 && picked.Count == 0) picked = t.Methods.Where(m => m.Name == args[2] && m.HasBody).ToList(); // a mapped name
+        foreach (var m in picked)
         {
             Console.WriteLine("// " + L(m));
             try { Console.WriteLine(decompiler.DecompileAsString(MetadataTokenHelpers.EntityHandleOrNil(m.MetadataToken.ToInt32()))); }
@@ -89,7 +152,7 @@ switch (args[0])
         // Every type, one file each under <dir>/<namespace>/, each method headed by its LIVE/dead line. "dead" only
         // means no direct call was found: coroutines, event handlers and delegates can still run it.
         var dir = args.Length > 1 ? args[1] : "decompiled";
-        var decompiler = new CSharpDecompiler(dll, new UniversalAssemblyResolver(dll, false, null), new DecompilerSettings { ThrowOnAssemblyResolveErrors = false });
+        var decompiler = Decompiler();
         int files = 0;
         foreach (var t in types.Where(t => !t.IsNested))
         {
@@ -97,6 +160,7 @@ switch (args[0])
             foreach (var nested in new[] { t }.Concat(Nested(t)))
             {
                 if (nested != t) text.Append($"\n// ===== nested {nested.FullName} : {nested.BaseType?.FullName}\n");
+                if (renamed.TryGetValue(nested, out var was)) text.Append($"// names.map: {string.Join(", ", was)}\n");
                 foreach (var f in nested.Fields) text.Append($"// field {(f.IsStatic ? "static " : "")}{f.FieldType.FullName} {f.Name}\n");
                 foreach (var m in nested.Methods.Where(m => m.HasBody))
                 {
@@ -167,3 +231,5 @@ static MethodDefinition? SafeResolve(MethodReference mr)
 }
 
 static IEnumerable<TypeDefinition> Nested(TypeDefinition t) => t.NestedTypes.SelectMany(n => new[] { n }.Concat(Nested(n)));
+
+static string Here([CallerFilePath] string path = "") => Path.GetDirectoryName(path)!;
