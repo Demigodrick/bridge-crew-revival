@@ -309,6 +309,7 @@ namespace StbcRevival
         private static void CrewTheOtherShip()
         {
             if (!PvpScope.Ready || !(Patches.PhotonNetworkType?.GetMethod("get_isMasterClient", BindingFlags.Public | BindingFlags.Static)?.Invoke(null, null) is bool master) || !master) return;
+            if (Bound != null) SetUpCrew(Bound.GetComponent<AI.USSAegisCrew>(), Letter(Bound));
             foreach (var ship in others)
             {
                 if (ship == null || exploded.Contains(ship)) continue;
@@ -319,11 +320,27 @@ namespace StbcRevival
                 PvpScope.Run(letter, () =>
                 {
                     foreach (var name in CrewConsoleCaches) AccessTools.Field(typeof(AI.USSAegisCrew), name)?.SetValue(crew, null);
+                    SetUpCrew(crew, letter);
                     crew.enabled = true;
                 });
                 Plugin.Log.LogInfo($"PvP: ship {letter}'s AI crew on ({ship.ALPAOOKFIEE?.BaseName ?? ship.name})");
             }
         }
+
+        // A crew sets itself up (GEFJIDCHAGC: its stations' blackboards and schedulers) when its ship drops out
+        // of warp or the mission clears the crew. A PvP ship spawned in place never did: the captain's tactical
+        // menu read its missing blackboard (CurrentTacticalTarget threw) and its tactical officer never fired.
+        // Run with that ship's view on, as it reads the bridge's consoles and the crew order board.
+        private static void SetUpCrew(AI.USSAegisCrew crew, string letter)
+        {
+            if (crew == null || crewSetUp == null || crewBlackboard?.GetValue(crew) != null) return;
+            if (Bridge.KHFJCHHMFHN == null || Bridge.AGAFPEFMEGB == null || Bridge.LJFGEPOKONO == null) return; // consoles not loaded yet
+            crewSetUp.Invoke(crew, null);
+            Plugin.Log.LogInfo($"PvP: ship {letter}'s AI crew set up");
+        }
+
+        private static readonly MethodInfo crewSetUp = AccessTools.Method(typeof(AI.USSAegisCrew), "GEFJIDCHAGC");
+        private static readonly FieldInfo crewBlackboard = AccessTools.Field(typeof(AI.USSAegisCrew), "NPKHBJCCMAE");
 
         // The AI crew's consoles, by station (Captain has none: the AI never captains).
         private static readonly Dictionary<FLCHMJJDKDL, FieldInfo> crewConsoles = new Dictionary<FLCHMJJDKDL, FieldInfo>

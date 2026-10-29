@@ -366,6 +366,8 @@ var aegisCrew = game.GetType("AI.USSAegisCrew");
 Check("  USSAegisCrew.IsConsoleAI (pvp: stations of the other ship's players)", aegisCrew?.GetMethod("IsConsoleAI", Inst));
 foreach (var f in new[] { "GELDBDOEIBN", "IJFDAJGLKLF", "LMFOFJEALLE" })
     Check($"  USSAegisCrew.{f} (station console)", aegisCrew?.GetField(f, Inst));
+Check("  USSAegisCrew.GEFJIDCHAGC (pvp: crew setup for a ship spawned in place)", aegisCrew?.GetMethod("GEFJIDCHAGC", Inst));
+Check("  USSAegisCrew.NPKHBJCCMAE (tactical blackboard)", aegisCrew?.GetField("NPKHBJCCMAE", Inst));
 var console = game.GetType("ConsoleBase");
 foreach (var prop in new[] { "FKKJLMLCKJI", "LPMMGGIAOCL", "BJLCFFKCFFN" })
     Check($"  ConsoleBase.{prop}", console?.GetProperty(prop, Inst));
