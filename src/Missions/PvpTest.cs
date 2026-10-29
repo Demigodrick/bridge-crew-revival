@@ -17,7 +17,7 @@ namespace StbcRevival.Missions
     /// PvP test (phase 1 of player-vs-player, a debug mission: [Debug] PvpTest shows it in the briefing): a second
     /// player ship, "PvP B", spawns ahead of yours on the Klingon team, both ships targetable and attackable by
     /// phasers and torpedoes. Each player's game stays on its own ship (PvpPrototype); the first
-    /// player to join after the host crews the second (PvpShips). Won when PvP B is destroyed; lost, as always, if the first ship is.
+    /// player to join after the host crews the second (PvpShips). It ends when either ship is destroyed, naming the winner (a win on the host when its ship wins).
     /// </summary>
     public sealed class PvpTestSequence : MissionSequence
     {
@@ -92,17 +92,21 @@ namespace StbcRevival.Missions
             yield return Task.OKLDNLKLLFJ.WithGroup("State_Group_Mus_Dyn").WithState("Tension");
 
             int ticks = 0;
-            while (LastStandWaves.Alive(other, UnityEngine.Time.time - spawned < 10f))
+            while (LastStandWaves.Alive(other, UnityEngine.Time.time - spawned < 10f) && LastStandWaves.Alive(player, false))
             {
                 yield return Task.KNMMMJOOBHC.WithTime(2f);
                 if (++ticks % 10 == 0) Plugin.Log.LogInfo($"PvP test: {Describe(a)}; {Describe(b)}; {Apart(a, b)}; bound to {PvpPrototype.Bound?.name ?? "nothing"}; target panel {PvpPrototype.PanelShows}");
             }
 
-            var body = other.AHMPFHDGMKJ;
-            Plugin.Log.LogInfo($"PvP test: PvP B destroyed: {(body == null || (body is UnityEngine.Object o && o == null) ? "gone" : body is UnityEngine.Component c && !c.gameObject.activeInHierarchy ? "inactive" : Describe(body as PlayerSpacecraft))}");
+            // Ship A lost: the game's own player-ship-lost failure is skipped in the PvP test (PvpPrototype), so
+            // the result comes from here either way. It reaches every game; a win is the host's ship winning.
+            bool bLost = !LastStandWaves.Alive(other, false);
+            var body = (bLost ? other : player).AHMPFHDGMKJ;
+            string lost = bLost ? "B" : "A", winner = bLost ? "A" : "B";
+            Plugin.Log.LogInfo($"PvP test: ship {lost} destroyed: {(body == null || (body is UnityEngine.Object o && o == null) ? "gone" : body is UnityEngine.Component c && !c.gameObject.activeInHierarchy ? "inactive" : Describe(body as PlayerSpacecraft))}");
             yield return Task.OKLDNLKLLFJ.WithGroup("State_Group_Mus_Dyn").WithState("Explore");
-            yield return Task.NECMCDDOFJB.CompleteSubDirective(directive, target);
-            yield return Task.HHNFJKHGEPH.WithMissionResult("PvP B destroyed", true);
+            if (bLost) yield return Task.NECMCDDOFJB.CompleteSubDirective(directive, target);
+            yield return Task.HHNFJKHGEPH.WithMissionResult($"Ship {lost} destroyed: ship {winner} wins", winner == PvpShips.Mine);
             yield return Task.KNMMMJOOBHC.WithTime(10f);
         }
 

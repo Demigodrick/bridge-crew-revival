@@ -120,12 +120,20 @@ namespace StbcRevival
             if (cameras == null) Plugin.Log.LogWarning("PvP: CameraManager.ILKCJBGLJPI not found; a second bound ship's viewscreen draws over the first's");
             else harmony.Patch(cameras, prefix: new HarmonyMethod(typeof(PvpPrototype), nameof(Cameras_Prefix)),
                 postfix: new HarmonyMethod(typeof(PvpPrototype), nameof(Cameras_Postfix)));
+            var playerDeath = AccessTools.TypeByName("Mission.MissionManager")?.GetNestedTypes(BindingFlags.NonPublic)
+                .FirstOrDefault(t => t.Name.StartsWith("<PlayerDeathMissionEnd>"));
+            var playerDeathStep = playerDeath == null ? null : AccessTools.Method(playerDeath, "MoveNext");
+            if (playerDeathStep == null) Plugin.Log.LogWarning("PvP: MissionManager's PlayerDeathMissionEnd not found; ship A's loss always fails the mission");
+            else harmony.Patch(playerDeathStep, prefix: new HarmonyMethod(typeof(PvpPrototype), nameof(PlayerDeath_Prefix)));
             var heading = AccessTools.Method(typeof(NavMapIcon), "GICLGFHINDB");
             if (heading == null) Plugin.Log.LogWarning("PvP: NavMapIcon.GICLGFHINDB not found; the other ship's map icon turns with yours");
             else harmony.Patch(heading, postfix: new HarmonyMethod(typeof(PvpPrototype), nameof(Heading_Postfix)));
             PatchPlayerShipChecks(harmony);
             PvpConsoles.Patch(harmony);
             var consoleAI = AccessTools.Method(typeof(AI.USSAegisCrew), "IsConsoleAI");
+            var crewVoice = AccessTools.Method(typeof(AI.USSAegisCrew), "CrewbotPlayVO");
+            if (crewVoice == null) Plugin.Log.LogWarning("PvP: USSAegisCrew.CrewbotPlayVO not found; the other ship's crew calls out its status on your bridge");
+            else harmony.Patch(crewVoice, prefix: new HarmonyMethod(typeof(PvpPrototype), nameof(CrewVoice_Prefix)));
             if (consoleAI == null) Plugin.Log.LogWarning("PvP: USSAegisCrew.IsConsoleAI not found");
             else harmony.Patch(consoleAI, postfix: new HarmonyMethod(typeof(PvpPrototype), nameof(ConsoleAI_Postfix)));
             foreach (var name in new[] { "OPGMKEGJFIP", "FBNPCAFBGCH" }) // the target's details: TNG / Aegis, original series
@@ -291,6 +299,16 @@ namespace StbcRevival
             }
             foreach (var root in Resources.FindObjectsOfTypeAll<Transform>().Where(t => t.parent == null && t.name == "OcclusionProxyRoot" && t.gameObject.scene.name != null))
                 lines.Append($"\n   {root.name} [{root.gameObject.scene.name}] active {root.gameObject.activeInHierarchy} rot {root.rotation.eulerAngles}");
+            // The crew orders menus (one per crew bot and console set, and the captain's crew-wide one): which is open.
+            foreach (var menu in Resources.FindObjectsOfTypeAll<GazeTargetCrewBotUI>().Where(m => m.gameObject.scene.name != null))
+            {
+                var path = menu.name;
+                for (var t = menu.transform.parent; t != null; t = t.parent) path = t.name + "/" + path;
+                var f = Traverse.Create(menu);
+                lines.Append($"\n   menu {path} [{menu.gameObject.scene.name}] on {menu.isActiveAndEnabled} station {f.Field("OHMLDNCIJBJ").GetValue()} shown {f.Field("LKGIEDEECIC").GetValue()}"
+                             + $" open {f.Field("ABLOCMKECPH").GetValue()} closeNext {f.Field("BHFBHBGGGKB").GetValue()} commands {(f.Field("FCPHALDHADK").GetValue() == null ? "none" : "set")}"
+                             + $" captainHeader {f.Field("JHDAGMGDKAO").GetValue()}");
+            }
             Plugin.Log.LogInfo(lines.ToString());
         }
 
@@ -309,7 +327,7 @@ namespace StbcRevival
         private static void CrewTheOtherShip()
         {
             if (!PvpScope.Ready || !(Patches.PhotonNetworkType?.GetMethod("get_isMasterClient", BindingFlags.Public | BindingFlags.Static)?.Invoke(null, null) is bool master) || !master) return;
-            if (Bound != null) SetUpCrew(Bound.GetComponent<AI.USSAegisCrew>(), Letter(Bound));
+            if (Bound != null && Letter(Bound) == PvpShips.Mine) SetUpCrew(Bound.GetComponent<AI.USSAegisCrew>(), Letter(Bound));
             foreach (var ship in others)
             {
                 if (ship == null || exploded.Contains(ship)) continue;
@@ -330,17 +348,28 @@ namespace StbcRevival
         // A crew sets itself up (GEFJIDCHAGC: its stations' blackboards and schedulers) when its ship drops out
         // of warp or the mission clears the crew. A PvP ship spawned in place never did: the captain's tactical
         // menu read its missing blackboard (CurrentTacticalTarget threw) and its tactical officer never fired.
-        // Run with that ship's view on, as it reads the bridge's consoles and the crew order board.
+        // Run with that ship's view on, as it reads the bridge's consoles and the crew order board, and only once
+        // all three stations have their crew bot seated (it reaches for their hands). Done when its ready flag
+        // (OEACLEGCMNJ, the setup's last step) is set.
         private static void SetUpCrew(AI.USSAegisCrew crew, string letter)
         {
-            if (crew == null || crewSetUp == null || crewBlackboard?.GetValue(crew) != null) return;
-            if (Bridge.KHFJCHHMFHN == null || Bridge.AGAFPEFMEGB == null || Bridge.LJFGEPOKONO == null) return; // consoles not loaded yet
-            crewSetUp.Invoke(crew, null);
-            Plugin.Log.LogInfo($"PvP: ship {letter}'s AI crew set up");
+            if (crew == null || crewSetUp == null || crewReady == null || (bool)crewReady.GetValue(crew)) return;
+            foreach (ConsoleBase console in new ConsoleBase[] { Bridge.KHFJCHHMFHN, Bridge.AGAFPEFMEGB, Bridge.LJFGEPOKONO })
+                if (console == null || console.LPMMGGIAOCL == null || console.LPMMGGIAOCL.PawnObject == null) return;
+            try
+            {
+                crewSetUp.Invoke(crew, null);
+                Plugin.Log.LogInfo($"PvP: ship {letter}'s AI crew set up");
+            }
+            catch (TargetInvocationException e)
+            {
+                if (crewSetUpFailed.Add(letter)) Plugin.Log.LogWarning($"PvP: ship {letter}'s AI crew setup failed (retrying): {e.InnerException}");
+            }
         }
 
+        private static readonly HashSet<string> crewSetUpFailed = new HashSet<string>();
         private static readonly MethodInfo crewSetUp = AccessTools.Method(typeof(AI.USSAegisCrew), "GEFJIDCHAGC");
-        private static readonly FieldInfo crewBlackboard = AccessTools.Field(typeof(AI.USSAegisCrew), "NPKHBJCCMAE");
+        private static readonly FieldInfo crewReady = AccessTools.Field(typeof(AI.USSAegisCrew), "OEACLEGCMNJ");
 
         // The AI crew's consoles, by station (Captain has none: the AI never captains).
         private static readonly Dictionary<FLCHMJJDKDL, FieldInfo> crewConsoles = new Dictionary<FLCHMJJDKDL, FieldInfo>
@@ -479,6 +508,11 @@ namespace StbcRevival
         private static bool IsOther(PlayerSpacecraft ship) => Active && Bound != null && ship != Bound;
 
         private static bool OwnShipOnly_Prefix(PlayerSpacecraft __instance) => !IsOther(__instance);
+
+        // The other ship's AI crew (run on the master, PvpScope) called out its shields and systems aloud on your
+        // bridge, its console messages already kept off. Its voice lines are played networked, to every game,
+        // naming no ship: for now they're dropped at the source, so that ship's players don't hear them either.
+        private static bool CrewVoice_Prefix(AI.USSAegisCrew __instance) => !IsOther(__instance.GetComponent<PlayerSpacecraft>());
 
         // Multicast_SetThrottleAndPower also moves the helm's throttle slider: not for the other ship.
         private static void Throttle_Prefix(PlayerSpacecraft __instance, out float __state)
@@ -633,6 +667,22 @@ namespace StbcRevival
             }
             Plugin.Log.LogInfo($"PvP: viewscreen cameras set up for {player.name}'s seat");
         }
+
+        // The game ends the mission as failed ("HULL COMPROMISED") when its player ship, ship A, is lost, whoever
+        // destroyed it. In the PvP test the test mission ends it instead, naming the winner, for either ship.
+        private static bool PlayerDeath_Prefix(ref bool __result)
+        {
+            if (!Active) return true;
+            if (!playerDeathSkipped)
+            {
+                playerDeathSkipped = true;
+                Plugin.Log.LogInfo("PvP: the game's player-ship-lost mission failure skipped (the PvP test names the winner)");
+            }
+            __result = false;
+            return false;
+        }
+
+        private static bool playerDeathSkipped;
 
         private static readonly MethodInfo seatRig = AccessTools.Method(typeof(OrientExternalCamera), "ODAGBFEIGPE");
         private static readonly FieldInfo seatPlayer = AccessTools.Field(typeof(OrientExternalCamera), "HAMOMEFCFNB");

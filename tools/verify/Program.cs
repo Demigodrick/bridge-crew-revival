@@ -367,7 +367,9 @@ Check("  USSAegisCrew.IsConsoleAI (pvp: stations of the other ship's players)", 
 foreach (var f in new[] { "GELDBDOEIBN", "IJFDAJGLKLF", "LMFOFJEALLE" })
     Check($"  USSAegisCrew.{f} (station console)", aegisCrew?.GetField(f, Inst));
 Check("  USSAegisCrew.GEFJIDCHAGC (pvp: crew setup for a ship spawned in place)", aegisCrew?.GetMethod("GEFJIDCHAGC", Inst));
-Check("  USSAegisCrew.NPKHBJCCMAE (tactical blackboard)", aegisCrew?.GetField("NPKHBJCCMAE", Inst));
+Check("  USSAegisCrew.OEACLEGCMNJ (crew set up)", aegisCrew?.GetField("OEACLEGCMNJ", Inst));
+Check("  USSAegisCrew.CrewbotPlayVO (pvp: the other crew's voice)", aegisCrew?.GetMethod("CrewbotPlayVO", Inst));
+Check("  MissionManager <PlayerDeathMissionEnd> MoveNext (pvp: ship A lost)", game.GetType("Mission.MissionManager")?.GetNestedTypes(BindingFlags.NonPublic).FirstOrDefault(t => t.Name.StartsWith("<PlayerDeathMissionEnd>"))?.GetMethod("MoveNext", Inst));
 var console = game.GetType("ConsoleBase");
 foreach (var prop in new[] { "FKKJLMLCKJI", "LPMMGGIAOCL", "BJLCFFKCFFN" })
     Check($"  ConsoleBase.{prop}", console?.GetProperty(prop, Inst));
