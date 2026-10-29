@@ -13,7 +13,8 @@ namespace StbcRevival
     /// PvP test: the other ship's AI crew. The game's crew (USSAegisCrew, on each player ship) and everything it
     /// calls read "the" ship from a handful of one-per-game handles: the bridge's craft, its four console
     /// statics, and the crew order board (CommandManager.Instance, whose CurrentOrder the crew reads ~140
-    /// times). While code runs for the other ship (PvpRouting.Context), those handles are that ship's:
+    /// times). While the other ship's crew runs (its BatchUpdate and event handlers, PvpRouting), those handles
+    /// are that ship's (only the crew's: the other captain console drives the bridge's one viewscreen):
     ///   - the craft: the other player ship;
     ///   - the consoles: the twins (PvpConsoles) of yours, so the other set;
     ///   - the order board: the ship's own CommandManager if its prefab has one, else a copy of yours made
@@ -48,6 +49,9 @@ namespace StbcRevival
         private static View yours;      // the handles as they were when the other ship's view went on
         private static string applied;  // the ship whose view is on, or null for yours
 
+        /// <summary>The ship whose view is on, or null for yours.</summary>
+        internal static string Applied => applied;
+
         internal static bool Ready => CraftField != null && CaptainField != null && EngineeringField != null && HelmField != null
                                       && TacticalField != null && CrewField != null && OrdersField != null;
 
@@ -56,6 +60,8 @@ namespace StbcRevival
         {
             if (ship == PvpShips.Mine) ship = null;
             if (ship == applied || !Ready || Bridge.Instance == null) return;
+            // Only once your own ship is bound (until then the handles are the first ship's, whoever you are).
+            if (ship != null && (PvpPrototype.Bound == null || PvpPrototype.Letter(PvpPrototype.Bound) != PvpShips.Mine)) return;
             if (applied == null) yours = Read();
             View view = ship == null ? yours : Build(ship);
             if (view == null) return; // the other ship isn't there (yet): stay as you are

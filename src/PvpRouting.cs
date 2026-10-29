@@ -33,12 +33,7 @@ namespace StbcRevival
         /// <summary>The ship the running code is for ("A", "B"), or null when it isn't known.</summary>
         internal static string Context { get; private set; }
 
-        // The context, and with it the ship view the handles show (PvpScope).
-        private static void SetContext(string ship)
-        {
-            Context = ship;
-            PvpScope.Switch(ship);
-        }
+        private static void SetContext(string ship) => Context = ship;
 
         private static FieldInfo listeners, dispatching, deferred;
         private static MethodInfo cleanup;
@@ -94,7 +89,8 @@ namespace StbcRevival
             var graphEntry = new HarmonyMethod(typeof(PvpRouting), nameof(Graph_Prefix));
             foreach (var name in new[] { "SendDistributionUpdate", "ADKNCMHHNMK", "KLICDPIAFHF" })
                 PatchEntry(harmony, graph == null || gridGraph == null ? null : AccessTools.Method(graph, name), graphEntry, leave, "power graph " + name);
-            PatchEntry(harmony, AccessTools.Method(typeof(AI.USSAegisCrew), "BatchUpdate"), part, leave, "USSAegisCrew.BatchUpdate");
+            PatchEntry(harmony, AccessTools.Method(typeof(AI.USSAegisCrew), "BatchUpdate"),
+                new HarmonyMethod(typeof(PvpRouting), nameof(Crew_Prefix)), new HarmonyMethod(typeof(PvpRouting), nameof(Crew_Finalizer)), "USSAegisCrew.BatchUpdate");
             int parts = 0;
             foreach (var type in typeof(ConsoleBase).Assembly.GetTypes())
             {
@@ -172,6 +168,30 @@ namespace StbcRevival
             SetContext(Owner(grid) ?? Context);
         }
 
+        // The AI crew (only it: other code for the other ship, such as its captain console, which drives the
+        // bridge's one viewscreen, keeps your view) runs with its ship's view on (PvpScope).
+        internal struct Saved
+        {
+            public string Context, Scope;
+        }
+
+        private static void Crew_Prefix(Component __instance, out Saved __state)
+        {
+            __state = new Saved { Context = Context, Scope = PvpScope.Applied };
+            if (!Routing) return;
+            var ship = Owner(__instance);
+            if (ship == null) return;
+            SetContext(ship);
+            PvpScope.Switch(ship);
+        }
+
+        private static Exception Crew_Finalizer(Saved __state, Exception __exception)
+        {
+            Context = __state.Context;
+            PvpScope.Switch(__state.Scope);
+            return __exception;
+        }
+
         private static Exception Leave_Finalizer(string __state, Exception __exception)
         {
             if (Context != __state) SetContext(__state);
@@ -218,6 +238,10 @@ namespace StbcRevival
                     string owner = Owner(Listener(wrapper)?.Target);
                     if (eventShip != null ? (owner ?? Mine) != eventShip : sender != null && (owner ?? Mine) != sender) continue;
                     SetContext(owner ?? sender);
+                    var target = Listener(wrapper)?.Target;
+                    string scope = PvpScope.Applied;
+                    bool crew = owner != null && (target is AI.USSAegisCrew || target is AI.CommandManager);
+                    if (crew) PvpScope.Switch(owner);
                     try
                     {
                         wrapper.DynamicInvoke(__0);
@@ -229,6 +253,7 @@ namespace StbcRevival
                     finally
                     {
                         SetContext(sender);
+                        if (crew) PvpScope.Switch(scope);
                     }
                 }
                 dispatching.SetValue(__instance, null);
