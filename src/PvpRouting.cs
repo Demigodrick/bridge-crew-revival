@@ -86,7 +86,9 @@ namespace StbcRevival
             PatchEntry(harmony, AccessTools.Method(typeof(BaseSpacecraft), "KMHNOKFDFAB"), part, leave, "BaseSpacecraft.KMHNOKFDFAB");
             // Damage: what a player ship's hull and systems announce as it's hit is about that ship (your crew
             // and the bridge's alarms took the other ship's hits for yours).
-            PatchEntry(harmony, AccessTools.Method(typeof(BaseSpacecraft), "takeHit"), part, leave, "BaseSpacecraft.takeHit");
+            foreach (var hit in AccessTools.GetDeclaredMethods(typeof(BaseSpacecraft)).Concat(AccessTools.GetDeclaredMethods(typeof(PlayerSpacecraft)))
+                         .Where(m => m.Name == "takeHit" && !m.IsAbstract))
+                PatchEntry(harmony, hit, part, leave, $"{hit.DeclaringType.Name}.takeHit");
             PatchEntry(harmony, AccessTools.Method(typeof(BaseSpacecraft), "JOKMKFDGBIE"), part, leave, "BaseSpacecraft.JOKMKFDGBIE");
             var graph = AccessTools.TypeByName("Sector.Spacecraft.Subsystems.CIMNOCCODAC");
             gridGraph = AccessTools.Field(typeof(EngineerPowerGrid), "CFPJPPMLGKH");
