@@ -14,6 +14,7 @@
 //   str <text>                     live methods with a string literal containing <text>
 //   returns <Type>                 live parameterless methods returning it, and fields of that type
 //   names <regex>                  identifiers (types, members) matching a regex
+//   dump [dir]                     every type decompiled to <dir>/<namespace>/<type>.cs (default decompiled/, gitignored)
 using System.Text.RegularExpressions;
 using ICSharpCode.Decompiler;
 using ICSharpCode.Decompiler.CSharp;
@@ -83,6 +84,35 @@ switch (args[0])
         }
         break;
     }
+    case "dump":
+    {
+        // Every type, one file each under <dir>/<namespace>/, each method headed by its LIVE/dead line. "dead" only
+        // means no direct call was found: coroutines, event handlers and delegates can still run it.
+        var dir = args.Length > 1 ? args[1] : "decompiled";
+        var decompiler = new CSharpDecompiler(dll, new UniversalAssemblyResolver(dll, false, null), new DecompilerSettings { ThrowOnAssemblyResolveErrors = false });
+        int files = 0;
+        foreach (var t in types.Where(t => !t.IsNested))
+        {
+            var text = new System.Text.StringBuilder($"// {t.FullName} : {t.BaseType?.FullName}\n");
+            foreach (var nested in new[] { t }.Concat(Nested(t)))
+            {
+                if (nested != t) text.Append($"\n// ===== nested {nested.FullName} : {nested.BaseType?.FullName}\n");
+                foreach (var f in nested.Fields) text.Append($"// field {(f.IsStatic ? "static " : "")}{f.FieldType.FullName} {f.Name}\n");
+                foreach (var m in nested.Methods.Where(m => m.HasBody))
+                {
+                    text.Append("\n// " + L(m) + "\n");
+                    try { text.Append(decompiler.DecompileAsString(MetadataTokenHelpers.EntityHandleOrNil(m.MetadataToken.ToInt32()))); }
+                    catch (Exception e) { text.Append("// FAIL " + e.Message + "\n"); }
+                }
+            }
+            var path = Path.Combine(dir, t.Namespace == "" ? "_" : t.Namespace, Regex.Replace(t.Name, "[^A-Za-z0-9_.-]", "_") + ".cs");
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.WriteAllText(path, text.ToString());
+            files++;
+        }
+        Console.WriteLine($"{files} files in {dir}");
+        break;
+    }
     case "callers":
         foreach (var m in M(args[1], args[2]))
         {
@@ -135,3 +165,5 @@ static MethodDefinition? SafeResolve(MethodReference mr)
 {
     try { return mr.Resolve(); } catch { return null; }
 }
+
+static IEnumerable<TypeDefinition> Nested(TypeDefinition t) => t.NestedTypes.SelectMany(n => new[] { n }.Concat(Nested(n)));

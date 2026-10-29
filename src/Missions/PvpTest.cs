@@ -47,6 +47,9 @@ namespace StbcRevival.Missions
         {
             player = Objective.FFKKADIEOGP;
             system = Objective.KALBLMGFNIN;
+            // The game watches its player ship, ship A: at no hull it halts the mission script (this one, before it
+            // names the winner) and fails the mission ("HULL COMPROMISED"). Here either ship's loss ends it.
+            PvpPrototype.WatchPlayerShip(false);
             Objective.AddStep("pvp", Task.MFLJBKCDBMC.WithSubtaskCoroutine(Fight), Objective.Success());
         }
 

@@ -120,11 +120,6 @@ namespace StbcRevival
             if (cameras == null) Plugin.Log.LogWarning("PvP: CameraManager.ILKCJBGLJPI not found; a second bound ship's viewscreen draws over the first's");
             else harmony.Patch(cameras, prefix: new HarmonyMethod(typeof(PvpPrototype), nameof(Cameras_Prefix)),
                 postfix: new HarmonyMethod(typeof(PvpPrototype), nameof(Cameras_Postfix)));
-            var playerDeath = AccessTools.TypeByName("Mission.MissionManager")?.GetNestedTypes(BindingFlags.NonPublic)
-                .FirstOrDefault(t => t.Name.StartsWith("<PlayerDeathMissionEnd>"));
-            var playerDeathStep = playerDeath == null ? null : AccessTools.Method(playerDeath, "MoveNext");
-            if (playerDeathStep == null) Plugin.Log.LogWarning("PvP: MissionManager's PlayerDeathMissionEnd not found; ship A's loss always fails the mission");
-            else harmony.Patch(playerDeathStep, prefix: new HarmonyMethod(typeof(PvpPrototype), nameof(PlayerDeath_Prefix)));
             var heading = AccessTools.Method(typeof(NavMapIcon), "GICLGFHINDB");
             if (heading == null) Plugin.Log.LogWarning("PvP: NavMapIcon.GICLGFHINDB not found; the other ship's map icon turns with yours");
             else harmony.Patch(heading, postfix: new HarmonyMethod(typeof(PvpPrototype), nameof(Heading_Postfix)));
@@ -140,8 +135,6 @@ namespace StbcRevival
             if (menuOpen != null) harmony.Patch(menuOpen, postfix: new HarmonyMethod(typeof(PvpPrototype), nameof(MenuOpen_Postfix)));
             if (menuClose != null) harmony.Patch(menuClose, postfix: new HarmonyMethod(typeof(PvpPrototype), nameof(MenuClose_Postfix)));
             if (lookAt != null) harmony.Patch(lookAt, postfix: new HarmonyMethod(typeof(PvpPrototype), nameof(LookAt_Postfix)));
-            var lookAtUpdate = AccessTools.Method(typeof(LookAtSelection), "BatchUpdate");
-            if (lookAtUpdate != null) harmony.Patch(lookAtUpdate, postfix: new HarmonyMethod(typeof(PvpPrototype), nameof(LookAtUpdate_Postfix)));
             if (consoleAI == null) Plugin.Log.LogWarning("PvP: USSAegisCrew.IsConsoleAI not found");
             else harmony.Patch(consoleAI, postfix: new HarmonyMethod(typeof(PvpPrototype), nameof(ConsoleAI_Postfix)));
             foreach (var name in new[] { "OPGMKEGJFIP", "FBNPCAFBGCH" }) // the target's details: TNG / Aegis, original series
@@ -247,10 +240,9 @@ namespace StbcRevival
                     others.Clear();
                     exploded.Clear();
                 }
-                shipLost = null;
-                missionEndChecked = false;
                 if (hiddenAvatars.Count > 0) ShowAllAvatars();
                 PvpScope.Reset();
+                if (playerShipUnwatched) WatchPlayerShip(true);
                 return;
             }
             PvpShips.Update();
@@ -276,7 +268,6 @@ namespace StbcRevival
                 CrewTheOtherShip();
                 ProbeGaze();
             }
-            EndMissionIfAShipIsLost();
             DumpCamerasOnce();
         }
 
@@ -350,81 +341,48 @@ namespace StbcRevival
             return $"{path} [{t.gameObject.scene.name}]";
         }
 
-        // The PvP test mission ends the mission when either ship is lost, but when ship A (the game's player ship)
-        // was lost its script never got there: the game seems to halt mission scripts for its own player-ship-lost
-        // failure (skipped in PvP). So 5 s after a ship is lost, if the mission is still running, the master ends it.
-        private static string shipLost;
-        private static float shipLostAt;
-        private static bool missionEndChecked;
-        private static readonly FieldInfo missionStatus = AccessTools.Field(typeof(Mission.MissionManager), "HKMMKFJNJBJ");
-        private static readonly MethodInfo missionOver = AccessTools.Method(typeof(Mission.MissionManager), "MHABPDIJBCK");
-
-        private static void EndMissionIfAShipIsLost()
-        {
-            if (missionEndChecked) return;
-            if (shipLost == null)
-            {
-                foreach (var letter in new[] { "A", "B" })
-                {
-                    var info = ShipOf(letter)?.GetTargetInfo();
-                    if (info == null || info.GBNCJMFFIDI > 0f) continue;
-                    shipLost = letter;
-                    shipLostAt = Time.unscaledTime;
-                    break;
-                }
-                return;
-            }
-            if (Time.unscaledTime - shipLostAt < 5f) return;
-            missionEndChecked = true;
-            if (!IsMaster) return;
-            var manager = UnityEngine.Object.FindObjectOfType<Mission.MissionManager>();
-            if (manager == null || missionStatus == null || missionOver == null) return;
-            if (missionStatus.GetValue(manager).ToString() != "running")
-            {
-                Plugin.Log.LogInfo($"PvP: ship {shipLost} lost; the PvP test ended the mission");
-                return;
-            }
-            string winner = shipLost == "A" ? "B" : "A";
-            Plugin.Log.LogWarning($"PvP: ship {shipLost} lost 5 s ago and the mission still running (the PvP test's script stopped): ended here, ship {winner} wins");
-            missionOver.Invoke(manager, new[] { Enum.Parse(missionStatus.FieldType, winner == PvpShips.Mine ? "success" : "failure"), null, null });
-        }
-
-        private static bool IsMaster =>
-            Patches.PhotonNetworkType?.GetMethod("get_isMasterClient", BindingFlags.Public | BindingFlags.Static)?.Invoke(null, null) is bool master && master;
-
-        // Testing the Aegis crew menus: once a second (30 lines at most), the look-at target nearest your view
-        // direction, whether the game's ray from Camera.main hits it, and how often the look-at selection ran.
-        private static int gazeProbes, lookAtUpdates;
-
-        private static void LookAtUpdate_Postfix() => lookAtUpdates++;
+        // Testing the Aegis crew menus without a headset (NonVRCrewBotManager: the mouse over a crew station picks
+        // it, among those it counts as AI-crewed, while you're "home" at your station): its state when it changes.
+        private static int gazeProbes;
+        private static string lastCrewMouse;
 
         private static void ProbeGaze()
         {
-            if (Bound == null || gazeProbes >= 30) return;
-            var cam = Camera.main;
-            var selection = UnityEngine.Object.FindObjectOfType<LookAtSelection>();
-            if (cam == null || selection == null) return;
-            var s = Traverse.Create(selection);
-            float max = s.Field("_targetMaxDistance").GetValue() is float d ? d : 0f;
-            var ray = new Ray(cam.transform.position, cam.transform.forward);
-            string nearest = null;
-            float best = 20f;
-            if (s.Field("NAAIKEPDFAE").GetValue() is System.Collections.IEnumerable targets)
-                foreach (var target in targets)
-                {
-                    var e = Traverse.Create(target);
-                    var collider = e.Field("Collider").GetValue() as Collider;
-                    if (collider == null) continue;
-                    float angle = Vector3.Angle(cam.transform.forward, collider.bounds.center - ray.origin);
-                    if (angle >= best) continue;
-                    best = angle;
-                    bool hitMax = collider.Raycast(ray, out var hit, max), hitFar = collider.Raycast(ray, out var far, 1000f);
-                    nearest = $"{(e.Field("Object").GetValue() as GameObject)?.name ?? "?"} {angle:F0}° off, size {collider.bounds.size}, ray hits {hitMax} within {max} m"
-                              + $" ({(hitFar ? $"at {far.distance:F1} m" : "not at all")}), looked at {e.Field("BeingLookedAt").GetValue()}";
-                }
-            if (nearest == null) return;
+            if (Bound == null || gazeProbes >= 40) return;
+            var manager = UnityEngine.Object.FindObjectOfType<NonVRCrewBotManager>();
+            var me = NovaPlayerManager.IEFBKOMBFGO == null ? null : NovaPlayerManager.IEFBKOMBFGO.AJPNCBOKCLC;
+            if (manager == null || me == null) return;
+            var m = Traverse.Create(manager);
+            var free = m.Field("GLBPIGKNLKM").GetValue() as bool[];
+            var colliders = m.Field("HNNNDKIEONM").GetValue() as Collider[];
+            var station = me.Station as NovaStation;
+            string state = $"on {manager.isActiveAndEnabled}, home {NonVRCrewBotManager.IsHome()}, your role {me.FJMHMOOJNJG}, station {(station == null ? "none" : station.name + " role " + station.OGBAPMIPPID + (PvpConsoles.IsCopy(station) ? " (copy)" : ""))}"
+                           + $", menu role {m.Field("LBPKNADGCJJ").GetValue()}, AI stations {(free == null ? "?" : string.Join(",", free.Select((f, i) => f ? ((FLCHMJJDKDL)i).ToString() : null).Where(x => x != null).ToArray()))}"
+                           + $", hovered {m.Field("GEGIJPGHBAA").GetValue()}, picked {m.Field("BBPBOOILNCM").GetValue()}, bot hovered {m.Field("EPNNHHDEIJE").GetValue()}"
+                           + $", station colliders {(colliders == null ? "?" : string.Join(",", colliders.Select(c => c == null ? "none" : c.name + (c.enabled && c.gameObject.activeInHierarchy ? "" : " (off)")).ToArray()))}"
+                           + $", input {SVR.InputManager.GetScheme()}";
+            if (state == lastCrewMouse) return;
+            lastCrewMouse = state;
             gazeProbes++;
-            Plugin.Log.LogInfo($"PvP: gaze: {nearest}; selected {(s.Field("FODMLDIILAF").GetValue() as GameObject)?.name ?? "none"}; look-at updates {lookAtUpdates}");
+            Plugin.Log.LogInfo($"PvP: crew mouse: {state}");
+        }
+
+        // The game's player-ship watch (MissionManager.MonitorPlayerHealth, on from its Awake): off for the PvP test
+        // (PvpTest), back on after it.
+        private static bool playerShipUnwatched;
+        private static readonly MethodInfo monitorPlayerHealth = AccessTools.Method(typeof(Mission.MissionManager), "set_MonitorPlayerHealth");
+
+        internal static void WatchPlayerShip(bool watch)
+        {
+            var manager = UnityEngine.Object.FindObjectOfType<Mission.MissionManager>();
+            playerShipUnwatched = !watch;
+            if (manager == null || monitorPlayerHealth == null)
+            {
+                Plugin.Log.LogWarning("PvP: MissionManager.MonitorPlayerHealth not found; ship A's loss halts the PvP test and fails the mission");
+                return;
+            }
+            monitorPlayerHealth.Invoke(manager, new object[] { watch });
+            Plugin.Log.LogInfo($"PvP: the game's player-ship-lost failure {(watch ? "back on" : "off (either ship's loss ends the PvP test)")}");
         }
 
         // Testing the crew menus: when each opens and closes, and what you're looking at.
@@ -808,22 +766,6 @@ namespace StbcRevival
             }
             Plugin.Log.LogInfo($"PvP: viewscreen cameras set up for {player.name}'s seat");
         }
-
-        // The game ends the mission as failed ("HULL COMPROMISED") when its player ship, ship A, is lost, whoever
-        // destroyed it. In the PvP test the test mission ends it instead, naming the winner, for either ship.
-        private static bool PlayerDeath_Prefix(ref bool __result)
-        {
-            if (!Active) return true;
-            if (!playerDeathSkipped)
-            {
-                playerDeathSkipped = true;
-                Plugin.Log.LogInfo("PvP: the game's player-ship-lost mission failure skipped (the PvP test names the winner)");
-            }
-            __result = false;
-            return false;
-        }
-
-        private static bool playerDeathSkipped;
 
         private static readonly MethodInfo seatRig = AccessTools.Method(typeof(OrientExternalCamera), "ODAGBFEIGPE");
         private static readonly FieldInfo seatPlayer = AccessTools.Field(typeof(OrientExternalCamera), "HAMOMEFCFNB");
