@@ -99,7 +99,7 @@ namespace StbcRevival
         }
 
         /// <summary>Minimal zip writer (stored, no compression): .NET 3.5 has no zip support.</summary>
-        private static class Zip
+        internal static class Zip
         {
             private static readonly uint[] CrcTable = BuildTable();
 

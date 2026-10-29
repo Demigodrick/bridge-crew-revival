@@ -85,6 +85,7 @@ namespace StbcRevival
         {
             Log = Logger;
             Instance = this;
+            CrashReport.Start(); // first: this run's own log, and a report if the last run crashed
             UpdateCheck.CleanUp();
 
             Mode = Config.Bind("Photon", "Mode", PhotonMode.Steam,
@@ -246,6 +247,7 @@ namespace StbcRevival
             Safely("host hand-off", HostHandoff.Update);
             Safely("voice commands", StbcRevival.VoiceCommands.Update);
             Safely("ubisoft save import", UbisoftSaveImport.Update);
+            Safely("crash report", CrashReport.Update);
         }
 
         private readonly System.Collections.Generic.HashSet<string> failedOnce = new System.Collections.Generic.HashSet<string>();
@@ -259,7 +261,11 @@ namespace StbcRevival
             }
         }
 
-        private void OnApplicationQuit() => Safely("local save on quit", StbcRevival.LocalSave.OnQuit);
+        private void OnApplicationQuit()
+        {
+            Safely("local save on quit", StbcRevival.LocalSave.OnQuit);
+            Safely("crash report on quit", CrashReport.OnQuit);
+        }
 
         private void OnGUI()
         {

@@ -50,7 +50,7 @@ survivors aboard"*. [Full list of commands](https://demigodrick.github.io/bridge
 - **Skip the launch videos** and the mic check, get a chime when someone joins, and a heads-up on the
   shuttle when a new version is out.
 - **A Romulan option** for female characters in the character creator.
-- **F10** saves a bug report in one keypress.
+- **F10** saves a bug report in one keypress, and if the game crashes, a crash report is saved for you on the next launch.
 - Most of it can be switched on and off from **REVIVAL SETTINGS** on the shuttle console.
 
 ## Install
@@ -92,7 +92,8 @@ It's PC with PC.
 friends, lobbies and networking.
 
 **Something broke.** [Open an issue](https://github.com/Demigodrick/bridge-crew-revival/issues) and attach
-`BepInEx/LogOutput.log` from the game folder (or press F10 in game to save a report).
+`BepInEx/LogOutput.log` from the game folder (or press F10 in game to save a report). If the game crashed, attach
+the newest zip from `BepInEx/crash-reports` instead: it's made on the next launch.
 
 More answers on the [website](https://demigodrick.github.io/bridge-crew-revival/).
 
