@@ -118,7 +118,8 @@ namespace StbcRevival
             if (selectable != null) harmony.Patch(selectable, postfix: new HarmonyMethod(typeof(PvpPrototype), nameof(Selectable_Postfix)));
             var cameras = AccessTools.GetDeclaredMethods(typeof(CameraManager)).FirstOrDefault(m => m.Name == "ILKCJBGLJPI");
             if (cameras == null) Plugin.Log.LogWarning("PvP: CameraManager.ILKCJBGLJPI not found; a second bound ship's viewscreen draws over the first's");
-            else harmony.Patch(cameras, prefix: new HarmonyMethod(typeof(PvpPrototype), nameof(Cameras_Prefix)));
+            else harmony.Patch(cameras, prefix: new HarmonyMethod(typeof(PvpPrototype), nameof(Cameras_Prefix)),
+                postfix: new HarmonyMethod(typeof(PvpPrototype), nameof(Cameras_Postfix)));
             var heading = AccessTools.Method(typeof(NavMapIcon), "GICLGFHINDB");
             if (heading == null) Plugin.Log.LogWarning("PvP: NavMapIcon.GICLGFHINDB not found; the other ship's map icon turns with yours");
             else harmony.Patch(heading, postfix: new HarmonyMethod(typeof(PvpPrototype), nameof(Heading_Postfix)));
@@ -256,6 +257,39 @@ namespace StbcRevival
                 nextCrewCheck = Time.unscaledTime + 1f;
                 CrewTheOtherShip();
             }
+            DumpCamerasOnce();
+        }
+
+        // Testing the viewscreen: every camera, 5 and 30 s after your ship binds.
+        private static PlayerSpacecraft camerasDumpedFor;
+        private static float boundAt;
+        private static int cameraDumps;
+
+        private static void DumpCamerasOnce()
+        {
+            if (Bound == null) return;
+            if (camerasDumpedFor != Bound)
+            {
+                camerasDumpedFor = Bound;
+                boundAt = Time.unscaledTime;
+                cameraDumps = 0;
+            }
+            float[] at = { 5f, 30f };
+            if (cameraDumps >= at.Length || Time.unscaledTime - boundAt < at[cameraDumps]) return;
+            cameraDumps++;
+            var lines = new System.Text.StringBuilder($"PvP: cameras {Time.unscaledTime - boundAt:F0} s after binding {Bound.name}:");
+            foreach (var cam in Resources.FindObjectsOfTypeAll<Camera>())
+            {
+                if (cam.gameObject.scene.name == null) continue; // prefabs
+                var path = cam.name;
+                for (var t = cam.transform.parent; t != null; t = t.parent) path = t.name + "/" + path;
+                var layers = string.Join(",", Enumerable.Range(0, 32).Where(l => (cam.cullingMask & (1 << l)) != 0)
+                    .Select(l => LayerMask.LayerToName(l)).Select(n => n == "" ? "?" : n).ToArray());
+                lines.Append($"\n   {path} [{cam.gameObject.scene.name}] on {cam.isActiveAndEnabled} (enabled {cam.enabled}, active {cam.gameObject.activeInHierarchy})"
+                             + $" depth {cam.depth} clear {cam.clearFlags} target {(cam.targetTexture != null ? cam.targetTexture.name + " " + cam.targetTexture.width : "screen")}"
+                             + $" eye {cam.stereoTargetEye} scale {cam.transform.lossyScale} pos {cam.transform.position} layers {layers}");
+            }
+            Plugin.Log.LogInfo(lines.ToString());
         }
 
         private static float nextCrewCheck;
@@ -537,8 +571,9 @@ namespace StbcRevival
         // A game on ship B binds ship A first (it spawns first), then its own: the camera manager wires each
         // announced ship's viewscreen camera rig in and adds two 3D-skybox copies of its cameras, and never
         // unwires the last. Before it takes the new ship: the old ship's rig off, its copies gone.
-        private static void Cameras_Prefix(CameraManager __instance, object __0)
+        private static void Cameras_Prefix(CameraManager __instance, object __0, out OrientExternalCamera __state)
         {
+            __state = null;
             if (!Active) return;
             var traverse = Traverse.Create(__instance);
             var old = traverse.Field("PFHOOFGPFMM").GetValue<PlayerSpacecraft>();
@@ -548,12 +583,37 @@ namespace StbcRevival
             var skyRig = traverse.Property("CCCAMMNGFLI").GetValue<GameObject>();
             var overlays = traverse.Property("GGICPOGHJLO").GetValue<Camera>();
             var skyOverlays = traverse.Property("ABHIJPHHDNG").GetValue<Camera>();
+            __state = rig != null ? rig.GetComponent<OrientExternalCamera>() : null;
             if (rig != null) rig.SetActive(false);
             if (overlays != null) overlays.enabled = false;
             if (skyRig != null) UnityEngine.Object.Destroy(skyRig);
             if (skyOverlays != null) UnityEngine.Object.Destroy(skyOverlays.gameObject);
             Plugin.Log.LogInfo($"PvP: {old.ALPAOOKFIEE?.BaseName ?? old.name}'s viewscreen cameras off for {next.ALPAOOKFIEE?.BaseName ?? next.name}'s");
         }
+
+        // A rig is set up for your seat when you sit down (OrientExternalCamera.ODAGBFEIGPE): its pivot turned
+        // to your station's view, and its bridge-shaped occlusion proxy drawn first, depth only. The new ship's
+        // rig (and its sky copy) came after that, so its proxy showed as a ghost bridge over the viewscreen and
+        // it looked out the wrong way: set them up as the old rig was, for the same player and view.
+        private static void Cameras_Postfix(CameraManager __instance, OrientExternalCamera __state)
+        {
+            if (__state == null || seatRig == null) return;
+            var player = seatPlayer.GetValue(__state) as PlayerInfo ?? NovaPlayerManager.IEFBKOMBFGO?.AJPNCBOKCLC;
+            if (player == null) return;
+            var traverse = Traverse.Create(__instance);
+            foreach (var rig in new[] { traverse.Property("MGBMPOJIOEI").GetValue<GameObject>(), traverse.Property("CCCAMMNGFLI").GetValue<GameObject>() })
+            {
+                var orient = rig != null ? rig.GetComponent<OrientExternalCamera>() : null;
+                if (orient == null || orient == __state) continue;
+                viewMode.SetValue(orient, viewMode.GetValue(__state));
+                seatRig.Invoke(orient, new object[] { player });
+            }
+            Plugin.Log.LogInfo($"PvP: viewscreen cameras set up for {player.name}'s seat");
+        }
+
+        private static readonly MethodInfo seatRig = AccessTools.Method(typeof(OrientExternalCamera), "ODAGBFEIGPE");
+        private static readonly FieldInfo seatPlayer = AccessTools.Field(typeof(OrientExternalCamera), "HAMOMEFCFNB");
+        private static readonly FieldInfo viewMode = AccessTools.Field(typeof(OrientExternalCamera), "EBDIIHHOPLO");
 
         // The nav map turns an icon by its ship's heading unless it's a player ship (yours sits under the map's
         // own rotation, which is your heading): the other player ship turns by its own, as an AI ship does.
