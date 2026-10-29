@@ -23,7 +23,8 @@ namespace StbcRevival
     ///   - a marker (BepInEx/sessions/running.txt) lives for as long as the game runs, removed on a clean quit;
     ///   - found at launch, the last run didn't close properly: its session log, Unity's crash folder, Windows'
     ///     "Application Error" entries for stbc.exe, SteamVR's logs and the mod's settings go into
-    ///     BepInEx/crash-reports/crash-&lt;date-time&gt;.zip, with Steam IDs, the Windows user name and your Steam name
+    ///     BepInEx/crash-reports/crash-&lt;date-time&gt;.zip, with Steam IDs, the Windows user name, your Steam name, the
+    ///     names of players you were in a room with (kept in the marker as they're seen) and the block list's names
     ///     blanked (people attach these on GitHub);
     ///   - on the shuttle, a popup says where it is, and the folder opens.
     /// </summary>
@@ -44,6 +45,8 @@ namespace StbcRevival
         private static bool told;
         private static float onShuttleSince = -1f;
         private static string system;         // read on the main thread (Unity's SystemInfo), used by the report thread
+        private static readonly HashSet<string> seenNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase); // players in your rooms
+        private static float nextNames;
 
         /// <summary>Plugin.Awake, first thing: a report for the last run if it crashed, then this run's log.</summary>
         internal static void Start()
@@ -90,6 +93,11 @@ namespace StbcRevival
                 steamName = name;
                 WriteMarker();
             }
+            if (Time.realtimeSinceStartup >= nextNames)
+            {
+                nextNames = Time.realtimeSinceStartup + 5f;
+                if (NoteRoomPlayers()) WriteMarker();
+            }
             if (reportReady == null || told) return;
             bool onShuttle = GameState.Phase() == "GamePhase_MainMenu" && !GameState.Loading()
                              && GameState.ConnectedAndReady() && GameState.RoomName() == null;
@@ -129,13 +137,15 @@ namespace StbcRevival
             public string Log;
             public string SteamName;
             public string Version;
+            public List<string> Names = new List<string>();
         }
 
         private static void WriteMarker()
         {
             try
             {
-                File.WriteAllText(Marker, $"started={startedUtc:o}\nlog={sessionName}\nsteamname={steamName}\nversion={Plugin.Version}\n");
+                File.WriteAllText(Marker, $"started={startedUtc:o}\nlog={sessionName}\nsteamname={steamName}\nversion={Plugin.Version}\n"
+                                          + $"names={string.Join("\t", seenNames.ToArray())}\n");
             }
             catch (Exception e)
             {
@@ -155,6 +165,7 @@ namespace StbcRevival
                 else if (key == "log") run.Log = value;
                 else if (key == "steamname" && value.Length > 0) run.SteamName = value;
                 else if (key == "version") run.Version = value;
+                else if (key == "names") run.Names.AddRange(value.Split(new[] { '\t' }, StringSplitOptions.RemoveEmptyEntries));
             }
             return run;
         }
@@ -165,6 +176,9 @@ namespace StbcRevival
         {
             try
             {
+                // The block list's names too (Steam IDs go anyway): it's in the settings, and they may be in the logs.
+                foreach (var item in (Plugin.BlockedPlayers?.Value ?? "").Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries))
+                    if (item.IndexOf('=') is int eq && eq >= 0) last.Names.Add(item.Substring(eq + 1).Trim());
                 var files = new List<KeyValuePair<string, byte[]>>();
                 var notes = new StringBuilder();
                 void Add(string name, string path, bool text = true)
@@ -282,15 +296,41 @@ namespace StbcRevival
             return library != null && Directory.Exists(Path.Combine(library, "logs")) ? Path.Combine(library, "logs") : null;
         }
 
-        // Steam IDs, the Windows user name (and any C:\Users\<name>), your Steam name: blanked.
+        // Steam IDs, the Windows user name (and any C:\Users\<name>), your Steam name, other players' names, and the
+        // block list's value: blanked. Longest names first, so one that contains another goes whole.
         private static string Redact(string text, LastRun last)
         {
             text = Regex.Replace(text, @"7656119\d{10}", "<steam id>");
             text = Regex.Replace(text, @"(?i)([\\/]Users[\\/])[^\\/\r\n""]+", "$1<user>");
-            foreach (var name in new[] { Environment.UserName, last.SteamName, steamName }.Distinct())
-                if (!string.IsNullOrEmpty(name) && name.Length >= 3)
-                    text = Regex.Replace(text, Regex.Escape(name), name == Environment.UserName ? "<user>" : "<steam name>", RegexOptions.IgnoreCase);
+            text = Regex.Replace(text, @"(?m)^(Blocked\s*=)[^\r\n]*", "$1 <blanked>");
+            if (!string.IsNullOrEmpty(Environment.UserName) && Environment.UserName.Length >= 3)
+                text = Regex.Replace(text, Regex.Escape(Environment.UserName), "<user>", RegexOptions.IgnoreCase);
+            foreach (var name in new[] { last.SteamName, steamName }.Where(n => !string.IsNullOrEmpty(n) && n.Length >= 3).Distinct())
+                text = Regex.Replace(text, Regex.Escape(name), "<steam name>", RegexOptions.IgnoreCase);
+            foreach (var name in last.Names.Where(n => !string.IsNullOrEmpty(n) && n.Length >= 3).Distinct().OrderByDescending(n => n.Length))
+                text = Regex.Replace(text, Regex.Escape(name), "<player>", RegexOptions.IgnoreCase);
             return text;
+        }
+
+        // The names of the players in your room (Photon's player list), kept for the next report's blanking. True
+        // if there's a new one.
+        private static bool NoteRoomPlayers()
+        {
+            bool added = false;
+            try
+            {
+                var photon = Patches.PhotonNetworkType;
+                if (photon?.GetMethod("get_playerList", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static)?.Invoke(null, null) is Array players)
+                    foreach (var player in players)
+                    {
+                        var name = player?.GetType().GetMethod("get_name")?.Invoke(player, null) as string;
+                        if (string.IsNullOrEmpty(name)) continue;
+                        name = name.Replace('\t', ' ').Replace('\n', ' ').Replace('\r', ' ').Trim();
+                        if (name.Length >= 3 && name != steamName && seenNames.Add(name)) added = true;
+                    }
+            }
+            catch { /* not connected yet */ }
+            return added;
         }
 
         // ---- Helpers ----------------------------------------------------------------------------------------
