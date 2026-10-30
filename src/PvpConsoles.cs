@@ -100,7 +100,24 @@ namespace StbcRevival
             public Hook(MethodBase method, string patch, bool prefix) { Method = method; Patch = patch; Prefix = prefix; }
         }
 
-        private static bool Active => PvpPrototype.Active;
+        // On the bridge only: with the PvP test merely picked in the briefing room, the game's own console sync is
+        // left alone (the master's sync of every station there flooded the crew; the second set exists on the
+        // bridge anyway). Once a frame: the sync hooks ask on every network tick.
+        private static int activeFrame = -1;
+        private static bool active;
+
+        private static bool Active
+        {
+            get
+            {
+                if (activeFrame != Time.frameCount)
+                {
+                    activeFrame = Time.frameCount;
+                    active = PvpPrototype.Active && GameState.Phase() == "GamePhase_Bridge";
+                }
+                return active;
+            }
+        }
         private static bool OnB => PvpShips.Mine == "B";
 
         // The bridge (the briefing room has stations too: only the bridge gets a second set).
