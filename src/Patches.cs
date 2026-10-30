@@ -147,9 +147,11 @@ namespace StbcRevival
             return true;
         }
 
-        // Incoming Photon events by kind, for the Steam link report (what a flood is): event code, and for RPCs
-        // (200) the method. Main thread (Photon dispatch), so no locking.
+        // Incoming Photon events by kind, for the Steam link report (what a flood is and who sends it): event
+        // code, and for RPCs (200) the method and the sender's actor number. Main thread (Photon dispatch). The
+        // names come off the network: kept to short identifiers, and at most 64 kinds (the rest count as "other").
         internal static readonly Dictionary<string, int> IncomingEvents = new Dictionary<string, int>();
+        private static List<string> rpcList;
 
         private static void PeerEvent_Prefix(object[] __args)
         {
@@ -159,13 +161,39 @@ namespace StbcRevival
                 if (e == null) return;
                 var t = e.GetType();
                 var code = t.GetField("Code")?.GetValue(e) ?? t.GetProperty("Code")?.GetValue(e, null);
-                string kind = code?.ToString() ?? "?";
-                if (kind == "200" && (t.GetField("Parameters")?.GetValue(e) ?? t.GetProperty("Parameters")?.GetValue(e, null)) is IDictionary parameters
-                    && parameters.Contains((byte)245) && parameters[(byte)245] is IDictionary rpc)
-                    kind = "RPC " + (rpc[(byte)3] as string ?? (rpc.Contains((byte)5) ? "#" + rpc[(byte)5] : "?"));
+                string kind = code is byte b ? b.ToString() : "?";
+                var parameters = (t.GetField("Parameters")?.GetValue(e) ?? t.GetProperty("Parameters")?.GetValue(e, null)) as IDictionary;
+                if (kind == "200" && parameters != null && parameters.Contains((byte)245) && parameters[(byte)245] is IDictionary rpc)
+                {
+                    string name = rpc[(byte)3] as string;
+                    if (name == null && rpc.Contains((byte)5) && rpc[(byte)5] is byte index) name = RpcName(index);
+                    kind = "RPC " + Clean(name);
+                    if (parameters.Contains((byte)254) && parameters[(byte)254] is int actor) kind += " from " + actor;
+                }
+                if (!IncomingEvents.ContainsKey(kind) && IncomingEvents.Count >= 64) kind = "other";
                 IncomingEvents[kind] = IncomingEvents.TryGetValue(kind, out var n) ? n + 1 : 1;
             }
             catch { /* counting only */ }
+        }
+
+        // PUN sends RPCs by their index in PhotonServerSettings.RpcList.
+        private static string RpcName(byte index)
+        {
+            if (rpcList == null)
+            {
+                var settings = PhotonNetworkType?.GetField("PhotonServerSettings", BindingFlags.Public | BindingFlags.Static)?.GetValue(null)
+                               ?? PhotonNetworkType?.GetProperty("PhotonServerSettings", BindingFlags.Public | BindingFlags.Static)?.GetValue(null, null);
+                rpcList = settings?.GetType().GetField("RpcList", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)?.GetValue(settings) as List<string>
+                          ?? new List<string>();
+            }
+            return index < rpcList.Count ? rpcList[index] : "#" + index;
+        }
+
+        private static string Clean(string name)
+        {
+            if (string.IsNullOrEmpty(name)) return "?";
+            var clean = new string(name.Where(c => char.IsLetterOrDigit(c) || c == '_' || c == '#').Take(40).ToArray());
+            return clean.Length > 0 ? clean : "?";
         }
 
         private static void PeerResponse_Prefix(object[] __args)

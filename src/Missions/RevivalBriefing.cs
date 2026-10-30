@@ -158,6 +158,28 @@ namespace StbcRevival.Missions
                    && ((!procedural.isOn && procedural.interactable) || (!campaign.isOn && campaign.interactable));
         }
 
+        // Back to Procedural (Revival missions run as one), sent to the crew: at most once a second, as every
+        // briefing console refreshes every frame, and something setting it back each time made a flood
+        // (SetMissionTypeRPC, hundreds a second). How often it was needed is logged.
+        private static float nextReset;
+        private static int resets;
+        private static float resetsSince = -1f;
+
+        private static void ResetMissionType()
+        {
+            float now = Time.realtimeSinceStartup;
+            if (now < nextReset) return;
+            nextReset = now + 1f;
+            Loader.SetMissionType(Loader.DAPMGBKPDNM.Procedural);
+            if (resetsSince < 0f) resetsSince = now;
+            if (++resets > 1 && now - resetsSince >= 30f)
+            {
+                Plugin.Log.LogWarning($"Revival missions: the mission type kept changing back from Procedural ({resets} resets in {now - resetsSince:0} s)");
+                resets = 0;
+                resetsSince = now;
+            }
+        }
+
         private static void Refresh_Postfix(ConsoleBriefingRoom __instance)
         {
             var console = __instance;
@@ -179,8 +201,7 @@ namespace StbcRevival.Missions
                 if (campaign.isOn) campaign.isOn = false;
                 procedural.interactable = chooser;
                 campaign.interactable = chooser;
-                if (chooser && Loader.GetMissionType() != Loader.DAPMGBKPDNM.Procedural)
-                    Loader.SetMissionType(Loader.DAPMGBKPDNM.Procedural);
+                if (chooser && Loader.GetMissionType() != Loader.DAPMGBKPDNM.Procedural) ResetMissionType();
 
                 // Ships as for an Ongoing Voyage (the console greys their names unless Ongoing Voyages is
                 // selected). Next/previous step through the Revival missions (see Next_Prefix).
