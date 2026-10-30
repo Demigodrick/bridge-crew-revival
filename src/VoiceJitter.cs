@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using HarmonyLib;
 using UnityEngine;
@@ -12,14 +13,19 @@ namespace StbcRevival
     /// it has and silence when it runs dry). Between their microphone and your ears are several frame-to-frame
     /// hops (their game, Photon, the Steam relay, the host's in-game server, the relay again, yours, the
     /// decoder), so the voice arrives a little unevenly, and every late frame was a gap: choppy. Here the start
-    /// of each burst of speech is held until [Voice] JitterBufferMs of it is waiting (100 ms; 0 = the game's
-    /// behaviour) and then handed over at once, so Wwise has that much in hand for the rest of the burst.
-    /// Every 30 s, for each crewmate heard, the log gives the bursts, the times the voice ran dry, and the voice
-    /// frames that never arrived (filled in by the decoder), to tell delay from loss.
+    /// of each burst of speech is held until a cushion of it is waiting and then handed over at once (in pieces
+    /// the game's player takes), so Wwise has that much in hand for the rest of the burst. The cushion adapts,
+    /// per crewmate: it starts at [Voice] JitterBufferMs (0 = the game's behaviour); when their voice runs dry in
+    /// the middle of a burst (it came late), playback holds again until there's a cushion, and the cushion grows
+    /// (up to 400 ms); each burst that plays through shrinks it back a little. A good connection stays quick,
+    /// a bad one gets smoother. Every 30 s, for each crewmate heard, the log gives the bursts, the times the
+    /// voice ran dry, the voice frames that never arrived (filled in by the decoder), and the cushion.
     /// </summary>
     internal static class VoiceJitter
     {
         private const float BurstGap = 0.25f; // seconds of no voice that end a burst of speech
+        private const int MaxCushionMs = 400, GrowMs = 40, ShrinkMs = 10;
+        private const int Piece = 4000;       // samples per hand-over: what the player's own 4096-sample clip takes
 
         private static readonly AccessTools.FieldRef<DaikonForge.VoIP.AudioPlayerBase, AudioSource> Source =
             AccessTools.FieldRefAccess<DaikonForge.VoIP.AudioPlayerBase, AudioSource>("NIPDKJAKHCO"); // tracks Wwise's playback
@@ -34,8 +40,11 @@ namespace StbcRevival
             public Samples Buffer;          // the decoder's buffer, reused to hand over what's held
             public bool Streaming;          // within a burst, with its cushion handed over
             public float LastVoice;
-            public int Bursts, DryOuts, LastMissing;
+            public int Bursts, DryOuts, LastMissing, Rebuffers;
             public bool WasPlaying;
+            public int CushionMs = -1;      // this crewmate's cushion; -1 until first heard
+            public bool PlayedThisStream;   // playback started since the last hand-over (only then can it run dry)
+            public bool BurstRanDry;        // this burst had to hold again
         }
 
         private static readonly Dictionary<WwiseAudioPlayer, Speaker> speakers = new Dictionary<WwiseAudioPlayer, Speaker>();
@@ -61,11 +70,10 @@ namespace StbcRevival
             return s;
         }
 
-        private static int Target(WwiseAudioPlayer player)
+        private static int Target(WwiseAudioPlayer player, Speaker s)
         {
             int rate = SampleRate(player) > 0 ? SampleRate(player) : 16000;
-            // At most what the player's own 4096-sample clip takes in one go (it tracks playback for the game).
-            return Mathf.Min(rate * Plugin.VoiceJitterBufferMs.Value / 1000, 4000);
+            return rate * s.CushionMs / 1000;
         }
 
         // Decoded voice for Wwise: within a burst, straight through; at the start of one, held until there's a
@@ -74,11 +82,28 @@ namespace StbcRevival
         {
             if (handingOver || Plugin.VoiceJitterBufferMs.Value <= 0 || __0 == null) return true;
             var s = Of(__instance);
+            int start = Plugin.VoiceJitterBufferMs.Value;
+            if (s.CushionMs < start) s.CushionMs = start;
             float now = Time.unscaledTime;
             bool sameBurst = now - s.LastVoice < BurstGap;
             s.LastVoice = now;
-            if (s.Streaming && sameBurst) return true;
-            if (!sameBurst) s.Held.Clear();
+            if (s.Streaming && sameBurst)
+            {
+                var source = Source(__instance);
+                if (!s.PlayedThisStream || source == null || source.isPlaying) return true;
+                // Ran dry mid-burst: this voice comes late. Hold again until there's a (bigger) cushion.
+                s.CushionMs = Math.Min(MaxCushionMs, s.CushionMs + GrowMs);
+                s.Rebuffers++;
+                s.BurstRanDry = true;
+            }
+            else if (!sameBurst)
+            {
+                // A new burst: if the last one played through, ease the cushion back towards where it started.
+                if (s.Streaming && !s.BurstRanDry) s.CushionMs = Math.Max(start, s.CushionMs - ShrinkMs);
+                s.BurstRanDry = false;
+                s.Held.Clear();
+                s.Bursts++;
+            }
             s.Streaming = false;
             s.Buffer = __0;
             int count = __0.PICFPDJILEK;
@@ -86,19 +111,30 @@ namespace StbcRevival
             var chunk = new float[count];
             __0.CopyTo(0, chunk, 0, count * 4);
             s.Held.AddRange(chunk);
-            if (s.Held.Count < Target(__instance)) return false; // keep holding
-            HandOverInto(s, __0);
-            return true;
+            if (s.Held.Count < Target(__instance, s)) return false; // keep holding
+            HandOver(__instance, s);
+            return false;
         }
 
-        private static void HandOverInto(Speaker s, Samples buffer)
+        // What's held, to the player in pieces it takes (each also goes to Wwise as it comes).
+        private static void HandOver(WwiseAudioPlayer player, Speaker s)
         {
             var all = s.Held.ToArray();
             s.Held.Clear();
-            buffer.Resize(all.Length);
-            buffer.CopyFrom(all, 0, 0, all.Length * 4);
             s.Streaming = true;
-            s.Bursts++;
+            s.PlayedThisStream = false;
+            handingOver = true;
+            try
+            {
+                for (int at = 0; at < all.Length; at += Piece)
+                {
+                    int n = Math.Min(Piece, all.Length - at);
+                    s.Buffer.Resize(n);
+                    s.Buffer.CopyFrom(all, at * 4, 0, n * 4);
+                    player.BufferAudio(s.Buffer);
+                }
+            }
+            finally { handingOver = false; }
         }
 
         private static void Update_Postfix(WwiseAudioPlayer __instance)
@@ -106,15 +142,11 @@ namespace StbcRevival
             var s = Of(__instance);
             // A short burst that never reached the cushion: hand it over once the voice has stopped coming.
             if (!s.Streaming && s.Held.Count > 0 && s.Buffer != null && Time.unscaledTime - s.LastVoice >= BurstGap * 0.5f)
-            {
-                HandOverInto(s, s.Buffer);
-                handingOver = true;
-                try { __instance.BufferAudio(s.Buffer); }
-                finally { handingOver = false; }
-            }
+                HandOver(__instance, s);
             // The game pauses its tracking clip when playback catches up with what arrived: the voice ran dry.
             var source = Source(__instance);
             bool playing = source != null && source.isPlaying;
+            if (playing) s.PlayedThisStream = true;
             if (s.WasPlaying && !playing) s.DryOuts++;
             s.WasPlaying = playing;
             if (Time.unscaledTime >= nextReport)
@@ -141,8 +173,9 @@ namespace StbcRevival
                 s.LastMissing = missing;
                 if (s.Bursts == 0 && s.DryOuts == 0 && lost == 0) continue;
                 Plugin.Log.LogInfo($"Voice chat from {player.gameObject.name}: last 30 s, {s.Bursts} bursts of speech, ran dry {s.DryOuts} times "
-                                   + $"(a burst's end counts once), {lost} frames lost on the way; cushion {Plugin.VoiceJitterBufferMs.Value} ms");
-                s.Bursts = s.DryOuts = 0;
+                                   + $"(a burst's end counts once), held again mid-burst {s.Rebuffers} times, {lost} frames lost on the way; "
+                                   + $"cushion {Math.Max(s.CushionMs, Plugin.VoiceJitterBufferMs.Value)} ms");
+                s.Bursts = s.DryOuts = s.Rebuffers = 0;
             }
         }
     }

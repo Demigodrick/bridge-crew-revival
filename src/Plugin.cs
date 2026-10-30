@@ -166,7 +166,7 @@ namespace StbcRevival
             UpdateUrl = Config.Bind("Updates", "VersionUrl", "",
                 "Where to read the latest version number. Empty = the official website's version.txt.");
             VoiceJitterBufferMs = Config.Bind("Voice", "JitterBufferMs", 100,
-                "Voice chat: how much of a crewmate's speech is held before it starts playing (milliseconds, up to about 85-250 depending on their microphone), so small delays on the way don't make it choppy. More is smoother but later; 0 = the game's own (plays each piece as it arrives).");
+                "Voice chat: how much of a crewmate's speech is held before it starts playing (milliseconds), so small delays on the way don't make it choppy. It's where each crewmate's cushion starts: it grows by itself (up to 400) when their voice keeps arriving late, and eases back when it doesn't. More is smoother but later; 0 = the game's own (plays each piece as it arrives).");
             ControllerGraceSeconds = Config.Bind("VR", "ControllerGraceSeconds", 30f,
                 "How long a VR controller the headset stops reporting (resting controllers often go to sleep) still counts as connected before the game's \"controllers disconnected\" warning shows. 0 = the game's own behaviour (at once).");
             VrDevice = Config.Bind("VR", "Device", VrDeviceChoice.Auto,
