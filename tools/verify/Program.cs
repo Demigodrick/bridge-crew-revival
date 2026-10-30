@@ -277,6 +277,9 @@ Check("  Sector.MapBase.ChooseStartingSystem", game.GetType("Sector.MapBase")?.G
 // Briefing: the mission category toggles' handlers (quiet during the console's refresh)
 foreach (var m in new[] { "MEOMCEOEBAC", "MBHACAKGEGM" })
     Check($"  ConsoleBriefingRoom.{m}(bool) (category toggle handler)", game.GetType("ConsoleBriefingRoom")?.GetMethods(Inst).FirstOrDefault(x => x.Name == m && x.GetParameters().Length == 1 && x.GetParameters()[0].ParameterType.Name == "Boolean"));
+// Fleet Battle: player ships take less damage
+foreach (var ty in new[] { "Sector.Spacecraft.Subsystems.HullServer", "Sector.Spacecraft.Subsystems.SubsystemServer" })
+    Check($"  {ty.Substring(ty.LastIndexOf('.') + 1)}.systemHit(float) (Fleet Battle armour)", game.GetType(ty)?.GetMethods(Inst | BindingFlags.DeclaredOnly).FirstOrDefault(x => x.Name == "systemHit" && x.GetParameters().Length == 1));
 // Host hand-off
 Check("  NetworkStatus.SetError(error, popup, ...) (hand-off: no popup for failed regroup joins)",
     game.GetType("SVR.Network.NetworkStatus")?.GetMethods(BindingFlags.Public | BindingFlags.Static).FirstOrDefault(m => m.Name == "SetError" && m.GetParameters().Length == 4));

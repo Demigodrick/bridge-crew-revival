@@ -115,6 +115,7 @@ namespace StbcRevival.Missions
             RevivalBriefing.Patch(harmony);
             LastStandLocks.Patch(harmony);
             FleetBattleNoCloak.Patch(harmony);
+            FleetBattleArmor.Patch(harmony);
             LastStandBridgeRepair.Patch(harmony);
             MissionMaps.Patch(harmony);
         }

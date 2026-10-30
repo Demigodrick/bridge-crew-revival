@@ -16,7 +16,8 @@ namespace StbcRevival.Missions
     /// Fleet Battle (Revival Missions): a Starfleet fleet and yours against a Klingon or Romulan fleet,
     /// [Revival] FleetBattleSize ships a side (30 by default). Allies form up around you, the enemy arrives
     /// ahead: every ally is ordered to attack an enemy ship, and the enemy hunts in packs of five (one ship in
-    /// six comes for you), sending a third as many again as reinforcements when it's down to half, up to twice.
+    /// eight comes for you), sending a third as many again as reinforcements when it's down to half, up to twice;
+    /// as they arrive your ship is repaired and restocked. Your ship takes 40% less damage (FleetBattleArmor).
     /// The allied fleet arrives a little battle-worn (85% hull). Won when
     /// the enemy fleet is destroyed; lost if your ship is. No warp or impulse travel: the battle is here.
     /// </summary>
@@ -157,6 +158,8 @@ namespace StbcRevival.Missions
                     enemies.AddRange(more);
                     liveEnemies.AddRange(more);
                     foreach (var ship in more) spawnedAt[ship] = UnityEngine.Time.time;
+                    // Starfleet's tender gets your ship back in shape as the next wave comes in.
+                    yield return LastStandWaves.RepairAndRestock(Task, player, "you");
                     yield return Task.KNMMMJOOBHC.WithTime(6f);
                     yield return Task.NECMCDDOFJB.RemoveSubDirective(directive, arriving);
                 }
@@ -199,9 +202,9 @@ namespace StbcRevival.Missions
         }
 
         // Enemies hunt in packs of five, each pack on one allied ship, so shields actually break; one ship in
-        // six comes for the player instead.
+        // eight comes for the player instead (one in six was too many).
         private BodyRef EnemyTarget(int index, List<BodyRef> allies) =>
-            allies.Count == 0 || index % 6 == 0 ? player : allies[(index / 5) % allies.Count];
+            allies.Count == 0 || index % 8 == 0 ? player : allies[(index / 5) % allies.Count];
 
         // When each ship appeared: a ship counts as alive for its first seconds, before its body is set.
         private readonly Dictionary<BodyRef, float> spawnedAt = new Dictionary<BodyRef, float>();
