@@ -10,7 +10,8 @@ namespace StbcRevival
     /// first after the host (the lowest Photon actor number that isn't the host's) is on the second (B,
     /// "PvP B"); anyone else on A. [Debug] PvpTestShip = A or B overrides it for your own game (Auto: the rule).
     /// Each game publishes its ship as the player property "PVP", so the host knows who is where even with
-    /// an override.
+    /// an override. A player whose game hasn't published one (the PvP test off: [Debug] PvpTest) counts as on A,
+    /// where their game puts them as the normal game does, and the host is told when the test starts.
     /// </summary>
     internal static class PvpShips
     {
@@ -34,13 +35,19 @@ namespace StbcRevival
             }
         }
 
-        /// <summary>The ship a Photon player crews: what their game published, else the rule.</summary>
+        /// <summary>The ship a Photon player crews: what their game published; else yours by the rule, and anyone
+        /// else's on A (their game has no PvP test, so it binds to the first ship as the game does).</summary>
         internal static string Of(object player)
         {
             if (player == null) return "A";
             if (Props(player)?[Key] is string published && (published == "A" || published == "B")) return published;
-            return Auto(player);
+            return Actor(player) == Actor(Me) ? Mine : "A";
         }
+
+        /// <summary>The other players whose game hasn't published a ship: no PvP test there.</summary>
+        internal static string[] WithoutPvp() =>
+            Players.Where(p => Actor(p) != Actor(Me) && !(Props(p)?[Key] is string))
+                .Select(p => Get(p, "get_name") as string ?? "a player").ToArray();
 
         /// <summary>The Photon player with this actor number, or null.</summary>
         internal static object Player(int actor) => Players.FirstOrDefault(p => Actor(p) == actor);

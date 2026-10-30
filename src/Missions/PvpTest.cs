@@ -92,6 +92,14 @@ namespace StbcRevival.Missions
                 targetable.SetTargetableByEngineering(true);
             }
             Plugin.Log.LogInfo($"PvP test: {Describe(a)} and {Describe(b)} spawned, {Apart(a, b)}");
+            var noPvp = PvpShips.WithoutPvp();
+            if (noPvp.Length > 0)
+            {
+                string who = string.Join(", ", noPvp);
+                Plugin.Log.LogWarning($"PvP test: {who} without the PvP test switched on: on ship A (ship B's crew is AI)");
+                RoomBrowser.Show($"{who} {(noPvp.Length == 1 ? "doesn't" : "don't")} have the PvP test switched on, so {(noPvp.Length == 1 ? "is" : "are")} on ship A. "
+                                 + "Ship B is crewed by the AI. To fly ship B, run the installer and type B at the update question.");
+            }
             yield return Task.OKLDNLKLLFJ.WithGroup("State_Group_Mus_Dyn").WithState("Tension");
 
             int ticks = 0;
