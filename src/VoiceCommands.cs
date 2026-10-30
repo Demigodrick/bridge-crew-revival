@@ -385,9 +385,10 @@ namespace StbcRevival
             }
             else
             {
-                // Not listening in: if voice chat has a microphone input at all, ending our recording ends the
-                // microphone under it too, so it's started again afterwards (Stop).
-                chatCut = ChatInput() != null;
+                // Not listening in. If voice chat was recording this microphone all the same, ending our recording
+                // ends it too, so it's started again afterwards (Stop); if it wasn't (muted, off), it stays off.
+                var chat = ChatInput();
+                chatCut = chat != null && ChatDevice(chat, out var chatDevice) && Microphone.IsRecording(chatDevice);
                 clip = Microphone.Start(micDevice, false, MaxSeconds, SampleRate);
             }
             TakeDestinations();
@@ -409,6 +410,21 @@ namespace StbcRevival
         private static DaikonForge.VoIP.AudioInputDeviceBase ChatInput() =>
             VoIpManager.IEFBKOMBFGO == null ? null : VoIpManager.IEFBKOMBFGO.GetLocalMicrophoneInputDevice();
 
+        // The microphone voice chat records from (by input class). False if the class isn't one this knows.
+        private static bool ChatDevice(DaikonForge.VoIP.AudioInputDeviceBase input, out string device)
+        {
+            device = null;
+            var field = new[] { "FJNHDGFAOLB", "GMNCBFBICKK" }.Select(n => AccessTools.Field(input.GetType(), n))
+                .FirstOrDefault(f => f != null && f.FieldType == typeof(string));
+            if (field == null)
+            {
+                Plugin.Log.LogWarning($"Voice commands: voice chat's microphone ({input.GetType().Name}) isn't one this knows");
+                return false;
+            }
+            device = field.GetValue(input) as string;
+            return true;
+        }
+
         // The voice chat's own recording of your microphone (a looping clip on its AudioSource), if it's recording.
         // Its input is either DaikonForge's UnityMicrophoneInputDevice (device in FJNHDGFAOLB) or the game's
         // WwiseMicrophoneInputDevice (GMNCBFBICKK), by voice template; both record with Unity's Microphone.
@@ -417,16 +433,8 @@ namespace StbcRevival
             try
             {
                 var input = ChatInput();
-                if (input == null) return null;
-                var deviceField = new[] { "FJNHDGFAOLB", "GMNCBFBICKK" }.Select(n => AccessTools.Field(input.GetType(), n))
-                    .FirstOrDefault(f => f != null && f.FieldType == typeof(string));
+                if (input == null || !ChatDevice(input, out var device)) return null;
                 var source = AccessTools.Field(input.GetType(), "EALMEBPADKI")?.GetValue(input) as AudioSource;
-                if (deviceField == null)
-                {
-                    Plugin.Log.LogWarning($"Voice commands: voice chat's microphone ({input.GetType().Name}) isn't one this knows");
-                    return null;
-                }
-                var device = deviceField.GetValue(input) as string;
                 if (source == null || source.clip == null || !Microphone.IsRecording(device)) return null;
                 return new ChatRecording { Device = device, Clip = source.clip };
             }
