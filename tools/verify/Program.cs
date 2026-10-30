@@ -275,6 +275,9 @@ Check("  CEOFAJJJCAN.LNIBLGBKLGI / AJPIEMDPKDC.JFAIKAOOPMO / EncounterSystem.Sys
 Check("  Sector.MapBase.ChooseStartingSystem", game.GetType("Sector.MapBase")?.GetMethod("ChooseStartingSystem", Inst));
 
 // Host hand-off
+Check("  NetworkStatus.SetError(error, popup, ...) (hand-off: no popup for failed regroup joins)",
+    game.GetType("SVR.Network.NetworkStatus")?.GetMethods(BindingFlags.Public | BindingFlags.Static).FirstOrDefault(m => m.Name == "SetError" && m.GetParameters().Length == 4));
+Check("  PAFNPDODDCM/OHDEDPBGFFE.None (popup mode)", game.GetType("SVR.Network.PAFNPDODDCM+OHDEDPBGFFE")?.GetField("None"));
 Check("PhotonNetwork.get_playerList (host hand-off)", photon?.GetMethod("get_playerList", PS));
 var roomType = photon?.GetMethod("get_room", PS)?.ReturnType;
 foreach (var m in new[] { "get_maxPlayers", "get_open", "get_visible", "get_propertiesListedInLobby", "get_customProperties", "get_name" })

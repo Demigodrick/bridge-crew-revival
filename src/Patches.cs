@@ -39,6 +39,7 @@ namespace StbcRevival
                 Patch(harmony, AccessTools.Method(typeof(NetworkCore), nameof(NetworkCore.GetLoginMethod)),
                     postfix: nameof(GetLoginMethod_Postfix));
 
+            HostHandoff.Patch(harmony);
             if (Plugin.Diagnostics.Value)
                 foreach (var setError in typeof(NetworkStatus).GetMethods(BindingFlags.Public | BindingFlags.Static)
                              .Where(m => m.Name == nameof(NetworkStatus.SetError)))
