@@ -216,7 +216,7 @@ namespace StbcRevival
 
         private static string MeshLine(SkinnedMeshRenderer r) =>
             $"'{r.sharedMesh.name}' on '{r.name}', {r.sharedMesh.vertexCount} vertices, {r.sharedMesh.subMeshCount} submeshes, "
-            + $"{r.bones.Length} bones, {r.sharedMesh.blendShapeCount} face shapes, uv {r.sharedMesh.uv.Length} uv2 {r.sharedMesh.uv2.Length}";
+            + $"{r.bones.Length} bones, {r.sharedMesh.blendShapeCount} face shapes";  // not the UVs: reading them off the game's locked meshes logs an error per mesh
 
         private static void Describe(StringBuilder report, string title, GameObject root)
         {

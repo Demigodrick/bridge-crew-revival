@@ -414,7 +414,16 @@ namespace StbcRevival
         private static bool ChatDevice(DaikonForge.VoIP.AudioInputDeviceBase input, out string device)
         {
             device = null;
-            var field = new[] { "FJNHDGFAOLB", "GMNCBFBICKK" }.Select(n => AccessTools.Field(input.GetType(), n))
+            // Looked up quietly (AccessTools.Field warns about the one a class doesn't have).
+            System.Reflection.FieldInfo Find(Type type, string name)
+            {
+                for (; type != null; type = type.BaseType)
+                    if (type.GetField(name, System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public
+                                            | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.DeclaredOnly) is System.Reflection.FieldInfo f)
+                        return f;
+                return null;
+            }
+            var field = new[] { "FJNHDGFAOLB", "GMNCBFBICKK" }.Select(n => Find(input.GetType(), n))
                 .FirstOrDefault(f => f != null && f.FieldType == typeof(string));
             if (field == null)
             {
