@@ -17,7 +17,8 @@ namespace StbcRevival.Missions
     /// [Revival] FleetBattleSize ships a side (30 by default). Allies form up around you, the enemy arrives
     /// ahead: every ally is ordered to attack an enemy ship, and the enemy hunts in packs of five (one ship in
     /// eight comes for you), sending a third as many again as reinforcements when it's down to half, up to twice;
-    /// as they arrive your ship is repaired and restocked. Your ship takes 40% less damage (FleetBattleArmor).
+    /// Starfleet sends its own as they arrive (nine for every ten). Your ship takes 40% less damage
+    /// (FleetBattleArmor).
     /// The allied fleet arrives a little battle-worn (85% hull). Won when
     /// the enemy fleet is destroyed; lost if your ship is. No warp or impulse travel: the battle is here.
     /// </summary>
@@ -88,14 +89,7 @@ namespace StbcRevival.Missions
 
             // Allies: a loose formation around and behind you, all facing the way you do.
             var allies = new List<BodyRef>();
-            for (int i = 0; i < allyCount; i++)
-            {
-                var ship = new BodyRef();
-                allies.Add(ship);
-                float angle = 180f + random.Next(-70, 70), distance = 3000f + random.Next(0, 6000);
-                yield return Task.BFMBGDIDKEI.UsingSpawner(MakeSpawner(Starfleet[random.Next(Starfleet.Length)], "USS", i, Tag.Friendly))
-                    .AtAngleAndDistanceFromBody(player, angle, distance).OutputTo(ship);
-            }
+            foreach (var step in SpawnAllies(allyCount, allies)) yield return step;
 
             yield return Task.KNMMMJOOBHC.WithTime(5f); // a moment to see the fleet before the enemy arrives
             yield return Task.OKLDNLKLLFJ.WithGroup("State_Group_Mus_Dyn").WithState("Tension");
@@ -104,11 +98,7 @@ namespace StbcRevival.Missions
             // ever broke): allied ships can be destroyed (some Starfleet ships spawn invulnerable, as mission
             // allies) and have weak shields; the enemy fleet has strong ones and hunts in packs (see EnemyTarget),
             // and sends reinforcements when it's down to half.
-            foreach (var ally in allies)
-            {
-                yield return Task.FEBCHOJGMHM.TellAI(ally).ToSetVulnerable();
-                yield return Task.OFNIKPPKOGI.TellAI(ally).ToSetShieldStrength(AI.IDCAFFBNKFO.Weak);
-            }
+            foreach (var step in ReadyAllies(allies)) yield return step;
 
             var enemies = new List<BodyRef>();
             foreach (var step in SpawnEnemies(size, empire, enemies, allies)) yield return step;
@@ -158,9 +148,22 @@ namespace StbcRevival.Missions
                     enemies.AddRange(more);
                     liveEnemies.AddRange(more);
                     foreach (var ship in more) spawnedAt[ship] = UnityEngine.Time.time;
-                    // Starfleet's tender gets your ship back in shape as the next wave comes in.
-                    yield return LastStandWaves.RepairAndRestock(Task, player, "you");
+                    // Starfleet answers in kind: nine ships for every ten of theirs, warping in behind you, each
+                    // ordered at an enemy.
+                    int ours = Math.Max(1, extra * 9 / 10);
+                    string ourArriving = "Starfleet reinforcements arriving";
+                    yield return Task.NECMCDDOFJB.AddSubDirectives(directive, ourArriving);
+                    Plugin.Log.LogInfo($"Fleet battle: {ours} Starfleet reinforcements");
+                    var backup = new List<BodyRef>();
+                    foreach (var step in SpawnAllies(ours, backup)) yield return step;
+                    foreach (var step in ReadyAllies(backup)) yield return step;
+                    foreach (var ally in backup)
+                        yield return Task.NDFEDBHFGFB.TellAI(ally).ToAddObjectives(liveEnemies[random.Next(liveEnemies.Count)]).OfObjectiveType(AIObjective.Attack);
+                    allies.AddRange(backup);
+                    liveAllies.AddRange(backup);
+                    foreach (var ship in backup) spawnedAt[ship] = UnityEngine.Time.time;
                     yield return Task.KNMMMJOOBHC.WithTime(6f);
+                    yield return Task.NECMCDDOFJB.RemoveSubDirective(directive, ourArriving);
                     yield return Task.NECMCDDOFJB.RemoveSubDirective(directive, arriving);
                 }
 
@@ -177,6 +180,32 @@ namespace StbcRevival.Missions
             yield return Task.NECMCDDOFJB.CompleteSubDirective(directive, status);
             yield return Task.HHNFJKHGEPH.WithMissionResult($"Victory: {alliesLeft} of {allies.Count} allied ships survived", true);
             yield return Task.KNMMMJOOBHC.WithTime(10f);
+        }
+
+        // Starfleet ships in a loose formation around and behind you, numbered on from the last.
+        private int allyNumber;
+
+        private IEnumerable<Step> SpawnAllies(int count, List<BodyRef> into)
+        {
+            for (int i = 0; i < count; i++)
+            {
+                var ship = new BodyRef();
+                into.Add(ship);
+                float angle = 180f + random.Next(-70, 70), distance = 3000f + random.Next(0, 6000);
+                yield return Task.BFMBGDIDKEI.UsingSpawner(MakeSpawner(Starfleet[random.Next(Starfleet.Length)], "USS", allyNumber++, Tag.Friendly))
+                    .AtAngleAndDistanceFromBody(player, angle, distance).OutputTo(ship);
+            }
+        }
+
+        // Allied ships can be destroyed (some Starfleet ships spawn invulnerable, as mission allies) and have weak
+        // shields.
+        private IEnumerable<Step> ReadyAllies(List<BodyRef> ships)
+        {
+            foreach (var ally in ships)
+            {
+                yield return Task.FEBCHOJGMHM.TellAI(ally).ToSetVulnerable();
+                yield return Task.OFNIKPPKOGI.TellAI(ally).ToSetShieldStrength(AI.IDCAFFBNKFO.Weak);
+            }
         }
 
         // Enemy ships at the far side of the field, facing you, with strong shields and their orders; a flagship
