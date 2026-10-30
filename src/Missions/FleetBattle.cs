@@ -17,7 +17,7 @@ namespace StbcRevival.Missions
     /// [Revival] FleetBattleSize ships a side (30 by default). Allies form up around you, the enemy arrives
     /// ahead: every ally is ordered to attack an enemy ship, and the enemy hunts in packs of five (one ship in
     /// eight comes for you), sending a third as many again as reinforcements when it's down to half, up to twice;
-    /// Starfleet sends its own as they arrive (nine for every ten). Your ship takes 40% less damage
+    /// Starfleet sends five of its own as they arrive. Your ship takes 40% less damage
     /// (FleetBattleArmor).
     /// The allied fleet arrives a little battle-worn (85% hull). Won when
     /// the enemy fleet is destroyed; lost if your ship is. No warp or impulse travel: the battle is here.
@@ -148,9 +148,9 @@ namespace StbcRevival.Missions
                     enemies.AddRange(more);
                     liveEnemies.AddRange(more);
                     foreach (var ship in more) spawnedAt[ship] = UnityEngine.Time.time;
-                    // Starfleet answers in kind: nine ships for every ten of theirs, warping in behind you, each
+                    // Starfleet answers: five ships (fewer if the enemy sent fewer), warping in behind you, each
                     // ordered at an enemy.
-                    int ours = Math.Max(1, extra * 9 / 10);
+                    int ours = Math.Min(5, extra);
                     string ourArriving = "Starfleet reinforcements arriving";
                     yield return Task.NECMCDDOFJB.AddSubDirectives(directive, ourArriving);
                     Plugin.Log.LogInfo($"Fleet battle: {ours} Starfleet reinforcements");
