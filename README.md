@@ -21,7 +21,7 @@ quality-of-life fixes.
 - **Nothing to host.** Whoever starts the crew hosts it on their own PC, and everyone connects through
   Steam's network. No ports to open, no accounts, no monthly server bill.
 - **Host left? No problem.** If the host drops, the crew regroups in the briefing room under the next
-  player instead of everyone landing back at the main menu.
+  player (or the one after, if they're gone too) instead of everyone landing back at the main menu.
 - **Voice chat** between crewmates, smoothed out so it doesn't stutter on a shaky connection.
 - **Passwords and blocking.** Lock a public crew with a password from the briefing room. Kick a troublemaker
   and you can block them from your crews; anyone you've blocked on Steam can't join either.
