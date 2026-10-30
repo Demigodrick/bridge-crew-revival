@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -144,6 +145,27 @@ namespace StbcRevival
                 return false;
             }
             return true;
+        }
+
+        // Incoming Photon events by kind, for the Steam link report (what a flood is): event code, and for RPCs
+        // (200) the method. Main thread (Photon dispatch), so no locking.
+        internal static readonly Dictionary<string, int> IncomingEvents = new Dictionary<string, int>();
+
+        private static void PeerEvent_Prefix(object[] __args)
+        {
+            try
+            {
+                var e = __args[0];
+                if (e == null) return;
+                var t = e.GetType();
+                var code = t.GetField("Code")?.GetValue(e) ?? t.GetProperty("Code")?.GetValue(e, null);
+                string kind = code?.ToString() ?? "?";
+                if (kind == "200" && (t.GetField("Parameters")?.GetValue(e) ?? t.GetProperty("Parameters")?.GetValue(e, null)) is IDictionary parameters
+                    && parameters.Contains((byte)245) && parameters[(byte)245] is IDictionary rpc)
+                    kind = "RPC " + (rpc[(byte)3] as string ?? (rpc.Contains((byte)5) ? "#" + rpc[(byte)5] : "?"));
+                IncomingEvents[kind] = IncomingEvents.TryGetValue(kind, out var n) ? n + 1 : 1;
+            }
+            catch { /* counting only */ }
         }
 
         private static void PeerResponse_Prefix(object[] __args)
@@ -303,6 +325,7 @@ namespace StbcRevival
                         postfix: new HarmonyMethod(typeof(Patches), nameof(SwitchToProtocol_Postfix)));
 
                 Patch(harmony, networkingPeer.GetMethod("OnStatusChanged", BindingFlags.Public | BindingFlags.Instance), prefix: nameof(PeerStatus_Prefix));
+                Patch(harmony, networkingPeer.GetMethod("OnEvent", BindingFlags.Public | BindingFlags.Instance), prefix: nameof(PeerEvent_Prefix));
                 if (Plugin.Diagnostics.Value)
                     Patch(harmony, networkingPeer.GetMethod("OnOperationResponse", BindingFlags.Public | BindingFlags.Instance), prefix: nameof(PeerResponse_Prefix));
             }

@@ -382,6 +382,16 @@ namespace StbcRevival
         // (voice too). Per player: direct or relayed by Steam's servers, traffic, and Steam's send queue (it
         // grows while Steam re-sends or the link can't keep up); for a crew member, Photon's round trip.
 
+        // ", events 201×900 (RPC Foo×40, …)": the most frequent incoming Photon events since the last report.
+        private static string IncomingEvents()
+        {
+            var counts = Patches.IncomingEvents;
+            if (counts.Count == 0) return "";
+            var top = counts.OrderByDescending(kv => kv.Value).Take(6).Select(kv => $"{kv.Key}×{kv.Value}").ToArray();
+            counts.Clear();
+            return ", incoming events " + string.Join(", ", top);
+        }
+
         private sealed class LinkStats
         {
             public int SentPackets, ReceivedPackets, PeakQueue;
@@ -425,7 +435,7 @@ namespace StbcRevival
                 string rtt = kv.Key == CurrentHost && !hostIsLocal ? $", Photon round trip {RoundTrip()}" : "";
                 Plugin.Log.LogInfo($"Steam link with {kv.Key}: {(relayed ? "relayed" : "direct")}, last {LinkReportSeconds:0} s "
                                    + $"sent {link.SentPackets} packets ({link.SentBytes / 1024} KB), received {link.ReceivedPackets} ({link.ReceivedBytes / 1024} KB); "
-                                   + $"Steam send queue {state.m_nPacketsQueuedForSend} packets ({state.m_nBytesQueuedForSend / 1024} KB), peak {link.PeakQueue}{rtt}");
+                                   + $"Steam send queue {state.m_nPacketsQueuedForSend} packets ({state.m_nBytesQueuedForSend / 1024} KB), peak {link.PeakQueue}{rtt}{IncomingEvents()}");
                 link.SentPackets = link.ReceivedPackets = link.PeakQueue = 0;
                 link.SentBytes = link.ReceivedBytes = 0;
             }
