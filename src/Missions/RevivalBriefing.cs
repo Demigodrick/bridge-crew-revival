@@ -45,7 +45,16 @@ namespace StbcRevival.Missions
                 return;
             }
             harmony.Patch(start, postfix: new HarmonyMethod(typeof(RevivalBriefing), nameof(Start_Postfix)));
-            harmony.Patch(refresh, postfix: new HarmonyMethod(typeof(RevivalBriefing), nameof(Refresh_Postfix)));
+            harmony.Patch(refresh, prefix: new HarmonyMethod(typeof(RevivalBriefing), nameof(Refresh_Prefix)),
+                postfix: new HarmonyMethod(typeof(RevivalBriefing), nameof(Refresh_Postfix)),
+                finalizer: new HarmonyMethod(typeof(RevivalBriefing), nameof(Refresh_Finalizer)));
+            // The mission category toggles' handlers (procedural MEOMCEOEBAC, campaign MBHACAKGEGM): see Handler_Prefix.
+            foreach (var handler in new[] { "MEOMCEOEBAC", "MBHACAKGEGM" })
+            {
+                var target = AccessTools.Method(typeof(ConsoleBriefingRoom), handler, new[] { typeof(bool) });
+                if (target != null) harmony.Patch(target, prefix: new HarmonyMethod(typeof(RevivalBriefing), nameof(Handler_Prefix)));
+                else Plugin.Log.LogWarning($"Revival missions: ConsoleBriefingRoom.{handler} not found; crew members' consoles may resend the mission type every frame");
+            }
             // Next/previous mission (NKIGJPBIGND / JEKNGMEIFGM): with Revival Missions selected, step through
             // those instead of the Ongoing Voyage tables.
             string[] buttons = { "NKIGJPBIGND", "JEKNGMEIFGM" }, prefixes = { nameof(Next_Prefix), nameof(Previous_Prefix) };
@@ -179,6 +188,23 @@ namespace StbcRevival.Missions
                 resetsSince = now;
             }
         }
+
+        // Every frame, the console sets a crew member's (not the captain's) category toggles from the mission type:
+        // with a Revival mission selected, the procedural one goes on (Refresh_Postfix turns it off again), and its
+        // handler sets the mission type and sends it to the crew, every frame on all four consoles: hundreds of
+        // SetMissionTypeRPC a second, the game stuttering. While the console refreshes with a Revival mission
+        // selected, its category handlers do nothing (a player's own click still goes through).
+        private static bool refreshing;
+
+        private static void Refresh_Prefix() => refreshing = true;
+
+        private static Exception Refresh_Finalizer(Exception __exception)
+        {
+            refreshing = false;
+            return __exception;
+        }
+
+        private static bool Handler_Prefix() => !(refreshing && RoomSelection() != null);
 
         private static void Refresh_Postfix(ConsoleBriefingRoom __instance)
         {

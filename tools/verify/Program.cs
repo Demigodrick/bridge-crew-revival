@@ -274,6 +274,9 @@ Check("  CEOFAJJJCAN.LNIBLGBKLGI / AJPIEMDPKDC.JFAIKAOOPMO / EncounterSystem.Sys
     && game.GetType("Mission.Scripting.Encounter.EncounterSystem") is { } es && ((object)es.GetField("System", Inst) ?? es.GetProperty("System", Inst)) is not null ? es : null);
 Check("  Sector.MapBase.ChooseStartingSystem", game.GetType("Sector.MapBase")?.GetMethod("ChooseStartingSystem", Inst));
 
+// Briefing: the mission category toggles' handlers (quiet during the console's refresh)
+foreach (var m in new[] { "MEOMCEOEBAC", "MBHACAKGEGM" })
+    Check($"  ConsoleBriefingRoom.{m}(bool) (category toggle handler)", game.GetType("ConsoleBriefingRoom")?.GetMethods(Inst).FirstOrDefault(x => x.Name == m && x.GetParameters().Length == 1 && x.GetParameters()[0].ParameterType.Name == "Boolean"));
 // Host hand-off
 Check("  NetworkStatus.SetError(error, popup, ...) (hand-off: no popup for failed regroup joins)",
     game.GetType("SVR.Network.NetworkStatus")?.GetMethods(BindingFlags.Public | BindingFlags.Static).FirstOrDefault(m => m.Name == "SetError" && m.GetParameters().Length == 4));
