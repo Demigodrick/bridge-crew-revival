@@ -405,6 +405,10 @@ foreach (var m in new[] { "NetworkSerialize", "NetworkDeserialize" })
 Check("VoIpManager.GetLocalMicrophoneInputDevice (voice commands)", game.GetType("VoIpManager")?.GetMethod("GetLocalMicrophoneInputDevice", Inst));
 Check("  UnityMicrophoneInputDevice.FJNHDGFAOLB (device)", game.GetType("DaikonForge.VoIP.UnityMicrophoneInputDevice")?.GetField("FJNHDGFAOLB", Inst));
 Check("  AudioInputDeviceBase.EALMEBPADKI (recording source)", game.GetType("DaikonForge.VoIP.AudioInputDeviceBase")?.GetField("EALMEBPADKI", Inst));
+var wwiseMic = game.GetType("WwiseMicrophoneInputDevice");
+var wwiseDevice = wwiseMic?.GetField("GMNCBFBICKK", Inst) ?? wwiseMic?.BaseType?.GetField("GMNCBFBICKK", Inst);
+Check("  WwiseMicrophoneInputDevice.GMNCBFBICKK (device, Wwise voice template)", wwiseDevice);
+Check("  AudioInputDeviceBase.StartRecording (voice chat's mic restarted)", game.GetType("DaikonForge.VoIP.AudioInputDeviceBase")?.GetMethod("StartRecording", Inst));
 
 // Crew passwords
 var briefingConsole = game.GetType("ConsoleBriefingRoom");
