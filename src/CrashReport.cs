@@ -296,16 +296,17 @@ namespace StbcRevival
             return library != null && Directory.Exists(Path.Combine(library, "logs")) ? Path.Combine(library, "logs") : null;
         }
 
-        // Steam IDs, the Windows user name (and any C:\Users\<name>), your Steam name, other players' names, and the
+        // Steam IDs, the Windows user name (and any C:\Users\<name>), your Steam name and [Login] PlayerName, other players' names, the
         // block list's value: blanked. Longest names first, so one that contains another goes whole.
         private static string Redact(string text, LastRun last)
         {
             text = Regex.Replace(text, @"7656119\d{10}", "<steam id>");
             text = Regex.Replace(text, @"(?i)([\\/]Users[\\/])[^\\/\r\n""]+", "$1<user>");
             text = Regex.Replace(text, @"(?m)^(Blocked\s*=)[^\r\n]*", "$1 <blanked>");
+            text = Regex.Replace(text, @"(?m)^(PlayerName\s*=)[ \t]*[^\r\n]+", "$1 <blanked>");
             if (!string.IsNullOrEmpty(Environment.UserName) && Environment.UserName.Length >= 3)
                 text = Regex.Replace(text, Regex.Escape(Environment.UserName), "<user>", RegexOptions.IgnoreCase);
-            foreach (var name in new[] { last.SteamName, steamName }.Where(n => !string.IsNullOrEmpty(n) && n.Length >= 3).Distinct())
+            foreach (var name in new[] { last.SteamName, steamName, Plugin.PlayerName?.Value }.Where(n => !string.IsNullOrEmpty(n) && n.Length >= 3).Distinct())
                 text = Regex.Replace(text, Regex.Escape(name), "<steam name>", RegexOptions.IgnoreCase);
             foreach (var name in last.Names.Where(n => !string.IsNullOrEmpty(n) && n.Length >= 3).Distinct().OrderByDescending(n => n.Length))
                 text = Regex.Replace(text, Regex.Escape(name), "<player>", RegexOptions.IgnoreCase);
