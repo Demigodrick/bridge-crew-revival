@@ -86,6 +86,7 @@ namespace StbcRevival
             Log = Logger;
             Instance = this;
             CrashReport.Start(); // first: this run's own log, and a report if the last run crashed
+            Safely("openssl sha fix", OpenSslShaFix.Apply); // before anything uses HTTPS: see OpenSslShaFix
             UpdateCheck.CleanUp();
 
             Mode = Config.Bind("Photon", "Mode", PhotonMode.Steam,
@@ -216,6 +217,7 @@ namespace StbcRevival
 
         private void Update()
         {
+            Safely("openssl sha fix", OpenSslShaFix.Apply);
             if (!deferredApplied)
             {
                 deferredApplied = true;
