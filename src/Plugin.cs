@@ -156,9 +156,9 @@ namespace StbcRevival
             TestLastStand = Config.Bind("Debug", "TestLastStand", false,
                 "Testing only: every Ongoing Voyage you host runs the Revival mission Last Stand instead.");
             PvpTest = Config.Bind("Debug", "PvpTest", false,
-                "Testing only: adds the PvP test mission to the Revival missions in the briefing room (two player ships, one per player).");
+                "Testing only: adds the PvP test mission to the Revival missions in the briefing room, for a host to pick (two player ships). Players joining a PvP test don't need it.");
             PvpTestShip = Config.Bind("Debug", "PvpTestShip", "Auto",
-                "Testing only, the PvP test mission: the player ship you crew. Auto: the host crews A (the first ship), the first player to join after the host crews B (PvP B), anyone else A. A or B: that ship.");
+                "Testing only, the PvP test mission: the player ship you crew. Auto: the crew is split, in joining order from the host: A, B, A, B (2 players: one each; 3: two on A; 4: two each). A or B: that ship.");
             CheckForUpdates = Config.Bind("Updates", "CheckForUpdates", true,
                 "Once per launch, on the shuttle, check the website for a newer version (and with AutoUpdate, install it). If the check fails, nothing is shown.");
             AutoUpdate = Config.Bind("Updates", "AutoUpdate", true,
@@ -242,7 +242,7 @@ namespace StbcRevival
             Safely("mission maps", StbcRevival.Missions.MissionMaps.Update);
             Safely("restock sync", StbcRevival.Missions.RestockSync.Update);
             Safely("excelsior", Excelsior.Update);
-            if (PvpTest.Value) Safely("pvp prototype", PvpPrototype.Update);
+            Safely("pvp prototype", PvpPrototype.Update);
             Safely("mod version check", ModVersionCheck.Update);
             Safely("host hand-off", HostHandoff.Update);
             Safely("voice commands", StbcRevival.VoiceCommands.Update);

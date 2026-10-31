@@ -169,6 +169,9 @@ namespace StbcRevival
                     if (name == null && rpc.Contains((byte)5) && rpc[(byte)5] is byte index) name = RpcName(index);
                     kind = "RPC " + Clean(name);
                     if (parameters.Contains((byte)254) && parameters[(byte)254] is int actor) kind += " from " + actor;
+                    // Console messages: which one (its text key), to tell a message sent every frame.
+                    if (name == "NewConsoleMessageRPC" && rpc.Contains((byte)4) && rpc[(byte)4] is object[] args)
+                        kind += " '" + Clean(args.OfType<string>().FirstOrDefault(), true) + "'";
                 }
                 if (!IncomingEvents.ContainsKey(kind) && IncomingEvents.Count >= 64) kind = "other";
                 IncomingEvents[kind] = IncomingEvents.TryGetValue(kind, out var n) ? n + 1 : 1;
@@ -189,10 +192,11 @@ namespace StbcRevival
             return index < rpcList.Count ? rpcList[index] : "#" + index;
         }
 
-        private static string Clean(string name)
+        private static string Clean(string name, bool text = false)
         {
             if (string.IsNullOrEmpty(name)) return "?";
-            var clean = new string(name.Where(c => char.IsLetterOrDigit(c) || c == '_' || c == '#').Take(40).ToArray());
+            var clean = new string(name.Where(c => char.IsLetterOrDigit(c) || c == '_' || c == '#' || (text && (c == ' ' || c == '|')))
+                .Take(40).ToArray());
             return clean.Length > 0 ? clean : "?";
         }
 
@@ -225,7 +229,7 @@ namespace StbcRevival
             PauseMenuTweaks.Patch(harmony);
             VrRoomPanels.Patch(harmony);
             Missions.RevivalMissions.Patch(harmony);
-            if (Plugin.PvpTest.Value) PvpPrototype.Patch(harmony); // testing only: no PvP patches for players
+            PvpPrototype.Patch(harmony); // for everyone: it acts only when the host picks the PvP test ([Debug] PvpTest shows it)
             RomulanCreatorOption.Patch(harmony);
             RevivalSettings.Patch(harmony);
             SteamFriendAdd.Patch(harmony);

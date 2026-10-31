@@ -6,9 +6,10 @@ using System.Reflection;
 namespace StbcRevival
 {
     /// <summary>
-    /// PvP test: which player ship each player crews. The host is on the first ship (A); the player who joined
-    /// first after the host (the lowest Photon actor number that isn't the host's) is on the second (B,
-    /// "PvP B"); anyone else on A. [Debug] PvpTestShip = A or B overrides it for your own game (Auto: the rule).
+    /// PvP test: which player ship each player crews. The crew is split in joining order: the host (master) on
+    /// the first ship (A), then the others by Photon actor number, alternating B, A, B (2 players: one a ship;
+    /// 3: two on A, one on B; 4: two each). [Debug] PvpTestShip = A or B overrides it for your own game (Auto:
+    /// the rule).
     /// Each game publishes its ship as the player property "PVP", so the host knows who is where even with
     /// an override. A player whose game hasn't published one (the PvP test off: [Debug] PvpTest) counts as on A,
     /// where their game puts them as the normal game does, and the host is told when the test starts.
@@ -62,8 +63,10 @@ namespace StbcRevival
         private static string Auto(object player)
         {
             if (player == null || IsMaster(player)) return "A";
-            int first = Players.Where(p => !IsMaster(p)).Select(Actor).Where(a => a >= 0).DefaultIfEmpty(-1).Min();
-            return Actor(player) == first ? "B" : "A";
+            // The host is 0 (A); the others in actor order: 1 B, 2 A, 3 B.
+            var order = Players.Where(p => !IsMaster(p)).Select(Actor).Where(a => a >= 0).OrderBy(a => a).ToList();
+            int place = order.IndexOf(Actor(player)) + 1;
+            return place % 2 == 1 ? "B" : "A";
         }
 
         private static bool IsMaster(object player) => Get(player, "get_isMasterClient") is bool master && master;
