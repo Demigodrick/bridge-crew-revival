@@ -3,6 +3,9 @@ WORKDIR /src
 COPY StbcServer/StbcServer.csproj StbcServer/
 RUN dotnet restore StbcServer/StbcServer.csproj
 COPY StbcServer/ StbcServer/
+COPY StbcCore/StbcCore.csproj StbcCore/
+RUN dotnet restore StbcCore/StbcCore.csproj
+COPY StbcCore/ StbcCore/
 RUN dotnet publish StbcServer/StbcServer.csproj -c Release -o /app --no-restore
 
 FROM mcr.microsoft.com/dotnet/runtime:8.0-alpine
