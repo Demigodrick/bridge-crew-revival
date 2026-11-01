@@ -346,6 +346,18 @@ foreach (var f in new[] { "PCPBPMKFJOE", "JEFHDNFCPLD" })
 var novaInfo = game.GetType("NovaPlayerInfo");
 Check("  NovaPlayerInfo.PKIBEAIHJNE", (MemberInfo)novaInfo?.GetField("PKIBEAIHJNE", Inst) ?? novaInfo?.GetProperty("PKIBEAIHJNE", Inst));
 
+// Player volumes (escape menu player options: the voice volume slider down to muted)
+var voip = game.GetType("VoIpManager");
+Check("VoIpManager.SetVolumeForPlayer (player volumes)", voip?.GetMethod("SetVolumeForPlayer", Inst));
+foreach (var f in new[] { "_minPlayerVolume", "PFKNMPPKOFP" })
+    Check($"  VoIpManager.{f}", voip?.GetField(f, Inst));
+Check("  VoIpManager.IEFBKOMBFGO (instance)", (MemberInfo)voip?.GetField("IEFBKOMBFGO", AnyS) ?? voip?.GetProperty("IEFBKOMBFGO", AnyS));
+Check("  PlayerListUI._voiceVolumeInteractionSlider", playerList?.GetField("_voiceVolumeInteractionSlider", Inst));
+Check("  SliderInteraction.SliderMinValue", game.GetType("SliderInteraction")?.GetField("SliderMinValue", Inst));
+var voipInfo = voip?.GetNestedType("PIHAFAACGLJ", BindingFlags.Public | BindingFlags.NonPublic);
+foreach (var f in new[] { "Player", "Volume" })
+    Check($"  VoIpManager/PIHAFAACGLJ.{f}", voipInfo?.GetField(f, Inst));
+
 // VR keyboard (join by code in the headset)
 Check("Valve.VR CVRSystem.PollNextEvent (vr keyboard)", game.GetType("Valve.VR.PBMLFENDPMG")?.GetMethod("PollNextEvent", Inst));
 Check("  CVROverlay.ShowKeyboard", game.GetType("Valve.VR.HADDNHEFDEE")?.GetMethod("ShowKeyboard", Inst));

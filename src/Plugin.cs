@@ -68,6 +68,7 @@ namespace StbcRevival
         internal static ConfigEntry<VrDeviceChoice> VrDevice;
         internal static ConfigEntry<int> VoiceJitterBufferMs;
         internal static ConfigEntry<string> BlockedPlayers;
+        internal static ConfigEntry<string> VoiceVolumes;
         internal static ConfigEntry<bool> ExcelsiorTest;
         internal static ConfigEntry<float> ShuttleSpeed;
         internal static ConfigEntry<float> ShuttleTurnSpeed;
@@ -126,6 +127,8 @@ namespace StbcRevival
                 "Test: when you host, the crew flies an Excelsior-class ship, with the training holodeck as its bridge for now.");
             BlockedPlayers = Config.Bind("Players", "Blocked", "",
                 "Players kept out of crews you host (Steam IDs, as steamid=name;...). Added when you kick someone and choose to block them; players you've blocked or ignored in Steam are kept out too.");
+            VoiceVolumes = Config.Bind("Players", "VoiceVolumes", "",
+                "Crewmates' voice chat volumes you've set in the escape menu's player options (Steam IDs, as steamid=volume;..., 0 is muted). Given back whenever they're in a crew with you again.");
             HideFullCrews = Config.Bind("Rooms", "HideFullCrews", false,
                 "Crew lists (shuttle, escape menu, F7): leave out crews with no free seat.");
             HideCrewsInMission = Config.Bind("Rooms", "HideCrewsInMission", false,
@@ -247,6 +250,7 @@ namespace StbcRevival
             Safely("game dump", GameDump.Update);
             Safely("romulan face", StbcRevival.RomulanFace.Update);
             Safely("klingon head", StbcRevival.KlingonHead.Update);
+            Safely("player volumes", PlayerVolumes.Update);
             Safely("creator species choices", SpeciesCreatorOptions.Update);
             Safely("revival settings", RevivalSettings.Update);
             Safely("briefing room decor", BriefingRoomDecor.Update);

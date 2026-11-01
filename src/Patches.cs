@@ -233,6 +233,7 @@ namespace StbcRevival
             SpeciesCreatorOptions.Patch(harmony);
             RevivalSettings.Patch(harmony);
             SteamFriendAdd.Patch(harmony);
+            PlayerVolumes.Patch(harmony);
             if (SteamMode.Enabled) Blocklist.Patch(harmony);
             VrKeyboard.Patch(harmony);
             RomulanFace.Patch(harmony);
