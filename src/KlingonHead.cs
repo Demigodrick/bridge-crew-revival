@@ -41,6 +41,7 @@ namespace StbcRevival
         private static readonly FieldInfo CharacterPrefab = AccessTools.Field(AccessTools.TypeByName("NPCHailingView"), "_characterPrefab");
         private static float nextCheck, nextSearch;
         private static Material hidden;
+        private static bool toldNotLoaded;
 
         internal static void Update()
         {
@@ -105,7 +106,13 @@ namespace StbcRevival
                 grafts.Remove(head);
                 Plugin.Log.LogInfo($"Klingon head: off {avatar.name}");
             }
-            if (want <= 0 || sources[want] == null) return;
+            if (want <= 0) return;
+            if (sources[want] == null)
+            {
+                if (!toldNotLoaded) Plugin.Log.LogInfo($"Klingon head: {Names[want]} wanted on {avatar.name}, but the heads load with the bridge: it'll show once you've been on one");
+                toldNotLoaded = true;
+                return;
+            }
             graft = Graft(avatar, head, want);
             if (graft != null) grafts[head] = graft;
         }
