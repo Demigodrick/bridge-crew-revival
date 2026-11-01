@@ -52,7 +52,7 @@ survivors aboard"*. [Full list of commands](https://demigodrick.github.io/bridge
 - **Skip the launch videos** and the mic check, get a chime when someone joins, and a heads-up on the
   shuttle when a new version is out.
 - **Romulan and Klingon options** in the character creator: ROMULAN for female characters, KLINGON for male
-  ones (a Klingon captain's head; it appears once you've been on a bridge that session).
+  ones (a Klingon captain's head).
 - **F10** saves a bug report in one keypress, and if the game crashes, a crash report is saved for you on the next launch.
 - Most of it can be switched on and off from **REVIVAL SETTINGS** on the shuttle console.
 
