@@ -42,6 +42,8 @@ namespace StbcRevival.Missions
         private static string Override()
         {
             if (Loader.GetMissionType() != Loader.DAPMGBKPDNM.Procedural) return null;
+            // Kobayashi Maru is set in The Trench (Gamma Hydra): never another map.
+            if (RevivalMissions.Selected == typeof(Mission.KobayashiMaruStandAlone.KMSequence)) return null;
             var fromRoom = RoomValue();
             if (!string.IsNullOrEmpty(fromRoom)) return fromRoom;
             var own = Plugin.MapOverride.Value;
@@ -96,6 +98,13 @@ namespace StbcRevival.Missions
                 var random = (System.Random)AccessTools.Field(manager, "GBEFMAACMFK").GetValue(__instance);
                 var selection = (BHNEPPPPMKH)AccessTools.Field(manager, "DJFMMNBHJPC").GetValue(__instance);
                 var sectorMap = AccessTools.Field(manager, "LFBBCGCLOKG").GetValue(__instance);
+                // Kobayashi Maru starts at Gamma Hydra, as its sequence asks (KMSequence.StartingSystemSelection): the
+                // selection here is the Ongoing Voyage's, made before the Revival mission's script is swapped in.
+                if (RevivalMissions.Selected == typeof(Mission.KobayashiMaruStandAlone.KMSequence))
+                {
+                    selection.Tags = new[] { BLECEHNPNBH.LabelSystemGammaHydra };
+                    selection.Choice = BHNEPPPPMKH.LPCLBKKEBMK.First;
+                }
                 system = (Map.SystemRoot)AccessTools.Method(sectorMap.GetType(), "ChooseStartingSystem").Invoke(sectorMap, new object[] { map, selection, random });
                 // Patrol starts anywhere: the game's choice always lands on the same system (on the Trench,
                 // Sarza, which has no spawn point, so Venov).

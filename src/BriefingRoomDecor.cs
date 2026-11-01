@@ -33,6 +33,7 @@ namespace StbcRevival
             [RevivalMissions.FleetBattle] = "Sector/Ships/Ship - Klingon Flagship",
             [RevivalMissions.Patrol] = "Sector/Ships/Ship - Pirate A",
             [RevivalMissions.Evacuation] = "Sector/Ships/Ship - Bird Of Prey",
+            [RevivalMissions.KobayashiMaru] = "Sector/Ships/Ship - Kobayashi Maru", // the freighter itself
         };
 
         private static float nextCheck;

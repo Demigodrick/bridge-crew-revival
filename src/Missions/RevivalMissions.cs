@@ -17,14 +17,15 @@ namespace StbcRevival.Missions
         internal const string FleetBattle = "FleetBattle";
         internal const string Patrol = "Patrol";
         internal const string Evacuation = "Evacuation";
+        internal const string KobayashiMaru = "KobayashiMaru"; // the game's own, from the campaign, in any ship
         internal const string FreeRoam = "FreeRoam"; // the developers' own exploration mission, as shipped
         internal const string PvpTest = "PvpTest";   // debug: two player ships ([Debug] PvpTest)
 
         /// <summary>The Revival missions, in the order the briefing's next/previous buttons step through them.</summary>
         internal static string[] All => Plugin.PvpTest.Value ? WithPvp : Missions;
 
-        private static readonly string[] Missions = { LastStand, FleetBattle, Patrol, Evacuation, FreeRoam };
-        private static readonly string[] WithPvp = { LastStand, FleetBattle, Patrol, Evacuation, FreeRoam, PvpTest };
+        private static readonly string[] Missions = { LastStand, FleetBattle, Patrol, Evacuation, KobayashiMaru, FreeRoam };
+        private static readonly string[] WithPvp = { LastStand, FleetBattle, Patrol, Evacuation, KobayashiMaru, FreeRoam, PvpTest };
 
         /// <summary>The Revival mission the next launch should run, or null for the game's own missions.</summary>
         internal static Type Selected
@@ -40,6 +41,7 @@ namespace StbcRevival.Missions
                     case FleetBattle: return typeof(FleetBattleSequence);
                     case Patrol: return typeof(PatrolSequence);
                     case Evacuation: return typeof(StellarEvacuationSequence);
+                    case KobayashiMaru: return typeof(Mission.KobayashiMaruStandAlone.KMSequence);
                     case FreeRoam: return typeof(Mission.DebugExplorationMode.DebugExplorationModeSequence);
                     case PvpTest: return typeof(PvpTestSequence);
                     default: return null;
@@ -68,7 +70,7 @@ namespace StbcRevival.Missions
 
         internal static string Name(string mission) =>
             mission == LastStand ? "LAST STAND" : mission == FleetBattle ? "FLEET BATTLE" : mission == Patrol ? "PATROL"
-            : mission == Evacuation ? "STELLAR EVACUATION"
+            : mission == Evacuation ? "STELLAR EVACUATION" : mission == KobayashiMaru ? "KOBAYASHI MARU"
             : mission == FreeRoam ? "FREE ROAM" : mission == PvpTest ? "PVP TEST" : "REVIVAL MISSION";
 
         internal static string Description(string mission)
@@ -87,6 +89,9 @@ namespace StbcRevival.Missions
                 case Evacuation:
                     return $"Perseph's star is about to erupt. Ferry the people off the station a group at a time to a waiting "
                            + $"transport, then warp out before the blast. {Plugin.EvacuationMinutes.Value} minutes: how many can you save?";
+                case KobayashiMaru:
+                    return "The no-win scenario: the freighter Kobayashi Maru is stranded in the Neutral Zone, and Klingon "
+                           + "warships are coming. Save her crew if you can. The game's own test from the campaign, in any ship.";
                 case FreeRoam:
                     var map = Plugin.MapOverride.Value;
                     return "No hostiles, no objectives: fly, scan and warp around a sector at your own pace "

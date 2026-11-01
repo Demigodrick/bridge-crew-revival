@@ -37,6 +37,8 @@ A new **Revival Missions** category in the briefing room, next to Campaign and O
   space stations as Starfleet sends you from system to system.
 - **Stellar Evacuation:** a star is about to erupt. Beam people out of escape pods, ferry them to safety and
   get out before the blast.
+- **Kobayashi Maru:** the game's own no-win test from the campaign, now in any ship: Aegis, Enterprise or
+  Enterprise-D.
 - **Free Roam:** the developers' own exploration mission, left in the game. No enemies, just space.
 
 ### Voice commands are back
