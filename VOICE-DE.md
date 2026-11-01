@@ -65,3 +65,7 @@ Es gibt zu jedem Befehl mehrere Möglichkeiten, auch aus der deutschen Synchroni
 Zusammengesetzte Wörter wie "Warpkern", "Photonentorpedos" oder "Statusbericht" kennt das kleine Modell nicht als Ganzes; es erkennt sie als "Warp Kern", "Photonen Torpedos" und "Status Bericht", und der Mod versteht das.
 
 Alltagswörter wie "los", "weg", "voll", "halt", "näher" oder "zurück" lösen allein nichts aus, damit nicht versehentlich ein Befehl gegeben wird. Allgemeine Verben wie "verteilen" oder "verbessern" zählen nur zusammen mit "Energie" oder einem Bordsystem ("Schilde verbessern").
+
+## Mehrere Befehle hintereinander
+
+Mach zwischen zwei Befehlen eine kurze Pause (etwa eine halbe Sekunde), dann werden beide ausgeführt: "Schilde hoch ... Torpedos scharf" oder "Schilde hoch ... Roter Alarm". Ohne Pause wird wie bisher nur ein Befehl erkannt. Eine Pause mitten in einem Befehl ("Schilde ... runter") schadet nicht; es zählt nur, wenn danach wirklich ein zweiter Befehl folgt. Es sind bis zu vier Befehle pro Tastendruck möglich.

@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
+using System.Text.RegularExpressions;
 
 namespace StbcRevival
 {
@@ -148,7 +150,63 @@ namespace StbcRevival
         private static string[] NumberNamesNow => german ? DeNumberNames : new[] { "one", "two", "three", "four", "five", "six", "seven", "eight", "nine" };
         private static HashSet<string> NumbersNow => german ? DeNumberSet : Numbers;
 
-        private static string ParseNow(string text) => german ? ParseDe(text) : Parse(text);
+        private static string ParseNow(string text, string json) => german ? ParseSpoken(text, json) : Parse(text);
+
+        private const double DeGap = 0.4; // seconds of silence between two orders
+
+        private struct Spoken
+        {
+            public string Word;
+            public double Start, End;
+        }
+
+        // Vosk's words with their times ("result": [{"conf":1,"end":0.9,"start":0.5,"word":"schilde"}, ...]).
+        private static List<Spoken> SpokenWords(string json)
+        {
+            var words = new List<Spoken>();
+            if (json == null) return words;
+            foreach (Match entry in Regex.Matches(json, @"\{[^{}]*\}"))
+            {
+                var word = Regex.Match(entry.Value, "\"word\"\\s*:\\s*\"([^\"]*)\"");
+                var start = Regex.Match(entry.Value, "\"start\"\\s*:\\s*([-0-9.eE+]+)");
+                var end = Regex.Match(entry.Value, "\"end\"\\s*:\\s*([-0-9.eE+]+)");
+                double from, to;
+                if (!word.Success || !start.Success || !end.Success
+                    || !double.TryParse(start.Groups[1].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out from)
+                    || !double.TryParse(end.Groups[1].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out to)) continue;
+                words.Add(new Spoken { Word = word.Groups[1].Value, Start = from, End = to });
+            }
+            return words;
+        }
+
+        // Orders spoken one after the other ("Schilde hoch, Torpedos scharf"): a pause splits what was heard, and each
+        // part is an order of its own. Only when at least two different orders come out; otherwise the pause was in
+        // the middle of one ("Schilde ... runter"), and the whole is read as one.
+        internal static string ParseSpoken(string text, string json)
+        {
+            var whole = ParseDe(text);
+            var words = SpokenWords(json);
+            var parts = new List<string>();
+            var current = new List<string>();
+            for (int i = 0; i < words.Count; i++)
+            {
+                if (i > 0 && words[i].Start - words[i - 1].End >= DeGap)
+                {
+                    parts.Add(string.Join(" ", current.ToArray()));
+                    current.Clear();
+                }
+                current.Add(words[i].Word);
+            }
+            parts.Add(string.Join(" ", current.ToArray()));
+            if (parts.Count < 2 || parts.Count > 4) return whole;
+            var commands = new List<string>();
+            foreach (var part in parts)
+            {
+                var one = ParseDe(part);
+                if (one != null && !commands.Contains(one)) commands.Add(one);
+            }
+            return commands.Count >= 2 ? string.Join(",", commands.ToArray()) : whole;
+        }
 
         private static bool WantsEngage(HashSet<string> w)
         {

@@ -672,11 +672,12 @@ namespace StbcRevival
                 var grammar = "[" + string.Join(",", words.Select(w => "\"" + w + "\"").ToArray()) + ",\"[unk]\"]";
                 var recogniser = Vosk.RecognizerNewGrm(model, SampleRate, Vosk.Str(grammar));
                 if (recogniser == IntPtr.Zero) throw new Exception("the recogniser didn't start");
+                if (german) Vosk.SetWords?.Invoke(recogniser, 1);
                 Vosk.AcceptWaveform(recogniser, pcm, pcm.Length);
                 var json = Utf8(Vosk.FinalResult(recogniser));
                 Vosk.RecognizerFree(recogniser);
                 var text = Field(json, "text");
-                command = ParseNow(text);
+                command = ParseNow(text, json);
                 Plugin.Log.LogInfo($"Voice commands: heard \"{text}\" → {command ?? "nothing known"}");
                 // A course with a name the recogniser doesn't know ("set course for [unk]"): listen again without the
                 // word list and match what was heard against the map's names by spelling.
@@ -814,6 +815,7 @@ namespace StbcRevival
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)] internal delegate int AcceptWaveformFn(IntPtr recogniser, byte[] data, int length);
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)] internal delegate IntPtr FinalResultFn(IntPtr recogniser);
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)] internal delegate void RecognizerFreeFn(IntPtr recogniser);
+            [UnmanagedFunctionPointer(CallingConvention.Cdecl)] internal delegate void SetWordsFn(IntPtr recogniser, int words);
 
             internal static SetLogLevelFn SetLogLevel;
             internal static ModelNewFn ModelNew;
@@ -822,6 +824,7 @@ namespace StbcRevival
             internal static AcceptWaveformFn AcceptWaveform;
             internal static FinalResultFn FinalResult;
             internal static RecognizerFreeFn RecognizerFree;
+            internal static SetWordsFn SetWords; // word times, for orders spoken one after the other (German); null if libvosk lacks it
 
             internal static void Bind(IntPtr module)
             {
@@ -832,6 +835,8 @@ namespace StbcRevival
                 AcceptWaveform = Fn<AcceptWaveformFn>(module, "vosk_recognizer_accept_waveform");
                 FinalResult = Fn<FinalResultFn>(module, "vosk_recognizer_final_result");
                 RecognizerFree = Fn<RecognizerFreeFn>(module, "vosk_recognizer_free");
+                try { SetWords = Fn<SetWordsFn>(module, "vosk_recognizer_set_words"); }
+                catch (EntryPointNotFoundException) { SetWords = null; }
             }
 
             private static T Fn<T>(IntPtr module, string name) where T : class
