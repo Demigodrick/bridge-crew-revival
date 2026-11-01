@@ -62,6 +62,7 @@ namespace StbcRevival
         internal static ConfigEntry<int> EvacuationMinutes;
         internal static ConfigEntry<bool> VoiceCommands;
         internal static ConfigEntry<UnityEngine.KeyCode> PushToTalkKey;
+        internal static ConfigEntry<VoiceLanguageChoice> VoiceLanguage;
         internal static ConfigEntry<string> UpdateUrl;
         internal static ConfigEntry<bool> ShuttleWasd;
         internal static ConfigEntry<float> ControllerGraceSeconds;
@@ -150,6 +151,9 @@ namespace StbcRevival
                 + "Needs BepInEx/vosk (libvosk.dll and a model folder; the installer sets it up). Takes effect after a restart.");
             PushToTalkKey = Config.Bind("Voice", "PushToTalkKey", UnityEngine.KeyCode.V,
                 "Hold to give a voice order as captain (as well as the game's own voice button, which depends on your controllers).");
+            VoiceLanguage = Config.Bind("Voice", "VoiceLanguage", VoiceLanguageChoice.English,
+                "English or German: the language of the spoken orders. German needs the German Vosk model (vosk-model-small-de-0.15) "
+                + "unpacked to BepInEx/vosk/model-de. Takes effect after a restart.");
             FleetBattleSize = Config.Bind("Revival", "FleetBattleSize", 30,
                 "Fleet Battle: ships on each side (1-60). Big battles are heavy on the host's computer; lower it if the game stutters.");
             EvacuationMinutes = Config.Bind("Revival", "EvacuationMinutes", 15,

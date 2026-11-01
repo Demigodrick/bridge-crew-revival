@@ -11,11 +11,15 @@
 # English model, checksum verified). Run it again to update or remove it (it asks). $env:STBC_VERSION pins a release.
 # It then offers to copy your settings from your Ubisoft cloud save (avatar, options) by starting the game
 # once; -ImportSave does that without asking, -NoImport skips the question.
+# It also asks which language the voice commands are in, English or German (the German model is a second,
+# small download); -VoiceLanguage German / English answers that without asking ($env:STBC_VOICE_LANGUAGE
+# does the same when it's run through "irm | iex").
 param(
     [string]$GameDir = "",
     [switch]$Uninstall,
     [switch]$ImportSave,
-    [switch]$NoImport
+    [switch]$NoImport,
+    [string]$VoiceLanguage = ""
 )
 
 $Repo = "Demigodrick/bridge-crew-revival"
@@ -26,6 +30,8 @@ $VoskUrl = "https://github.com/alphacep/vosk-api/releases/download/v0.3.45/vosk-
 $VoskSha256 = "f1dcc9cca460630f81ea8f71794f69c80bed6556d2a4e6237b5785e1d2dff34b"
 $VoskModelUrl = "https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip"
 $VoskModelSha256 = "30f26242c4eb449f948e42cb302dd7a686cb29a3423a8367f99ff41780942498"
+$VoskModelDeUrl = "https://alphacephei.com/vosk/models/vosk-model-small-de-0.15.zip"
+$VoskModelDeSha256 = "b7e53c90b1f0a38456f4cd62b366ecd58803cd97cd42b06438e2c131713d5e43"
 $AppId = 527100
 
 # Run through "irm | iex" this is the user's own PowerShell session: no "exit", errors are thrown
@@ -118,6 +124,67 @@ function Install-Vosk([string]$GameDir, [string]$Tmp) {
     }
 }
 
+# The voice commands' language, [Voice] VoiceLanguage in the mod's config (English when it isn't there).
+function Get-VoiceLanguage([string]$GameDir) {
+    $cfg = Join-Path $GameDir "BepInEx\config\stbc.revival.cfg"
+    if (-not (Test-Path $cfg)) { return "English" }
+    $section = ""
+    foreach ($line in Get-Content $cfg) {
+        if ($line -match '^\[(.*)\]') { $section = $Matches[1] }
+        elseif ($section -eq "Voice" -and $line -match '^VoiceLanguage = (\w+)') { return $Matches[1] }
+    }
+    return "English"
+}
+
+function Set-VoiceLanguage([string]$GameDir, [string]$Language) {
+    $configDir = Join-Path $GameDir "BepInEx\config"
+    New-Item -ItemType Directory -Force -Path $configDir | Out-Null
+    $cfg = Join-Path $configDir "stbc.revival.cfg"
+    $section = ""; $found = $false
+    $lines = @(if (Test-Path $cfg) {
+        foreach ($line in Get-Content $cfg) {
+            if ($line -match '^\[(.*)\]') { $section = $Matches[1] }
+            if ($section -eq "Voice" -and $line -match '^VoiceLanguage = ') { $found = $true; "VoiceLanguage = $Language" } else { $line }
+        }
+    })
+    # BepInEx reads a section named twice as one, and tidies the file when the game starts.
+    if (-not $found) { $lines += @("", "[Voice]", "", "VoiceLanguage = $Language") }
+    Set-Content -Path $cfg -Value $lines -Encoding UTF8
+}
+
+# Asks for the voice commands' language (unless told) and sets it up: German needs its own model in
+# BepInEx\vosk\model-de. English is what Install-Vosk installs, so it only has to be set back if German was on.
+function Install-VoiceLanguage([string]$GameDir, [string]$Tmp, [string]$Choice) {
+    $vosk = Join-Path $GameDir "BepInEx\vosk"
+    if (-not (Test-Path (Join-Path $vosk "libvosk.dll"))) { return }
+    $current = Get-VoiceLanguage $GameDir
+    if (-not $Choice) {
+        if (-not [Environment]::UserInteractive) { return }
+        $default = if ($current -eq "German") { "German" } else { "English" }
+        $answer = try { Read-Host "       Language of the voice commands? [E]nglish / [G]erman (Enter = $default)" } catch { "" }
+        $Choice = if ($answer -match '^\s*[gGdD]') { "German" } elseif ($answer -match '^\s*[eE]') { "English" } else { $default }
+    }
+    if ($Choice -ne "German") {
+        if ($current -eq "German") { Set-VoiceLanguage $GameDir "English" }
+        return
+    }
+    try {
+        if (-not (Test-Path (Join-Path $vosk "model-de"))) {
+            Info "Downloading the German voice model (about 45 MB)..."
+            $zip = Join-Path $Tmp "vosk-model-de.zip"
+            Get-Download $VoskModelDeUrl $zip
+            if ((Get-FileHash -Algorithm SHA256 $zip).Hash -ne $VoskModelDeSha256) { throw "the German voice model download was damaged (checksum mismatch)" }
+            Expand-Archive -Path $zip -DestinationPath (Join-Path $Tmp "vosk-model-de") -Force
+            $model = Get-ChildItem -Path (Join-Path $Tmp "vosk-model-de") -Directory | Select-Object -First 1
+            Move-Item -LiteralPath $model.FullName -Destination (Join-Path $vosk "model-de")
+        }
+        Set-VoiceLanguage $GameDir "German"
+        Ok "Voice commands in German"
+    } catch {
+        Warn "German voice commands won't work: $($_.Exception.Message). They stay as they were; run the installer again to retry."
+    }
+}
+
 function Step([string]$Text) { Write-Host ""; Write-Host $Text -ForegroundColor Cyan }
 function Ok([string]$Text) { Write-Host "  OK   $Text" -ForegroundColor Green }
 function Info([string]$Text) { Write-Host "       $Text" }
@@ -192,7 +259,7 @@ function Set-PvpTest([string]$GameDir, [bool]$On) {
     Set-Content -Path $cfg -Value $lines -Encoding UTF8
 }
 
-function Install-BridgeCrewRevival([string]$GameDir, [bool]$Uninstall, [string]$Here, [string]$Import) {
+function Install-BridgeCrewRevival([string]$GameDir, [bool]$Uninstall, [string]$Here, [string]$Import, [string]$Voice) {
     [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
 
     Write-Host "Bridge Crew Revival installer" -ForegroundColor Cyan
@@ -321,6 +388,7 @@ function Install-BridgeCrewRevival([string]$GameDir, [bool]$Uninstall, [string]$
 
         Copy-Item -Path (Join-Path $source "Stbc*") -Destination $plugins -Force
         Install-Vosk $GameDir $tmp
+        Install-VoiceLanguage $GameDir $tmp $Voice
     } finally {
         Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue
     }
@@ -331,7 +399,8 @@ function Install-BridgeCrewRevival([string]$GameDir, [bool]$Uninstall, [string]$
         if ($beta) { Ok "Beta mode on: the PvP test mission is in the Revival missions (choose B again to turn it off)" }
         else { Ok "Beta mode off: the PvP test mission is gone again" }
     }
-    Info "Voice commands: as captain, hold V (or the voice button) and give an order, e.g. `"red alert`"."
+    if ((Get-VoiceLanguage $GameDir) -eq "German") { Info "Voice commands: as captain, hold V (or the voice button) and give an order in German, e.g. `"Roter Alarm`"." }
+    else { Info "Voice commands: as captain, hold V (or the voice button) and give an order, e.g. `"red alert`"." }
 
     # ---- Ubisoft save -------------------------------------------------------------------------
 
@@ -359,7 +428,9 @@ function Install-BridgeCrewRevival([string]$GameDir, [bool]$Uninstall, [string]$
 
 try {
     $import = if ($ImportSave) { "yes" } elseif ($NoImport) { "no" } else { "" }
-    Install-BridgeCrewRevival -GameDir $GameDir -Uninstall:$Uninstall.IsPresent -Here $PSScriptRoot -Import $import
+    $asked = if ($VoiceLanguage) { $VoiceLanguage } else { $env:STBC_VOICE_LANGUAGE }
+    $voice = if ($asked -match '^\s*[gGdD]') { "German" } elseif ($asked -match '^\s*[eE]') { "English" } else { "" }
+    Install-BridgeCrewRevival -GameDir $GameDir -Uninstall:$Uninstall.IsPresent -Here $PSScriptRoot -Import $import -Voice $voice
 } catch {
     Write-Host ""
     Write-Host "  Error: $($_.Exception.Message)" -ForegroundColor Red

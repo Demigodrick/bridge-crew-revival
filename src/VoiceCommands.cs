@@ -25,7 +25,7 @@ namespace StbcRevival
     /// Needs BepInEx/vosk/libvosk.dll (and its three runtime DLLs) and a model folder,
     /// BepInEx/vosk/model (e.g. vosk-model-small-en-us-0.15).
     /// </summary>
-    internal static class VoiceCommands
+    internal static partial class VoiceCommands
     {
         private const int SampleRate = 16000;
         private const int MaxSeconds = 10;
@@ -194,9 +194,9 @@ namespace StbcRevival
         private static string Course(HashSet<string> w, Func<string[], bool> any)
         {
             var list = destinations;
-            if (list.Count == 0 || !any(CourseWords) && !w.Contains("for")) return null;
+            if (list.Count == 0 || !any(CourseWordsNow) && !any(CourseForNow)) return null;
             int best = -1;
-            if (any(new[] { "nearest", "closest" }))
+            if (any(NearestNow))
             {
                 for (int i = 0; i < list.Count; i++)
                     if (best < 0 || list[i].Distance < list[best].Distance) best = i;
@@ -209,7 +209,7 @@ namespace StbcRevival
                 bool tie = false;
                 for (int i = 0; i < list.Count; i++)
                 {
-                    if (!list[i].Words.Any(x => w.Contains(x) && !Numbers.Contains(x))) continue;
+                    if (!list[i].Words.Any(x => w.Contains(x) && !NumbersNow.Contains(x))) continue;
                     double score = (double)list[i].Words.Count(w.Contains) / list[i].Words.Length;
                     if (score > top) { top = score; best = i; tie = false; }
                     else if (score == top && score > 0) tie = true;
@@ -218,8 +218,7 @@ namespace StbcRevival
             }
             if (best < 0) return null;
             lastPrepared = "Warp";
-            bool engage = any(new[] { "engage", "punch", "jump" }) || (w.Contains("so") && any(new[] { "make", "it" }));
-            return $"Course:{best},PrepareWarp" + (engage ? ",EngageWarp" : "");
+            return $"Course:{best},PrepareWarp" + (WantsEngage(w) ? ",EngageWarp" : "");
         }
 
         // The helm's warp map: your ship's helm console's (PvP has two), else any.
@@ -278,11 +277,12 @@ namespace StbcRevival
         // "Theta Novae IV" → theta, novae, four: lower case, letters only, Roman and Arabic numerals as words.
         private static string[] NameWords(string name)
         {
+            var n = NumberNamesNow;
             var numbers = new Dictionary<string, string>
             {
-                { "i", "one" }, { "ii", "two" }, { "iii", "three" }, { "iv", "four" }, { "v", "five" }, { "vi", "six" },
-                { "vii", "seven" }, { "viii", "eight" }, { "ix", "nine" }, { "1", "one" }, { "2", "two" }, { "3", "three" },
-                { "4", "four" }, { "5", "five" }, { "6", "six" }, { "7", "seven" }, { "8", "eight" }, { "9", "nine" },
+                { "i", n[0] }, { "ii", n[1] }, { "iii", n[2] }, { "iv", n[3] }, { "v", n[4] }, { "vi", n[5] },
+                { "vii", n[6] }, { "viii", n[7] }, { "ix", n[8] }, { "1", n[0] }, { "2", n[1] }, { "3", n[2] },
+                { "4", n[3] }, { "5", n[4] }, { "6", n[5] }, { "7", n[6] }, { "8", n[7] }, { "9", n[8] },
             };
             var words = new List<string>();
             foreach (var raw in name.ToLowerInvariant().Split(' ', '-', '\'', '.', ','))
@@ -668,7 +668,7 @@ namespace StbcRevival
             string command = null;
             try
             {
-                var words = Vocabulary.Concat(destinations.SelectMany(d => d.Words)).Distinct();
+                var words = WordsNow.Concat(destinations.SelectMany(d => d.Words)).Distinct();
                 var grammar = "[" + string.Join(",", words.Select(w => "\"" + w + "\"").ToArray()) + ",\"[unk]\"]";
                 var recogniser = Vosk.RecognizerNewGrm(model, SampleRate, Vosk.Str(grammar));
                 if (recogniser == IntPtr.Zero) throw new Exception("the recogniser didn't start");
@@ -676,7 +676,7 @@ namespace StbcRevival
                 var json = Utf8(Vosk.FinalResult(recogniser));
                 Vosk.RecognizerFree(recogniser);
                 var text = Field(json, "text");
-                command = Parse(text);
+                command = ParseNow(text);
                 Plugin.Log.LogInfo($"Voice commands: heard \"{text}\" → {command ?? "nothing known"}");
                 // A course with a name the recogniser doesn't know ("set course for [unk]"): listen again without the
                 // word list and match what was heard against the map's names by spelling.
@@ -696,7 +696,7 @@ namespace StbcRevival
             if (string.IsNullOrEmpty(text) || !text.Contains("[unk]") || destinations.Count == 0) return false;
             if (command != null && command.StartsWith("Course:", StringComparison.Ordinal)) return false;
             var w = new HashSet<string>(text.Split(' '));
-            return CourseWords.Any(w.Contains) || w.Contains("for") || w.Contains("to");
+            return CourseWordsNow.Any(w.Contains) || CourseToNow.Any(w.Contains);
         }
 
         // The destination whose name is spelled most like what an unrestricted listen heard (alone, or two words
@@ -710,13 +710,13 @@ namespace StbcRevival
             else
             {
                 heard = Free(pcm);
-                var spoken = (heard ?? "").Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries).Where(x => !Vocabulary.Contains(x) || x.Length > 5).ToList();
+                var spoken = (heard ?? "").Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries).Where(x => !WordsNow.Contains(x) || x.Length > 5).ToList();
                 var candidates = new List<string>(spoken);
                 for (int i = 0; i + 1 < spoken.Count; i++) candidates.Add(spoken[i] + spoken[i + 1]);
                 double top = 0, second = 0;
                 for (int i = 0; i < list.Count; i++)
                 {
-                    var name = string.Concat(list[i].Words.Where(x => !Numbers.Contains(x)).ToArray());
+                    var name = string.Concat(list[i].Words.Where(x => !NumbersNow.Contains(x)).ToArray());
                     if (name.Length < 3) continue;
                     double score = candidates.Select(c => Similarity(c, name)).DefaultIfEmpty(0).Max();
                     if (score > top) { second = top; top = score; best = i; }
@@ -728,8 +728,7 @@ namespace StbcRevival
             if (best < 0) return null;
             var w = new HashSet<string>(text.Split(' '));
             lastPrepared = "Warp";
-            bool engage = new[] { "engage", "punch", "jump" }.Any(w.Contains) || (w.Contains("so") && (w.Contains("make") || w.Contains("it")));
-            return $"Course:{best},PrepareWarp" + (engage ? ",EngageWarp" : "");
+            return $"Course:{best},PrepareWarp" + (WantsEngage(w) ? ",EngageWarp" : "");
         }
 
         // 1 for the same spelling, 0 for nothing alike (edit distance over the longer length).
@@ -771,9 +770,9 @@ namespace StbcRevival
             try
             {
                 var folder = Path.Combine(Paths.BepInExRootPath, "vosk"); // not under plugins: BepInEx scans that for mods
-                var modelPath = Path.Combine(folder, "model");
+                var modelPath = Path.Combine(folder, german ? "model-de" : "model");
                 if (!File.Exists(Path.Combine(folder, "libvosk.dll")) || !Directory.Exists(modelPath))
-                    throw new FileNotFoundException("BepInEx/vosk (libvosk.dll and model) is missing");
+                    throw new FileNotFoundException($"BepInEx/vosk (libvosk.dll and {Path.GetFileName(modelPath)}) is missing");
                 // Load the native DLLs by full path (dependencies first), then call libvosk through pointers.
                 IntPtr module = IntPtr.Zero;
                 foreach (var dll in new[] { "libwinpthread-1.dll", "libgcc_s_seh-1.dll", "libstdc++-6.dll", "libvosk.dll" })
@@ -787,7 +786,7 @@ namespace StbcRevival
                 model = Vosk.ModelNew(Vosk.Str(modelPath));
                 if (model == IntPtr.Zero) throw new Exception("couldn't load the model in " + modelPath);
                 ready = true;
-                Plugin.Log.LogInfo("Voice commands: offline recognition ready");
+                Plugin.Log.LogInfo("Voice commands: offline recognition ready" + (german ? " (German)" : ""));
                 return true;
             }
             catch (Exception e)
