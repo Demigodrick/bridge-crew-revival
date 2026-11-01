@@ -45,6 +45,7 @@ A new **Revival Missions** category in the briefing room, next to Campaign and O
 The captain's spoken orders used IBM Watson, which shut down years ago. They now run offline on your own PC.
 Hold **V** (or the voice button) and say *"Red alert!"*, *"Fire at will"*, *"Engage"* or *"Beam the
 survivors aboard"*. [Full list of commands](https://demigodrick.github.io/bridge-crew-revival/#voice).
+The orders also work in German; the installer asks, see [VOICE-DE.md](VOICE-DE.md).
 
 ### Everything else
 - **Your avatar and settings are kept on your PC.** The game only ever saved them on Ubisoft's servers; the

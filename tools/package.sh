@@ -40,6 +40,9 @@ Both find the game in your Steam libraries (or pass the game folder as an argume
 BepInEx 5.4.23.5 from its GitHub release, and copy the mod. Run again to update or remove it (it
 asks); --uninstall (Linux), -Uninstall or uninstall.cmd (Windows) removes it straight away.
 
+Voice commands: the installer asks whether the orders are in English or German (-VoiceLanguage German on
+Windows, --voice-language=german on Linux answers it).
+
 Everyone you play with needs the mod. Host with Quick match or Custom lobby; friends join from
 the shuttle's Steam friends panel, Steam's Join Game / invites, or the F7 room browser (desktop).
 Settings: BepInEx/config/stbc.revival.cfg. Log: BepInEx/LogOutput.log.
