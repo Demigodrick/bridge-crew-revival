@@ -237,8 +237,8 @@ Check("  CustomizationManager.FFJOIFLJFPF (creator avatars)", game.GetType("Cust
 Check("  NovaPlayerManager.get_Instance + PlayerManager.CharacterProfiles", game.GetType("NovaPlayerManager")?.GetMethod("get_Instance", PS) is not null
     && game.GetType("SVR.PlayerManager")?.GetField("CharacterProfiles", Inst) is { } cpf ? cpf : null);
 var creatorType = game.GetType("CustomizationManager");
-foreach (var m in new[] { "OGEINMNDPMI", "KPAOOOCNEKP", "PHHOOCMCLIJ" })
-    Check($"  CustomizationManager.{m} (ROMULAN choice)", creatorType?.GetMethod(m, Inst));
+foreach (var m in new[] { "OGEINMNDPMI", "KPAOOOCNEKP", "PHHOOCMCLIJ", "DADHMIIKIME" })
+    Check($"  CustomizationManager.{m} (ROMULAN and KLINGON choices)", creatorType?.GetMethod(m, Inst));
 foreach (var f in new[] { "EPNEDLICCMJ", "COABBGKIHFL", "_humanRaceToggle", "_vulcanRaceToggle", "_androidRaceToggle" })
     Check($"  CustomizationManager.{f}", creatorType?.GetField(f, Inst));
 Check("  HandAnimatorManager.get_Instance / NotifyAnimatorsForConsole", game.GetType("HandAnimatorManager") is { } ham

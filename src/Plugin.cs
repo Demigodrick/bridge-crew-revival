@@ -56,6 +56,7 @@ namespace StbcRevival
         internal static ConfigEntry<UnityEngine.KeyCode> BugReportKey;
         internal static ConfigEntry<UnityEngine.KeyCode> GameDumpKey;
         internal static ConfigEntry<bool> RomulanFace;
+        internal static ConfigEntry<int> KlingonHead;
         internal static ConfigEntry<string> MapOverride;
         internal static ConfigEntry<int> FleetBattleSize;
         internal static ConfigEntry<int> EvacuationMinutes;
@@ -137,6 +138,9 @@ namespace StbcRevival
                 "Saves the logs and settings needed for a bug report as one zip in the game folder.");
             RomulanFace = Config.Bind("Avatar", "RomulanFace", false,
                 "Wear the Romulan captain's face. Female Vulcan character presets only; crewmates with the mod see it too.");
+            KlingonHead = Config.Bind("Avatar", "KlingonHead", 0,
+                new ConfigDescription("Wear a Klingon captain's head: 0 off, 1 the captain, 2 the flagship's captain. Male Human character presets only; crewmates with the mod see it too. "
+                                      + "The heads load with the bridge, so they appear once you've been on one.", new AcceptableValueRange<int>(0, 2)));
             GameDumpKey = Config.Bind("Debug", "GameDumpKey", UnityEngine.KeyCode.F9,
                 "Testing only: describes the game's state (hail-screen characters, player avatars, sound, the scene) to BepInEx/game-dump.txt.");
             VoiceCommands = Config.Bind("Voice", "VoiceCommands", true,
@@ -237,7 +241,8 @@ namespace StbcRevival
             Safely("bug report", BugReport.Update);
             Safely("game dump", GameDump.Update);
             Safely("romulan face", StbcRevival.RomulanFace.Update);
-            Safely("romulan creator choice", StbcRevival.RomulanCreatorOption.Update);
+            Safely("klingon head", StbcRevival.KlingonHead.Update);
+            Safely("creator species choices", SpeciesCreatorOptions.Update);
             Safely("revival settings", RevivalSettings.Update);
             Safely("briefing room decor", BriefingRoomDecor.Update);
             Safely("stellar evacuation", StbcRevival.Missions.StellarEvacuationObjective.Update);

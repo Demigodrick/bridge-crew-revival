@@ -54,6 +54,16 @@ namespace StbcRevival
             Switch("Skip mic check", () => Plugin.SkipMicCheck, restart: true),
             Switch("Voice commands", () => Plugin.VoiceCommands, restart: true),
             Switch("Romulan face", () => Plugin.RomulanFace),
+            new Entry
+            {
+                Text = () => "Klingon head: " + KlingonHead.Names[Mathf.Clamp(Plugin.KlingonHead.Value, 0, 2)].ToUpperInvariant(),
+                Button = () => "Change",
+                Press = () =>
+                {
+                    Plugin.KlingonHead.Value = (Plugin.KlingonHead.Value + 1) % 3;
+                    Plugin.Log.LogInfo($"Revival settings: Klingon head {KlingonHead.Names[Plugin.KlingonHead.Value]}");
+                },
+            },
             Switch("Chime when someone joins", () => Plugin.PlayerJoinedAlert),
             Switch("Public crews in VR", () => Plugin.VrRoomPanels),
             new Entry

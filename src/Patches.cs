@@ -230,12 +230,13 @@ namespace StbcRevival
             VrRoomPanels.Patch(harmony);
             Missions.RevivalMissions.Patch(harmony);
             PvpPrototype.Patch(harmony); // for everyone: it acts only when the host picks the PvP test ([Debug] PvpTest shows it)
-            RomulanCreatorOption.Patch(harmony);
+            SpeciesCreatorOptions.Patch(harmony);
             RevivalSettings.Patch(harmony);
             SteamFriendAdd.Patch(harmony);
             if (SteamMode.Enabled) Blocklist.Patch(harmony);
             VrKeyboard.Patch(harmony);
             RomulanFace.Patch(harmony);
+            KlingonHead.Patch(harmony);
             VoiceCommands.Patch(harmony);
             ControllerGrace.Patch(harmony);
             Excelsior.Patch(harmony);

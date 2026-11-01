@@ -45,9 +45,9 @@ namespace StbcRevival
             wearing.RemoveWhere(h => h == null);
         }
 
-        private static readonly FieldInfo CreatorAvatars = AccessTools.Field(typeof(CustomizationManager), "FFJOIFLJFPF");
+        internal static readonly FieldInfo CreatorAvatars = AccessTools.Field(typeof(CustomizationManager), "FFJOIFLJFPF");
 
-        private static IList Profiles()
+        internal static IList Profiles()
         {
             var instance = AccessTools.Method(AccessTools.TypeByName("NovaPlayerManager"), "get_Instance")?.Invoke(null, null);
             return instance == null ? null : AccessTools.Field(instance.GetType(), "CharacterProfiles")?.GetValue(instance) as IList; // SVR.PlayerManager field
@@ -100,9 +100,9 @@ namespace StbcRevival
             return true;
         }
 
-        private static bool IsLocal(object player) => AccessTools.Field(player.GetType(), "isLocal")?.GetValue(player) is bool local && local;
+        internal static bool IsLocal(object player) => AccessTools.Field(player.GetType(), "isLocal")?.GetValue(player) is bool local && local;
 
-        private static object Properties(object player) => player.GetType().GetMethod("get_customProperties", All)?.Invoke(player, null);
+        internal static object Properties(object player) => player.GetType().GetMethod("get_customProperties", All)?.Invoke(player, null);
 
         // Put the Romulan face on, keeping the hair colour and intensity the creator set on the face it replaces.
         private static bool Wear(SkinnedMeshRenderer head)
