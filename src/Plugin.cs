@@ -216,6 +216,11 @@ namespace StbcRevival
             Log.LogInfo($"{Name} {Version} loaded. Photon mode: {Mode.Value}, skip Uplay: {SkipUplay.Value}");
         }
 
+        private void Start()
+        {
+            StartCoroutine(StbcRevival.KlingonHead.PreloadAtLaunch()); // the Klingon heads without a bridge visit
+        }
+
         private Harmony harmony;
         private bool deferredApplied;
 

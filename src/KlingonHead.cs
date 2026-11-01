@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Reflection;
 using HarmonyLib;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace StbcRevival
 {
@@ -226,10 +227,12 @@ namespace StbcRevival
         internal static bool IsHidden(Material m) => m != null && hidden != null && m == hidden;
 
         // The hail views' character prefabs, on a bridge; looked for every 5 s until both heads are found.
-        private static void FindSources()
+        private static bool Found => sources[1] != null && sources[2] != null;
+
+        private static void FindSources(bool now = false)
         {
-            if (sources[1] != null && sources[2] != null) return;
-            if (Time.unscaledTime < nextSearch || CharacterPrefab == null) return;
+            if (Found) return;
+            if ((!now && Time.unscaledTime < nextSearch) || CharacterPrefab == null) return;
             nextSearch = Time.unscaledTime + 5f;
             foreach (var view in Resources.FindObjectsOfTypeAll(CharacterPrefab.DeclaringType))
             {
@@ -299,6 +302,81 @@ namespace StbcRevival
                 Plugin.Log.LogWarning($"Klingon head: reading {character.name}: {e.Message}");
                 return null;
             }
+        }
+
+        // ---- At launch: the heads without a bridge -----------------------------------------------------------
+        // With a Klingon head chosen, the Aegis bridge scene (it owns the hail characters' assets) is loaded
+        // alongside once, as the game starts: the moment it's in (after its objects' Awake, before any Start or
+        // Update) the heads are taken and every one of its objects switched off, anything it put in
+        // DontDestroyOnLoad is destroyed, and it's unloaded the next frame. At launch the game has set up few of
+        // its own managers for the scene to trip over, and its own first full scene load clears the rest.
+        private const string PreloadScene = "Bridge_scene_02";
+        private static bool preloading;
+
+        internal static System.Collections.IEnumerator PreloadAtLaunch()
+        {
+            if (Chosen() == 0 || Found || preloading) yield break;
+            preloading = true;
+            float started = Time.realtimeSinceStartup;
+            Scene loaded = default(Scene);
+            bool arrived = false;
+            var persistent = PersistentRoots();
+            var killed = new List<string>();
+            UnityEngine.Events.UnityAction<Scene, LoadSceneMode> onLoaded = (scene, mode) =>
+            {
+                if (arrived || scene.name != PreloadScene) return;
+                arrived = true;
+                loaded = scene;
+                try
+                {
+                    FindSources(true);
+                    foreach (var root in scene.GetRootGameObjects()) root.SetActive(false);
+                    foreach (var root in PersistentRoots())
+                        if (!persistent.Contains(root))
+                        {
+                            killed.Add(root.name);
+                            root.SetActive(false);
+                            UnityEngine.Object.Destroy(root);
+                        }
+                }
+                catch (Exception e)
+                {
+                    Plugin.Log.LogWarning("Klingon head: switching the preloaded bridge off: " + e.Message);
+                }
+            };
+            SceneManager.sceneLoaded += onLoaded;
+            Plugin.Log.LogInfo($"Klingon head: loading the {PreloadScene} scene alongside, for the heads");
+            AsyncOperation op = null;
+            try { op = SceneManager.LoadSceneAsync(PreloadScene, LoadSceneMode.Additive); }
+            catch (Exception e) { Plugin.Log.LogWarning("Klingon head: couldn't load the bridge: " + e.Message); }
+            while (op != null && !arrived && Time.realtimeSinceStartup - started < 60f)
+            {
+                persistent = PersistentRoots(); // anything the game itself keeps while we wait is the game's
+                yield return null;
+            }
+            SceneManager.sceneLoaded -= onLoaded;
+            yield return null;
+            try
+            {
+                if (loaded.IsValid() && loaded.isLoaded) SceneManager.UnloadScene(loaded);
+            }
+            catch (Exception e)
+            {
+                Plugin.Log.LogWarning("Klingon head: unloading the preloaded bridge: " + e.Message);
+            }
+            Resources.UnloadUnusedAssets();
+            preloading = false;
+            Plugin.Log.LogInfo($"Klingon head: preload {(Found ? "found both heads" : arrived ? "found no heads" : "timed out")} in {Time.realtimeSinceStartup - started:F1} s"
+                               + (killed.Count > 0 ? $"; removed what it kept alive: {string.Join(", ", killed.ToArray())}" : ""));
+        }
+
+        // The roots in DontDestroyOnLoad (active ones; that's where a scene's singletons put themselves).
+        private static HashSet<GameObject> PersistentRoots()
+        {
+            var roots = new HashSet<GameObject>();
+            foreach (var t in UnityEngine.Object.FindObjectsOfType<Transform>())
+                if (t.parent == null && t.gameObject.scene.buildIndex < 0 && t.gameObject.scene.name == "DontDestroyOnLoad") roots.Add(t.gameObject);
+            return roots;
         }
 
         internal static void Patch(Harmony harmony)
