@@ -235,17 +235,21 @@ namespace StbcRevival
         private static void TakeDestinations()
         {
             var found = new List<Destination>();
+            int maps = 0, total = 0;
             try
             {
+                maps = UnityEngine.Object.FindObjectsOfType<WarpPanel>().Length;
                 var map = WarpMap();
                 if (map != null && Traverse.Create(map).Field("JBDJGIKEICO").GetValue() is System.Collections.IDictionary locations)
                 {
                     var here = Traverse.Create(map).Method("HBKEIMBBMHI").GetValue() as Component;
                     foreach (var location in locations.Values)
                     {
+                        total++;
                         var l = Traverse.Create(location);
                         var system = l.Field("<JOEKIOLDNAF>k__BackingField").GetValue() as Map.SystemRoot;
-                        if (system == null || ReferenceEquals(location, here) || !(l.Property("KGPNEONLCJN").GetValue() is true)) continue;
+                        // Every system on the map but where you are: SetWarpDestination refuses the ones you can't go to.
+                        if (system == null || ReferenceEquals(location, here)) continue;
                         string name;
                         try { name = SVR.Localization.GetLocalizedText(system.SystemName); }
                         catch { name = system.SystemName; }
@@ -266,7 +270,7 @@ namespace StbcRevival
                 Plugin.Log.LogWarning("Voice commands: the warp map's systems: " + e.Message);
             }
             destinations = found;
-            Plugin.Log.LogInfo($"Voice commands: destinations: {(found.Count == 0 ? "none" : string.Join(", ", found.Select(d => $"{d.Name} ({string.Join(" ", d.Words)})").ToArray()))}");
+            Plugin.Log.LogInfo($"Voice commands: destinations: {(found.Count == 0 ? $"none ({maps} warp maps, {total} locations)" : string.Join(", ", found.Select(d => $"{d.Name} ({string.Join(" ", d.Words)})").ToArray()))}");
         }
 
         private static readonly HashSet<string> Numbers = new HashSet<string> { "one", "two", "three", "four", "five", "six", "seven", "eight", "nine" };
@@ -674,6 +678,9 @@ namespace StbcRevival
                 var text = Field(json, "text");
                 command = Parse(text);
                 Plugin.Log.LogInfo($"Voice commands: heard \"{text}\" → {command ?? "nothing known"}");
+                // A course with a name the recogniser doesn't know ("set course for [unk]"): listen again without the
+                // word list and match what was heard against the map's names by spelling.
+                if (NeedsName(text, command) && GuessDestination(pcm, text) is string guessed) command = guessed;
             }
             catch (Exception e)
             {
@@ -681,6 +688,80 @@ namespace StbcRevival
             }
             pendingCommand = command;
             pendingResult = true;
+        }
+
+        // A course order with a word the recogniser didn't know, and no destination picked from it.
+        private static bool NeedsName(string text, string command)
+        {
+            if (string.IsNullOrEmpty(text) || !text.Contains("[unk]") || destinations.Count == 0) return false;
+            if (command != null && command.StartsWith("Course:", StringComparison.Ordinal)) return false;
+            var w = new HashSet<string>(text.Split(' '));
+            return CourseWords.Any(w.Contains) || w.Contains("for") || w.Contains("to");
+        }
+
+        // The destination whose name is spelled most like what an unrestricted listen heard (alone, or two words
+        // run together: "donna to" for Donatu); with one destination on the map, that one. Null if unsure.
+        private static string GuessDestination(byte[] pcm, string text)
+        {
+            var list = destinations;
+            int best = -1;
+            string heard = null;
+            if (list.Count == 1) best = 0;
+            else
+            {
+                heard = Free(pcm);
+                var spoken = (heard ?? "").Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries).Where(x => !Vocabulary.Contains(x) || x.Length > 5).ToList();
+                var candidates = new List<string>(spoken);
+                for (int i = 0; i + 1 < spoken.Count; i++) candidates.Add(spoken[i] + spoken[i + 1]);
+                double top = 0, second = 0;
+                for (int i = 0; i < list.Count; i++)
+                {
+                    var name = string.Concat(list[i].Words.Where(x => !Numbers.Contains(x)).ToArray());
+                    if (name.Length < 3) continue;
+                    double score = candidates.Select(c => Similarity(c, name)).DefaultIfEmpty(0).Max();
+                    if (score > top) { second = top; top = score; best = i; }
+                    else if (score > second) second = score;
+                }
+                if (top < 0.6 || top - second < 0.1) best = -1;
+            }
+            Plugin.Log.LogInfo($"Voice commands: course name {(heard != null ? $"heard as \"{heard}\"" : "(the only system on the map)")} → {(best < 0 ? "no match" : list[best].Name)}");
+            if (best < 0) return null;
+            var w = new HashSet<string>(text.Split(' '));
+            lastPrepared = "Warp";
+            bool engage = new[] { "engage", "punch", "jump" }.Any(w.Contains) || (w.Contains("so") && (w.Contains("make") || w.Contains("it")));
+            return $"Course:{best},PrepareWarp" + (engage ? ",EngageWarp" : "");
+        }
+
+        // 1 for the same spelling, 0 for nothing alike (edit distance over the longer length).
+        private static double Similarity(string a, string b)
+        {
+            if (a.Length == 0 || b.Length == 0) return 0;
+            var d = new int[a.Length + 1, b.Length + 1];
+            for (int i = 0; i <= a.Length; i++) d[i, 0] = i;
+            for (int j = 0; j <= b.Length; j++) d[0, j] = j;
+            for (int i = 1; i <= a.Length; i++)
+                for (int j = 1; j <= b.Length; j++)
+                    d[i, j] = Math.Min(Math.Min(d[i - 1, j] + 1, d[i, j - 1] + 1), d[i - 1, j - 1] + (a[i - 1] == b[j - 1] ? 0 : 1));
+            return 1.0 - (double)d[a.Length, b.Length] / Math.Max(a.Length, b.Length);
+        }
+
+        // What was said, with the model's whole vocabulary (no word list). Null if it couldn't run.
+        private static string Free(byte[] pcm)
+        {
+            try
+            {
+                var recogniser = Vosk.RecognizerNew(model, SampleRate);
+                if (recogniser == IntPtr.Zero) return null;
+                Vosk.AcceptWaveform(recogniser, pcm, pcm.Length);
+                var json = Utf8(Vosk.FinalResult(recogniser));
+                Vosk.RecognizerFree(recogniser);
+                return Field(json, "text");
+            }
+            catch (Exception e)
+            {
+                Plugin.Log.LogInfo("Voice commands: listening again failed: " + e.Message);
+                return null;
+            }
         }
 
         private static bool EnsureRecogniser()
@@ -730,6 +811,7 @@ namespace StbcRevival
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)] internal delegate void SetLogLevelFn(int level);
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)] internal delegate IntPtr ModelNewFn(byte[] path);
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)] internal delegate IntPtr RecognizerNewGrmFn(IntPtr model, float sampleRate, byte[] grammar);
+            [UnmanagedFunctionPointer(CallingConvention.Cdecl)] internal delegate IntPtr RecognizerNewFn(IntPtr model, float sampleRate);
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)] internal delegate int AcceptWaveformFn(IntPtr recogniser, byte[] data, int length);
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)] internal delegate IntPtr FinalResultFn(IntPtr recogniser);
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)] internal delegate void RecognizerFreeFn(IntPtr recogniser);
@@ -737,6 +819,7 @@ namespace StbcRevival
             internal static SetLogLevelFn SetLogLevel;
             internal static ModelNewFn ModelNew;
             internal static RecognizerNewGrmFn RecognizerNewGrm;
+            internal static RecognizerNewFn RecognizerNew;
             internal static AcceptWaveformFn AcceptWaveform;
             internal static FinalResultFn FinalResult;
             internal static RecognizerFreeFn RecognizerFree;
@@ -746,6 +829,7 @@ namespace StbcRevival
                 SetLogLevel = Fn<SetLogLevelFn>(module, "vosk_set_log_level");
                 ModelNew = Fn<ModelNewFn>(module, "vosk_model_new");
                 RecognizerNewGrm = Fn<RecognizerNewGrmFn>(module, "vosk_recognizer_new_grm");
+                RecognizerNew = Fn<RecognizerNewFn>(module, "vosk_recognizer_new");
                 AcceptWaveform = Fn<AcceptWaveformFn>(module, "vosk_recognizer_accept_waveform");
                 FinalResult = Fn<FinalResultFn>(module, "vosk_recognizer_final_result");
                 RecognizerFree = Fn<RecognizerFreeFn>(module, "vosk_recognizer_free");
