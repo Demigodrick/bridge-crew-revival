@@ -33,14 +33,14 @@ namespace StbcRevival
             Cursor.visible = true;
             Cursor.lockState = CursorLockMode.None;
             if (UnityEngine.VR.VRSettings.enabled)
-                try { UI.PopupMgr.ShowPopup($"Type it in the window on the desktop ({what}).", null, UI.PDHCCBFJODN.Notification, true); }
+                try { UI.PopupMgr.ShowPopup(Translation.T($"Type it in the window on the desktop ({what})."), null, UI.PDHCCBFJODN.Notification, true); }
                 catch { /* no popups here */ }
         }
 
         internal static void OnGUI()
         {
             if (done == null) return;
-            window = GUILayout.Window(0x5BC8, window, Draw, title);
+            window = GUILayout.Window(0x5BC8, window, Draw, Translation.T(title));
         }
 
         private static void Draw(int id)
@@ -50,8 +50,8 @@ namespace StbcRevival
             GUI.FocusControl("prompt");
             bool enter = Event.current.type == EventType.KeyDown && (Event.current.keyCode == KeyCode.Return || Event.current.keyCode == KeyCode.KeypadEnter);
             GUILayout.BeginHorizontal();
-            bool ok = GUILayout.Button("OK") || enter;
-            bool cancel = GUILayout.Button("Cancel") || (Event.current.type == EventType.KeyDown && Event.current.keyCode == KeyCode.Escape);
+            bool ok = GUILayout.Button(Translation.T("OK")) || enter;
+            bool cancel = GUILayout.Button(Translation.T("Cancel")) || (Event.current.type == EventType.KeyDown && Event.current.keyCode == KeyCode.Escape);
             GUILayout.EndHorizontal();
             if (ok && input.Trim().Length > 0)
             {

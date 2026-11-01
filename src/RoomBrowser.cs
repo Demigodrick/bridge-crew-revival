@@ -118,7 +118,7 @@ namespace StbcRevival
         }
 
         private static string ContentLabel(CrewContent c) =>
-            c == CrewContent.NextGenerationOnly ? "Content: TNG only" : c == CrewContent.NoNextGeneration ? "Content: no TNG" : "Content: any";
+            Translation.T(c == CrewContent.NextGenerationOnly ? "Content: TNG only" : c == CrewContent.NoNextGeneration ? "Content: no TNG" : "Content: any");
 
         internal static string Code(string roomName) =>
             roomName == null ? "" : roomName.Contains("|") ? roomName.Substring(roomName.IndexOf('|') + 1) : roomName;
@@ -140,6 +140,7 @@ namespace StbcRevival
         internal static void Show(string message)
         {
             SetVisible(true);
+            message = Translation.T(message);
             status = message;
             if (message == lastPopup && Time.realtimeSinceStartup - lastPopupAt < 10f) return;
             lastPopup = message;
@@ -172,7 +173,7 @@ namespace StbcRevival
         internal static void OnGUI()
         {
             if (!visible) return;
-            window = GUILayout.Window(0x5BC7, window, DrawWindow, "Bridge Crew Revival — Rooms");
+            window = GUILayout.Window(0x5BC7, window, DrawWindow, Translation.T("Bridge Crew Revival — Rooms"));
         }
 
         private static void DrawWindow(int id)
@@ -180,19 +181,19 @@ namespace StbcRevival
             photonNetwork = photonNetwork ?? Patches.PhotonNetworkType;
             string current = CurrentRoomName();
 
-            GUILayout.Label(current != null
+            GUILayout.Label(Translation.T(current != null
                 ? (SteamMode.Enabled ? $"You are in room  {Code(current)}   share code: {SteamMode.ShareCode(current)}" : $"You are in room  {Code(current)}   (share this code with your crew)")
-                : InLobby() ? "Connected. Pick a room or enter a code." : "Not connected to the server yet.");
+                : InLobby() ? "Connected. Pick a room or enter a code." : "Not connected to the server yet."));
             if (current != null)
             {
                 if (SteamMode.Enabled) GUILayout.Label(SteamMode.RoomStatus(current, CurrentRoomVisible()));
                 GUILayout.BeginHorizontal();
-                if (GUILayout.Button(SteamMode.Enabled ? "Copy share code" : "Copy my room code", GUILayout.Width(180)))
+                if (GUILayout.Button(Translation.T(SteamMode.Enabled ? "Copy share code" : "Copy my room code"), GUILayout.Width(180)))
                 {
                     GUIUtility.systemCopyBuffer = SteamMode.Enabled ? SteamMode.ShareCode(current) : Code(current);
                     status = SteamMode.Enabled ? "Share code copied: anyone with it can join, Steam friends or not." : "Room code copied.";
                 }
-                if (Plugin.SteamPresence.Value && SteamIntegration.Joinable && GUILayout.Button("Invite Steam friends", GUILayout.Width(180)))
+                if (Plugin.SteamPresence.Value && SteamIntegration.Joinable && GUILayout.Button(Translation.T("Invite Steam friends"), GUILayout.Width(180)))
                 {
                     SteamIntegration.OpenInviteOverlay();
                     status = "In the Steam overlay, right-click a friend and choose \"Invite to Game\".";
@@ -202,43 +203,43 @@ namespace StbcRevival
 
             GUILayout.Space(6);
             GUILayout.BeginHorizontal();
-            GUILayout.Label("Room code:", GUILayout.Width(80));
+            GUILayout.Label(Translation.T("Room code:"), GUILayout.Width(80));
             codeInput = GUILayout.TextField(codeInput, 64, GUILayout.Width(220));
-            if (GUILayout.Button("Paste", GUILayout.Width(60))) codeInput = (GUIUtility.systemCopyBuffer ?? "").Trim();
-            if (GUILayout.Button("Join", GUILayout.Width(70))) Join(codeInput);
+            if (GUILayout.Button(Translation.T("Paste"), GUILayout.Width(60))) codeInput = (GUIUtility.systemCopyBuffer ?? "").Trim();
+            if (GUILayout.Button(Translation.T("Join"), GUILayout.Width(70))) Join(codeInput);
             GUILayout.EndHorizontal();
 
             GUILayout.Space(8);
             GUILayout.Label(SteamMode.Enabled
-                ? "Public rooms (Steam, worldwide):" + (SteamMode.OnlineText.Length > 0 ? "   · " + SteamMode.OnlineText : "")
-                : "Public rooms on this server:");
+                ? Translation.T("Public rooms (Steam, worldwide):" + (SteamMode.OnlineText.Length > 0 ? "   · " + SteamMode.OnlineText : ""))
+                : Translation.T("Public rooms on this server:"));
             GUILayout.BeginHorizontal();
-            Plugin.HideFullCrews.Value = GUILayout.Toggle(Plugin.HideFullCrews.Value, " Hide full", GUILayout.Width(110));
-            Plugin.HideCrewsInMission.Value = GUILayout.Toggle(Plugin.HideCrewsInMission.Value, " Hide in mission", GUILayout.Width(140));
+            Plugin.HideFullCrews.Value = GUILayout.Toggle(Plugin.HideFullCrews.Value, Translation.T(" Hide full"), GUILayout.Width(110));
+            Plugin.HideCrewsInMission.Value = GUILayout.Toggle(Plugin.HideCrewsInMission.Value, Translation.T(" Hide in mission"), GUILayout.Width(140));
             if (GUILayout.Button(ContentLabel(Plugin.CrewContentFilter.Value), GUILayout.Width(170)))
                 Plugin.CrewContentFilter.Value = (CrewContent)(((int)Plugin.CrewContentFilter.Value + 1) % 3);
             GUILayout.EndHorizontal();
             scroll = GUILayout.BeginScrollView(scroll, GUILayout.Height(270));
             var rooms = RoomList();
             if (rooms.Length == 0)
-                GUILayout.Label(SteamMode.Enabled || InLobby() ? "  None right now. Start a Quick match to host one." : "  (room list appears once you're connected, on the shuttle)");
+                GUILayout.Label(Translation.T(SteamMode.Enabled || InLobby() ? "  None right now. Start a Quick match to host one." : "  (room list appears once you're connected, on the shuttle)"));
             foreach (var r in rooms)
             {
                 GUILayout.BeginHorizontal("box");
-                GUILayout.Label(r.Mine ? r.Code + " (you)" : r.Code, GUILayout.Width(90));
+                GUILayout.Label(r.Mine ? Translation.T(r.Code + " (you)") : r.Code, GUILayout.Width(90));
                 GUILayout.Label($"{r.Mode} · {r.Phase}", GUILayout.Width(220));
                 GUILayout.Label($"{r.Players}/{(r.MaxPlayers > 0 ? r.MaxPlayers.ToString() : "any")}", GUILayout.Width(50));
                 GUI.enabled = r.Joinable && r.Name != current && !r.Mine;
-                if (GUILayout.Button(r.Joinable ? "Join" : "Full", GUILayout.Width(70))) Join(r.Name);
+                if (GUILayout.Button(Translation.T(r.Joinable ? "Join" : "Full"), GUILayout.Width(70))) Join(r.Name);
                 GUI.enabled = true;
                 GUILayout.EndHorizontal();
             }
             GUILayout.EndScrollView();
 
-            if (status.Length > 0) GUILayout.Label(status);
+            if (status.Length > 0) GUILayout.Label(Translation.T(status));
             GUILayout.Label(SteamMode.Enabled
-                ? $"Press {Plugin.BrowserKey.Value} to close. Public rooms are Steam lobbies, worldwide."
-                : $"Press {Plugin.BrowserKey.Value} to close. Also at http://{Plugin.Server.Value}:8080/ on a self-hosted server.");
+                ? Translation.T($"Press {Plugin.BrowserKey.Value} to close. Public rooms are Steam lobbies, worldwide.")
+                : Translation.T($"Press {Plugin.BrowserKey.Value} to close. Also at http://{Plugin.Server.Value}:8080/ on a self-hosted server."));
             GUI.DragWindow();
         }
 
@@ -253,7 +254,7 @@ namespace StbcRevival
         {
             Name = name,
             Code = Code(name),
-            Mode = ModeName(Int(props, "C3")) + (props != null && props.Contains(StbcServer.ModProp.Locked) && props[StbcServer.ModProp.Locked] is true ? " · password" : ""),
+            Mode = ModeName(Int(props, "C3")) + (props != null && props.Contains(StbcServer.ModProp.Locked) && props[StbcServer.ModProp.Locked] is true ? Translation.T(" · password") : ""),
             Phase = PhaseName(Int(props, "C6")),
             Players = players,
             MaxPlayers = max,
@@ -338,9 +339,9 @@ namespace StbcRevival
 
         // Room properties as Bridge Crew sets them (OOLKIMEFIPC): C3 GameMode, C6 CurrentGamePhase.
         private static string ModeName(int? mode) =>
-            mode == 0 ? "Public" : mode == 1 ? "Solo" : mode == 2 ? "Private" : mode == 3 ? "Tutorial" : "Unknown";
+            Translation.T(mode == 0 ? "Public" : mode == 1 ? "Solo" : mode == 2 ? "Private" : mode == 3 ? "Tutorial" : "Unknown");
 
         private static string PhaseName(int? phase) =>
-            phase == 1 ? "Shuttle" : phase == 2 ? "Briefing room" : phase == 4 ? "Intro" : phase == null ? "?" : "In mission";
+            Translation.T(phase == 1 ? "Shuttle" : phase == 2 ? "Briefing room" : phase == 4 ? "Intro" : phase == null ? "?" : "In mission");
     }
 }

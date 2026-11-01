@@ -44,3 +44,7 @@ Wie bisher als Captain V (oder den Sprachknopf) halten, den Befehl sagen und los
 | Brücke | "Auf den Schirm", "Kanal öffnen", "Statusbericht" |
 
 Die Systemnamen der Warpkarte sind englisch. Wenn das Modell einen Namen nicht kennt, wird nach der Schreibweise zugeordnet.
+
+## Deutsche Texte im Spiel
+
+Ist die Menüsprache des Spiels Deutsch, erscheinen auch die Texte des Mods auf Deutsch: Revival-Missionen (Titel, Beschreibungen, Aufträge, Meldungen), Revival-Einstellungen, Crew-Passwort, Raumliste, Hinweise und Popups. Bei jeder anderen Sprache bleibt alles Englisch. Es gibt dafür nichts einzustellen; jeder Spieler sieht die Texte in seiner eigenen Sprache, auch wenn der Host eine andere hat.

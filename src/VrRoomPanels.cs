@@ -76,15 +76,15 @@ namespace StbcRevival
                 rows.Add(new Row
                 {
                     Title = "YOUR CREW " + RoomBrowser.Code(current),
-                    Detail = (RoomBrowser.CurrentRoomVisible() ? "Public: anyone can join" : "Private: invite or code only")
-                             + (SteamName.SteamInitialized() ? " - tap to invite" : ""),
+                    Detail = Translation.T(RoomBrowser.CurrentRoomVisible() ? "Public: anyone can join" : "Private: invite or code only")
+                             + (SteamName.SteamInitialized() ? Translation.T(" - tap to invite") : ""),
                     Mine = true,
                 });
             foreach (var e in RoomBrowser.RoomList().Where(e => e.Name != current))
                 rows.Add(new Row
                 {
                     Title = e.Code,
-                    Detail = $"{e.Mode} - {e.Phase} - {e.Players}/{(e.MaxPlayers > 0 ? e.MaxPlayers.ToString() : "any")}{(e.Joinable ? "" : " - full")}",
+                    Detail = $"{e.Mode} - {e.Phase} - {e.Players}/{(e.MaxPlayers > 0 ? e.MaxPlayers.ToString() : Translation.T("any"))}{(e.Joinable ? "" : Translation.T(" - full"))}",
                     Room = e,
                 });
             return rows;
@@ -126,7 +126,7 @@ namespace StbcRevival
 
         // The game's localizer treats "id|text" specially, so no '|' in anything shown.
         private static void Popup(string text, Action<bool> onAnswer, UI.PDHCCBFJODN kind) =>
-            UI.PopupMgr.ShowPopup(text.Replace('|', ' '), onAnswer != null ? new UI.LGNBEBILNCL(onAnswer) : null, kind, true);
+            UI.PopupMgr.ShowPopup(Translation.T(text).Replace('|', ' '), onAnswer != null ? new UI.LGNBEBILNCL(onAnswer) : null, kind, true);
 
         // TMP_Text's text property is renamed by the obfuscator; its accessor isn't.
         private static readonly System.Reflection.MethodInfo GetTextMethod = AccessTools.Method(typeof(TMP_Text), "get_text");
@@ -209,7 +209,7 @@ namespace StbcRevival
             if (slot == null) return;
             slot.SetActive(row != null);
             if (row == null) return;
-            SetText(title, row.Title + "\n" + row.Detail);
+            SetText(title, Translation.T(row.Title) + "\n" + Translation.T(row.Detail));
             if (banner != null) banner.sprite = defaultBanner;
         }
 
