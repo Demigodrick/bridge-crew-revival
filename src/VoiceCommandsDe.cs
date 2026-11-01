@@ -84,7 +84,7 @@ namespace StbcRevival
             "entsichern", "feuerbereit", "nachladen");
         private static readonly string[] DeScan = G("scannen", "scanne", "scan", "sondieren", "sondiere", "sonde", "abtasten", "absuchen", "durchsuchen");
         private static readonly string[] DeAnalyse = G("analysieren", "analysiere", "analyse", "untersuchen", "untersuche", "untersuchung", "identifizieren", "identifiziere");
-        private static readonly string[] DeDisrupt = G("stören", "störe", "lahmlegen", "lahm", "hacken", "hacke", "sabotieren", "manipulieren");
+        private static readonly string[] DeDisrupt = G("stören", "störe", "lahmlegen", "hacken", "hacke", "sabotieren", "manipulieren");
         private static readonly string[] DeComms = G("kommunikation", "kommunikationssystem", "funk");
         private static readonly string[] DeBeam = G("beamen", "beam", "transportieren", "transportiere", "transport", "evakuieren", "evakuierung");
         private static readonly string[] DePeople = G("überlebende", "überlebenden", "besatzung", "crew", "leute", "menschen", "lebensformen", "personen", "mannschaft");
@@ -95,7 +95,7 @@ namespace StbcRevival
         private static readonly string[] DeCloaked = G("getarnt", "getarnte", "getarnten", "getarntes", "getarnter");
         private static readonly string[] DeCloak = G("tarnung", "tarnen", "tarnvorrichtung");
         private static readonly string[] DeHunt = G("jagen", "jage", "jagd", "aufspüren", "orten", "orte");
-        private static readonly string[] DeStealth = G("signatur", "signaturen", "leise", "lautlos", "schleichfahrt", "stealth", "unauffällig");
+        private static readonly string[] DeStealth = G("signatur", "signaturen", "leise", "lautlos", "schleichfahrt", "unauffällig");
 
         // engineering
         private static readonly string[] DeRepair = G("reparieren", "repariere", "reparatur", "reparaturen", "beheben", "behebe", "instandsetzen", "fixen", "flicken",
@@ -111,7 +111,7 @@ namespace StbcRevival
         private static readonly string[] DePowerVerbs = G("umleiten", "umlenken", "leiten", "lenken", "verteilen", "umverteilen", "umschalten", "leite", "lenke",
             "verteile", "verlagern", "verschieben");
         private static readonly string[] DeEnergy = G("energie", "leistung", "strom");
-        private static readonly string[] DeBalance = G("ausgleichen", "ausgeglichen", "balancieren", "gleichmäßig", "balance");
+        private static readonly string[] DeBalance = G("ausgleichen", "ausgeglichen", "balancieren", "gleichmäßig");
 
         // Star Trek phrases
         private static readonly string[] DeAlert = G("alarm", "alarmstufe", "alarmbereitschaft", "gefechtsbereitschaft", "kampfbereitschaft");
@@ -132,7 +132,7 @@ namespace StbcRevival
         private static readonly string[] DeCarry = G("der", "die", "das", "den", "dem", "des", "ein", "eine", "einen", "einem", "bitte", "sie", "uns", "unser", "unsere",
             "unseren", "auf", "an", "zu", "zum", "zur", "nach", "für", "von", "vom", "mit", "im", "in", "aus", "und", "ab", "bei", "alle", "alles", "jetzt", "sofort",
             "schnell", "gleich", "dringend", "schiff", "raumschiff", "system", "sektor", "ihre", "ihren", "ihr", "mal", "doch", "so", "sei", "es", "mir", "mich",
-            "hier", "dort", "da", "dann", "auch", "noch", "mann", "posten", "kapitän", "captain", "nummer", "raum", "kraft", "muster", "delta", "antworten",
+            "hier", "dort", "da", "dann", "auch", "noch", "mann", "posten", "kapitän", "nummer", "raum", "kraft", "muster", "delta", "antworten",
             "hochfahren", "hochfahre", "aufbauen", "baue", "ausfahren", "einschalten", "gib", "stell", "stelle", "lass", "mache", "feind", "schiffe", "schiffen",
             "eröffnen", "sicher", "sichere", "hoch", "oben", "unten", "schäden");
 
@@ -238,7 +238,7 @@ namespace StbcRevival
 
         private static string LoreDe(HashSet<string> w, Func<string[], bool> any)
         {
-            bool alert = any(DeAlert) || (any(DeBattle) && any(DeStation));
+            bool alert = any(DeAlert) || (any(DeBattle) && any(DeStation)) || any(DeRed) || any(DeYellow); // "roter" alone: "alarm" is often cut off
             if ((alert && any(DeCancel)) || any(DeAllClear)) return "RedAlertOff,LowerShields,DisarmTorpedoes";
             if (alert && any(DeYellow)) return "RaiseShields";
             if (alert) return "RedAlertOn,RaiseShields,ArmTorpedoes";
