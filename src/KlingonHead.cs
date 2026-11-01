@@ -41,6 +41,7 @@ namespace StbcRevival
         private static float nextCheck, nextSearch;
         private static Material hidden;
         private static bool toldNotLoaded;
+        private static readonly HashSet<SkinnedMeshRenderer> unfit = new HashSet<SkinnedMeshRenderer>(); // no Head or eye bones: tried once
 
         internal static void Update()
         {
@@ -61,6 +62,7 @@ namespace StbcRevival
             var gone = new List<SkinnedMeshRenderer>();
             foreach (var pair in grafts) if (pair.Key == null || pair.Value == null) gone.Add(pair.Key);
             foreach (var head in gone) grafts.Remove(head);
+            unfit.RemoveWhere(h => h == null);
         }
 
         private static int Chosen() => Mathf.Clamp(Plugin.KlingonHead.Value, 0, Characters.Length - 1);
@@ -105,7 +107,7 @@ namespace StbcRevival
                 grafts.Remove(head);
                 Plugin.Log.LogInfo($"Klingon head: off {avatar.name}");
             }
-            if (want <= 0) return;
+            if (want <= 0 || unfit.Contains(head)) return;
             if (sources[want] == null)
             {
                 if (!toldNotLoaded) Plugin.Log.LogInfo($"Klingon head: {Names[want]} wanted on {avatar.name}, but the heads aren't loaded (yet: they load as the game starts, or with a bridge)");
@@ -124,19 +126,15 @@ namespace StbcRevival
             var source = sources[variant];
             try
             {
+                // The head's Head bone; an optimised rig (no bones on the renderer) still exposes Head and the eyes.
                 var bones = head.bones;
                 int index = bones == null ? -1 : Array.FindIndex(bones, b => b != null && b.name == "Head");
-                if (index < 0)
+                var bone = index >= 0 ? bones[index] : Find(avatar.transform, "Head");
+                var left = bone == null ? null : Find(bone, "Eye_L") ?? Find(avatar.transform, "Eye_L");
+                var right = bone == null ? null : Find(bone, "Eye_R") ?? Find(avatar.transform, "Eye_R");
+                if (bone == null || left == null || right == null)
                 {
-                    Plugin.Log.LogWarning($"Klingon head: {avatar.name}'s head has no Head bone");
-                    return null;
-                }
-                var bone = bones[index];
-                var left = Find(bone, "Eye_L");
-                var right = Find(bone, "Eye_R");
-                if (left == null || right == null)
-                {
-                    Plugin.Log.LogWarning($"Klingon head: {avatar.name} has no eye bones; left alone");
+                    if (unfit.Add(head)) Plugin.Log.LogInfo($"Klingon head: {avatar.name} has no {(bone == null ? "Head bone" : "eye bones")}; left alone");
                     return null;
                 }
                 var mid = bone.InverseTransformPoint((left.position + right.position) * 0.5f);
