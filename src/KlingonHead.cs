@@ -170,6 +170,7 @@ namespace StbcRevival
                 worn.updateWhenOffscreen = true;
                 var graft = go.AddComponent<KlingonHeadGraft>();
                 graft.Set(head, worn, variant, Hidden(avatar));
+                ForgetRenderers(bone);
                 Plugin.Log.LogInfo($"Klingon head: {Names[variant]} on {avatar.name} ({how}; at {F(go.transform.localPosition)} turned {F(go.transform.localEulerAngles)} x{go.transform.localScale.x:F3} on {bone.name}; drawn at {F(worn.bounds.center)} size {F(worn.bounds.size)}, avatar eyes at {F(left.position)})");
                 return graft;
             }
@@ -178,6 +179,16 @@ namespace StbcRevival
                 Plugin.Log.LogWarning($"Klingon head: couldn't put it on {avatar.name}: {e}");
                 return null;
             }
+        }
+
+        // The avatar's CharacterLightingInterface lists its renderers once (AOAGAPLFIEO) and lights each one
+        // (SetPropertyBlock); with the Klingon head added or taken off, it lists them again.
+        private static readonly FieldInfo LitRenderers = AccessTools.Field(typeof(CharacterLightingInterface), "AOAGAPLFIEO");
+
+        internal static void ForgetRenderers(Transform inAvatar)
+        {
+            if (inAvatar == null || LitRenderers == null) return;
+            foreach (var lighting in inAvatar.GetComponentsInParent<CharacterLightingInterface>(true)) LitRenderers.SetValue(lighting, null);
         }
 
         private static string F(Vector3 v) => $"({v.x:F3}, {v.y:F3}, {v.z:F3})";
@@ -246,10 +257,9 @@ namespace StbcRevival
                     return null;
                 }
                 // Their rig is optimised away (no bone transforms on the renderer), so the mesh's own bind poses
-                // relate it to the bones; the Head's is the one that puts the eyes (the eye mesh's middle, in the
-                // head mesh's space) where the exposed eye transforms say they are in Head space.
-                var eyesToHead = head.transform.worldToLocalMatrix * eyes.transform.localToWorldMatrix;
-                var eyeMid = eyesToHead.MultiplyPoint3x4(eyes.sharedMesh.bounds.center);
+                // relate it to the bones; the Head's is the one that puts the head mesh's middle nearest the eyes
+                // (the exposed eye transforms, in Head space). (The eye mesh is no guide: it sits off to one side.)
+                var headMid = head.sharedMesh.bounds.center;
                 var headEyeMid = headBone.InverseTransformPoint((left.position + right.position) * 0.5f);
                 var spacing = (headBone.InverseTransformPoint(left.position) - headBone.InverseTransformPoint(right.position)).magnitude;
                 var poses = head.sharedMesh.bindposes;
@@ -258,7 +268,7 @@ namespace StbcRevival
                 var misses = new List<string>();
                 for (int i = 0; i < poses.Length; i++)
                 {
-                    float miss = (poses[i].MultiplyPoint3x4(eyeMid) - headEyeMid).magnitude;
+                    float miss = (poses[i].MultiplyPoint3x4(headMid) - headEyeMid).magnitude;
                     misses.Add(miss.ToString("F3"));
                     if (miss < bestMiss) { bestMiss = miss; best = i; }
                 }
@@ -275,13 +285,13 @@ namespace StbcRevival
                     HeadEyeMid = headEyeMid,
                     HeadEyeSpacing = spacing,
                 };
-                if (bestMiss > 0.03f)
-                    Plugin.Log.LogWarning($"Klingon head: {character.name}: no bind pose puts the eyes in place (misses {string.Join(", ", misses.ToArray())} m); using the closest");
+                if (bestMiss > 0.15f)
+                    Plugin.Log.LogWarning($"Klingon head: {character.name}: no bind pose puts the head by the eyes (misses {string.Join(", ", misses.ToArray())} m); using the closest");
                 // Kept for the session: the bridge's assets are unloaded with it.
                 source.Mesh.hideFlags |= HideFlags.DontUnloadUnusedAsset;
                 foreach (var m in source.Materials) if (m != null) m.hideFlags |= HideFlags.DontUnloadUnusedAsset;
                 Plugin.Log.LogInfo($"Klingon head: found {character.name} ({source.Mesh.name}, {source.Mesh.vertexCount} vertices, {source.Mesh.blendShapeCount} face shapes; "
-                                   + $"head bind pose {best} of {poses.Length} (eye misses {string.Join(", ", misses.ToArray())} m); eye mesh middle {F(eyeMid)}, eye bones {F(headEyeMid)} apart {spacing:F4}; mesh bounds {F(source.Mesh.bounds.center)} size {F(source.Mesh.bounds.size)})");
+                                   + $"head bind pose {best} of {poses.Length} (head middle from the eyes {string.Join(", ", misses.ToArray())} m); eye bones {F(headEyeMid)} apart {spacing:F4}; mesh bounds {F(source.Mesh.bounds.center)} size {F(source.Mesh.bounds.size)})");
                 return source;
             }
             catch (Exception e)
@@ -354,6 +364,11 @@ namespace StbcRevival
         {
             if (original != null && originalMaterials != null) original.sharedMaterials = originalMaterials;
             original = null;
+            // Out of the avatar first (it's destroyed at the end of the frame), so its lighting lists it no more.
+            var avatar = transform.parent;
+            transform.SetParent(null, false);
+            gameObject.SetActive(false);
+            KlingonHead.ForgetRenderers(avatar);
             Destroy(gameObject);
         }
 

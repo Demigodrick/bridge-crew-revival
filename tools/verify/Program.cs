@@ -230,6 +230,7 @@ Check("  NPCHailingManager._hailingViews", game.GetType("NPCHailingManager")?.Ge
 var faceCustomization = game.GetType("FaceCustomization");
 foreach (var f in new[] { "LookMaterialNames", "_originalLookIdx" })
     Check($"FaceCustomization.{f} (Romulan face)", faceCustomization?.GetField(f, Inst));
+Check("CharacterLightingInterface.AOAGAPLFIEO (Klingon head: its renderer list)", game.GetType("CharacterLightingInterface")?.GetField("AOAGAPLFIEO", Inst));
 Check("  FaceCustomization.SetDefaultLook", faceCustomization?.GetMethod("SetDefaultLook", Inst));
 Check("  FaceCustomization.DNNOHHKPGDA / CAJFLMIJGLL (face material swaps)", faceCustomization?.GetMethod("DNNOHHKPGDA", Inst) is not null
     && faceCustomization.GetMethod("CAJFLMIJGLL", Inst) is not null ? faceCustomization : null);
