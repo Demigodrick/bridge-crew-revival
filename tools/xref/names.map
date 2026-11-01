@@ -43,6 +43,37 @@ Mission.Scripting.Framework.Tasks.FNICGFPIEOL = TaskBuilders
 Mission.GPJGLFHMNJO = MissionStatus                     # running, success, failure, aborted, captainLeft
 HHJAGACLBKA = MissionRunner                             # runs the sequence: Update, Halt, OnMissionSuccess/Failure
 
+# An objective's Task (FNICGFPIEOL): one builder per kind of step, as the mod's missions use them
+Mission.Scripting.Framework.Tasks.FNICGFPIEOL::BFMBGDIDKEI = Spawn               # UsingSpawner(...).AtAngleAndDistanceFromBody(...).OutputTo(ref)
+Mission.Scripting.Framework.Tasks.FNICGFPIEOL::KNMMMJOOBHC = Wait                # WithTime(seconds)
+Mission.Scripting.Framework.Tasks.FNICGFPIEOL::MFLJBKCDBMC = Run                 # WithAction / WithSubtaskCoroutine
+Mission.Scripting.Framework.Tasks.FNICGFPIEOL::KKALNAMJCNH = StartSteps          # WithName: start an objective's named steps
+Mission.Scripting.Framework.Tasks.FNICGFPIEOL::CLNFMDFOFKL = StopSteps           # WithName
+Mission.Scripting.Framework.Tasks.FNICGFPIEOL::NECMCDDOFJB = Directives          # WithDescriptionString, Add/Remove/CompleteSubDirective(s)
+Mission.Scripting.Framework.Tasks.FNICGFPIEOL::HHNFJKHGEPH = MissionText         # WithMissionString (title), WithMissionResult (ends it)
+Mission.Scripting.Framework.Tasks.FNICGFPIEOL::CAJKAPALCCO = ViewScreenMessage   # SendViewScreenMessage
+Mission.Scripting.Framework.Tasks.FNICGFPIEOL::BCJDEKKIHDD = Markers             # AddMarker, RemoveAllMarkers
+Mission.Scripting.Framework.Tasks.FNICGFPIEOL::PAMPNJNPLCI = PointOfInterest     # OfPOIChild
+Mission.Scripting.Framework.Tasks.FNICGFPIEOL::OGJONIFINCB = Warping             # DisableWarping
+Mission.Scripting.Framework.Tasks.FNICGFPIEOL::CIAHOPCODGJ = SetStats            # WithTargets(...).SetHullHealthPercent / SetShieldHealthPercent / SetCargo
+Mission.Scripting.Framework.Tasks.FNICGFPIEOL::HOHEEDLMMPH = CargoTransfer       # Reset().WithCargoType(People): beaming survivors aboard
+Mission.Scripting.Framework.Tasks.FNICGFPIEOL::JAIMKEDGFEG = WaitForSubsystem    # WhenTargetSubsystem(body, system).IsEqualTo(value)
+Mission.Scripting.Framework.Tasks.FNICGFPIEOL::LJAGNEPFGJO = WaitForCargo?       # IsEqualTo(100), after a cargo transfer
+Mission.Scripting.Framework.Tasks.FNICGFPIEOL::NDFEDBHFGFB = AIObjectives        # TellAI(ship).ToAddObjectives(target).OfObjectiveType(Attack)
+Mission.Scripting.Framework.Tasks.FNICGFPIEOL::OFNIKPPKOGI = AIShields           # TellAI(ship).ToSetShieldStrength(ShieldStrength)
+Mission.Scripting.Framework.Tasks.FNICGFPIEOL::FEBCHOJGMHM = AIVulnerable        # TellAI(ship).ToSetVulnerable
+Mission.Scripting.Framework.Tasks.FNICGFPIEOL::JPLFLPFBCDJ = AITeam              # TellAI(ship).ToSetTeam
+Mission.Scripting.Framework.Tasks.FNICGFPIEOL::KDNOMKAPDKG = AIDisable           # TellAI(ship).ToDisable
+Mission.Scripting.Framework.Tasks.FNICGFPIEOL::JFEBIIPBJCA = Throttle            # ToCurrentThrottleAndPower
+Mission.Scripting.Framework.Tasks.FNICGFPIEOL::HFBHFAGDFOM = ExternalView        # BeginExternalView().AtRelativePosition
+Mission.Scripting.Framework.Tasks.FNICGFPIEOL::ECAJNALPIHI = DestroyShip         # DestroyShip(): the player ship's end
+Mission.Scripting.Framework.Tasks.FNICGFPIEOL::ABHANLLBILL = PlaySound           # WithEventID: a Wwise event
+Mission.Scripting.Framework.Tasks.FNICGFPIEOL::JJFBKBLIMCC = PlayVoice           # WithEventID(...).OnBridgeObject: a crew or comms line
+Mission.Scripting.Framework.Tasks.FNICGFPIEOL::CHBEPABEAEL = PlayMusic           # WithPlayEvent
+Mission.Scripting.Framework.Tasks.FNICGFPIEOL::OKLDNLKLLFJ = MusicState          # WithGroup("State_Group_Mus_Dyn").WithState("Tension")
+AI.IDCAFFBNKFO = ShieldStrength                         # Weak, Strong, ...
+BHNEPPPPMKH/LPCLBKKEBMK = Choice                        # StartSystemSelection.Choice: Random, First, ...
+
 Mission.MissionManager::IEFBKOMBFGO = Instance
 Mission.MissionManager::JNFHBOKLFIE = MonitorPlayerHealth   # on from Awake: at no hull, halts the script and fails
 Mission.MissionManager::HKMMKFJNJBJ = Status
@@ -58,6 +89,9 @@ NetworkLoadLevel::MMMDBOOILME = OnSceneLoaded
 # ---- Loader, players -----------------------------------------------------------------------------------------
 Loader::IOMGCNMDDCK = IsTNG
 Loader::JCEFNOJHCKO = IsTOS
+Loader::EJLNDBGLIFL = Instance
+Loader/DAPMGBKPDNM = MissionType                        # Procedural (Ongoing Voyage), campaign, ...
+PlayerInfo::PKIBEAIHJNE = NetworkPlayer                 # the Photon player (its custom properties); null for AI crew
 NovaPlayerManager::IEFBKOMBFGO = Instance
 NovaPlayerManager::AJPNCBOKCLC = LocalPlayer
 NovaPlayerInfo::FJMHMOOJNJG = Role
@@ -171,3 +205,33 @@ WarpPanel::KHDENOMKIJE = Console
 WarpPanel::HBKEIMBBMHI = CurrentLocation
 WarpMapLocation::PBCKCOJGAEI = System
 WarpMapLocation::KGPNEONLCJN = Pickable?
+
+# ---- Briefing room, popups -----------------------------------------------------------------------------------
+ConsoleBriefingRoom::MEOMCEOEBAC = OnProceduralToggled  # sends SetMissionTypeRPC (flooded when run every frame)
+ConsoleBriefingRoom::MBHACAKGEGM = OnCampaignToggled
+ConsoleBriefingRoom::NKIGJPBIGND = NextMission
+ConsoleBriefingRoom::JEKNGMEIFGM = PreviousMission
+UI.PDHCCBFJODN = PopupType                              # Question, ...
+UI.LGNBEBILNCL = PopupCallback                          # PopupMgr.ShowPopup's answer handler
+
+# ---- Character creator, faces --------------------------------------------------------------------------------
+CustomizationManager::EPNEDLICCMJ = Gender
+CustomizationManager::COABBGKIHFL = Species
+CustomizationManager::FFJOIFLJFPF = PresetAvatars       # its own copy of each preset, in CharacterProfiles order
+CustomizationManager::OGEINMNDPMI = SetUp               # first set-up: listeners, Android toggle
+CustomizationManager::KPAOOOCNEKP = ShowCurrentChoice   # redraws gender and species (only on Undo)
+CustomizationManager::LOMJKFDINIM = Undo?
+CustomizationManager::DADHMIIKIME = OnHumanToggled
+CustomizationManager::PHHOOCMCLIJ = OnVulcanToggled
+CustomizationManager::MNBOECICPJB = OnAndroidToggled
+CustomizationManager::BGDMAIHLDFA = OnMaleToggled
+CustomizationManager::MCJMMCIKDFI = OnFemaleToggled
+FaceCustomization::DNNOHHKPGDA = PutOnLook              # swaps the head's face material
+FaceCustomization::CAJFLMIJGLL = PutOnOriginalLooks
+CharacterLightingInterface::AOAGAPLFIEO = Renderers     # listed once, lit with a property block each refresh
+NPCHailingView::HPGGFNDEFCE = Character                 # the instance of _characterPrefab
+NPCHailingManager::BCDMJJCICNO = Views
+
+# ---- Voice chat ----------------------------------------------------------------------------------------------
+DaikonForge.VoIP.UnityMicrophoneInputDevice::FJNHDGFAOLB = DeviceName
+DaikonForge.VoIP.AudioInputDeviceBase::GMNCBFBICKK = DeviceName     # the Wwise template's device
