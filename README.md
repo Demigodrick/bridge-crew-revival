@@ -22,7 +22,9 @@ quality-of-life fixes.
   Steam's network. No ports to open, no accounts, no monthly server bill.
 - **Host left? No problem.** If the host drops, the crew regroups in the briefing room under the next
   player (or the one after, if they're gone too) instead of everyone landing back at the main menu.
-- **Voice chat** between crewmates, smoothed out so it doesn't stutter on a shaky connection.
+- **Voice chat** between crewmates, smoothed out so it doesn't stutter on a shaky connection. Mute a
+  crewmate, or just turn them down, with their voice slider in the escape menu's player list; the mod
+  remembers it for next time.
 - **Passwords and blocking.** Lock a public crew with a password from the briefing room. Kick a troublemaker
   and you can block them from your crews; anyone you've blocked on Steam can't join either.
 
@@ -45,6 +47,8 @@ A new **Revival Missions** category in the briefing room, next to Campaign and O
 The captain's spoken orders used IBM Watson, which shut down years ago. They now run offline on your own PC.
 Hold **V** (or the voice button) and say *"Red alert!"*, *"Fire at will"*, *"Engage"* or *"Beam the
 survivors aboard"*. [Full list of commands](https://demigodrick.github.io/bridge-crew-revival/#voice).
+Want the helm, tactical or engineering officer to give the AI crew orders too? Switch on **Voice orders from
+any station** in REVIVAL SETTINGS (experimental).
 
 ### Everything else
 - **Your avatar and settings are kept on your PC.** The game only ever saved them on Ubisoft's servers; the
