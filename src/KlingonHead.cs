@@ -29,10 +29,8 @@ namespace StbcRevival
         {
             public Mesh Mesh;
             public Material[] Materials;
-            public Vector3 EyeMid;      // in the head mesh's own space
-            public float EyeWidth;
-            public Matrix4x4 MeshToHead; // the head mesh's space to the character's Head transform (fallback placement)
-            public Vector3 HeadEyeMid;   // the eyes' midpoint and spacing in that Head transform's space
+            public Matrix4x4 MeshToHead; // the head mesh's space to the character's Head bone (that bone's bind pose)
+            public Vector3 HeadEyeMid;   // the eye bones' midpoint and spacing in the Head bone's space
             public float HeadEyeSpacing;
         }
 
@@ -117,10 +115,9 @@ namespace StbcRevival
             if (graft != null) grafts[head] = graft;
         }
 
-        // The Klingon head on this avatar's Head bone. Placement: the avatar's head mesh's bind pose for its
-        // Head bone, with the Klingon head moved and scaled in mesh space so its eyes match the avatar's eyes
-        // (both meshes are character-space models from the same rig); without bind poses, the Klingon's own
-        // Head transform matched to the avatar's Head bone by the eyes.
+        // The Klingon head on this avatar's Head bone: their mesh in their Head bone's space (its bind pose), then
+        // moved and scaled so their eyes (eye bones, in Head space) land on the avatar's. The two rigs share
+        // their bone layout (the eye bones sit at the same place in both Heads), so no turn is needed.
         private static KlingonHeadGraft Graft(GameObject avatar, SkinnedMeshRenderer head, int variant)
         {
             var source = sources[variant];
@@ -134,33 +131,19 @@ namespace StbcRevival
                     return null;
                 }
                 var bone = bones[index];
-                Matrix4x4 local;
-                string how;
-                var bind = head.sharedMesh != null ? head.sharedMesh.bindposes : null;
-                var eyes = EyesOf(avatar, head);
-                if (bind != null && index < bind.Length && eyes != null && Eyes(eyes, "Head", bind[index]) is Bounds ours)
+                var left = Find(bone, "Eye_L");
+                var right = Find(bone, "Eye_R");
+                if (left == null || right == null)
                 {
-                    float scale = Mathf.Abs(ours.size.x) / source.EyeWidth;
-                    local = bind[index] * Matrix4x4.TRS(ours.center, Quaternion.identity, Vector3.one * scale)
-                            * Matrix4x4.TRS(-source.EyeMid, Quaternion.identity, Vector3.one);
-                    how = $"bind pose, eyes {ours.center} wide {Mathf.Abs(ours.size.x):F3} (theirs {source.EyeMid} wide {source.EyeWidth:F3}), scale {scale:F3}";
+                    Plugin.Log.LogWarning($"Klingon head: {avatar.name} has no eye bones; left alone");
+                    return null;
                 }
-                else
-                {
-                    var left = Find(bone, "Eye_L");
-                    var right = Find(bone, "Eye_R");
-                    if (left == null || right == null)
-                    {
-                        Plugin.Log.LogWarning($"Klingon head: {avatar.name}: no bind pose and no eye bones; left alone");
-                        return null;
-                    }
-                    var mid = bone.InverseTransformPoint((left.position + right.position) * 0.5f);
-                    float spacing = (bone.InverseTransformPoint(left.position) - bone.InverseTransformPoint(right.position)).magnitude;
-                    float scale = spacing / source.HeadEyeSpacing;
-                    local = Matrix4x4.TRS(mid, Quaternion.identity, Vector3.one * scale)
+                var mid = bone.InverseTransformPoint((left.position + right.position) * 0.5f);
+                float spacing = (bone.InverseTransformPoint(left.position) - bone.InverseTransformPoint(right.position)).magnitude;
+                float scale = spacing / source.HeadEyeSpacing;
+                var local = Matrix4x4.TRS(mid, Quaternion.identity, Vector3.one * scale)
                             * Matrix4x4.TRS(-source.HeadEyeMid, Quaternion.identity, Vector3.one) * source.MeshToHead;
-                    how = $"head transform, eyes {mid} apart {spacing:F3}, scale {scale:F3}";
-                }
+                string how = $"eyes {F(mid)} apart {spacing:F4}, scale {scale:F3}";
 
                 var go = new GameObject("Klingon head");
                 go.transform.SetParent(bone, false);
@@ -187,7 +170,7 @@ namespace StbcRevival
                 worn.updateWhenOffscreen = true;
                 var graft = go.AddComponent<KlingonHeadGraft>();
                 graft.Set(head, worn, variant, Hidden(avatar));
-                Plugin.Log.LogInfo($"Klingon head: {Names[variant]} on {avatar.name} ({how}; at {go.transform.localPosition} {go.transform.localEulerAngles} x{go.transform.localScale.x:F3} on {bone.name})");
+                Plugin.Log.LogInfo($"Klingon head: {Names[variant]} on {avatar.name} ({how}; at {F(go.transform.localPosition)} turned {F(go.transform.localEulerAngles)} x{go.transform.localScale.x:F3} on {bone.name}; drawn at {F(worn.bounds.center)} size {F(worn.bounds.size)}, avatar eyes at {F(left.position)})");
                 return graft;
             }
             catch (Exception e)
@@ -197,27 +180,7 @@ namespace StbcRevival
             }
         }
 
-        // The avatar's eyes renderer (Female_Eye / Male_Eye: both eyeballs, skinned to the eye bones and Head).
-        private static SkinnedMeshRenderer EyesOf(GameObject avatar, SkinnedMeshRenderer head)
-        {
-            foreach (var r in avatar.GetComponentsInChildren<SkinnedMeshRenderer>(true))
-                if (r != head && r.name.EndsWith("_Eye", StringComparison.Ordinal)) return r;
-            return null;
-        }
-
-        // The eyes' mesh bounds, in the head mesh's space (through the shared Head bone's bind poses).
-        private static Bounds? Eyes(SkinnedMeshRenderer eyes, string boneName, Matrix4x4 headBind)
-        {
-            var mesh = eyes.sharedMesh;
-            var bones = eyes.bones;
-            var bind = mesh != null ? mesh.bindposes : null;
-            if (mesh == null || bones == null || bind == null) return null;
-            int index = Array.FindIndex(bones, b => b != null && b.name == boneName);
-            if (index < 0 || index >= bind.Length) return null;
-            var toHead = headBind.inverse * bind[index];
-            var b0 = mesh.bounds;
-            return new Bounds(toHead.MultiplyPoint3x4(b0.center), toHead.MultiplyVector(b0.size));
-        }
+        private static string F(Vector3 v) => $"({v.x:F3}, {v.y:F3}, {v.z:F3})";
 
         private static Transform Find(Transform parent, string name)
         {
@@ -282,30 +245,43 @@ namespace StbcRevival
                     Plugin.Log.LogWarning($"Klingon head: {character.name} isn't laid out as expected ({string.Join(", ", names.ToArray())})");
                     return null;
                 }
-                // The eyes' mesh bounds in the head mesh's space (the two renderers' own transforms in between).
+                // Their rig is optimised away (no bone transforms on the renderer), so the mesh's own bind poses
+                // relate it to the bones; the Head's is the one that puts the eyes (the eye mesh's middle, in the
+                // head mesh's space) where the exposed eye transforms say they are in Head space.
                 var eyesToHead = head.transform.worldToLocalMatrix * eyes.transform.localToWorldMatrix;
-                var eb = eyes.sharedMesh.bounds;
+                var eyeMid = eyesToHead.MultiplyPoint3x4(eyes.sharedMesh.bounds.center);
+                var headEyeMid = headBone.InverseTransformPoint((left.position + right.position) * 0.5f);
+                var spacing = (headBone.InverseTransformPoint(left.position) - headBone.InverseTransformPoint(right.position)).magnitude;
+                var poses = head.sharedMesh.bindposes;
+                int best = -1;
+                float bestMiss = float.MaxValue;
+                var misses = new List<string>();
+                for (int i = 0; i < poses.Length; i++)
+                {
+                    float miss = (poses[i].MultiplyPoint3x4(eyeMid) - headEyeMid).magnitude;
+                    misses.Add(miss.ToString("F3"));
+                    if (miss < bestMiss) { bestMiss = miss; best = i; }
+                }
+                if (best < 0 || spacing < 1e-4f)
+                {
+                    Plugin.Log.LogWarning($"Klingon head: {character.name}: {poses.Length} bind poses, eye spacing {spacing}; can't place it");
+                    return null;
+                }
                 var source = new Source
                 {
                     Mesh = head.sharedMesh,
                     Materials = head.sharedMaterials,
-                    EyeMid = eyesToHead.MultiplyPoint3x4(eb.center),
-                    EyeWidth = eyesToHead.MultiplyVector(eb.size).x,
-                    MeshToHead = headBone.worldToLocalMatrix * head.transform.localToWorldMatrix,
-                    HeadEyeMid = headBone.InverseTransformPoint((left.position + right.position) * 0.5f),
-                    HeadEyeSpacing = (headBone.InverseTransformPoint(left.position) - headBone.InverseTransformPoint(right.position)).magnitude,
+                    MeshToHead = poses[best],
+                    HeadEyeMid = headEyeMid,
+                    HeadEyeSpacing = spacing,
                 };
-                if (Mathf.Abs(source.EyeWidth) < 1e-4f || source.HeadEyeSpacing < 1e-4f)
-                {
-                    Plugin.Log.LogWarning($"Klingon head: {character.name}'s eyes measure nothing (width {source.EyeWidth}, spacing {source.HeadEyeSpacing})");
-                    return null;
-                }
-                source.EyeWidth = Mathf.Abs(source.EyeWidth);
+                if (bestMiss > 0.03f)
+                    Plugin.Log.LogWarning($"Klingon head: {character.name}: no bind pose puts the eyes in place (misses {string.Join(", ", misses.ToArray())} m); using the closest");
                 // Kept for the session: the bridge's assets are unloaded with it.
                 source.Mesh.hideFlags |= HideFlags.DontUnloadUnusedAsset;
                 foreach (var m in source.Materials) if (m != null) m.hideFlags |= HideFlags.DontUnloadUnusedAsset;
-                Plugin.Log.LogInfo($"Klingon head: found {character.name} ({source.Mesh.name}, {source.Mesh.vertexCount} vertices, {source.Mesh.blendShapeCount} face shapes, {source.Mesh.bindposes.Length} bind poses; "
-                                   + $"eyes at {source.EyeMid} wide {source.EyeWidth:F3}, mesh size {source.Mesh.bounds.size}; eye bones {source.HeadEyeMid} apart {source.HeadEyeSpacing:F3})");
+                Plugin.Log.LogInfo($"Klingon head: found {character.name} ({source.Mesh.name}, {source.Mesh.vertexCount} vertices, {source.Mesh.blendShapeCount} face shapes; "
+                                   + $"head bind pose {best} of {poses.Length} (eye misses {string.Join(", ", misses.ToArray())} m); eye mesh middle {F(eyeMid)}, eye bones {F(headEyeMid)} apart {spacing:F4}; mesh bounds {F(source.Mesh.bounds.center)} size {F(source.Mesh.bounds.size)})");
                 return source;
             }
             catch (Exception e)
