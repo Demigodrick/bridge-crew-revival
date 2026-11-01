@@ -140,7 +140,7 @@ namespace StbcRevival
                 "Wear the Romulan captain's face. Female Vulcan character presets only; crewmates with the mod see it too.");
             KlingonHead = Config.Bind("Avatar", "KlingonHead", 0,
                 new ConfigDescription("Wear a Klingon captain's head: 0 off, 1 the captain, 2 the flagship's captain. Male Human character presets only; crewmates with the mod see it too. "
-                                      + "The heads load with the bridge, so they appear once you've been on one.", new AcceptableValueRange<int>(0, 2)));
+                                      + "The heads are loaded from the bridge's assets as the game starts.", new AcceptableValueRange<int>(0, 2)));
             GameDumpKey = Config.Bind("Debug", "GameDumpKey", UnityEngine.KeyCode.F9,
                 "Testing only: describes the game's state (hail-screen characters, player avatars, sound, the scene) to BepInEx/game-dump.txt.");
             VoiceCommands = Config.Bind("Voice", "VoiceCommands", true,
@@ -218,7 +218,7 @@ namespace StbcRevival
 
         private void Start()
         {
-            StartCoroutine(StbcRevival.KlingonHead.PreloadAtLaunch()); // the Klingon heads without a bridge visit
+            StartCoroutine(StbcRevival.KlingonHead.PreloadAtLaunch()); // the Klingon heads, for the creator and crewmates, without a bridge visit
         }
 
         private Harmony harmony;

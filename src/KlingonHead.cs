@@ -108,7 +108,7 @@ namespace StbcRevival
             if (want <= 0) return;
             if (sources[want] == null)
             {
-                if (!toldNotLoaded) Plugin.Log.LogInfo($"Klingon head: {Names[want]} wanted on {avatar.name}, but the heads load with the bridge: it'll show once you've been on one");
+                if (!toldNotLoaded) Plugin.Log.LogInfo($"Klingon head: {Names[want]} wanted on {avatar.name}, but the heads aren't loaded (yet: they load as the game starts, or with a bridge)");
                 toldNotLoaded = true;
                 return;
             }
@@ -290,6 +290,10 @@ namespace StbcRevival
                 };
                 if (bestMiss > 0.15f)
                     Plugin.Log.LogWarning($"Klingon head: {character.name}: no bind pose puts the head by the eyes (misses {string.Join(", ", misses.ToArray())} m); using the closest");
+                // Whether the mesh can be read back (for a saved copy): unreadable, Unity logs an error and returns none.
+                bool readable;
+                try { readable = source.Mesh.vertices.Length == source.Mesh.vertexCount; } catch { readable = false; }
+                Plugin.Log.LogInfo($"Klingon head: {character.name}'s mesh is {(readable ? "readable" : "not readable")}");
                 // Kept for the session: the bridge's assets are unloaded with it.
                 source.Mesh.hideFlags |= HideFlags.DontUnloadUnusedAsset;
                 foreach (var m in source.Materials) if (m != null) m.hideFlags |= HideFlags.DontUnloadUnusedAsset;
@@ -305,7 +309,7 @@ namespace StbcRevival
         }
 
         // ---- At launch: the heads without a bridge -----------------------------------------------------------
-        // With a Klingon head chosen, the Aegis bridge scene (it owns the hail characters' assets) is loaded
+        // Every launch (anyone may pick KLINGON in the creator, or have a crewmate wearing one), the Aegis bridge scene (it owns the hail characters' assets) is loaded
         // alongside once, as the game starts: the moment it's in (after its objects' Awake, before any Start or
         // Update) the heads are taken and every one of its objects switched off, anything it put in
         // DontDestroyOnLoad is destroyed, and it's unloaded the next frame. At launch the game has set up few of
@@ -315,7 +319,7 @@ namespace StbcRevival
 
         internal static System.Collections.IEnumerator PreloadAtLaunch()
         {
-            if (Chosen() == 0 || Found || preloading) yield break;
+            if (Found || preloading) yield break;
             preloading = true;
             float started = Time.realtimeSinceStartup;
             Scene loaded = default(Scene);
