@@ -62,6 +62,7 @@ namespace StbcRevival
         internal static ConfigEntry<int> EvacuationMinutes;
         internal static ConfigEntry<bool> VoiceCommands;
         internal static ConfigEntry<UnityEngine.KeyCode> PushToTalkKey;
+        internal static ConfigEntry<bool> VoiceAnyStation;
         internal static ConfigEntry<string> UpdateUrl;
         internal static ConfigEntry<bool> ShuttleWasd;
         internal static ConfigEntry<float> ControllerGraceSeconds;
@@ -153,6 +154,10 @@ namespace StbcRevival
                 + "Needs BepInEx/vosk (libvosk.dll and a model folder; the installer sets it up). Takes effect after a restart.");
             PushToTalkKey = Config.Bind("Voice", "PushToTalkKey", UnityEngine.KeyCode.V,
                 "Hold to give a voice order as captain (as well as the game's own voice button, which depends on your controllers).");
+            VoiceAnyStation = Config.Bind("Voice", "AnyStation", false,
+                "Experimental: voice orders from helm, tactical and engineering too, not just the captain. They go to the other "
+                + "stations' AI crew (not your own station's, and not the captain's playbook, red alert, hails or warp map). "
+                + "The host carries every crew order out, so the host needs this version of the mod.");
             FleetBattleSize = Config.Bind("Revival", "FleetBattleSize", 30,
                 "Fleet Battle: ships on each side (1-60). Big battles are heavy on the host's computer; lower it if the game stutters.");
             EvacuationMinutes = Config.Bind("Revival", "EvacuationMinutes", 15,

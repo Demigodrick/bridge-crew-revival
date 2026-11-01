@@ -316,6 +316,10 @@ foreach (var t in new[] { "GEJIEIDGDBO", "MJNNGHIKMIO", "DCDOEBCMNHK" })
 
 // Voice "approach target": the helm menu's Move To entries
 Check("  CommandManager.IEFBKOMBFGO (instance)", (MemberInfo)commandManager?.GetField("IEFBKOMBFGO", AnyS) ?? commandManager?.GetProperty("IEFBKOMBFGO", AnyS));
+// Voice orders from any station (CrewOrders): which station carries an order out, and yours
+Check("  CommandManager.LHPHCBLOOLE (an order's station)", commandManager?.GetMethod("LHPHCBLOOLE", AnyS));
+var stationPlayer = game.GetType("NovaPlayerInfo");
+Check("  NovaPlayerInfo.GHJLPNMIOAJ (console)", (MemberInfo)stationPlayer?.GetField("GHJLPNMIOAJ", Inst) ?? stationPlayer?.GetProperty("GHJLPNMIOAJ", Inst));
 Check("  CommandManager.ENLHIAIPDMD (menus)", commandManager?.GetField("ENLHIAIPDMD", Inst | AnyS));
 Check("  CommandManager.ECNLCPFAEGF (roles)", commandManager?.GetProperty("ECNLCPFAEGF", AnyS));
 Check("  menus GetHelmMenu", commandManager?.GetField("ENLHIAIPDMD", Inst | AnyS)?.FieldType.GetMethod("GetHelmMenu"));

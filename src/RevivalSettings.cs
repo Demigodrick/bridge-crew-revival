@@ -53,6 +53,7 @@ namespace StbcRevival
             Switch("Skip intro videos", () => Plugin.SkipIntro, restart: true),
             Switch("Skip mic check", () => Plugin.SkipMicCheck, restart: true),
             Switch("Voice commands", () => Plugin.VoiceCommands, restart: true),
+            Switch("Voice orders from any station", () => Plugin.VoiceAnyStation),
             Switch("Romulan face", () => Plugin.RomulanFace),
             new Entry
             {

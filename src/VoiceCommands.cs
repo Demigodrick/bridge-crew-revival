@@ -22,6 +22,8 @@ namespace StbcRevival
     ///     that reports true; the Watson side of VoiceRecognitionManager (never set up) is skipped.
     ///   - Button down: record the microphone (Unity, 16 kHz). Button up: recognise on a background thread.
     ///   - Key words pick the command (Parse), as Watson's intents did; nothing usable: the crew's "didn't catch that".
+    ///   - The crew's orders are carried out by the host, where the AI crew runs; with [Voice] AnyStation the other
+    ///     stations can give them too (CrewOrders).
     /// Needs BepInEx/vosk/libvosk.dll (and its three runtime DLLs) and a model folder,
     /// BepInEx/vosk/model (e.g. vosk-model-small-en-us-0.15).
     /// </summary>
@@ -370,7 +372,7 @@ namespace StbcRevival
 
         private static void Start()
         {
-            if (listening || !IsCaptain() || !EnsureRecogniser()) return;
+            if (listening || !(IsCaptain() || CrewOrders.AnyStation) || !EnsureRecogniser()) return;
             micDevice = Microphone.devices.Length > 0 ? Microphone.devices[0] : null;
             if (micDevice == null)
             {
@@ -557,6 +559,7 @@ namespace StbcRevival
         internal static void Update()
         {
             keyHeld = Plugin.VoiceCommands.Value && Input.GetKey(Plugin.PushToTalkKey.Value);
+            CrewOrders.Update();
             if (!pendingResult) return;
             pendingResult = false;
             Finish(pendingCommand);
@@ -566,13 +569,28 @@ namespace StbcRevival
         {
             SendUiEvent("DCDOEBCMNHK"); // done
             var manager = AccessTools.TypeByName("AI.CommandManager");
-            var commands = AccessTools.TypeByName("AI.BHPPPGKNAHK");
-            if (manager == null || commands == null) return;
-            if (command == null)
+            if (manager == null) return;
+            if (command != null && !IsCaptain()) command = CrewOrders.ForMyStation(command);
+            if (string.IsNullOrEmpty(command))
             {
                 AccessTools.Method(manager, "PlayInvalidCommandVO")?.Invoke(null, null);
                 return;
             }
+            // The captain's own console (red alert, hails, status, the warp map) here; the crew's orders where the AI
+            // crew runs, the host (CrewOrders): orders only change the game they're given in.
+            var console = command.Split(',').Where(CrewOrders.AtConsole).ToArray();
+            var crew = command.Split(',').Where(c => !CrewOrders.AtConsole(c)).ToArray();
+            if (console.Length > 0) Run(string.Join(",", console));
+            if (crew.Length == 0) return;
+            if (CrewOrders.IAmHost) Run(string.Join(",", crew));
+            else CrewOrders.SendToHost(string.Join(",", crew));
+        }
+
+        internal static void Run(string command)
+        {
+            var manager = AccessTools.TypeByName("AI.CommandManager");
+            var commands = AccessTools.TypeByName("AI.BHPPPGKNAHK");
+            if (manager == null || commands == null) return;
             // As after a Watson answer: refresh the crew's simple orders, then the command(s).
             var roles = AccessTools.TypeByName("FLCHMJJDKDL");
             var update = AccessTools.Method(manager, "UpdateSimpleOrders");
