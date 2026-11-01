@@ -8,7 +8,7 @@ services:
       - "4530:4530/tcp"   # game (Photon over TCP)
       - "8080:8080/tcp"   # room browser web page and JSON API
     environment:
-      LOG_LEVEL: info
+      LOG_LEVEL: ${LOG_LEVEL:-info}
       # Only needed for clients that don't run the Bridge Crew Revival mod's game-server
       # address rewrite: the address players can reach this server at.
       # PUBLIC_ADDRESS: "203.0.113.10:4530"
