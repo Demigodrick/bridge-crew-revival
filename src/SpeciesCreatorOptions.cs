@@ -165,11 +165,13 @@ namespace StbcRevival
                 }
                 option.Toggle.gameObject.SetActive(false);
             }
-            if (shown != null && shown.Toggle.gameObject.activeSelf) return;
-            Layout(shown);
-            if (shown == null) return;
-            shown.Toggle.gameObject.SetActive(true);
-            TellHands(shown);
+            if (shown != null && !shown.Toggle.gameObject.activeSelf)
+            {
+                Layout(shown);
+                shown.Toggle.gameObject.SetActive(true);
+                TellHands(shown);
+            }
+            Sync(creator);
         }
 
         // The VR hands only reach the controls they collected when the console loaded
@@ -215,10 +217,14 @@ namespace StbcRevival
             extra.Toggle.transform.localPosition = first + step * n;
         }
 
-        // After the game shows the current choice: an extra choice on in place of its base species if chosen.
-        private static void Refresh_Postfix(CustomizationManager __instance)
+        // After the game shows the current choice (only on Undo: the creator opens showing the saved species),
+        // and every frame: an extra choice on in place of its base species if chosen, so the buttons say what
+        // the avatar wears.
+        private static void Refresh_Postfix(CustomizationManager __instance) => Sync(__instance);
+
+        private static void Sync(CustomizationManager __instance)
         {
-            if (Options[0].Toggle == null) return;
+            if (Options[0].Toggle == null || __instance == null) return;
             try
             {
                 string gender = Gender.GetValue(__instance).ToString();
