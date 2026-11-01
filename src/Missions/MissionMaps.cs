@@ -11,8 +11,9 @@ namespace StbcRevival.Missions
 {
     /// <summary>
     /// Which sector map a mission loads. The game always loads one map per mission (Loader.GetMapName, on
-    /// every player's machine); Ongoing Voyages and the campaign use "The Trench". Here:
+    /// every player's machine); Ongoing Voyages use "The Trench", campaign missions their own maps. Here:
     ///   - Last Stand is fought in the E3 demo sector.
+    ///   - Kobayashi Maru loads the campaign's map for it (Gamma Hydra), read from the game's campaign list.
     ///   - [Debug] MapOverride loads any map from the game's Resources ("Mission Data/Maps/...") for an
     ///     Ongoing Voyage, to look around the leftover test and demo sectors.
     /// The host's choice goes in the room ("RM"), so everyone loads the same map. Off the Trench there are no
@@ -38,12 +39,43 @@ namespace StbcRevival.Missions
             harmony.Patch(generate, prefix: new HarmonyMethod(typeof(MissionMaps), nameof(Generate_Prefix)) { priority = Priority.First });
         }
 
+        // The map the campaign loads for a mission (Loader._campaignElements: its mission's sequence, and MapName),
+        // or null if it isn't one of the campaign's.
+        private static readonly System.Collections.Generic.Dictionary<Type, string> campaignMaps = new System.Collections.Generic.Dictionary<Type, string>();
+
+        private static string CampaignMap(Type sequence)
+        {
+            if (campaignMaps.TryGetValue(sequence, out var known)) return known;
+            string campaignMapFor = null;
+            try
+            {
+                if (Loader.EJLNDBGLIFL == null
+                    || !(AccessTools.Field(typeof(Loader), "_campaignElements")?.GetValue(Loader.EJLNDBGLIFL) is System.Collections.IList elements))
+                    return null; // not loaded yet: ask again later
+                foreach (var element in elements)
+                    if (element is CampaignElement e && e.Mission != null && e.Mission.Type == sequence)
+                    {
+                        campaignMapFor = e.MapName;
+                        break;
+                    }
+                Plugin.Log.LogInfo($"Mission maps: the campaign's map for {sequence.Name}: {campaignMapFor ?? "none found"}");
+            }
+            catch (Exception e)
+            {
+                Plugin.Log.LogWarning($"Mission maps: the campaign's map for {sequence.Name}: {e.Message}");
+            }
+            campaignMaps[sequence] = campaignMapFor;
+            return campaignMapFor;
+        }
+
         /// <summary>The map this launch should load instead of the game's choice, or null.</summary>
         private static string Override()
         {
             if (Loader.GetMissionType() != Loader.DAPMGBKPDNM.Procedural) return null;
-            // Kobayashi Maru is set in The Trench (Gamma Hydra): never another map.
-            if (RevivalMissions.Selected == typeof(Mission.KobayashiMaruStandAlone.KMSequence)) return null;
+            // Kobayashi Maru: the campaign's own map for it (Gamma Hydra isn't in The Trench), whatever else is set.
+            if (RevivalMissions.Selected == typeof(Mission.KobayashiMaruStandAlone.KMSequence))
+                return CampaignMap(typeof(Mission.KobayashiMaruStandAlone.KMSequence)) ?? CampaignMap(typeof(Mission.M0.M0Sequence)); // or the
+                    // campaign's first mission, whose scenario it is
             var fromRoom = RoomValue();
             if (!string.IsNullOrEmpty(fromRoom)) return fromRoom;
             var own = Plugin.MapOverride.Value;
