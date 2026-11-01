@@ -290,10 +290,6 @@ namespace StbcRevival
                 };
                 if (bestMiss > 0.15f)
                     Plugin.Log.LogWarning($"Klingon head: {character.name}: no bind pose puts the head by the eyes (misses {string.Join(", ", misses.ToArray())} m); using the closest");
-                // Whether the mesh can be read back (for a saved copy): unreadable, Unity logs an error and returns none.
-                bool readable;
-                try { readable = source.Mesh.vertices.Length == source.Mesh.vertexCount; } catch { readable = false; }
-                Plugin.Log.LogInfo($"Klingon head: {character.name}'s mesh is {(readable ? "readable" : "not readable")}");
                 // Kept for the session: the bridge's assets are unloaded with it.
                 source.Mesh.hideFlags |= HideFlags.DontUnloadUnusedAsset;
                 foreach (var m in source.Materials) if (m != null) m.hideFlags |= HideFlags.DontUnloadUnusedAsset;
@@ -309,6 +305,7 @@ namespace StbcRevival
         }
 
         // ---- At launch: the heads without a bridge -----------------------------------------------------------
+        // (The mesh can't be read back, so there's no saved copy: this is how the heads are had without a bridge.)
         // Every launch (anyone may pick KLINGON in the creator, or have a crewmate wearing one), the Aegis bridge scene (it owns the hail characters' assets) is loaded
         // alongside once, as the game starts: the moment it's in (after its objects' Awake, before any Start or
         // Update) the heads are taken and every one of its objects switched off, anything it put in
@@ -326,15 +323,28 @@ namespace StbcRevival
             bool arrived = false;
             var persistent = PersistentRoots();
             var killed = new List<string>();
+            int switchedOff = 0;
             UnityEngine.Events.UnityAction<Scene, LoadSceneMode> onLoaded = (scene, mode) =>
             {
                 if (arrived || scene.name != PreloadScene) return;
                 arrived = true;
                 loaded = scene;
+                try { FindSources(true); }
+                catch (Exception e) { Plugin.Log.LogWarning("Klingon head: taking the heads from the preloaded bridge: " + e.Message); }
+                // Its roots by their scene: an additive scene isn't "loaded" yet when sceneLoaded fires (Unity 5.4),
+                // so scene.GetRootGameObjects throws.
                 try
                 {
-                    FindSources(true);
-                    foreach (var root in scene.GetRootGameObjects()) root.SetActive(false);
+                    foreach (var t in UnityEngine.Object.FindObjectsOfType<Transform>())
+                        if (t.parent == null && t.gameObject.scene == scene)
+                        {
+                            t.gameObject.SetActive(false);
+                            switchedOff++;
+                        }
+                }
+                catch (Exception e) { Plugin.Log.LogWarning("Klingon head: switching the preloaded bridge off: " + e.Message); }
+                try
+                {
                     foreach (var root in PersistentRoots())
                         if (!persistent.Contains(root))
                         {
@@ -343,10 +353,7 @@ namespace StbcRevival
                             UnityEngine.Object.Destroy(root);
                         }
                 }
-                catch (Exception e)
-                {
-                    Plugin.Log.LogWarning("Klingon head: switching the preloaded bridge off: " + e.Message);
-                }
+                catch (Exception e) { Plugin.Log.LogWarning("Klingon head: removing what the preloaded bridge kept: " + e.Message); }
             };
             SceneManager.sceneLoaded += onLoaded;
             Plugin.Log.LogInfo($"Klingon head: loading the {PreloadScene} scene alongside, for the heads");
@@ -370,7 +377,7 @@ namespace StbcRevival
             }
             Resources.UnloadUnusedAssets();
             preloading = false;
-            Plugin.Log.LogInfo($"Klingon head: preload {(Found ? "found both heads" : arrived ? "found no heads" : "timed out")} in {Time.realtimeSinceStartup - started:F1} s"
+            Plugin.Log.LogInfo($"Klingon head: preload {(Found ? "found both heads" : arrived ? "found no heads" : "timed out")} in {Time.realtimeSinceStartup - started:F1} s, {switchedOff} of the bridge's objects switched off"
                                + (killed.Count > 0 ? $"; removed what it kept alive: {string.Join(", ", killed.ToArray())}" : ""));
         }
 
