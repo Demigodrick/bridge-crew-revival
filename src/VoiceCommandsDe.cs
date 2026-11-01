@@ -11,9 +11,10 @@ namespace StbcRevival
     /// English ones, with the German model (BepInEx/vosk/model-de), a German word list and the German key words
     /// in ParseDe. The commands that come out are the same crew commands.
     /// The recogniser only ever returns words from the list, so the key words are matched as whole words: every
-    /// word ParseDe looks for is in one of the groups below, and the word list is made from the groups. Words
-    /// the model doesn't know are left out of the grammar by Vosk, so several spellings and inflections are
-    /// listed for the ones it may have under another form.
+    /// word ParseDe looks for is in one of the groups below, and the word list is made from the groups. Vosk
+    /// leaves out words its model doesn't know, and the small German model knows no compounds of its own ("warpkern",
+    /// "photonentorpedos", "gefechtsstation"): they come out as their parts ("warp kern"), so the groups hold
+    /// parts. Every word here is in vosk-model-small-de-0.15's word list.
     /// </summary>
     internal static partial class VoiceCommands
     {
@@ -28,104 +29,112 @@ namespace StbcRevival
         }
 
         // helm
-        private static readonly string[] DeWarp = G("warp", "warpantrieb", "warpgeschwindigkeit", "warpfaktor");
-        private static readonly string[] DeCore = G("warpkern", "kern", "reaktor");
-        private static readonly string[] DeImpulse = G("impuls", "impulsantrieb", "impulsgeschwindigkeit", "impulskraft");
+        private static readonly string[] DeWarp = G("warp");
+        private static readonly string[] DeCore = G("kern", "reaktor", "gondeln", "spulen");
+        private static readonly string[] DeImpulse = G("impuls", "impulse");
         private static readonly string[] DeNumbers = G("eins", "ein", "zwei", "zwo", "drei", "vier", "fünf", "sechs", "sieben", "acht", "neun", "zehn");
         private static readonly HashSet<string> DeNumberSet = new HashSet<string>(DeNumbers);
         private static readonly string[] DeNumberNames = { "eins", "zwei", "drei", "vier", "fünf", "sechs", "sieben", "acht", "neun" };
-        private static readonly string[] DePrepare = G("vorbereiten", "vorbereitung", "bereit", "bereitmachen", "klarmachen", "klar", "plotten", "plotte",
-            "kurs", "setzen", "setze", "legen", "lege", "festlegen", "programmieren");
-        private static readonly string[] DeEngage = G("engagieren", "engage", "los", "energie", "ausführen", "starten", "starte", "springen", "springe", "sprung");
-        private static readonly string[] DeEngageMild = G("aktivieren", "aktiviere", "einschalten", "zünden");
+        private static readonly string[] DePrepare = G("vorbereiten", "vorbereitung", "bereit", "klarmachen", "klar", "plotten", "kurs", "setzen", "setze", "legen",
+            "lege", "festlegen", "programmieren");
+        private static readonly string[] DeEngage = G("engagieren", "los", "energie", "ausführen", "starten", "starte", "springen", "sprung");
+        private static readonly string[] DeEngageMild = G("aktivieren", "aktiviere", "einschalten", "einleiten");
         private static readonly string[] DeMake = G("machen", "mach", "es", "tun");
-        private static readonly string[] DeWarpGo = G("faktor", "maximal", "maximum", "höchste", "höchstgeschwindigkeit", "gehen", "geh", "gehe", "springen",
-            "springe", "sprung", "warpgeschwindigkeit", "warpfaktor", "geschwindigkeit");
-        private static readonly string[] DeLeaveWarp = G("verlassen", "raus", "heraus", "abbrechen", "beenden", "aus", "fallen", "austreten");
+        private static readonly string[] DeWarpGo = G("faktor", "maximal", "maximale", "maximum", "höchste", "höchstgeschwindigkeit", "gehen", "geh", "gehe",
+            "springen", "sprung", "geschwindigkeit", "eintreten");
+        private static readonly string[] DeLeaveWarp = G("verlassen", "raus", "heraus", "abbrechen", "beenden", "aus", "fallen");
         private static readonly string[] DeUs = G("uns");
         private static readonly string[] DeOut = G("raus", "hinaus", "heraus");
-        private static readonly string[] DeCourseWords = G("kurs", "setze", "setzen", "plotte", "plotten", "legen", "lege", "festlegen", "ziel", "zielort", "zielsystem",
-            "richtung", "fliege", "fliegen", "flieg", "warp", "gehe", "gehen", "nimm", "nehmen", "steuern", "steuere", "ansteuern", "bringe", "bringen",
-            "fahre", "fahren", "reise", "reisen");
+        private static readonly string[] DeCourseWords = G("kurs", "setze", "setzen", "plotten", "legen", "lege", "festlegen", "ziel", "richtung", "fliege", "fliegen",
+            "flieg", "warp", "gehe", "gehen", "nimm", "nehmen", "steuern", "ansteuern", "bringe", "bringen", "bring", "fahre", "fahren", "fahr", "reise", "reisen",
+            "navigieren");
         private static readonly string[] DeCourseFor = G("für", "nach", "zu", "zum", "zur", "auf", "richtung");
-        private static readonly string[] DeNearest = G("nächste", "nächsten", "nächstes", "nächster", "nächstgelegene", "nächstgelegenen", "nächstgelegenes");
-        private static readonly string[] DeApproach = G("annähern", "nähern", "nähere", "abfangen", "abfangkurs", "heran", "näher", "herangehen", "ansteuern",
-            "ansteuere", "angreifen", "verfolgen", "verfolge", "verfolgung", "anfliegen");
-        private static readonly string[] DeAway = G("weg", "entfernen", "entferne", "fliehen", "flieh", "flucht", "rückzug", "zurückziehen", "meiden", "vermeiden",
-            "abdrehen", "abhauen");
-        private static readonly string[] DeMove = G("bewegen", "bewege", "fliegen", "flieg", "fliege", "gehen", "geh", "gehe", "steuern", "steuere", "richtung",
-            "kurs", "zufliegen");
-        private static readonly string[] DeStop = G("stopp", "stop", "anhalten", "halt", "stoppen", "stillstand");
-        private static readonly string[] DeReverse = G("rückwärts", "zurück", "rückwärtsgang", "umkehren");
-        private static readonly string[] DeHalf = G("halbe", "halben", "halber", "halb", "halbes");
-        private static readonly string[] DeQuarter = G("viertel", "viertelkraft");
+        private static readonly string[] DeNearest = G("nächste", "nächsten", "nächstes", "nächster");
+        private static readonly string[] DeApproach = G("annähern", "nähern", "nähere", "abfangen", "heran", "näher", "herangehen", "ansteuern", "angreifen",
+            "verfolgen", "anfliegen");
+        private static readonly string[] DeAway = G("weg", "entfernen", "fliehen", "flieh", "flüchten", "flucht", "rückzug", "zurückziehen", "meiden", "vermeiden",
+            "abdrehen", "abhauen", "davon");
+        private static readonly string[] DeMove = G("bewegen", "fliegen", "flieg", "fliege", "gehen", "geh", "gehe", "steuern", "richtung", "kurs");
+        private static readonly string[] DeStop = G("stopp", "stop", "anhalten", "halt", "stoppen", "stillstand", "bremsen", "abbremsen");
+        private static readonly string[] DeReverse = G("rückwärts", "zurück", "umkehren");
+        private static readonly string[] DeHalf = G("halbe", "halben", "halber", "halb", "halbes", "langsamer", "langsam", "verlangsamen");
+        private static readonly string[] DeQuarter = G("viertel");
         private static readonly string[] DeFull = G("voll", "volle", "vollen", "voller", "volles", "maximal", "maximum", "höchstgeschwindigkeit", "voraus", "vorwärts",
-            "geschwindigkeit", "gas");
+            "geschwindigkeit", "gas", "beschleunigen", "schneller");
 
         // tactical
-        private static readonly string[] DeShields = G("schilde", "schild", "schilden", "schutzschilde", "schutzschild", "deflektoren", "deflektor");
-        private static readonly string[] DeEngines = G("triebwerke", "triebwerk", "triebwerken", "antrieb", "maschinen", "motoren");
-        private static readonly string[] DeWeapons = G("waffen", "waffe", "waffensysteme", "phaser", "phasern", "phasers", "phaserbank", "phaserbänke");
-        private static readonly string[] DeTorpedoes = G("torpedos", "torpedo", "torpedoes", "photonentorpedos", "photonentorpedo", "photonen");
-        private static readonly string[] DeFire = G("feuer", "feuern", "feuere", "feure", "abfeuern", "schießen", "schieß", "schieße", "beschießen", "schuss", "abschießen");
+        private static readonly string[] DeShields = G("schilde", "schild", "schilden", "schutzschilde", "schutzschild");
+        private static readonly string[] DeEngines = G("triebwerke", "triebwerk", "triebwerken", "maschinen", "motoren");
+        private static readonly string[] DeDrive = G("antrieb");
+        private static readonly string[] DeWeapons = G("waffen", "waffe", "waffensysteme", "phaser", "geschütze", "geschütz");
+        private static readonly string[] DeTorpedoes = G("torpedos", "torpedo", "photonen");
+        private static readonly string[] DeFire = G("feuer", "feuern", "feuere", "abfeuern", "schießen", "schieß", "schieße", "beschießen", "schuss", "abschießen");
         private static readonly string[] DeCease = G("einstellen", "stopp", "stop", "halt", "halten", "aufhören", "beenden", "abbrechen", "aufheben", "löschen", "ende");
+        private static readonly string[] DeCeaseFire = G("feuerpause", "waffenruhe", "waffenstillstand");
+        private static readonly string[] DeNot = G("nicht", "kein", "keine");
         private static readonly string[] DeAtWill = G("frei", "belieben");
-        private static readonly string[] DeTarget = G("ziel", "ziele", "zielen", "zielerfassung", "anvisieren", "visieren", "anpeilen", "peilen");
-        private static readonly string[] DeLock = G("aufschalten", "aufschaltung", "ausrichten", "richten", "erfassen", "erfasse", "fixieren", "sperren");
+        private static readonly string[] DeTarget = G("ziel", "ziele", "zielen", "erfassung", "anvisieren", "visieren", "peilen");
+        private static readonly string[] DeLock = G("schalten", "schalte", "ausrichten", "richten", "erfassen", "erfasse", "fixieren", "sperren");
         private static readonly string[] DeEnemy = G("feind", "feindes", "feindliche", "feindlichen", "feindliches", "gegner", "gegners");
         private static readonly string[] DeDown = G("runter", "herunter", "senken", "senke", "absenken", "deaktivieren", "deaktiviere", "abschalten", "ausschalten",
-            "aus", "fallen", "unten", "herunterfahren", "runterfahren", "herab");
-        private static readonly string[] DeModulate = G("modulieren", "moduliere", "modulation");
-        private static readonly string[] DeDisarm = G("entschärfen", "entschärfe", "unscharf", "sichern", "sichere", "abrüsten", "entladen", "entlade", "deaktivieren",
-            "deaktiviere");
-        private static readonly string[] DeArm = G("scharf", "scharfmachen", "schärfen", "laden", "lade", "bewaffnen", "bewaffne", "aufladen", "aktivieren", "aktiviere",
-            "bereitmachen", "bereit");
-        private static readonly string[] DeScan = G("scannen", "scanne", "scan", "sondieren", "sondiere", "sonde", "abtasten");
+            "aus", "fallen", "unten", "herunterfahren", "herab", "abbauen", "einfahren", "herablassen", "herunterlassen", "fallenlassen");
+        private static readonly string[] DeModulate = G("modulieren", "modulation");
+        private static readonly string[] DeDisarm = G("entschärfen", "entschärfe", "unscharf", "sichern", "abrüsten", "entladen", "entlade", "deaktivieren", "deaktiviere");
+        private static readonly string[] DeArm = G("scharf", "schärfen", "laden", "lade", "bewaffnen", "aufladen", "aktivieren", "aktiviere", "klarmachen", "bereit",
+            "entsichern", "feuerbereit", "nachladen");
+        private static readonly string[] DeScan = G("scannen", "scanne", "scan", "sondieren", "sondiere", "sonde", "abtasten", "absuchen", "durchsuchen");
         private static readonly string[] DeAnalyse = G("analysieren", "analysiere", "analyse", "untersuchen", "untersuche", "untersuchung", "identifizieren", "identifiziere");
-        private static readonly string[] DeDisrupt = G("stören", "störe", "lahmlegen", "lahm", "hacken", "hacke", "sabotieren", "sabotiere", "manipulieren");
-        private static readonly string[] DeComms = G("kommunikation", "kommunikationssysteme", "kommunikationssystem", "funk", "comms");
-        private static readonly string[] DeBeam = G("beamen", "beam", "beame", "hochbeamen", "raufbeamen", "herüberbeamen", "hochholen", "transportieren", "transportiere",
-            "transport", "evakuieren", "evakuiere", "evakuierung");
+        private static readonly string[] DeDisrupt = G("stören", "störe", "lahmlegen", "lahm", "hacken", "hacke", "sabotieren", "manipulieren");
+        private static readonly string[] DeComms = G("kommunikation", "kommunikationssystem", "funk");
+        private static readonly string[] DeBeam = G("beamen", "beam", "transportieren", "transportiere", "transport", "evakuieren", "evakuierung");
         private static readonly string[] DePeople = G("überlebende", "überlebenden", "besatzung", "crew", "leute", "menschen", "lebensformen", "personen", "mannschaft");
-        private static readonly string[] DeRescue = G("retten", "rette", "bringen", "bringe", "holen", "hole", "hoch", "rauf", "heraufholen", "aufnehmen", "bord");
+        private static readonly string[] DeRescue = G("retten", "rette", "bringen", "bringe", "holen", "hole", "hoch", "rauf", "herauf", "aufnehmen", "bord", "bergen",
+            "berge", "bergung", "aufsammeln", "einsammeln");
         private static readonly string[] DeBring = G("bringen", "bringe", "holen", "hole", "aufnehmen");
         private static readonly string[] DeAboard = G("bord");
         private static readonly string[] DeCloaked = G("getarnt", "getarnte", "getarnten", "getarntes", "getarnter");
-        private static readonly string[] DeCloak = G("tarnung", "tarnen", "tarne", "tarnvorrichtung");
-        private static readonly string[] DeHunt = G("jagen", "jage", "jagd", "aufspüren", "aufspüre", "orten", "orte");
-        private static readonly string[] DeSearch = G("suchen", "suche", "finden", "entdecken");
+        private static readonly string[] DeCloak = G("tarnung", "tarnen", "tarnvorrichtung");
+        private static readonly string[] DeHunt = G("jagen", "jage", "jagd", "aufspüren", "orten", "orte");
         private static readonly string[] DeStealth = G("signatur", "signaturen", "leise", "lautlos", "schleichfahrt", "stealth", "unauffällig");
 
         // engineering
-        private static readonly string[] DeRepair = G("reparieren", "repariere", "reparatur", "reparaturen", "beheben", "behebe", "instandsetzen", "fixen", "flicken");
-        private static readonly string[] DeOptimize = G("optimieren", "optimiere", "optimierung", "verbessern", "maximieren");
+        private static readonly string[] DeRepair = G("reparieren", "repariere", "reparatur", "reparaturen", "beheben", "behebe", "instandsetzen", "fixen", "flicken",
+            "ausbessern");
+        private static readonly string[] DeOptimize = G("optimieren", "optimiere", "optimierung", "verbessern", "maximieren", "steigern", "verstärken");
         private static readonly string[] DeOffense = G("offensive", "offensiv", "angriff");
         private static readonly string[] DeDefense = G("defensive", "defensiv", "verteidigung");
         private static readonly string[] DeSensors = G("sensoren", "sensor", "scanner");
-        private static readonly string[] DeScience = G("wissenschaft", "labor", "wissenschaftslabor");
-        private static readonly string[] DeTransporter = G("transporter", "transporterraum", "rettung");
-        private static readonly string[] DeComputer = G("computer", "computerkern", "rechner");
+        private static readonly string[] DeScience = G("wissenschaft", "labor");
+        private static readonly string[] DeTransporter = G("transporter", "rettung");
+        private static readonly string[] DeComputer = G("computer", "rechner");
         private static readonly string[] DeSickbay = G("krankenstation", "krankenrevier", "medizin", "medizinische", "lazarett");
-        private static readonly string[] DePowerVerbs = G("umleiten", "umlenken", "leiten", "lenken", "verteilen", "umverteilen", "umschalten", "leite", "lenke", "verteile");
+        private static readonly string[] DePowerVerbs = G("umleiten", "umlenken", "leiten", "lenken", "verteilen", "umverteilen", "umschalten", "leite", "lenke",
+            "verteile", "verlagern", "verschieben");
         private static readonly string[] DeEnergy = G("energie", "leistung", "strom");
-        private static readonly string[] DeBalance = G("ausgleichen", "ausgeglichen", "balancieren", "gleichmäßig", "ausbalancieren", "balance", "gleichverteilen");
+        private static readonly string[] DeBalance = G("ausgleichen", "ausgeglichen", "balancieren", "gleichmäßig", "balance");
 
         // Star Trek phrases
-        private static readonly string[] DeAlert = G("alarm", "alarmstufe", "gefechtsstation", "gefechtsstationen", "kampfstation", "kampfstationen", "gefechtsbereitschaft",
-            "kampfbereitschaft");
-        private static readonly string[] DeCancel = G("aufheben", "aufgehoben", "beenden", "abbrechen", "aus", "abschalten", "ende", "normal", "abblasen", "deaktivieren");
+        private static readonly string[] DeAlert = G("alarm", "alarmstufe", "alarmbereitschaft", "gefechtsbereitschaft", "kampfbereitschaft");
+        private static readonly string[] DeBattle = G("gefecht", "gefechts", "kampf");
+        private static readonly string[] DeStation = G("station", "stationen");
+        private static readonly string[] DeCancel = G("aufheben", "aufgehoben", "beenden", "abbrechen", "aus", "abschalten", "ende", "normal", "normalzustand", "abblasen",
+            "deaktivieren");
         private static readonly string[] DeAllClear = G("entwarnung");
         private static readonly string[] DeYellow = G("gelb", "gelber", "gelben");
         private static readonly string[] DeRed = G("rot", "roter", "roten");
-        private static readonly string[] DeEvasive = G("ausweichmanöver", "ausweichmanövers", "ausweichen", "ausweichkurs", "ausweichkurse");
-        private static readonly string[] DeHail = G("rufen", "rufe", "anruf", "anrufen", "grußfrequenz", "grußfrequenzen", "grüßen", "kanal", "frequenz", "frequenzen");
+        private static readonly string[] DeEvasive = G("ausweichmanöver", "ausweichen");
+        private static readonly string[] DeHail = G("rufen", "rufe", "anruf", "anrufen", "grüße", "gruß", "kanal", "frequenz", "frequenzen", "verbindung");
         private static readonly string[] DeAnswer = G("antworten", "antwort", "beantworten");
         private static readonly string[] DeScreen = G("schirm", "bildschirm");
-        private static readonly string[] DeStatus = G("status", "statusbericht", "bericht", "schadensbericht", "lagebericht", "zustandsbericht", "meldung", "melden");
+        private static readonly string[] DeStatus = G("status", "bericht", "lagebericht", "statusmeldung", "meldung", "melden", "zustand", "lage");
 
-        private static readonly string[] DeFillers = G("der", "die", "das", "den", "dem", "des", "ein", "eine", "einen", "einem", "bitte", "sie", "uns", "unser", "unsere",
+        // Words that only carry the sentence along: the recogniser has them to fit speech to instead of a key word.
+        private static readonly string[] DeCarry = G("der", "die", "das", "den", "dem", "des", "ein", "eine", "einen", "einem", "bitte", "sie", "uns", "unser", "unsere",
             "unseren", "auf", "an", "zu", "zum", "zur", "nach", "für", "von", "vom", "mit", "im", "in", "aus", "und", "ab", "bei", "alle", "alles", "jetzt", "sofort",
-            "schiff", "system", "sektor", "ihre", "ihren", "ihr", "unsere", "mal", "so", "sei", "es");
+            "schnell", "gleich", "dringend", "schiff", "raumschiff", "system", "sektor", "ihre", "ihren", "ihr", "mal", "doch", "so", "sei", "es", "mir", "mich",
+            "hier", "dort", "da", "dann", "auch", "noch", "mann", "posten", "kapitän", "captain", "nummer", "raum", "kraft", "muster", "delta", "antworten",
+            "hochfahren", "hochfahre", "aufbauen", "baue", "ausfahren", "einschalten", "gib", "stell", "stelle", "lass", "mache", "feind", "schiffe", "schiffen",
+            "eröffnen", "sicher", "sichere", "hoch", "oben", "unten", "schäden");
 
         private static string[] deWords;
 
@@ -145,7 +154,7 @@ namespace StbcRevival
 
         private static bool WantsEngage(HashSet<string> w)
         {
-            if (german) return DeEngage.Any(w.Contains) || (w.Contains("so") && DeMake.Any(w.Contains));
+            if (german) return DeEngage.Any(w.Contains) || (w.Contains("so") && DeMake.Any(w.Contains)) || (w.Contains("tun") && w.Contains("es"));
             return new[] { "engage", "punch", "jump" }.Any(w.Contains) || (w.Contains("so") && new[] { "make", "it" }.Any(w.Contains));
         }
 
@@ -157,11 +166,13 @@ namespace StbcRevival
             Func<string[], bool> any = list => list.Any(w.Contains);
             if (Course(w, any) is string course) return course;
             if (LoreDe(w, any) is string lore) return lore;
-            bool shields = any(DeShields), engines = any(DeEngines);
+            bool shields = any(DeShields);
             bool weapons = any(DeWeapons), torpedoes = any(DeTorpedoes);
             bool warp = any(DeWarp) && !any(DeCore), impulse = any(DeImpulse);
+            bool engines = any(DeEngines) || (any(DeDrive) && !warp && !impulse); // "warp antrieb" is the warp drive, not the engines
             bool fire = any(DeFire), target = any(DeTarget);
 
+            if (any(DeCeaseFire) || (fire && any(DeNot))) return "CeaseFire";
             if (any(DeCease) && (fire || target || weapons || torpedoes))
                 return fire || weapons || torpedoes ? "CeaseFire" : "CeaseTargeting";
 
@@ -182,7 +193,7 @@ namespace StbcRevival
             // Helm travel: prepare / engage warp or impulse.
             if (any(DePrepare) && (warp || impulse))
                 return Remember(warp ? "PrepareWarp" : "PrepareImpulse");
-            if (any(DeEngage) || (w.Contains("so") && any(DeMake)) || (any(DeEngageMild) && (warp || impulse)))
+            if (any(DeEngage) || (w.Contains("so") && any(DeMake)) || (w.Contains("tun") && w.Contains("es")) || (any(DeEngageMild) && (warp || impulse)))
             {
                 if (warp) return "EngageWarp";
                 if (impulse) return "EngageImpulse";
@@ -200,13 +211,13 @@ namespace StbcRevival
             if (any(DeBeam) || (any(DePeople) && any(DeRescue)) || (any(DeAboard) && any(DeBring)))
                 return "TransportFromTarget";
             if (any(DeScan)) return "ScanTarget";
-            if (any(DeCloaked) || any(DeHunt) || (any(DeCloak) && any(DeSearch))) return "CloakHunt";
-            if (any(DeStealth) || any(DeCloak)) return "ReduceSignature";
+            if (any(DeCloaked) || any(DeHunt) || any(DeCloak)) return "CloakHunt";
+            if (any(DeStealth)) return "ReduceSignature";
 
             // Tactical.
             if (shields)
                 return any(DeModulate) ? "ModulateShields" : any(DeDown) ? "LowerShields" : "RaiseShields";
-            if (torpedoes || any(new[] { "scharf", "scharfmachen", "schärfen" }))
+            if (torpedoes || any(new[] { "scharf", "schärfen" }) || (weapons && (any(DeDisarm) || any(DeArm))))
             {
                 if (any(DeDisarm)) return "DisarmTorpedoes";
                 if (any(DeArm)) return "ArmTorpedoes";
@@ -227,7 +238,7 @@ namespace StbcRevival
 
         private static string LoreDe(HashSet<string> w, Func<string[], bool> any)
         {
-            bool alert = any(DeAlert);
+            bool alert = any(DeAlert) || (any(DeBattle) && any(DeStation));
             if ((alert && any(DeCancel)) || any(DeAllClear)) return "RedAlertOff,LowerShields,DisarmTorpedoes";
             if (alert && any(DeYellow)) return "RaiseShields";
             if (alert) return "RedAlertOn,RaiseShields,ArmTorpedoes";
@@ -237,11 +248,12 @@ namespace StbcRevival
                 return "AnswerHail";
             if (any(DeStatus) && !any(DeScan) && !any(DeAnalyse))
                 return "StatusReport";
+            if (any(DeEnergy) && any(DeTransporter) && !any(DeRepair) && !any(DeOptimize)) return "TransportFromTarget"; // "Transporter, Energie"
             bool warp = any(DeWarp) && !any(DeCore);
             if (warp && any(DeLeaveWarp)) return "SetSpeedStop";
             if (warp && !any(DePrepare) && (any(DeWarpGo) || any(DeNumbers))) return "EngageWarp";
             if (any(DeUs) && any(DeOut) && !warp) return "SetSpeedFull";
-            if (any(DeLock) && (any(DeWeapons) || any(DeTorpedoes) || any(DeTarget))) return "EngageTarget";
+            if (any(DeLock) && !w.Contains("scharf") && (any(DeWeapons) || any(DeTorpedoes) || any(DeTarget))) return "EngageTarget"; // "scharf schalten" arms
             return null;
         }
     }

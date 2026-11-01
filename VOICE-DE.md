@@ -48,3 +48,18 @@ Die Systemnamen der Warpkarte sind englisch. Wenn das Modell einen Namen nicht k
 ## Deutsche Texte im Spiel
 
 Ist die Menüsprache des Spiels Deutsch, erscheinen auch die Texte des Mods auf Deutsch: Revival-Missionen (Titel, Beschreibungen, Aufträge, Meldungen), Revival-Einstellungen, Crew-Passwort, Raumliste, Hinweise und Popups. Bei jeder anderen Sprache bleibt alles Englisch. Es gibt dafür nichts einzustellen; jeder Spieler sieht die Texte in seiner eigenen Sprache, auch wenn der Host eine andere hat.
+
+## Andere Formulierungen
+
+Es gibt zu jedem Befehl mehrere Möglichkeiten, auch aus der deutschen Synchronisation. Einige Beispiele:
+
+- **Schilde:** "Schilde hochfahren / aufbauen / aktivieren", "Schutzschilde runter / senken / abschalten".
+- **Alarm:** "Roter Alarm", "Alarmstufe Rot", "Alle Mann auf Gefechtsstation", "Gelber Alarm"; "Alarm aufheben / beenden", "Entwarnung".
+- **Feuer:** "Feuer frei", "Phaser feuern / abfeuern", "Feuer eröffnen"; "Feuer einstellen", "Nicht schießen", "Feuerpause", "Waffenruhe".
+- **Torpedos:** "Torpedos laden / scharf machen / klarmachen", "Waffen entsichern"; "Torpedos entschärfen / sichern".
+- **Geschwindigkeit:** "Beschleunigen", "Langsamer", "Bremsen", "Alle Maschinen stopp", "Bring uns hier raus".
+- **Warp:** "Gehe auf Warp", "Warp einleiten", "Warp zwo", "Machen Sie es so", "Tun Sie es", "Energie!", "Aus dem Warp fallen".
+- **Transporter:** "Überlebende bergen / retten", "Hochbeamen", "Transporter, Energie".
+- **Brücke:** "Grußfrequenzen öffnen", "Verbindung", "Lagebericht", "Zustand".
+
+Zusammengesetzte Wörter wie "Warpkern", "Photonentorpedos" oder "Statusbericht" kennt das kleine Modell nicht als Ganzes; es erkennt sie als "Warp Kern", "Photonen Torpedos" und "Status Bericht", und der Mod versteht das.
