@@ -42,6 +42,7 @@ function Find-Game {
     $roots += "${env:ProgramFiles(x86)}\Steam"
     $libraries = @()
     foreach ($root in ($roots | Select-Object -Unique)) {
+        if (-not (Test-Path -LiteralPath $root)) { continue }
         $vdf = Join-Path $root "steamapps\libraryfolders.vdf"
         if (-not (Test-Path $vdf)) { continue }
         $libraries += $root
@@ -51,6 +52,9 @@ function Find-Game {
         }
     }
     foreach ($library in ($libraries | Select-Object -Unique)) {
+        # Steam keeps listing a library whose drive has gone (an unplugged or removed disk), and Join-Path
+        # fails on a drive that doesn't exist
+        if (-not (Test-Path -LiteralPath $library)) { continue }
         $manifest = Join-Path $library "steamapps\appmanifest_$AppId.acf"
         if (-not (Test-Path $manifest)) { continue }
         $match = Select-String -Path $manifest -Pattern '^\s*"installdir"\s*"(.*)"\s*$' | Select-Object -First 1
