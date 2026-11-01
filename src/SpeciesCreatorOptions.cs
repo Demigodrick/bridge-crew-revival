@@ -44,6 +44,7 @@ namespace StbcRevival
 
         private static CustomizationManager creator;
         private static Toggle[] rows;           // the species toggles shown with an extra one, top to bottom
+        private static Toggle android;          // ANDROID (TNG content): a row once it's shown
         private static Vector3[] rowPositions;  // their own positions (no extra one shown)
         private static Vector3 rowStep;
         private static Option laidOutFor;      // the extra choice the rows are spaced for (null: their own places)
@@ -81,7 +82,7 @@ namespace StbcRevival
             {
                 var human = Field(__instance, "_humanRaceToggle");
                 var vulcan = Field(__instance, "_vulcanRaceToggle");
-                var android = Field(__instance, "_androidRaceToggle");
+                android = Field(__instance, "_androidRaceToggle");
                 if (human == null || vulcan == null) return;
 
                 // A row after the last species shown (Android is only there with the TNG content).
@@ -90,6 +91,7 @@ namespace StbcRevival
                 rows = last == android ? new[] { human, vulcan, android } : new[] { human, vulcan };
                 rowPositions = Array.ConvertAll(rows, r => r.transform.localPosition);
                 rowStep = vulcan.transform.localPosition - human.transform.localPosition;
+                laidOutFor = null; // a new creator (back on the shuttle after a mission): its rows are in their own places
                 int sibling = last.transform.GetSiblingIndex();
                 foreach (var option in Options)
                 {
@@ -165,11 +167,14 @@ namespace StbcRevival
                 }
                 option.Toggle.gameObject.SetActive(false);
             }
-            if (shown != null && !shown.Toggle.gameObject.activeSelf)
+            if (shown != null)
             {
-                Layout(shown);
-                shown.Toggle.gameObject.SetActive(true);
-                TellHands(shown);
+                Layout(shown); // every frame until it's done (the rows may not be in place yet)
+                if (!shown.Toggle.gameObject.activeSelf)
+                {
+                    shown.Toggle.gameObject.SetActive(true);
+                    TellHands(shown);
+                }
             }
             Sync(creator);
         }
@@ -204,8 +209,24 @@ namespace StbcRevival
         private static void Layout(Option extra)
         {
             if (rows == null || laidOutFor == extra) return;
-            laidOutFor = extra;
+            // ANDROID shown after the creator was set up (the TNG content checked later): one more row.
+            if (android != null && android.gameObject.activeSelf && Array.IndexOf(rows, android) < 0)
+            {
+                rows = rows.Concat(new[] { android }).ToArray();
+                rowPositions = rowPositions.Concat(new[] { android.transform.localPosition }).ToArray();
+                laidOutFor = null;
+                if (extra == null) return;
+            }
             int n = rows.Length;
+            // Rows not placed yet when the creator was set up (all in one spot): their places now.
+            if (rowStep.sqrMagnitude < 1e-8f)
+            {
+                rowPositions = Array.ConvertAll(rows, r => r.transform.localPosition);
+                rowStep = n > 1 ? rowPositions[1] - rowPositions[0] : Vector3.zero;
+                if (rowStep.sqrMagnitude < 1e-8f) return; // still not placed: try again next frame
+            }
+            laidOutFor = extra;
+            if (extra != null) Plugin.Log.LogInfo($"{extra.Log}: {extra.Label.ToUpperInvariant()} laid out below {n} species rows (row step {rowStep})");
             if (extra == null)
             {
                 for (int i = 0; i < n; i++) rows[i].transform.localPosition = rowPositions[i];
