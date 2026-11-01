@@ -60,6 +60,8 @@ Es gibt zu jedem Befehl mehrere Möglichkeiten, auch aus der deutschen Synchroni
 - **Geschwindigkeit:** "Beschleunigen", "Langsamer", "Bremsen", "Alle Maschinen stopp", "Bring uns hier raus".
 - **Warp:** "Gehe auf Warp", "Warp einleiten", "Warp zwo", "Machen Sie es so", "Tun Sie es", "Energie!", "Aus dem Warp fallen".
 - **Transporter:** "Überlebende bergen / retten", "Hochbeamen", "Transporter, Energie".
-- **Brücke:** "Grußfrequenzen öffnen", "Verbindung", "Lagebericht", "Zustand".
+- **Brücke:** "Grußfrequenzen öffnen", "Kanal öffnen", "Lagebericht".
 
 Zusammengesetzte Wörter wie "Warpkern", "Photonentorpedos" oder "Statusbericht" kennt das kleine Modell nicht als Ganzes; es erkennt sie als "Warp Kern", "Photonen Torpedos" und "Status Bericht", und der Mod versteht das.
+
+Alltagswörter wie "los", "weg", "voll", "halt", "näher" oder "zurück" lösen allein nichts aus, damit nicht versehentlich ein Befehl gegeben wird. Allgemeine Verben wie "verteilen" oder "verbessern" zählen nur zusammen mit "Energie" oder einem Bordsystem ("Schilde verbessern").

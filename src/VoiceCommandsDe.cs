@@ -30,18 +30,17 @@ namespace StbcRevival
 
         // helm
         private static readonly string[] DeWarp = G("warp");
-        private static readonly string[] DeCore = G("kern", "reaktor", "gondeln", "spulen");
+        private static readonly string[] DeCore = G("kern", "gondeln");
         private static readonly string[] DeImpulse = G("impuls", "impulse");
         private static readonly string[] DeNumbers = G("eins", "ein", "zwei", "zwo", "drei", "vier", "fünf", "sechs", "sieben", "acht", "neun", "zehn");
         private static readonly HashSet<string> DeNumberSet = new HashSet<string>(DeNumbers);
         private static readonly string[] DeNumberNames = { "eins", "zwei", "drei", "vier", "fünf", "sechs", "sieben", "acht", "neun" };
         private static readonly string[] DePrepare = G("vorbereiten", "vorbereitung", "bereit", "klarmachen", "klar", "plotten", "kurs", "setzen", "setze", "legen",
             "lege", "festlegen", "programmieren");
-        private static readonly string[] DeEngage = G("engagieren", "los", "energie", "ausführen", "starten", "starte", "springen", "sprung");
-        private static readonly string[] DeEngageMild = G("aktivieren", "aktiviere", "einschalten", "einleiten");
-        private static readonly string[] DeMake = G("machen", "mach", "es", "tun");
-        private static readonly string[] DeWarpGo = G("faktor", "maximal", "maximale", "maximum", "höchste", "höchstgeschwindigkeit", "gehen", "geh", "gehe",
-            "springen", "sprung", "geschwindigkeit", "eintreten");
+        private static readonly string[] DeEngage = G("engagieren", "ausführen");
+        private static readonly string[] DeEngageMild = G("aktivieren", "aktiviere", "einschalten", "einleiten", "starten", "starte", "springen", "sprung"); // only with warp or impulse
+        private static readonly string[] DeMake = G("machen", "mach");
+        private static readonly string[] DeWarpGo = G("faktor", "maximal", "maximale", "maximum", "höchste", "höchstgeschwindigkeit", "gehen", "geh", "gehe", "geschwindigkeit", "eintreten");
         private static readonly string[] DeLeaveWarp = G("verlassen", "raus", "heraus", "abbrechen", "beenden", "aus", "fallen");
         private static readonly string[] DeUs = G("uns");
         private static readonly string[] DeOut = G("raus", "hinaus", "heraus");
@@ -50,17 +49,15 @@ namespace StbcRevival
             "navigieren");
         private static readonly string[] DeCourseFor = G("für", "nach", "zu", "zum", "zur", "auf", "richtung");
         private static readonly string[] DeNearest = G("nächste", "nächsten", "nächstes", "nächster");
-        private static readonly string[] DeApproach = G("annähern", "nähern", "nähere", "abfangen", "heran", "näher", "herangehen", "ansteuern", "angreifen",
+        private static readonly string[] DeApproach = G("annähern", "nähern", "nähere", "abfangen", "herangehen", "ansteuern", "angreifen",
             "verfolgen", "anfliegen");
-        private static readonly string[] DeAway = G("weg", "entfernen", "fliehen", "flieh", "flüchten", "flucht", "rückzug", "zurückziehen", "meiden", "vermeiden",
-            "abdrehen", "abhauen", "davon");
+        private static readonly string[] DeAway = G("entfernen", "fliehen", "flieh", "flüchten", "flucht", "rückzug", "zurückziehen", "meiden", "vermeiden", "abdrehen");
         private static readonly string[] DeMove = G("bewegen", "fliegen", "flieg", "fliege", "gehen", "geh", "gehe", "steuern", "richtung", "kurs");
-        private static readonly string[] DeStop = G("stopp", "stop", "anhalten", "halt", "stoppen", "stillstand", "bremsen", "abbremsen");
-        private static readonly string[] DeReverse = G("rückwärts", "zurück", "umkehren");
-        private static readonly string[] DeHalf = G("halbe", "halben", "halber", "halb", "halbes", "langsamer", "langsam", "verlangsamen");
+        private static readonly string[] DeStop = G("stopp", "stop", "anhalten", "stoppen", "stillstand", "bremsen", "abbremsen");
+        private static readonly string[] DeReverse = G("rückwärts", "umkehren");
+        private static readonly string[] DeHalf = G("halbe", "halben", "halber", "halbes", "langsamer", "verlangsamen");
         private static readonly string[] DeQuarter = G("viertel");
-        private static readonly string[] DeFull = G("voll", "volle", "vollen", "voller", "volles", "maximal", "maximum", "höchstgeschwindigkeit", "voraus", "vorwärts",
-            "geschwindigkeit", "gas", "beschleunigen", "schneller");
+        private static readonly string[] DeFull = G("volle", "vollen", "voller", "maximum", "höchstgeschwindigkeit", "voraus", "vorwärts", "beschleunigen", "schneller");
 
         // tactical
         private static readonly string[] DeShields = G("schilde", "schild", "schilden", "schutzschilde", "schutzschild");
@@ -94,13 +91,14 @@ namespace StbcRevival
         private static readonly string[] DeAboard = G("bord");
         private static readonly string[] DeCloaked = G("getarnt", "getarnte", "getarnten", "getarntes", "getarnter");
         private static readonly string[] DeCloak = G("tarnung", "tarnen", "tarnvorrichtung");
-        private static readonly string[] DeHunt = G("jagen", "jage", "jagd", "aufspüren", "orten", "orte");
+        private static readonly string[] DeHunt = G("jagen", "jage", "jagd", "aufspüren", "orten");
         private static readonly string[] DeStealth = G("signatur", "signaturen", "leise", "lautlos", "schleichfahrt", "unauffällig");
 
         // engineering
         private static readonly string[] DeRepair = G("reparieren", "repariere", "reparatur", "reparaturen", "beheben", "behebe", "instandsetzen", "fixen", "flicken",
             "ausbessern");
-        private static readonly string[] DeOptimize = G("optimieren", "optimiere", "optimierung", "verbessern", "maximieren", "steigern", "verstärken");
+        private static readonly string[] DeOptimize = G("optimieren", "optimiere", "optimierung");
+        private static readonly string[] DeImprove = G("verbessern", "maximieren", "steigern", "verstärken"); // only for a named system
         private static readonly string[] DeOffense = G("offensive", "offensiv", "angriff");
         private static readonly string[] DeDefense = G("defensive", "defensiv", "verteidigung");
         private static readonly string[] DeSensors = G("sensoren", "sensor", "scanner");
@@ -108,10 +106,10 @@ namespace StbcRevival
         private static readonly string[] DeTransporter = G("transporter", "rettung");
         private static readonly string[] DeComputer = G("computer", "rechner");
         private static readonly string[] DeSickbay = G("krankenstation", "krankenrevier", "medizin", "medizinische", "lazarett");
-        private static readonly string[] DePowerVerbs = G("umleiten", "umlenken", "leiten", "lenken", "verteilen", "umverteilen", "umschalten", "leite", "lenke",
-            "verteile", "verlagern", "verschieben");
-        private static readonly string[] DeEnergy = G("energie", "leistung", "strom");
-        private static readonly string[] DeBalance = G("ausgleichen", "ausgeglichen", "balancieren", "gleichmäßig");
+        private static readonly string[] DePowerVerbs = G("umleiten", "umlenken", "umverteilen", "verlagern");
+        private static readonly string[] DePowerWays = G("leiten", "lenken", "verteilen", "leite", "lenke", "verteile", "verschieben", "ausgleichen", "ausgeglichen",
+            "balancieren", "gleichmäßig"); // only with "energie"
+        private static readonly string[] DeEnergy = G("energie", "leistung");
 
         // Star Trek phrases
         private static readonly string[] DeAlert = G("alarm", "alarmstufe", "alarmbereitschaft", "gefechtsbereitschaft", "kampfbereitschaft");
@@ -123,17 +121,17 @@ namespace StbcRevival
         private static readonly string[] DeYellow = G("gelb", "gelber", "gelben");
         private static readonly string[] DeRed = G("rot", "roter", "roten");
         private static readonly string[] DeEvasive = G("ausweichmanöver", "ausweichen");
-        private static readonly string[] DeHail = G("rufen", "rufe", "anruf", "anrufen", "grüße", "gruß", "kanal", "frequenz", "frequenzen", "verbindung");
-        private static readonly string[] DeAnswer = G("antworten", "antwort", "beantworten");
-        private static readonly string[] DeScreen = G("schirm", "bildschirm");
-        private static readonly string[] DeStatus = G("status", "bericht", "lagebericht", "statusmeldung", "meldung", "melden", "zustand", "lage");
+        private static readonly string[] DeHail = G("anruf", "gruß", "kanal", "frequenzen");
+        private static readonly string[] DeAnswer = G("antworten", "beantworten");
+        private static readonly string[] DeScreen = G("schirm");
+        private static readonly string[] DeStatus = G("status", "bericht", "lagebericht", "statusmeldung");
 
         // Words that only carry the sentence along: the recogniser has them to fit speech to instead of a key word.
         private static readonly string[] DeCarry = G("der", "die", "das", "den", "dem", "des", "ein", "eine", "einen", "einem", "bitte", "sie", "uns", "unser", "unsere",
             "unseren", "auf", "an", "zu", "zum", "zur", "nach", "für", "von", "vom", "mit", "im", "in", "aus", "und", "ab", "bei", "alle", "alles", "jetzt", "sofort",
             "schnell", "gleich", "dringend", "schiff", "raumschiff", "system", "sektor", "ihre", "ihren", "ihr", "mal", "doch", "so", "sei", "es", "mir", "mich",
-            "hier", "dort", "da", "dann", "auch", "noch", "mann", "posten", "kapitän", "nummer", "raum", "kraft", "muster", "delta", "antworten",
-            "hochfahren", "hochfahre", "aufbauen", "baue", "ausfahren", "einschalten", "gib", "stell", "stelle", "lass", "mache", "feind", "schiffe", "schiffen",
+            "hier", "dort", "da", "dann", "auch", "noch", "mann", "posten", "kapitän", "nummer", "raum", "kraft", "muster", "delta", "tun", "weg", "davon", "zurück", "halt", "langsam", "voll",
+            "hochfahren", "hochfahre", "aufbauen", "baue", "ausfahren", "gib", "stell", "stelle", "lass", "schiffe", "schiffen",
             "eröffnen", "sicher", "sichere", "hoch", "oben", "unten", "schäden");
 
         private static string[] deWords;
@@ -154,7 +152,7 @@ namespace StbcRevival
 
         private static bool WantsEngage(HashSet<string> w)
         {
-            if (german) return DeEngage.Any(w.Contains) || (w.Contains("so") && DeMake.Any(w.Contains)) || (w.Contains("tun") && w.Contains("es"));
+            if (german) return DeEngage.Any(w.Contains) || w.Contains("energie") || (w.Contains("so") && DeMake.Any(w.Contains)) || (w.Contains("tun") && w.Contains("es"));
             return new[] { "engage", "punch", "jump" }.Any(w.Contains) || (w.Contains("so") && new[] { "make", "it" }.Any(w.Contains));
         }
 
@@ -182,18 +180,20 @@ namespace StbcRevival
                     : any(DeComputer) ? "RepairComputerCore" : any(DeCore) || any(DeWarp) ? "RepairWarpcore" : any(DeSensors) ? "RepairSensors"
                     : any(DeScience) ? "RepairScience" : any(DeTransporter) ? "RepairTransporter"
                     : any(DeSickbay) ? "RepairSickbay" : "RepairBalanced";
-            if (any(DeOptimize))
+            bool named = engines || shields || weapons || torpedoes || any(DeOffense) || any(DeDefense) || any(DeSensors) || any(DeComputer) || any(DeTransporter);
+            if (any(DeOptimize) || (any(DeImprove) && named))
                 return any(DeOffense) || weapons || torpedoes ? "OptimizeWeapons"
                     : any(DeDefense) || shields ? "OptimizeShields" : engines ? "OptimizeEngines"
                     : any(DeTransporter) ? "OptimizeTransporter"
                     : any(DeSensors) ? "OptimizeScanners" : any(DeComputer) ? "OptimzeComputerCore" : "OptimizeBalanced";
-            if (any(DePowerVerbs) || any(DeBalance) || (any(DeEnergy) && (engines || shields || weapons)))
+            if (any(DePowerVerbs) || (any(DeEnergy) && (engines || shields || weapons || any(DePowerWays))))
                 return engines ? "PowerToEngines" : shields ? "PowerToShields" : weapons ? "PowerToPhasers" : "PowerBalanced";
 
             // Helm travel: prepare / engage warp or impulse.
             if (any(DePrepare) && (warp || impulse))
                 return Remember(warp ? "PrepareWarp" : "PrepareImpulse");
-            if (any(DeEngage) || (w.Contains("so") && any(DeMake)) || (w.Contains("tun") && w.Contains("es")) || (any(DeEngageMild) && (warp || impulse)))
+            bool energyOnly = w.Contains("energie") && w.All(x => x == "energie" || DeCarry.Contains(x)); // "Energie!", not "Energie ..." with something else
+            if (any(DeEngage) || energyOnly || (w.Contains("so") && any(DeMake)) || (w.Contains("tun") && w.Contains("es")) || (any(DeEngageMild) && (warp || impulse)))
             {
                 if (warp) return "EngageWarp";
                 if (impulse) return "EngageImpulse";
@@ -226,10 +226,10 @@ namespace StbcRevival
 
             // Helm movement and speed.
             if (any(DeApproach)) return "MoveTo";
-            if (any(DeAway)) return "MoveAwayFrom";
+            if (any(DeAway) || ((w.Contains("weg") || w.Contains("davon")) && any(DeMove))) return "MoveAwayFrom";
             if (target && any(DeMove)) return "MoveTo";
             if (any(DeStop)) return "SetSpeedStop";
-            if (any(DeReverse)) return "SetSpeedReverse";
+            if (any(DeReverse) || (w.Contains("zurück") && any(DeMove))) return "SetSpeedReverse";
             if (any(DeHalf)) return "SetSpeedHalf";
             if (any(DeQuarter)) return "SetSpeedQuarter";
             if (any(DeFull) || impulse) return "SetSpeedFull";
@@ -238,7 +238,7 @@ namespace StbcRevival
 
         private static string LoreDe(HashSet<string> w, Func<string[], bool> any)
         {
-            bool alert = any(DeAlert) || (any(DeBattle) && any(DeStation)) || any(DeRed) || any(DeYellow); // "roter" alone: "alarm" is often cut off
+            bool alert = any(DeAlert) || (any(DeBattle) && any(DeStation)) || w.Contains("roter") || w.Contains("gelber"); // "roter" alone: "alarm" is often cut off
             if ((alert && any(DeCancel)) || any(DeAllClear)) return "RedAlertOff,LowerShields,DisarmTorpedoes";
             if (alert && any(DeYellow)) return "RaiseShields";
             if (alert) return "RedAlertOn,RaiseShields,ArmTorpedoes";
