@@ -521,14 +521,15 @@ namespace StbcRevival.Missions
         // known (on every player's game: SetSubsystemKnown is the game's RPC). Only for a body with ship data
         // (GetTargetInfo): the captain's order checks read it once the transporter can lock on, and without
         // it they fail and take every crew order with them.
-        private static void Beamable(BodyRef body)
+        // (Patrol uses this and PutPeople for its rescue freighters: label names the mission in the log.)
+        internal static void Beamable(BodyRef body, string label = "Stellar evacuation")
         {
             try
             {
                 var sector = body?.AHMPFHDGMKJ as Sector.SectorBody;
                 var targetable = sector?.GetDetectable() as Sector.TargetableComponent;
                 bool shipData = sector?.GetTargetInfo() != null;
-                Plugin.Log.LogInfo($"Stellar evacuation: pod {sector?.GetType().Name}, ship data {shipData}, "
+                Plugin.Log.LogInfo($"{label}: {sector?.name} {sector?.GetType().Name}, ship data {shipData}, "
                                    + $"life signs {(targetable == null ? "-" : targetable.IsSubsystemKnown(Sector.NHGGGDMADKM.Life) ? "known" : "unknown")}, "
                                    + $"cargo {(targetable == null ? "-" : targetable.IsSubsystemKnown(Sector.NHGGGDMADKM.Cargo) ? "known" : "unknown")}");
                 if (targetable == null || !shipData) return;
@@ -540,24 +541,24 @@ namespace StbcRevival.Missions
             }
             catch (Exception e)
             {
-                Plugin.Log.LogWarning("Stellar evacuation: making the pod beamable: " + e.Message);
+                Plugin.Log.LogWarning($"{label}: making {(body?.AHMPFHDGMKJ as UnityEngine.Object)?.name} beamable: " + e.Message);
             }
         }
 
         // People onto a body: straight into its cargo bay, adding one if it has none (the game's own cargo task
         // does nothing without one), and shared with the crew's games (Update, "EVC").
-        private static void PutPeople(BodyRef body, int count)
+        internal static void PutPeople(BodyRef body, int count, string label = "Stellar evacuation")
         {
             try
             {
                 if (!(body?.AHMPFHDGMKJ is Sector.SectorBody sector))
                 {
-                    Plugin.Log.LogWarning("Stellar evacuation: the station isn't a body people can be put on");
+                    Plugin.Log.LogWarning($"{label}: {(body?.AHMPFHDGMKJ as UnityEngine.Object)?.name ?? "the body"} isn't a body people can be put on");
                     return;
                 }
                 bool had = sector.GetCargo() != null;
                 SetPeople(sector, count);
-                Plugin.Log.LogInfo($"Stellar evacuation: {count} people on {sector.name} ({(had ? "its cargo bay" : "a cargo bay added")}); reads back {People(body)}");
+                Plugin.Log.LogInfo($"{label}: {count} people on {sector.name} ({(had ? "its cargo bay" : "a cargo bay added")}); reads back {People(body)}");
                 var room = Patches.PhotonNetworkType?.GetMethod("get_room", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static)?.Invoke(null, null);
                 // Only for a body with an ID (GuidComponent): without one, the ID is blank and a client would put the
                 // people on whichever ID-less body it found first. Escape pods have their own cargo bay, which the
@@ -566,7 +567,7 @@ namespace StbcRevival.Missions
             }
             catch (Exception e)
             {
-                Plugin.Log.LogWarning("Stellar evacuation: putting people aboard: " + e.Message);
+                Plugin.Log.LogWarning($"{label}: putting people aboard: " + e.Message);
             }
         }
 
@@ -722,7 +723,7 @@ namespace StbcRevival.Missions
             }
         }
 
-        private static int People(BodyRef body)
+        internal static int People(BodyRef body)
         {
             try { return body?.AHMPFHDGMKJ?.GetCargo()?.LEDFEFEFFAO?.GetNumItemsOfType(Sector.CargoTypes.People) ?? 0; }
             catch { return 0; }

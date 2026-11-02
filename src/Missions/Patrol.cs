@@ -99,10 +99,12 @@ namespace StbcRevival.Missions
 
             for (;;)
             {
-                // The offer: a job in another system, marked on the warp map.
-                int job = random.Next(4);
+                // The offer: a job in another system, marked on the warp map. Never the same kind of job twice in a
+                // row, nor the system of the last one (where it'd send you straight back to what you just left).
+                int job = lastJob < 0 ? random.Next(4) : (lastJob + 1 + random.Next(3)) % 4;
+                lastJob = job;
                 var here = Objective.KALBLMGFNIN;
-                var target = PickSystem(here);
+                var target = PickSystem(here, jobSystem);
                 string name = SystemName(target);
                 string offer = $"New assignment in the {name} system: {Offer(job)}. Warp there to accept";
                 string repairs = "Until then, repairs and torpedoes at any space station (within 5 km)";
@@ -216,22 +218,33 @@ namespace StbcRevival.Missions
             yield return Task.JPLFLPFBCDJ.TellAI(wreck).ToSetTeam(Sector.DGGJOECIFAF.Federation); // as the campaign's disabled freighters
             yield return Task.KDNOMKAPDKG.TellAI(wreck).ToDisable();
             // The survivors: the game's rescue encounters load them as "People" cargo; a plain spawn has none,
-            // which leaves no life signs to find and nothing to beam.
+            // which leaves no life signs to find and nothing to beam. A plain freighter has no cargo bay either, and
+            // the game's cargo task does nothing without one, so they're put aboard as Stellar Evacuation does: into a
+            // cargo bay (added), shared with the crew's games, with its life signs and cargo made targetable.
             int survivors = 8 + random.Next(0, 13);
-            yield return Task.CIAHOPCODGJ.WithTargets(wreck).SetCargo(Sector.CargoTypes.People, survivors);
-            Plugin.Log.LogInfo($"Patrol: rescue freighter with {survivors} survivors");
+            yield return Task.KNMMMJOOBHC.WithTime(1f); // the freighter fully in
+            StellarEvacuationObjective.PutPeople(wreck, survivors, "Patrol");
+            StellarEvacuationObjective.Beamable(wreck, "Patrol");
+            Plugin.Log.LogInfo($"Patrol: rescue freighter with {survivors} survivors (reads back {StellarEvacuationObjective.People(wreck)})");
             yield return Task.BCJDEKKIHDD.AddMarker(new[] { wreck });
             yield return Task.PAMPNJNPLCI.OfPOIChild(wreck); // as the game's rescue missions do with their target
 
+            // Its shields down and the transporter count started from the outset: they used to wait for a full
+            // scan of its life signs, and when that scan never registered (as can happen with these freighters)
+            // nothing could be beamed across and the assignment couldn't be finished. Scanning still tells you
+            // who's aboard; it's no longer what lets you beam them.
+            yield return Task.CIAHOPCODGJ.WithTargets(wreck).SetShieldHealthPercent(0f);
+            yield return Task.HOHEEDLMMPH.Reset().WithCargoType(Sector.CargoTypes.People).WithDescriptionString(Directive, "Beam the survivors aboard");
             bool rescued = false;
             string steps = "rescue " + (++spawnCount);
             Objective.AddStep(steps,
-                Task.JAIMKEDGFEG.WhenTargetSubsystem(wreck, ShipSystem.Life).IsEqualTo(100f),
-                Task.HOHEEDLMMPH.Reset().WithCargoType(Sector.CargoTypes.People).WithDescriptionString(Directive, "Beam the survivors aboard"),
-                Task.CIAHOPCODGJ.WithTargets(wreck).SetShieldHealthPercent(0f),
                 Task.LJAGNEPFGJO.IsEqualTo(100f),
                 Task.MFLJBKCDBMC.WithAction(() => rescued = true));
             yield return Task.KKALNAMJCNH.WithName(steps);
+            Objective.AddStep(steps + " scanned",
+                Task.JAIMKEDGFEG.WhenTargetSubsystem(wreck, ShipSystem.Life).IsEqualTo(100f),
+                Task.MFLJBKCDBMC.WithAction(() => Plugin.Log.LogInfo("Patrol: the freighter's life signs scanned")));
+            yield return Task.KKALNAMJCNH.WithName(steps + " scanned");
 
             var raiders = new List<BodyRef>();
             if (!ambush && random.Next(2) == 0)
@@ -252,8 +265,10 @@ namespace StbcRevival.Missions
             {
                 yield return Task.KNMMMJOOBHC.WithTime(2f);
                 bool justSpawned = UnityEngine.Time.time - started < 10f;
+                if (Abandoned()) break;
+                if (!rescued) yield return Task.CIAHOPCODGJ.WithTargets(wreck).SetShieldHealthPercent(0f); // kept down: a ship's shields recharge // first: out of its system the freighter is gone from view, not lost
                 lost = !LastStandWaves.Alive(wreck, justSpawned);
-                if (lost || Abandoned()) break;
+                if (lost) break;
                 // Sprung on approach (or at the latest once the survivors are aboard, if beamed from further out).
                 if (ambush && !sprung && (Distance(player, wreck) <= AmbushRange || rescued))
                 {
@@ -270,7 +285,7 @@ namespace StbcRevival.Missions
                 bool raidersLeft = sprung && raiders.Any(r => LastStandWaves.Alive(r, UnityEngine.Time.time - started < 10f));
                 if (rescued && (!ambush || (sprung && !raidersLeft))) break;
             }
-            yield return Task.CLNFMDFOFKL.WithName(steps);
+            yield return Task.CLNFMDFOFKL.WithNames(steps, steps + " scanned");
             Plugin.Log.LogInfo($"Patrol: {(ambush ? "ambush" : "rescue")} {(lost ? "failed, freighter lost" : abandoned ? "abandoned" : "complete")}");
             succeeded = !lost && !abandoned;
             if (sprung) yield return Task.NECMCDDOFJB.RemoveSubDirective(Directive, fight);
@@ -281,9 +296,13 @@ namespace StbcRevival.Missions
         // ---- Helpers ----------------------------------------------------------------------------------
 
         // Another system of the sector, at random (the game's FindSystemDifferentThan always gives the same one).
-        private Map.SystemRoot PickSystem(Map.SystemRoot here)
+        private int lastJob = -1;
+
+        private Map.SystemRoot PickSystem(Map.SystemRoot here, Map.SystemRoot last)
         {
-            var others = (Objective.MLHNDAEKLHO ?? new List<Map.SystemRoot>()).Where(s => s != null && s != here).ToList();
+            var all = (Objective.MLHNDAEKLHO ?? new List<Map.SystemRoot>()).Where(s => s != null && s != here).ToList();
+            var others = all.Where(s => s != last).ToList();
+            if (others.Count == 0) others = all;
             return others.Count > 0 ? others[random.Next(others.Count)] : Objective.FindSystemDifferentThan(new[] { here }) ?? here;
         }
 
@@ -409,13 +428,15 @@ namespace StbcRevival.Missions
             for (;;)
             {
                 yield return Task.KNMMMJOOBHC.WithTime(2f);
-                if (stop() || Abandoned()) yield break;
+                if (Abandoned() || stop()) yield break; // abandoned first: out of the system, what was fought over is out of view, not lost
                 bool justSpawned = UnityEngine.Time.time - started < 10f;
                 if (!ships.Any(s => LastStandWaves.Alive(s, justSpawned))) yield break;
             }
         }
 
-        // The name of a space station within repair range in this system, or null.
+        // The name of a space station within repair range in this system, or null. A station is what the game tags
+        // SpaceStation, or a Satellite named like one (the game files several of its stations, "Space Station"
+        // among them, as satellites). Range is from its surface (its radius, for a station up to 5 km across).
         private string NearStation()
         {
             try
@@ -425,13 +446,17 @@ namespace StbcRevival.Missions
                 var here = Objective.KALBLMGFNIN;
                 var stations = new List<BodyRef>();
                 Objective.FindAllBodyWithTags(stations, new[] { Tag.SpaceStation });
+                var satellites = new List<BodyRef>();
+                Objective.FindAllBodyWithTags(satellites, new[] { Tag.Satellite });
+                stations.AddRange(satellites.Where(s => LooksLikeStation(s?.AHMPFHDGMKJ?.ALPAOOKFIEE?.BaseName)));
                 foreach (var station in stations)
                 {
                     var body = station?.AHMPFHDGMKJ;
                     var transform = body?.ALPAOOKFIEE;
                     if (transform == null || transform.System != here) continue;
-                    if (UnityEngine.Vector3d.Distance(transform.Position, me.ALPAOOKFIEE.Position) <= RepairRange)
-                        return string.IsNullOrEmpty(transform.BaseName) ? "the station" : transform.BaseName;
+                    double radius = transform.Radius > 0 && transform.Radius < 5000 ? transform.Radius : 0;
+                    if (UnityEngine.Vector3d.Distance(transform.Position, me.ALPAOOKFIEE.Position) - radius <= RepairRange)
+                        return DisplayName(transform.BaseName) ?? "the station";
                 }
             }
             catch (Exception e)
@@ -442,7 +467,25 @@ namespace StbcRevival.Missions
             return null;
         }
 
-        // What's near the ship when no tagged station is in range: each body within 15 km once, with its distance
+        private static bool LooksLikeStation(string name)
+        {
+            foreach (var text in new[] { name, DisplayName(name) })
+                if (!string.IsNullOrEmpty(text) && new[] { "station", "starbase", "outpost", "depot" }.Any(word => text.IndexOf(word, StringComparison.OrdinalIgnoreCase) >= 0))
+                    return true;
+            return false;
+        }
+
+        // A body's name as the game shows it ("5796|Space Station" is a text ID and its English).
+        private static string DisplayName(string name)
+        {
+            if (string.IsNullOrEmpty(name)) return null;
+            try { name = SVR.Localization.GetLocalizedText(name); }
+            catch { }
+            int bar = name.IndexOf('|');
+            return bar >= 0 ? name.Substring(bar + 1) : name;
+        }
+
+        // What's near the ship when no station is in range: each body within 15 km once, with its distance
         // and every tag the game gave it, so a "station" that doesn't repair shows what it really is.
         private const double NearbyRange = 15000;
         private static readonly Tag[] NearbyTags = ((Tag[])Enum.GetValues(typeof(Tag)))
@@ -485,7 +528,8 @@ namespace StbcRevival.Missions
                     double km = UnityEngine.Vector3d.Distance(transform.Position, me.ALPAOOKFIEE.Position) / 1000;
                     Plugin.Log.LogInfo($"Patrol: near {(string.IsNullOrEmpty(transform.BaseName) ? "(no name)" : transform.BaseName)} ({pair.Key.GetType().Name}), "
                                        + $"{km:0.0} km, tags {string.Join(", ", pair.Value.ToArray())}: "
-                                       + (pair.Value.Contains("SpaceStation") ? $"a space station, repairs within {RepairRange / 1000:0} km of its middle" : "not a space station, so no repairs here"));
+                                       + (pair.Value.Contains("SpaceStation") || pair.Value.Contains("Satellite") && LooksLikeStation(transform.BaseName)
+                                           ? $"a space station, repairs within {RepairRange / 1000:0} km of it" : "not a space station, so no repairs here"));
                 }
             }
             catch (Exception e)
