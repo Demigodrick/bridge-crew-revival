@@ -190,6 +190,11 @@ namespace StbcRevival
                 Add($"{setting[0]}: ON{later}", $"{setting[1]}: AN{spaeter}");
                 Add($"{setting[0]}: OFF{later}", $"{setting[1]}: AUS{spaeter}");
             }
+            // Creator species rows (SpeciesCreatorOptions): the label follows the case of the row it copies.
+            Add("ROMULAN", "ROMULANER");
+            Add("KLINGON", "KLINGONE");
+            Add("Romulan", "Romulaner");
+            Add("Klingon", "Klingone");
             Add("Klingon head: OFF", "Klingonenkopf: AUS");
             Add("Klingon head: CAPTAIN", "Klingonenkopf: KAPITÄN");
             Add("Klingon head: FLAGSHIP CAPTAIN", "Klingonenkopf: FLAGGSCHIFF-KAPITÄN");
