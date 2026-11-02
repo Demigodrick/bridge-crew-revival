@@ -13,13 +13,13 @@ namespace StbcRevival
     /// PvP test: the other ship's AI crew. The game's crew (USSAegisCrew, on each player ship) and everything it
     /// calls read "the" ship from a handful of one-per-game handles: the bridge's craft, its four console
     /// statics, and the crew order board (CommandManager.Instance, whose CurrentOrder the crew reads ~140
-    /// times). While the other ship's crew runs (its BatchUpdate and event handlers, PvpRouting), those handles
+    /// times). While the other ship's crew runs (its scheduled station tasks, BatchUpdate and events, PvpRouting), those handles
     /// are that ship's (only the crew's: the other captain console drives the bridge's one viewscreen):
     ///   - the craft: the other player ship;
     ///   - the consoles: the twins (PvpConsoles) of yours, so the other set;
     ///   - the order board: the ship's own CommandManager if its prefab has one, else a copy of yours made
     ///     once (same command list, its own orders);
-    ///   - Bridge.Crew: the other ship's crew.
+    ///   - Bridge.Crew, and the crew order menus' cached crew: the other ship's crew.
     /// Leaving puts yours back. The bridge's own parts (the captain's crew menu, the crew bots' avatars) stay
     /// yours. The other set's consoles get the crew bots of their twins (ConsoleBase.AI), so the crew counts
     /// them as AI stations. Only while the PvP test runs.
@@ -35,6 +35,7 @@ namespace StbcRevival
             public ConsoleTactical Tactical;
             public USSAegisCrew Crew;
             public CommandManager Orders;
+            public USSAegisCrew MenuCrew;
         }
 
         private static readonly FieldInfo CraftField = AccessTools.Field(typeof(Bridge), "<BAPNEMLKIOK>k__BackingField");
@@ -44,6 +45,9 @@ namespace StbcRevival
         private static readonly FieldInfo TacticalField = AccessTools.Field(typeof(Bridge), "<FEENAOHJOEO>k__BackingField");
         private static readonly FieldInfo CrewField = AccessTools.Field(typeof(Bridge), "<FIKINJFBFEL>k__BackingField");
         private static readonly FieldInfo OrdersField = AccessTools.Field(typeof(CommandManager), "<MFBACMFBGOL>k__BackingField");
+        // The crew order menus' one crew, shared by every menu item (CHJEFCBPHGN.get_Aegis), cached from the first
+        // ship it was asked about: so a menu order for ship B ran on ship A's crew.
+        private static readonly FieldInfo MenuCrewField = AccessTools.Field(AccessTools.TypeByName("AI.CHJEFCBPHGN"), "OAEMHOPHIBJ");
 
         private static readonly Dictionary<string, CommandManager> copiedOrders = new Dictionary<string, CommandManager>();
         private static View yours;      // the handles as they were when the other ship's view went on
@@ -53,7 +57,7 @@ namespace StbcRevival
         internal static string Applied => applied;
 
         internal static bool Ready => CraftField != null && CaptainField != null && EngineeringField != null && HelmField != null
-                                      && TacticalField != null && CrewField != null && OrdersField != null;
+                                      && TacticalField != null && CrewField != null && OrdersField != null && MenuCrewField != null;
 
         /// <summary>Code for this ship ("A", "B", or null for yours) is about to run: its view goes on.</summary>
         internal static void Switch(string ship)
@@ -98,6 +102,7 @@ namespace StbcRevival
             Tactical = TacticalField.GetValue(null) as ConsoleTactical,
             Crew = CrewField.GetValue(null) as USSAegisCrew,
             Orders = OrdersField.GetValue(null) as CommandManager,
+            MenuCrew = MenuCrewField.GetValue(null) as USSAegisCrew,
         };
 
         private static void Write(View view)
@@ -109,6 +114,7 @@ namespace StbcRevival
             TacticalField.SetValue(null, view.Tactical);
             CrewField.SetValue(null, view.Crew);
             OrdersField.SetValue(null, view.Orders);
+            MenuCrewField.SetValue(null, view.MenuCrew);
         }
 
         private static View Build(string ship)
@@ -124,6 +130,7 @@ namespace StbcRevival
                 Tactical = PvpConsoles.Twin(yours.Tactical),
                 Crew = craft.GetComponent<USSAegisCrew>(),
                 Orders = OrdersFor(ship, craft, yours.Orders),
+                MenuCrew = craft.GetComponent<USSAegisCrew>(),
             };
         }
 

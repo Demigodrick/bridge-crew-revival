@@ -419,6 +419,9 @@ foreach (var f in new[] { "GELDBDOEIBN", "IJFDAJGLKLF", "LMFOFJEALLE" })
     Check($"  USSAegisCrew.{f} (station console)", aegisCrew?.GetField(f, Inst));
 Check("  USSAegisCrew.GEFJIDCHAGC (pvp: crew setup for a ship spawned in place)", aegisCrew?.GetMethod("GEFJIDCHAGC", Inst));
 Check("  USSAegisCrew.OEACLEGCMNJ (crew set up)", aegisCrew?.GetField("OEACLEGCMNJ", Inst));
+foreach (var m in new[] { "HOKJHIMAFMC", "MIECHGHGMND", "OLIPCPOPKIP", "CNELGOKOEOA", "BDPCPIHNPJO", "DNGNMFLCIKO", "LAAHAHPODCA", "OnEnterSystem", "OnExplosionResultsEvent", "TakeHit" })
+    Check($"  USSAegisCrew.{m} (pvp: a crew task or event, run with its ship's view)", aegisCrew?.GetMethod(m, Inst));
+Check("  AI.CHJEFCBPHGN.OAEMHOPHIBJ (pvp: the crew menus' cached crew)", game.GetType("AI.CHJEFCBPHGN")?.GetField("OAEMHOPHIBJ", AnyS));
 Check("  USSAegisCrew.CrewbotPlayVO (pvp: the other crew's voice)", aegisCrew?.GetMethod("CrewbotPlayVO", Inst));
 Check("  MissionManager.set_MonitorPlayerHealth (pvp: ship A lost halts the mission)", game.GetType("Mission.MissionManager")?.GetMethod("set_MonitorPlayerHealth", Inst));
 var console = game.GetType("ConsoleBase");

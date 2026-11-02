@@ -35,6 +35,21 @@ namespace StbcRevival
 
         private static void SetContext(string ship) => Context = ship;
 
+        /// <summary>Runs something as that ship's code (its context and view, PvpScope), when the PvP test is
+        /// routing; otherwise just runs it. For orders the host carries out for another ship's crew.</summary>
+        internal static void RunAs(string ship, Action action)
+        {
+            if (!Routing || ship == null)
+            {
+                action();
+                return;
+            }
+            var before = Context;
+            SetContext(ship);
+            try { PvpScope.Run(ship, action); }
+            finally { SetContext(before); }
+        }
+
         private static FieldInfo listeners, dispatching, deferred;
         private static MethodInfo cleanup;
         private static readonly Dictionary<Type, FieldInfo> innerListener = new Dictionary<Type, FieldInfo>();
@@ -98,8 +113,19 @@ namespace StbcRevival
             var graphEntry = new HarmonyMethod(typeof(PvpRouting), nameof(Graph_Prefix));
             foreach (var name in new[] { "SendDistributionUpdate", "ADKNCMHHNMK", "KLICDPIAFHF" })
                 PatchEntry(harmony, graph == null || gridGraph == null ? null : AccessTools.Method(graph, name), graphEntry, leave, "power graph " + name);
-            PatchEntry(harmony, AccessTools.Method(typeof(AI.USSAegisCrew), "BatchUpdate"),
-                new HarmonyMethod(typeof(PvpRouting), nameof(Crew_Prefix)), new HarmonyMethod(typeof(PvpRouting), nameof(Crew_Finalizer)), "USSAegisCrew.BatchUpdate");
+            // The AI crew, with its ship's view on (PvpScope). Its stations' work isn't done in BatchUpdate (that
+            // only keeps its markers and tag list): it runs as tasks the crew gives the game's scheduler when it's
+            // switched on (USSAegisCrew.PIHCPFMPBNK), each station's tick and the contact and line-of-sight
+            // checks, plus a few events of its own. Unwrapped, ship B's crew ran them with ship A's craft, consoles
+            // and orders (and the scheduler swallows their errors).
+            var crewIn = new HarmonyMethod(typeof(PvpRouting), nameof(Crew_Prefix));
+            var crewOut = new HarmonyMethod(typeof(PvpRouting), nameof(Crew_Finalizer));
+            foreach (var name in new[] { "BatchUpdate", "HOKJHIMAFMC", "MIECHGHGMND", "OLIPCPOPKIP", "CNELGOKOEOA", "BDPCPIHNPJO",
+                                         "DNGNMFLCIKO", "LAAHAHPODCA", "OnEnterSystem", "OnExplosionResultsEvent", "TakeHit" })
+                PatchEntry(harmony, AccessTools.Method(typeof(AI.USSAegisCrew), name), crewIn, crewOut, "USSAegisCrew." + name);
+            var tick = AccessTools.Method(typeof(AI.USSAegisCrew), "HOKJHIMAFMC");
+            if (tick != null) harmony.Patch(tick, postfix: new HarmonyMethod(typeof(PvpRouting), nameof(CrewCheck_Postfix)));
+
             int parts = 0;
             foreach (var type in typeof(ConsoleBase).Assembly.GetTypes())
             {
@@ -192,6 +218,26 @@ namespace StbcRevival
             if (ship == null) return;
             SetContext(ship);
             PvpScope.Switch(ship);
+        }
+
+        // Once per crew: which console set its stations work through (they should be its own ship's).
+        private static readonly FieldInfo[] CrewConsoles =
+            new[] { "GELDBDOEIBN", "IJFDAJGLKLF", "LMFOFJEALLE" }.Select(n => AccessTools.Field(typeof(AI.USSAegisCrew), n)).ToArray();
+        private static readonly HashSet<AI.USSAegisCrew> checkedCrews = new HashSet<AI.USSAegisCrew>();
+
+        private static void CrewCheck_Postfix(AI.USSAegisCrew __instance)
+        {
+            if (!Routing || __instance == null || checkedCrews.Contains(__instance)) return;
+            var consoles = CrewConsoles.Select(f => f?.GetValue(__instance) as ConsoleBase).ToArray();
+            if (consoles.Any(c => c == null)) return; // not all found yet: look again next tick
+            checkedCrews.Add(__instance);
+            var ship = Owner(__instance);
+            var sets = consoles.Select(PvpConsoles.SetOf).ToArray();
+            bool right = sets.All(set => set == ship);
+            string line = $"PvP: ship {ship}'s AI crew works through the consoles of ship {string.Join(", ", sets.Distinct().Select(x => x ?? "?").ToArray())}"
+                          + (right ? "" : " (should be its own)");
+            if (right) Plugin.Log.LogInfo(line);
+            else Plugin.Log.LogWarning(line);
         }
 
         private static Exception Crew_Finalizer(Saved __state, Exception __exception)

@@ -20,6 +20,7 @@ namespace StbcRevival
     ///    only). So the host carries them out: anyone else puts the order in their player properties ("VO",
     ///    "number:command"), and the host runs each new one it sees, the crew's answer playing for everyone
     ///    as usual. The captain's console actions stay local, as the console's state is shared already.
+    ///  - In the PvP test the host runs each order as the sender's ship's (PvpRouting.RunAs), for that ship's crew.
     ///  - The host runs only the crew order names the voice commands use (anything else is ignored), and only
     ///    orders given after it first saw the player, so nothing old is replayed after a join or a new host.
     /// </summary>
@@ -113,7 +114,8 @@ namespace StbcRevival
                 if (orders.Length == 0) continue;
                 string command = string.Join(",", orders);
                 Plugin.Log.LogInfo($"Voice commands: {Get(player, "get_name") ?? "a crewmate"} ordered {command}");
-                try { VoiceCommands.Run(command); }
+                // As that player's ship's code: in the PvP test, a ship B captain's orders are for ship B's crew.
+                try { PvpRouting.RunAs(PvpShips.Of(player), () => VoiceCommands.Run(command)); }
                 catch (Exception e) { Plugin.Log.LogWarning($"Voice commands: {command} from a crewmate: {(e.InnerException ?? e).Message}"); }
             }
             foreach (var gone in seen.Keys.Where(a => !present.Contains(a)).ToList()) seen.Remove(gone);
