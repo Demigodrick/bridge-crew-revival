@@ -438,7 +438,60 @@ namespace StbcRevival.Missions
             {
                 Plugin.Log.LogWarning("Patrol: station check: " + e.Message);
             }
+            LogNearby();
             return null;
+        }
+
+        // What's near the ship when no tagged station is in range: each body within 15 km once, with its distance
+        // and every tag the game gave it, so a "station" that doesn't repair shows what it really is.
+        private const double NearbyRange = 15000;
+        private static readonly Tag[] NearbyTags = ((Tag[])Enum.GetValues(typeof(Tag)))
+            .Where(t => { var n = t.ToString(); return !n.StartsWith("Label", StringComparison.Ordinal) && n.Length > 1 && !n.StartsWith("Region", StringComparison.Ordinal) || n == "RegionSpaceStation"; })
+            .Where(t => !new[] { "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Alpha", "Beta", "Gamma", "Delta", "Epsilon" }.Contains(t.ToString()))
+            .ToArray();
+        private readonly HashSet<object> loggedNearby = new HashSet<object>();
+        private float nextNearby;
+
+        private void LogNearby()
+        {
+            if (UnityEngine.Time.time < nextNearby) return;
+            nextNearby = UnityEngine.Time.time + 10f;
+            try
+            {
+                var me = player.AHMPFHDGMKJ;
+                if (me == null) return;
+                var here = Objective.KALBLMGFNIN;
+                var tags = new Dictionary<object, List<string>>();
+                var bodies = new Dictionary<object, SystemTransform>();
+                var found = new List<BodyRef>();
+                foreach (var tag in NearbyTags)
+                {
+                    found.Clear();
+                    Objective.FindAllBodyWithTags(found, new[] { tag });
+                    foreach (var reference in found)
+                    {
+                        var body = reference?.AHMPFHDGMKJ;
+                        var transform = body?.ALPAOOKFIEE;
+                        if (transform == null || body == me || transform.System != here || loggedNearby.Contains(body)) continue;
+                        if (UnityEngine.Vector3d.Distance(transform.Position, me.ALPAOOKFIEE.Position) > NearbyRange) continue;
+                        if (!tags.TryGetValue(body, out var list)) { tags[body] = list = new List<string>(); bodies[body] = transform; }
+                        list.Add(tag.ToString());
+                    }
+                }
+                foreach (var pair in tags)
+                {
+                    loggedNearby.Add(pair.Key);
+                    var transform = bodies[pair.Key];
+                    double km = UnityEngine.Vector3d.Distance(transform.Position, me.ALPAOOKFIEE.Position) / 1000;
+                    Plugin.Log.LogInfo($"Patrol: near {(string.IsNullOrEmpty(transform.BaseName) ? "(no name)" : transform.BaseName)} ({pair.Key.GetType().Name}), "
+                                       + $"{km:0.0} km, tags {string.Join(", ", pair.Value.ToArray())}: "
+                                       + (pair.Value.Contains("SpaceStation") ? $"a space station, repairs within {RepairRange / 1000:0} km of its middle" : "not a space station, so no repairs here"));
+                }
+            }
+            catch (Exception e)
+            {
+                Plugin.Log.LogWarning("Patrol: nearby check: " + e.Message);
+            }
         }
 
         private static string SystemName(Map.SystemRoot system)
