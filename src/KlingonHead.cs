@@ -16,8 +16,9 @@ namespace StbcRevival
     /// are (scaled to the same eye width), and the avatar's own head is drawn invisible. The avatar's face
     /// animation (speech, blinks, expressions) is copied onto it by shape name each frame, and its lighting,
     /// layer, shadows and visibility follow the avatar's head.
-    /// The heads are in the bridge scenes' assets (the hail views' character prefabs), so they're picked up
-    /// the first time a bridge loads and kept for the session; until then avatars keep their own heads.
+    /// The heads are the hail views' character prefabs in the Aegis bridge's assets. They're read from the game's
+    /// files as it starts (KlingonHeadFiles), and made once their shaders are loaded; if that fails, the bridge is
+    /// loaded alongside at launch for them (PreloadBridge), and any bridge that loads later provides them too.
     /// The choice is a player property ("KH": 0 off, 1 or 2), so crewmates with the mod see it too.
     /// </summary>
     internal static class KlingonHead
@@ -230,6 +231,8 @@ namespace StbcRevival
         private static void FindSources(bool now = false)
         {
             if (Found) return;
+            MakeFromFiles();
+            if (Found) return;
             if ((!now && Time.unscaledTime < nextSearch) || CharacterPrefab == null) return;
             nextSearch = Time.unscaledTime + 5f;
             foreach (var view in Resources.FindObjectsOfTypeAll(CharacterPrefab.DeclaringType))
@@ -260,10 +263,31 @@ namespace StbcRevival
                 // Their rig is optimised away (no bone transforms on the renderer), so the mesh's own bind poses
                 // relate it to the bones; the Head's is the one that puts the head mesh's middle nearest the eyes
                 // (the exposed eye transforms, in Head space). (The eye mesh is no guide: it sits off to one side.)
-                var headMid = head.sharedMesh.bounds.center;
                 var headEyeMid = headBone.InverseTransformPoint((left.position + right.position) * 0.5f);
                 var spacing = (headBone.InverseTransformPoint(left.position) - headBone.InverseTransformPoint(right.position)).magnitude;
-                var poses = head.sharedMesh.bindposes;
+                var source = Make(character.name, head.sharedMesh, head.sharedMaterials, headEyeMid, spacing);
+                // Kept for the session: the bridge's assets are unloaded with it.
+                if (source != null)
+                {
+                    source.Mesh.hideFlags |= HideFlags.DontUnloadUnusedAsset;
+                    foreach (var m in source.Materials) if (m != null) m.hideFlags |= HideFlags.DontUnloadUnusedAsset;
+                }
+                return source;
+            }
+            catch (Exception e)
+            {
+                Plugin.Log.LogWarning($"Klingon head: reading {character.name}: {e.Message}");
+                return null;
+            }
+        }
+
+        // A head to wear: the mesh, its materials, and where the Head bone and eyes are. Shared by the heads taken
+        // from a loaded bridge and the ones read from the game's files.
+        private static Source Make(string character, Mesh mesh, Material[] materials, Vector3 headEyeMid, float spacing)
+        {
+            {
+                var headMid = mesh.bounds.center;
+                var poses = mesh.bindposes;
                 int best = -1;
                 float bestMiss = float.MaxValue;
                 var misses = new List<string>();
@@ -275,30 +299,22 @@ namespace StbcRevival
                 }
                 if (best < 0 || spacing < 1e-4f)
                 {
-                    Plugin.Log.LogWarning($"Klingon head: {character.name}: {poses.Length} bind poses, eye spacing {spacing}; can't place it");
+                    Plugin.Log.LogWarning($"Klingon head: {character}: {poses.Length} bind poses, eye spacing {spacing}; can't place it");
                     return null;
                 }
                 var source = new Source
                 {
-                    Mesh = head.sharedMesh,
-                    Materials = head.sharedMaterials,
+                    Mesh = mesh,
+                    Materials = materials,
                     MeshToHead = poses[best],
                     HeadEyeMid = headEyeMid,
                     HeadEyeSpacing = spacing,
                 };
                 if (bestMiss > 0.15f)
-                    Plugin.Log.LogWarning($"Klingon head: {character.name}: no bind pose puts the head by the eyes (misses {string.Join(", ", misses.ToArray())} m); using the closest");
-                // Kept for the session: the bridge's assets are unloaded with it.
-                source.Mesh.hideFlags |= HideFlags.DontUnloadUnusedAsset;
-                foreach (var m in source.Materials) if (m != null) m.hideFlags |= HideFlags.DontUnloadUnusedAsset;
-                Plugin.Log.LogInfo($"Klingon head: found {character.name} ({source.Mesh.name}, {source.Mesh.vertexCount} vertices, {source.Mesh.blendShapeCount} face shapes; "
+                    Plugin.Log.LogWarning($"Klingon head: {character}: no bind pose puts the head by the eyes (misses {string.Join(", ", misses.ToArray())} m); using the closest");
+                Plugin.Log.LogInfo($"Klingon head: found {character} ({source.Mesh.name}, {source.Mesh.vertexCount} vertices, {source.Mesh.blendShapeCount} face shapes; "
                                    + $"head bind pose {best} of {poses.Length} (head middle from the eyes {string.Join(", ", misses.ToArray())} m); eye bones {F(headEyeMid)} apart {spacing:F4}; mesh bounds {F(source.Mesh.bounds.center)} size {F(source.Mesh.bounds.size)})");
                 return source;
-            }
-            catch (Exception e)
-            {
-                Plugin.Log.LogWarning($"Klingon head: reading {character.name}: {e.Message}");
-                return null;
             }
         }
 
@@ -312,7 +328,65 @@ namespace StbcRevival
         private const string PreloadScene = "Bridge_scene_02";
         private static bool preloading;
 
+        // ---- At launch: the heads from the game's files ---------------------------------------------------------
+        // Read on a background thread as the game starts (KlingonHeadFiles); made once their shaders are loaded,
+        // which they are by the shuttle. If the files can't be read as expected, the bridge preload below runs.
+        private static Dictionary<string, KlingonHeadFiles.Head> fromFiles;
+        private static readonly Dictionary<string, Mesh> fileMeshes = new Dictionary<string, Mesh>();
+        private static bool toldWaitingForShaders;
+
         internal static System.Collections.IEnumerator PreloadAtLaunch()
+        {
+            if (Found || preloading) yield break;
+            float started = Time.realtimeSinceStartup;
+            Dictionary<string, KlingonHeadFiles.Head> read = null;
+            Exception error = null;
+            yield return KlingonHeadFiles.ReadInBackground(new[] { Characters[1], Characters[2] }, (heads, e) => { read = heads; error = e; });
+            if (error == null && read != null && read.ContainsKey(Characters[1]) && read.ContainsKey(Characters[2]))
+            {
+                fromFiles = read;
+                Plugin.Log.LogInfo($"Klingon head: read both heads from the game's files in {Time.realtimeSinceStartup - started:F2} s (no bridge to load)");
+                MakeFromFiles();
+                yield break;
+            }
+            Plugin.Log.LogWarning("Klingon head: couldn't read the heads from the game's files (" + (error != null ? error.Message : $"found {(read == null ? 0 : read.Count)} of 2")
+                                  + "); loading the bridge for them instead");
+            yield return PreloadBridge();
+        }
+
+        private static void MakeFromFiles()
+        {
+            if (fromFiles == null) return;
+            for (int i = 1; i < Characters.Length; i++)
+            {
+                if (sources[i] != null || !fromFiles.TryGetValue(Characters[i], out var head)) continue;
+                try
+                {
+                    var materials = new Material[head.Materials.Count];
+                    for (int m = 0; m < materials.Length; m++)
+                        if ((materials[m] = KlingonHeadFiles.MakeMaterial(head.Materials[m])) == null)
+                        {
+                            if (!toldWaitingForShaders) Plugin.Log.LogInfo($"Klingon head: waiting for the {head.Materials[m].Shader} shader to load");
+                            toldWaitingForShaders = true;
+                            return;
+                        }
+                    if (!fileMeshes.TryGetValue(head.Character, out var mesh) || mesh == null)
+                    {
+                        mesh = fileMeshes[head.Character] = KlingonHeadFiles.MakeMesh(head.Mesh);
+                        mesh.hideFlags |= HideFlags.DontUnloadUnusedAsset;
+                    }
+                    sources[i] = Make(head.Character, mesh, materials, head.HeadEyeMid, head.EyeSpacing);
+                }
+                catch (Exception e)
+                {
+                    Plugin.Log.LogWarning($"Klingon head: making {head.Character} from the game's files: {e.Message}; it'll come from a bridge instead");
+                    fromFiles.Remove(head.Character);
+                }
+            }
+            if (Found) fromFiles = null;
+        }
+
+        private static System.Collections.IEnumerator PreloadBridge()
         {
             if (Found || preloading) yield break;
             preloading = true;
