@@ -126,6 +126,13 @@ namespace StbcRevival
         /// <summary>Is this station (or console) part of the second set, ship B's?</summary>
         internal static bool IsCopy(NovaStation station) => station != null && copies.Contains(station);
 
+        /// <summary>A station's other-ship twin (the copy of an original, or the original of a copy), or null.</summary>
+        internal static NovaStation TwinOf(NovaStation station) =>
+            station != null && twinOf.TryGetValue(station, out var twin) && twin != null ? twin : null;
+
+        /// <summary>The game's registered stations (the originals, then the copies), or null before they're found.</summary>
+        internal static IList Stations => stationList?.GetValue(null) as IList;
+
         internal static bool IsCopy(ConsoleBase console) => copies.Any(s => s != null && s.GHJLPNMIOAJ == console);
 
         /// <summary>The same console in the other set (ship A's for ship B's, and back), or null.</summary>
@@ -450,12 +457,16 @@ namespace StbcRevival
         private static MethodInfo showMessage;
 
         // Bridge.SendConsoleMessage tells every bridge, with no ship in it. Each game's messages are about its
-        // own ship (the host's are ship A's), so they stay on that game for now. (With crews of several, a
-        // ship's other players will need them sent to them alone.)
+        // own ship (the host's are ship A's), so they stay on that game; the host's for the other ship go to
+        // that ship's players (PvpRelay).
         private static bool Message_Prefix(Bridge __instance, object __0, string __1, float __2, bool __3, bool __4, string[] __5)
         {
             if (!Active) return true;
-            if (PvpRouting.KeepOff(__1)) return false;
+            if (PvpRouting.KeepOff(__1))
+            {
+                PvpRelay.Message(PvpRouting.Context, __0, __1, __2, __3, __4, __5); // for that ship's players
+                return false;
+            }
             if (showMessage == null) showMessage = AccessTools.Method(typeof(Bridge), "NewConsoleMessageRPC");
             if (showMessage == null) return true;
             showMessage.Invoke(__instance, new object[] { Convert.ToInt32(__0), __1, __2, __3, __4, __5 });

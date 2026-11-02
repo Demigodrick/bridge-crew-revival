@@ -30,17 +30,20 @@ namespace StbcRevival
             {
                 if (mineFrame == UnityEngine.Time.frameCount) return mine;
                 var setting = Plugin.PvpTestShip.Value?.Trim().ToUpperInvariant();
-                mine = setting == "A" || setting == "B" ? setting : Auto(Me);
+                mine = setting == "A" || setting == "B" ? setting : PvpRoles.ShipOfSlot(Actor(Me)) ?? Auto(Me);
                 mineFrame = UnityEngine.Time.frameCount;
                 return mine;
             }
         }
 
-        /// <summary>The ship a Photon player crews: what their game published; else yours by the rule, and anyone
+        /// <summary>The ship a Photon player crews: the slot they picked in the briefing room (4–7: ship B), else what
+        /// their game published; else yours by the rule, and anyone
         /// else's on A (their game has no PvP test, so it binds to the first ship as the game does).</summary>
         internal static string Of(object player)
         {
             if (player == null) return "A";
+            if (Actor(player) == Actor(Me)) return Mine; // [Debug] PvpTestShip can override your own slot
+            if (PvpRoles.ShipOfSlot(Actor(player)) is string slotted) return slotted; // the briefing room slot they picked
             if (Props(player)?[Key] is string published && (published == "A" || published == "B")) return published;
             return Actor(player) == Actor(Me) ? Mine : "A";
         }

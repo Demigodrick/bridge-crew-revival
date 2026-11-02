@@ -125,6 +125,8 @@ namespace StbcRevival
             else harmony.Patch(heading, postfix: new HarmonyMethod(typeof(PvpPrototype), nameof(Heading_Postfix)));
             PatchPlayerShipChecks(harmony);
             PvpConsoles.Patch(harmony);
+            PvpRoles.Patch(harmony);
+            PvpRelay.Patch(harmony);
             var consoleAI = AccessTools.Method(typeof(AI.USSAegisCrew), "IsConsoleAI");
             var crewVoice = AccessTools.Method(typeof(AI.USSAegisCrew), "CrewbotPlayVO");
             if (crewVoice == null) Plugin.Log.LogWarning("PvP: USSAegisCrew.CrewbotPlayVO not found; the other ship's crew calls out its status on your bridge");
@@ -227,6 +229,8 @@ namespace StbcRevival
         /// <summary>Each frame: the other ship explodes when its hull is gone.</summary>
         internal static void Update()
         {
+            PvpRoles.Update();
+            PvpRelay.Update();
             if (!Active)
             {
                 if (others.Count > 0 || exploded.Count > 0)
@@ -482,7 +486,14 @@ namespace StbcRevival
         // The other ship's AI crew (run on the master, PvpScope) called out its shields and systems aloud on your
         // bridge, its console messages already kept off. Its voice lines are played networked, to every game,
         // naming no ship: for now they're dropped at the source, so that ship's players don't hear them either.
-        private static bool CrewVoice_Prefix(AI.USSAegisCrew __instance) => !IsOther(__instance.GetComponent<PlayerSpacecraft>());
+        // The other ship's crew isn't heard on your bridge; its players hear it (PvpRelay).
+        private static bool CrewVoice_Prefix(AI.USSAegisCrew __instance, string __0, object __1, float __2)
+        {
+            var ship = __instance.GetComponent<PlayerSpacecraft>();
+            if (!IsOther(ship)) return true;
+            PvpRelay.Voice(Letter(ship), __0, __1, __2);
+            return false;
+        }
 
         // Multicast_SetThrottleAndPower also moves the helm's throttle slider: not for the other ship.
         private static void Throttle_Prefix(PlayerSpacecraft __instance, out float __state)

@@ -367,6 +367,36 @@ var bodyCustomization = game.GetType("BodyCustomization");
 foreach (var f in new[] { "PDMECBLMBGB", "HandMaterialPosition" })
     Check($"  BodyCustomization.{f}", bodyCustomization?.GetField(f, Inst));
 
+// PvP crews: eight role slots, the briefing room's ship B rows, seating, menu orders, ship lines, voice per ship
+var roleManager = game.GetType("NovaRoleManager");
+foreach (var f in new[] { "JIOGBBNFGMJ", "LPPEEFGBIID" })
+    Check($"NovaRoleManager.{f} (pvp roles)", roleManager?.GetField(f, Inst));
+foreach (var m in new[] { "Awake", "Start", "NetworkSerialize", "NetworkDeserialize" })
+    Check($"  NovaRoleManager.{m}", roleManager?.GetMethod(m, Inst));
+Check("  NovaRoleManager.get_Instance", roleManager?.GetMethod("get_Instance", AnyS));
+var briefingRoom = game.GetType("ConsoleBriefingRoom");
+Check("  ConsoleBriefingRoom._playerRoleInfos", briefingRoom?.GetField("_playerRoleInfos", Inst));
+foreach (var m in new[] { "Awake", "BJBJFCFIDOA", "GLFEOIFJEHE" })
+    Check($"  ConsoleBriefingRoom.{m}", briefingRoom?.GetMethod(m, Inst));
+Check("  ConsoleBriefingRoom/PlayerRoleInfo.Role", briefingRoom?.GetNestedType("PlayerRoleInfo", BindingFlags.Public | BindingFlags.NonPublic)?.GetField("Role", Inst));
+Check("  NovaPlayerInfo.FJMHMOOJNJG (role)", game.GetType("NovaPlayerInfo")?.GetProperty("FJMHMOOJNJG", Inst));
+Check("  Station.Pawn (a station's seated pawn)", (MemberInfo)game.GetType("NovaStation")?.GetField("Pawn", Inst) ?? game.GetType("Station")?.GetField("Pawn", Inst));
+var seatIterator = game.GetType("NovaSpawnManager")?.GetNestedType("<SpawnNewlyAddedPlayerOnClients>c__Iterator1F3", BindingFlags.Public | BindingFlags.NonPublic);
+Check("  NovaSpawnManager seating iterator .MoveNext", seatIterator?.GetMethod("MoveNext", Inst));
+Check("  NovaSpawnManager seating iterator .PNGLMGLMLJM (the player)", seatIterator?.GetField("PNGLMGLMLJM", Inst));
+var stationRegistry = game.GetType("GGPMPCDFHAK");
+Check("  GGPMPCDFHAK.GetStationIndex(Station)", stationRegistry?.GetMethods(AnyS).FirstOrDefault(m => m.Name == "GetStationIndex" && m.GetParameters().Length == 1 && m.GetParameters()[0].ParameterType.Name == "FLCHMJJDKDL"));
+Check("  GGPMPCDFHAK.GetFreeStationIndex", stationRegistry?.GetMethod("GetFreeStationIndex", AnyS));
+Check("  CommandManager.ApplyNewOrder (pvp: menu orders to the host)", game.GetType("AI.CommandManager")?.GetMethod("ApplyNewOrder", AnyS));
+var pvpMenuItem = game.GetType("AI.CHJEFCBPHGN");
+Check("  AI.CHJEFCBPHGN.OnExecute", pvpMenuItem?.GetMethod("OnExecute", Inst));
+Check("  AI.CHJEFCBPHGN command backing field", pvpMenuItem?.GetField("<ONOKMLAGHHI>k__BackingField", Inst));
+var voPlayback = game.GetType("VOPlaybackManager");
+Check("  VOPlaybackManager.PlayVO (pvp: your ship's crew lines)", voPlayback?.GetMethod("PlayVO", Inst));
+Check("  VOPlaybackManager.IEFBKOMBFGO", (MemberInfo)voPlayback?.GetField("IEFBKOMBFGO", AnyS) ?? voPlayback?.GetProperty("IEFBKOMBFGO", AnyS));
+Check("  Bridge.NewConsoleMessageRPC", game.GetType("Bridge")?.GetMethod("NewConsoleMessageRPC", Inst));
+Check("  VoIpManager.GMFCCIFGKDN (pvp: voice chat per ship)", game.GetType("VoIpManager")?.GetMethod("GMFCCIFGKDN", Inst));
+
 // Player volumes (escape menu player options: the voice volume slider down to muted)
 var voip = game.GetType("VoIpManager");
 Check("VoIpManager.SetVolumeForPlayer (player volumes)", voip?.GetMethod("SetVolumeForPlayer", Inst));

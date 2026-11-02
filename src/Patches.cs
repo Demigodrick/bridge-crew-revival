@@ -240,6 +240,7 @@ namespace StbcRevival
             KlingonHead.Patch(harmony);
             HandSkinLog.Patch(harmony);
             VoiceCommands.Patch(harmony);
+            CrewOrders.Patch(harmony);
             Translation.Patch(harmony);
             ControllerGrace.Patch(harmony);
             Excelsior.Patch(harmony);

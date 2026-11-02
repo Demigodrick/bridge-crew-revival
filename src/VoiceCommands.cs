@@ -618,6 +618,13 @@ namespace StbcRevival
                     PlotCourse(int.Parse(one.Substring("Course:".Length)));
                     continue;
                 }
+                // A crew menu playbook order forwarded to the host (CrewOrders): by its place in the order list.
+                if (one.StartsWith(CrewOrders.Playbook, StringComparison.Ordinal))
+                {
+                    if (int.TryParse(one.Substring(CrewOrders.Playbook.Length), out int order))
+                        AccessTools.Method(manager, "ApplyNewOrder")?.Invoke(null, new object[] { order });
+                    continue;
+                }
                 foreach (var role in new[] { "Engineering", "Tactical", "Helm" })
                     update?.Invoke(null, new[] { Enum.Parse(roles, role) });
                 // The helm menu has several Move To orders (to the captain's target, the closest contact, a cloaked

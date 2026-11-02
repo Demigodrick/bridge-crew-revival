@@ -137,12 +137,11 @@ namespace StbcRevival
             }
 
             // What the other ship's code says to the bridge.
-            var mute = new HarmonyMethod(typeof(PvpRouting), nameof(Voice_Prefix));
             foreach (var name in new[] { "PlayVO", "PlayVO_Networked" })
             {
                 var play = AccessTools.Method(typeof(VOPlaybackManager), name);
                 if (play == null) Plugin.Log.LogWarning($"PvP: VOPlaybackManager.{name} not found");
-                else harmony.Patch(play, prefix: mute);
+                else harmony.Patch(play, prefix: new HarmonyMethod(typeof(PvpRouting), name == "PlayVO" ? nameof(Voice_Prefix) : nameof(NetworkedVoice_Prefix)));
             }
             Plugin.Log.LogInfo($"PvP: events routed by ship ({parts} ship parts' console state)");
         }
@@ -159,6 +158,14 @@ namespace StbcRevival
         }
 
         private static bool Voice_Prefix() => !Muted;
+
+        // A voice line for everyone from the other ship's code: that ship's players hear it (PvpRelay).
+        private static bool NetworkedVoice_Prefix(string __0, object __1, float __2)
+        {
+            if (!Muted) return true;
+            PvpRelay.Voice(Context, __0, __1, __2);
+            return false;
+        }
 
         // ---- Context ------------------------------------------------------------------------------
 

@@ -81,6 +81,49 @@ namespace StbcRevival
             Plugin.Log.LogInfo($"Voice commands: {command} (sent to the host, who runs the AI crew)");
         }
 
+        // ---- Crew menu orders (PvP test) -------------------------------------------------------------
+
+        internal const string Playbook = "Playbook:";
+
+        /// <summary>The crew menus too: a menu or playbook order picked on a game that isn't the host's only changed
+        /// that game's own copy of the orders, which no AI crew reads. In the PvP test (each ship's crew run by
+        /// the host as that ship's) they're sent to the host instead, like voice orders.</summary>
+        internal static void Patch(Harmony harmony)
+        {
+            var manager = AccessTools.TypeByName("AI.CommandManager");
+            var apply = manager == null ? null : AccessTools.Method(manager, "ApplyNewOrder");
+            var item = AccessTools.TypeByName("AI.CHJEFCBPHGN");
+            var execute = item == null ? null : AccessTools.Method(item, "OnExecute");
+            menuCommand = item == null ? null : AccessTools.Field(item, "<ONOKMLAGHHI>k__BackingField");
+            if (apply == null || execute == null || menuCommand == null)
+            {
+                Plugin.Log.LogWarning("Crew orders: the crew menu's order methods weren't found; in the PvP test, a crewmate's menu orders stay on their game");
+                return;
+            }
+            harmony.Patch(apply, prefix: new HarmonyMethod(typeof(CrewOrders), nameof(Playbook_Prefix)));
+            harmony.Patch(execute, prefix: new HarmonyMethod(typeof(CrewOrders), nameof(MenuOrder_Prefix)));
+        }
+
+        private static FieldInfo menuCommand;
+
+        private static bool Forwarding => PvpPrototype.Active && !IAmHost;
+
+        private static bool Playbook_Prefix(int __0)
+        {
+            if (!Forwarding) return true;
+            SendToHost(Playbook + __0);
+            return false;
+        }
+
+        private static bool MenuOrder_Prefix(object __instance)
+        {
+            if (!Forwarding || __instance == null) return true;
+            var command = menuCommand.GetValue(__instance)?.ToString();
+            if (string.IsNullOrEmpty(command) || command == "Invalid") return true;
+            SendToHost(command);
+            return false;
+        }
+
         // ---- The host ---------------------------------------------------------------------------
 
         internal static void Update()
@@ -125,6 +168,7 @@ namespace StbcRevival
         private static bool Valid(string one)
         {
             if (string.IsNullOrEmpty(one) || AtConsole(one)) return false;
+            if (one.StartsWith(Playbook, StringComparison.Ordinal)) return int.TryParse(one.Substring(Playbook.Length), out int n) && n >= 0 && n < 256;
             var commands = AccessTools.TypeByName("AI.BHPPPGKNAHK");
             return commands != null && Enum.GetNames(commands).Contains(one);
         }
