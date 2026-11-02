@@ -357,6 +357,16 @@ var menuLanguage = localization?.GetMethod("get_MenuLanguageID", AnyS);
 Check("  SVR.Localization.get_MenuLanguageID", menuLanguage);
 Check("  menu language German", menuLanguage != null && Enum.GetNames(menuLanguage.ReturnType).Contains("German") ? menuLanguage : null);
 
+// Hand skin log (issue #4): the shuttle avatar's species hands and skin tone
+var characterCustomization = game.GetType("CharacterCustomization");
+foreach (var m in new[] { "UpdateRaceSkinValues", "SetVisualSpeciesForMainMenuAvatar" })
+    Check($"CharacterCustomization.{m} (hand skin log)", characterCustomization?.GetMethod(m, Inst));
+foreach (var f in new[] { "IsMainMenuAvatar", "GPLBJJJBPOL" })
+    Check($"  CharacterCustomization.{f}", characterCustomization?.GetField(f, Inst));
+var bodyCustomization = game.GetType("BodyCustomization");
+foreach (var f in new[] { "PDMECBLMBGB", "HandMaterialPosition" })
+    Check($"  BodyCustomization.{f}", bodyCustomization?.GetField(f, Inst));
+
 // Player volumes (escape menu player options: the voice volume slider down to muted)
 var voip = game.GetType("VoIpManager");
 Check("VoIpManager.SetVolumeForPlayer (player volumes)", voip?.GetMethod("SetVolumeForPlayer", Inst));

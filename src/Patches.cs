@@ -238,6 +238,7 @@ namespace StbcRevival
             VrKeyboard.Patch(harmony);
             RomulanFace.Patch(harmony);
             KlingonHead.Patch(harmony);
+            HandSkinLog.Patch(harmony);
             VoiceCommands.Patch(harmony);
             Translation.Patch(harmony);
             ControllerGrace.Patch(harmony);
