@@ -13,7 +13,9 @@ namespace StbcRevival
     /// Female is picked, KLINGON while Male is. Each is a copy of the Vulcan toggle in the same group; picking
     /// it picks its base species for the game (Vulcan for Romulan: the female Vulcan presets; Human for
     /// Klingon: the male Human presets) and turns its setting on ([Avatar] RomulanFace, KlingonHead); picking
-    /// any other species turns it off. See RomulanFace and KlingonHead for the heads themselves.
+    /// any other species turns it off. Their base species is kept shown as not picked while they are (the game
+    /// puts it back on whenever it shows the current choice), and a click or VR press on HUMAN, VULCAN or ANDROID
+    /// unpicks them. See RomulanFace and KlingonHead for the heads themselves.
     /// </summary>
     internal static class SpeciesCreatorOptions
     {
@@ -67,6 +69,9 @@ namespace StbcRevival
             harmony.Patch(refresh, postfix: new HarmonyMethod(typeof(SpeciesCreatorOptions), nameof(Refresh_Postfix)));
             // A VR press ends in HandInteraction.OnPointerUp; pick the choice from there in case the toggle's
             // own click never arrives.
+            var clicked = AccessTools.Method(typeof(Toggle), "InternalToggle");
+            if (clicked != null) harmony.Patch(clicked, postfix: new HarmonyMethod(typeof(SpeciesCreatorOptions), nameof(Clicked_Postfix)));
+            else Plugin.Log.LogWarning("Creator species: Toggle.InternalToggle not found; picking HUMAN or VULCAN may leave KLINGON or ROMULAN on");
             var pressed = AccessTools.Method(typeof(HandInteraction), "OnPointerUp");
             if (pressed != null)
                 harmony.Patch(pressed, postfix: new HarmonyMethod(typeof(SpeciesCreatorOptions), nameof(Pressed_Postfix)));
@@ -253,9 +258,10 @@ namespace StbcRevival
                 foreach (var option in Options)
                 {
                     bool show = gender == option.Gender && species == option.BaseSpecies && option.Chosen();
-                    if (option.Toggle.isOn == show) continue;
-                    Set(option.Toggle, show);
-                    if (show && option.Toggle.group == null && Field(__instance, option.BaseToggle) is Toggle baseToggle) Set(baseToggle, false);
+                    if (option.Toggle.isOn != show) Set(option.Toggle, show);
+                    // Its base species shows as not picked, checked every frame: the game puts it back on whenever it
+                    // shows the current choice, and a toggle group may not count our copy.
+                    if (show && Field(__instance, option.BaseToggle) is Toggle baseToggle && baseToggle.isOn) Off(baseToggle);
                 }
             }
             catch (Exception e)
@@ -268,6 +274,9 @@ namespace StbcRevival
         private static void Pressed_Postfix(HandInteraction __instance)
         {
             if (__instance == null) return;
+            // HUMAN, VULCAN or ANDROID pressed: once the press has landed, it's none of ours.
+            if (creator != null && SpeciesToggles.Select(name => Field(creator, name)).FirstOrDefault(t => t != null && t.gameObject == __instance.gameObject) is Toggle species)
+                Plugin.Instance.StartCoroutine(AfterSpeciesPress(species));
             foreach (var option in Options)
             {
                 if (option.Toggle == null || __instance.gameObject != option.Toggle.gameObject) continue;
@@ -276,11 +285,47 @@ namespace StbcRevival
             }
         }
 
+        private static System.Collections.IEnumerator AfterSpeciesPress(Toggle species)
+        {
+            yield return null;
+            Clicked_Postfix(species);
+        }
+
         // A frame later, so a click the toggle does get isn't undone by picking it twice.
         private static System.Collections.IEnumerator PickAfterClick(Toggle toggle)
         {
             yield return null;
             if (toggle != null && !toggle.isOn && toggle.IsInteractable()) toggle.isOn = true; // fires Toggled
+        }
+
+        // Off even in a toggle group that keeps one on (ours may not be in it): out of the group for the moment.
+        private static void Off(Toggle toggle)
+        {
+            var group = toggle.group;
+            if (group != null) toggle.group = null;
+            Set(toggle, false);
+            if (group != null) toggle.group = group;
+        }
+
+        // A player picking HUMAN, VULCAN or ANDROID (a click or a VR press: Toggle.InternalToggle) means none of ours.
+        private static void Clicked_Postfix(Toggle __instance)
+        {
+            try
+            {
+                if (creator == null || __instance == null || !__instance.isOn) return;
+                if (!SpeciesToggles.Any(name => Field(creator, name) == __instance)) return;
+                foreach (var option in Options)
+                {
+                    if (!option.Chosen()) continue;
+                    option.Choose(false);
+                    if (option.Toggle != null && option.Toggle.isOn) Off(option.Toggle);
+                    Plugin.Log.LogInfo($"{option.Log}: {__instance.name} picked in the creator");
+                }
+            }
+            catch (Exception e)
+            {
+                Plugin.Log.LogWarning("Creator species: species click: " + e.Message);
+            }
         }
 
         private static void Set(Toggle toggle, bool on)
