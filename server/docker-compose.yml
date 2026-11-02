@@ -5,8 +5,8 @@ services:
     container_name: stbc-server
     restart: unless-stopped
     ports:
-      - "4530:4530/tcp"   # game (Photon over TCP)
-      - "8080:8080/tcp"   # room browser web page and JSON API
+      - "${PORT:-4530}:${PORT:-4530}/tcp"   # game (Photon over TCP)
+      - "${PORT:-8000}:${PORT:-8000}/tcp"   # room browser web page and JSON API
     environment:
       LOG_LEVEL: ${LOG_LEVEL:-info}
       # Only needed for clients that don't run the Bridge Crew Revival mod's game-server
