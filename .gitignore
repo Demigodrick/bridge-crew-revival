@@ -4,3 +4,4 @@ dist/
 decompiled/
 .idea/
 *.DotSettings.user
+server/.env
