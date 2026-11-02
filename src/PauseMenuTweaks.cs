@@ -87,7 +87,7 @@ namespace StbcRevival
 
         /// <summary>The mod's name, version and website, for the escape menu.</summary>
         // Spaced out, and the address broken at its slash rather than wherever the panel wraps it.
-        internal static string ModInfo => $"Version {Plugin.Version}\nSteam multiplayer mod\n\n"
+        internal static string ModInfo => $"Version {Plugin.Version}\n{Translation.T("Steam multiplayer mod")}\n\n"
                                           + (SteamMode.OnlineText.Length > 0 ? SteamMode.OnlineText + "\n\n" : "")
                                           + Website.Replace("/", "/\n");
 

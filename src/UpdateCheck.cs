@@ -203,8 +203,8 @@ namespace StbcRevival
             try
             {
                 UI.PopupMgr.ShowPopup(
-                    $"Bridge Crew Revival {newer} is available. You have {Plugin.Version}.\n\n" +
-                    "Open the website to update? This closes the game; run the installer again from there.",
+                    Translation.T($"Bridge Crew Revival {newer} is available. You have {Plugin.Version}.\n\n" +
+                    "Open the website to update? This closes the game; run the installer again from there."),
                     new UI.LGNBEBILNCL(yes =>
                     {
                         if (!yes) return;
@@ -225,8 +225,8 @@ namespace StbcRevival
             try
             {
                 UI.PopupMgr.ShowPopup(
-                    $"Bridge Crew Revival has been updated to {installed}. It starts the next time you launch the game.\n\n" +
-                    "Close the game now?",
+                    Translation.T($"Bridge Crew Revival has been updated to {installed}. It starts the next time you launch the game.\n\n" +
+                    "Close the game now?"),
                     new UI.LGNBEBILNCL(yes =>
                     {
                         if (!yes) return;

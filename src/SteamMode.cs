@@ -326,7 +326,7 @@ namespace StbcRevival
         internal static int OnlineCount => directory.OnlineCount;
 
         /// <summary>"12 players online", or "" while unknown: for the crew lists.</summary>
-        internal static string OnlineText => Enabled && OnlineCount > 0 ? $"{OnlineCount} Revival player{(OnlineCount == 1 ? "" : "s")} online" : "";
+        internal static string OnlineText => Enabled && OnlineCount > 0 ? Translation.T($"{OnlineCount} Revival player{(OnlineCount == 1 ? "" : "s")} online") : "";
 
         // ---- For the room browser -------------------------------------------------------------
 
@@ -368,13 +368,13 @@ namespace StbcRevival
             if (!hosting)
             {
                 var host = CurrentHost != 0 && steamReady ? SteamFriends.GetFriendPersonaName(new CSteamID(CurrentHost)) : null;
-                return $"Hosted by {(string.IsNullOrEmpty(host) ? "another player" : host)} · {(visible ? "public" : "private")}";
+                return Translation.T($"Hosted by {(string.IsNullOrEmpty(host) ? "another player" : host)} · {(visible ? "public" : "private")}");
             }
             if (!visible)
-                return "You're hosting · PRIVATE: only Steam invites, Join Game and your share code get in";
-            return directory.PublishedRoom == roomName && directory.MyLobby != 0
+                return Translation.T("You're hosting · PRIVATE: only Steam invites, Join Game and your share code get in");
+            return Translation.T(directory.PublishedRoom == roomName && directory.MyLobby != 0
                 ? "You're hosting · PUBLIC: listed on Steam, Quick match players can join"
-                : "You're hosting · PUBLIC: publishing to Steam…";
+                : "You're hosting · PUBLIC: publishing to Steam…");
         }
 
         // ---- Link quality (the log, for choppy voice and lag) ------------------------------------------

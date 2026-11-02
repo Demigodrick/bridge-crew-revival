@@ -197,14 +197,14 @@ namespace StbcRevival
 
         private static void Question(string text, Action<bool> answer)
         {
-            try { UI.PopupMgr.ShowPopup(text.Replace('|', ' '), new UI.LGNBEBILNCL(answer), UI.PDHCCBFJODN.Question, true); }
+            try { UI.PopupMgr.ShowPopup(Translation.T(text).Replace('|', ' '), new UI.LGNBEBILNCL(answer), UI.PDHCCBFJODN.Question, true); }
             catch (Exception e) { Plugin.Log.LogWarning("Crew password: popup: " + e.Message); }
         }
 
         private static void Notify(string text)
         {
             Plugin.Log.LogInfo("Crew password: " + text);
-            try { UI.PopupMgr.ShowPopup(text.Replace('|', ' '), null, UI.PDHCCBFJODN.Notification, true); }
+            try { UI.PopupMgr.ShowPopup(Translation.T(text).Replace('|', ' '), null, UI.PDHCCBFJODN.Notification, true); }
             catch { /* no popups here */ }
         }
 

@@ -5,12 +5,15 @@
 #   curl -fsSL https://demigodrick.github.io/bridge-crew-revival/install.sh | bash -s -- --uninstall
 #
 # or from the release zip:  ./install.sh  [game folder]  [--uninstall]  [--import-save | --no-import]
+#                           [--voice-language=german | english]
 #
 # Finds the game in your Steam libraries, installs BepInEx 5 (from its GitHub release, checksum
 # verified), sets the BepInEx entrypoint this game needs, and copies the mod (from the zip it's in,
 # or the latest GitHub release), plus offline speech recognition for voice commands (Vosk and its small
 # English model, checksum verified). Run it again to update or remove it (it asks). It then offers to copy your settings from your
 # Ubisoft cloud save (avatar, options) by starting the game once.
+# It also asks which language the voice commands are in, English or German (the German model is a second,
+# small download); --voice-language=german or STBC_VOICE_LANGUAGE=german answers that without asking.
 set -euo pipefail
 
 REPO="Demigodrick/bridge-crew-revival"
@@ -21,6 +24,8 @@ VOSK_URL="https://github.com/alphacep/vosk-api/releases/download/v0.3.45/vosk-wi
 VOSK_SHA256="f1dcc9cca460630f81ea8f71794f69c80bed6556d2a4e6237b5785e1d2dff34b"
 VOSK_MODEL_URL="https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip"
 VOSK_MODEL_SHA256="30f26242c4eb449f948e42cb302dd7a686cb29a3423a8367f99ff41780942498"
+VOSK_MODEL_DE_URL="https://alphacephei.com/vosk/models/vosk-model-small-de-0.15.zip"
+VOSK_MODEL_DE_SHA256="b7e53c90b1f0a38456f4cd62b366ecd58803cd97cd42b06438e2c131713d5e43"
 APP_ID=527100
 LAUNCH_OPTIONS='WINEDLLOVERRIDES="winhttp=n,b" %command%'
 
@@ -34,10 +39,12 @@ fail()  { printf '\n  Error: %s\n' "$*" >&2; exit 1; }
 usage() {
   cat <<'EOF'
 Bridge Crew Revival installer (Linux)
-  install.sh [game folder] [--uninstall] [--import-save | --no-import]
+  install.sh [game folder] [--uninstall] [--import-save | --no-import] [--voice-language=german | english]
   --import-save  copy your Ubisoft cloud save (starts the game once; Ubisoft Connect must be signed in)
   --no-import    don't ask about it
+  --voice-language=german | english   the voice commands' language, without asking
 Environment: STBC_VERSION=0.6.1 installs that release instead of the latest.
+             STBC_VOICE_LANGUAGE=german does the same as --voice-language=german.
 EOF
 }
 
@@ -157,6 +164,48 @@ install_vosk() { # game tmp
   return 0
 }
 
+# The voice commands' language: [Voice] VoiceLanguage in the mod's config (English when it isn't there).
+voice_choice() { # text -> German, English, or nothing
+  case "$1" in [gGdD]*) echo German ;; [eE]*) echo English ;; esac
+}
+
+voice_language() { # game -> German / English
+  local cfg="$1/BepInEx/config/stbc.revival.cfg" language=""
+  [ -f "$cfg" ] && language="$(sed -n '/^\[Voice\]/,/^\[/ s/^VoiceLanguage = \([A-Za-z]*\).*/\1/p' "$cfg" | head -n1)"
+  echo "${language:-English}"
+}
+
+set_voice_language() { # game, German|English
+  local cfg="$1/BepInEx/config/stbc.revival.cfg"
+  mkdir -p "$1/BepInEx/config"
+  if [ -f "$cfg" ] && sed -n '/^\[Voice\]/,/^\[/p' "$cfg" | grep -q '^VoiceLanguage = '; then
+    # Only the key inside [Voice]; keeps BepInEx's CRLF line endings.
+    sed -i "/^\[Voice\]/,/^\[/ s/^VoiceLanguage = [^\r]*/VoiceLanguage = $2/" "$cfg"
+  else
+    # BepInEx reads a section named twice as one, and tidies the file when the game starts.
+    printf '\n[Voice]\n\nVoiceLanguage = %s\n' "$2" >> "$cfg"
+  fi
+}
+
+ask_voice_language() { # game -> German / English; fails without a terminal (automated run: don't ask)
+  local answer="" default
+  default="$(voice_language "$1")"
+  { : < /dev/tty; } 2>/dev/null || return 1
+  printf '       Language of the voice commands? [E]nglish / [G]erman (Enter = %s) ' "$default" > /dev/tty
+  read -r answer < /dev/tty || answer=""
+  voice_choice "$answer" | grep . || echo "$default"
+}
+
+install_vosk_german() { # game tmp: the German model, next to the English one. Run in a subshell.
+  local vosk="$1/BepInEx/vosk"
+  info "Downloading the German voice model (about 45 MB)..."
+  download "$VOSK_MODEL_DE_URL" "$2/vosk-model-de.zip"
+  echo "$VOSK_MODEL_DE_SHA256  $2/vosk-model-de.zip" | sha256sum -c --quiet - || fail "the German voice model download was damaged (checksum mismatch)."
+  extract "$2/vosk-model-de.zip" "$2/vosk-model-de"
+  rm -rf "$vosk/model-de"
+  mv "$(find "$2/vosk-model-de" -mindepth 1 -maxdepth 1 -type d | head -n1)" "$vosk/model-de"
+}
+
 prefix_reg() { # game -> path of the prefix's user.reg
   printf '%s\n' "$(cd "$1/../.." && pwd)/compatdata/$APP_ID/pfx/user.reg"
 }
@@ -260,12 +309,14 @@ import_save() { # game -> prints the outcome
 }
 
 main() {
-  local uninstall=0 game="" import="" beta="" arg
+  local uninstall=0 game="" import="" beta="" voice="" arg
+  voice="$(voice_choice "${STBC_VOICE_LANGUAGE:-}")"
   for arg in "$@"; do
     case "$arg" in
       --uninstall) uninstall=1 ;;
       --import-save) import=yes ;;
       --no-import) import=no ;;
+      --voice-language=*) voice="$(voice_choice "${arg#*=}")" ;;
       -h|--help) usage; exit 0 ;;
       *) game="$arg" ;;
     esac
@@ -409,6 +460,21 @@ main() {
     info "Voice commands: as captain, hold V (or the voice button) and give an order, e.g. \"red alert\"."
   else
     warn "Voice commands won't work (see above). Everything else does; run the installer again to retry."
+  fi
+  if [ -f "$game/BepInEx/vosk/libvosk.dll" ]; then
+    local choice="$voice"
+    [ -n "$choice" ] || choice="$(ask_voice_language "$game")" || choice=""
+    if [ "$choice" = German ]; then
+      if [ -d "$game/BepInEx/vosk/model-de" ] || (install_vosk_german "$game" "$tmp"); then
+        set_voice_language "$game" German
+        ok "Voice commands in German"
+        info "Voice commands: hold V (or the voice button) and give an order in German, e.g. \"Roter Alarm\"."
+      else
+        warn "German voice commands won't work (see above). They stay as they were; run the installer again to retry."
+      fi
+    elif [ "$choice" = English ] && [ "$(voice_language "$game")" = German ]; then
+      set_voice_language "$game" English
+    fi
   fi
   local loader_on=1
   if set_prefix_override "$game" on; then

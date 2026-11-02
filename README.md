@@ -47,6 +47,7 @@ A new **Revival Missions** category in the briefing room, next to Campaign and O
 The captain's spoken orders used IBM Watson, which shut down years ago. They now run offline on your own PC.
 Hold **V** (or the voice button) and say *"Red alert!"*, *"Fire at will"*, *"Engage"* or *"Beam the
 survivors aboard"*. [Full list of commands](https://demigodrick.github.io/bridge-crew-revival/#voice).
+The orders also work in German; the installer asks, see [VOICE-DE.md](VOICE-DE.md).
 Want the helm, tactical or engineering officer to give the AI crew orders too? Switch on **Voice orders from
 any station** in REVIVAL SETTINGS (experimental).
 

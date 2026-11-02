@@ -152,7 +152,7 @@ namespace StbcRevival
                 if (inGame && myRoom != null && group == myRoom)
                 {
                     state = FriendStatus.InMySession;
-                    presenceText = "In your crew";
+                    presenceText = Translation.T("In your crew");
                 }
                 else if (inGame && connect.Contains(SteamIntegration.JoinArg))
                 {
@@ -244,7 +244,7 @@ namespace StbcRevival
             if (friend == null || !info.TryGetValue(friend, out var steam)) return true;
             if (string.IsNullOrEmpty(steam.Connect))
             {
-                UI.PopupMgr.ShowPopup("This friend isn't in a crew you can join right now.", null, UI.PDHCCBFJODN.Notification, true);
+                UI.PopupMgr.ShowPopup(Translation.T("This friend isn't in a crew you can join right now."), null, UI.PDHCCBFJODN.Notification, true);
                 return false;
             }
             Plugin.Log.LogInfo($"Steam friends panel: joining {Profile(friend).NameOnPlatform} ({steam.Connect})");
@@ -259,12 +259,12 @@ namespace StbcRevival
             var connect = SteamIntegration.CurrentConnect;
             if (string.IsNullOrEmpty(connect))
             {
-                UI.PopupMgr.ShowPopup("Your crew isn't open to join right now.", null, UI.PDHCCBFJODN.Notification, true);
+                UI.PopupMgr.ShowPopup(Translation.T("Your crew isn't open to join right now."), null, UI.PDHCCBFJODN.Notification, true);
                 return false;
             }
             bool sent = SteamFriends.InviteUserToGame(new CSteamID(steam.Id), connect);
             Plugin.Log.LogInfo($"Steam friends panel: invited {Profile(friend).NameOnPlatform}: {sent}");
-            UI.PopupMgr.ShowPopup(sent ? $"Invite sent to {Profile(friend).NameOnPlatform}." : "Steam couldn't send the invite.",
+            UI.PopupMgr.ShowPopup(Translation.T(sent ? $"Invite sent to {Profile(friend).NameOnPlatform}." : "Steam couldn't send the invite."),
                 null, UI.PDHCCBFJODN.Notification, true);
             return false;
         }

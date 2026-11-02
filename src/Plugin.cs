@@ -62,6 +62,7 @@ namespace StbcRevival
         internal static ConfigEntry<int> EvacuationMinutes;
         internal static ConfigEntry<bool> VoiceCommands;
         internal static ConfigEntry<UnityEngine.KeyCode> PushToTalkKey;
+        internal static ConfigEntry<VoiceLanguageChoice> VoiceLanguage;
         internal static ConfigEntry<bool> VoiceAnyStation;
         internal static ConfigEntry<string> UpdateUrl;
         internal static ConfigEntry<bool> ShuttleWasd;
@@ -154,6 +155,9 @@ namespace StbcRevival
                 + "Needs BepInEx/vosk (libvosk.dll and a model folder; the installer sets it up). Takes effect after a restart.");
             PushToTalkKey = Config.Bind("Voice", "PushToTalkKey", UnityEngine.KeyCode.V,
                 "Hold to give a voice order as captain (as well as the game's own voice button, which depends on your controllers).");
+            VoiceLanguage = Config.Bind("Voice", "VoiceLanguage", VoiceLanguageChoice.English,
+                "English or German: the language of the spoken orders. German needs the German Vosk model (vosk-model-small-de-0.15) "
+                + "unpacked to BepInEx/vosk/model-de. Takes effect after a restart.");
             VoiceAnyStation = Config.Bind("Voice", "AnyStation", false,
                 "Experimental: voice orders from helm, tactical and engineering too, not just the captain. They go to the other "
                 + "stations' AI crew (not your own station's, and not the captain's playbook, red alert, hails or warp map). "

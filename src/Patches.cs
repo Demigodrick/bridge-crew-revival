@@ -239,6 +239,7 @@ namespace StbcRevival
             RomulanFace.Patch(harmony);
             KlingonHead.Patch(harmony);
             VoiceCommands.Patch(harmony);
+            Translation.Patch(harmony);
             ControllerGrace.Patch(harmony);
             Excelsior.Patch(harmony);
             VoiceJitter.Patch(harmony);

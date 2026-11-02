@@ -350,6 +350,13 @@ foreach (var f in new[] { "PCPBPMKFJOE", "JEFHDNFCPLD" })
 var novaInfo = game.GetType("NovaPlayerInfo");
 Check("  NovaPlayerInfo.PKIBEAIHJNE", (MemberInfo)novaInfo?.GetField("PKIBEAIHJNE", Inst) ?? novaInfo?.GetProperty("PKIBEAIHJNE", Inst));
 
+// Translation (the mod's texts in German): the game's text lookup and its menu language
+var localization = game.GetType("SVR.Localization");
+Check("SVR.Localization.GetLocalizedText(string, int) (translation)", localization?.GetMethod("GetLocalizedText", AnyS, null, new[] { mlc.CoreAssembly!.GetType("System.String")!, mlc.CoreAssembly!.GetType("System.Int32")! }, null));
+var menuLanguage = localization?.GetMethod("get_MenuLanguageID", AnyS);
+Check("  SVR.Localization.get_MenuLanguageID", menuLanguage);
+Check("  menu language German", menuLanguage != null && Enum.GetNames(menuLanguage.ReturnType).Contains("German") ? menuLanguage : null);
+
 // Player volumes (escape menu player options: the voice volume slider down to muted)
 var voip = game.GetType("VoIpManager");
 Check("VoIpManager.SetVolumeForPlayer (player volumes)", voip?.GetMethod("SetVolumeForPlayer", Inst));
