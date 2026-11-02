@@ -22,7 +22,8 @@ namespace StbcRevival
             AccessTools.FieldRefAccess<CharacterCustomization, BodyCustomization[]>("GPLBJJJBPOL");
         private static readonly AccessTools.FieldRef<CharacterCustomization, bool> IsMainMenuAvatar =
             AccessTools.FieldRefAccess<CharacterCustomization, bool>("IsMainMenuAvatar");
-        private static readonly int SkinColor1 = Shader.PropertyToID("_SkinColor1");
+        // What BodyCustomization.SetSkinParams sets for a skin tone (the colours; the rest are lighting values).
+        private static readonly string[] SkinColours = { "_MainTexColor", "_SkinColor1", "_SkinColor2" };
         private static readonly Dictionary<int, string> last = new Dictionary<int, string>();
 
         internal static void Patch(Harmony harmony)
@@ -70,9 +71,11 @@ namespace StbcRevival
                 var materials = renderer == null ? null : renderer.sharedMaterials;
                 int slot = body.HandMaterialPosition;
                 var hand = materials != null && slot >= 0 && slot < materials.Length ? materials[slot] : null;
-                string skin = hand != null && hand.HasProperty(SkinColor1) ? Colour(hand.GetColor(SkinColor1)) : "none";
+                var skin = new List<string>();
+                foreach (var colour in SkinColours)
+                    if (hand != null && hand.HasProperty(colour)) skin.Add(colour.Substring(1) + " " + Colour(hand.GetColor(colour)));
                 parts.Add($"{body.name} ({(body.isActiveAndEnabled ? "on" : "off")}, scene {body.gameObject.scene.name}): " +
-                          $"hand {(hand == null ? "none" : hand.name)}, skin {skin}");
+                          $"hand {(hand == null ? "none" : hand.name)}, {(skin.Count == 0 ? "no skin colours" : string.Join(" ", skin.ToArray()))}");
             }
             return $"{go.name} in {go.scene.name} ({(go.activeInHierarchy ? "active" : "inactive")}), " +
                    (parts.Count == 0 ? "no body parts" : string.Join("; ", parts.ToArray()));
