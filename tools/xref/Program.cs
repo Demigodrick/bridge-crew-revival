@@ -14,6 +14,8 @@
 //   str <text>                     live methods with a string literal containing <text>
 //   returns <Type>                 live parameterless methods returning it, and fields of that type
 //   names <regex>                  identifiers (types, members) matching a regex
+//   suggest <Type>                 names.map lines for its obfuscated properties (from their accessors' names)
+//                                  and the fields their plain getters return
 //   dump [dir]                     every type decompiled to <dir>/<namespace>/<type>.cs (default decompiled/, gitignored)
 //
 // names.map (next to this file) gives obfuscated names readable ones, per type; src and dump decompile with it
@@ -217,6 +219,29 @@ switch (args[0])
             .Concat(all.Select(m => m.DeclaringType.FullName + "::" + m.Name))
             .Where(n => re.IsMatch(n)).Distinct().OrderBy(n => n);
         foreach (var n in names) Console.WriteLine(n);
+        break;
+    }
+    case "suggest":
+    {
+        var t = T(args[1]);
+        if (t == null) { Console.Error.WriteLine("no type " + args[1]); return 1; }
+        string Camel(string n) => "_" + char.ToLowerInvariant(n[0]) + n.Substring(1);
+        var taken = new HashSet<string>(t.Fields.Select(f => f.Name));
+        foreach (var p in t.Properties.Where(p => obf.IsMatch(p.Name)))
+        {
+            var acc = p.GetMethod ?? p.SetMethod;
+            if (acc == null || !acc.Name.Contains('_')) continue;
+            var name = acc.Name.Substring(acc.Name.IndexOf('_') + 1);
+            if (obf.IsMatch(name) || name.Contains('.')) continue;
+            Console.WriteLine($"{t.FullName}::{p.Name} = {name}");
+            if (p.GetMethod is { HasBody: true } g)
+            {
+                var ins = g.Body.Instructions.Where(i => i.OpCode.Code != Code.Nop).ToList();
+                var fld = ins.Select(i => i.Operand).OfType<FieldReference>().ToList();
+                if (fld.Count == 1 && ins.Count <= 4 && fld[0].Resolve() is { } fd && fd.DeclaringType == t && obf.IsMatch(fd.Name) && taken.Add(Camel(name)))
+                    Console.WriteLine($"{t.FullName}::{fd.Name} = {Camel(name)}");
+            }
+        }
         break;
     }
     default:
