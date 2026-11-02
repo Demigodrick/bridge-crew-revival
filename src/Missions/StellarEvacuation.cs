@@ -55,7 +55,7 @@ namespace StbcRevival.Missions
         private const string Escape = "Warp out before the star erupts";
         private const double DeliverRange = 5000;      // metres from the transport to hand the survivors over
         private const double ArrivedRange = 100000;    // metres from the quarantine point's marker: you've impulsed there
-        private const float TransportDistance = 35000f; // metres from the station to the transport
+        private const float TransportDistance = 20000f; // metres from the station to the transport (no quarantine point)
         private const float FinalCountdown = 60f;       // the game's eruption: a minute from the blast to the end
         private const string ExplosionPrefab = "Sector/System/Mission 02 Prefabs/StarExplosion";
         private const string Home = "Perseph";
@@ -167,7 +167,7 @@ namespace StbcRevival.Missions
             {
                 dropOff = "the transport";
                 yield return Task.BFMBGDIDKEI.UsingSpawner(MakeSpawner(TransportShip, "USS Raleigh", Tag.Friendly))
-                    .AtAngleAndDistanceFromBody(player, random.Next(0, 360), TransportDistance).OutputTo(transport);
+                    .AtAngleAndDistanceFromBody(station, random.Next(0, 360), TransportDistance).OutputTo(transport);
                 yield return Task.KDNOMKAPDKG.TellAI(transport).ToDisable(); // holds position
                 Plugin.Log.LogInfo($"Stellar evacuation: transport {Distance(station, transport) / 1000:0} km from the station");
             }
@@ -273,7 +273,10 @@ namespace StbcRevival.Missions
                     transport = new BodyRef();
                     spawningTransport = false;
                 }
-                if (quarantine != null && transport.AHMPFHDGMKJ == null && !spawningTransport && Distance(player, quarantine) <= ArrivedRange)
+                // Spawned beside you once you've dropped out of impulse there: spawned on the way in, it was left
+                // behind wherever you crossed the 100 km mark, tens of km from where you stopped.
+                bool slow = Slow();
+                if (quarantine != null && transport.AHMPFHDGMKJ == null && !spawningTransport && Distance(player, quarantine) <= ArrivedRange && slow)
                 {
                     spawningTransport = true;
                     yield return Task.BFMBGDIDKEI.UsingSpawner(MakeSpawner(TransportShip, "USS Raleigh", Tag.Friendly))
@@ -780,6 +783,30 @@ namespace StbcRevival.Missions
                 Plugin.Log.LogWarning("Stellar evacuation: picking a system: " + e.Message);
             }
             return here;
+        }
+
+        // Moving at no more than full sublight speed, by how far the ship went since the last check (impulse
+        // travel covers thousands of km a second).
+        private const double SlowSpeed = 3000; // metres a second
+        private UnityEngine.Vector3d lastPosition;
+        private float lastPositionAt = -1f;
+
+        private bool Slow()
+        {
+            try
+            {
+                var here = player.AHMPFHDGMKJ.ALPAOOKFIEE.Position;
+                float now = UnityEngine.Time.time;
+                bool slow = lastPositionAt >= 0 && now > lastPositionAt
+                            && UnityEngine.Vector3d.Distance(here, lastPosition) / (now - lastPositionAt) <= SlowSpeed;
+                lastPosition = here;
+                lastPositionAt = now;
+                return slow;
+            }
+            catch
+            {
+                return true;
+            }
         }
 
         private static double Distance(BodyRef a, BodyRef b)
