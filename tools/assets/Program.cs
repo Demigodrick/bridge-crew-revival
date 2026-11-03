@@ -154,7 +154,22 @@ switch (args[0])
                     low = System.Numerics.Vector3.Min(low, p); lowMax = System.Numerics.Vector3.Max(lowMax, p);
                 }
             }
-            return $"from {F(min)} to {F(max)}; at its lowest, x {low.X:0.0} to {lowMax.X:0.0}, z {low.Z:0.0} to {lowMax.Z:0.0}";
+            // The heights most vertices sit at (a floor or ceiling shows up as a crowded height spread wide).
+            var levels = new Dictionary<int, (int count, float minX, float maxX)>();
+            foreach (var i in mr.SubsetIndices)
+            {
+                var sub = mesh.SubMeshes[(int)i];
+                for (uint v = sub.FirstVertex; v < sub.FirstVertex + sub.VertexCount; v++)
+                {
+                    int at = (int)v * stride;
+                    float x = BitConverter.ToSingle(mesh.VertexData, at), y = BitConverter.ToSingle(mesh.VertexData, at + 4);
+                    int key = (int)Math.Round(y * 10);
+                    var l = levels.TryGetValue(key, out var e) ? e : (0, float.MaxValue, float.MinValue);
+                    levels[key] = (l.Item1 + 1, Math.Min(l.Item2, x), Math.Max(l.Item3, x));
+                }
+            }
+            var crowded = string.Join(", ", levels.OrderByDescending(l => l.Value.count).Take(4).Select(l => $"y {l.Key / 10f:0.0}: {l.Value.count} (x {l.Value.minX:0} to {l.Value.maxX:0})"));
+            return $"from {F(min)} to {F(max)}; at its lowest, x {low.X:0.0} to {lowMax.X:0.0}, z {low.Z:0.0} to {lowMax.Z:0.0}; heights {crowded}";
         }
         void Show(TransformAsset t, string path)
         {

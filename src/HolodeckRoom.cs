@@ -22,7 +22,7 @@ namespace StbcRevival
     {
         private const string SceneFile = "level19"; // Assets/Nova/Scenes/Bridges/Bridge_scene_Holodeck.unity
         private static readonly string[] Parts = { "Holodeck_Walls", "Holodeck_DoorWay", "Holodeck_Wires", "Holodeck_Wall_Pillars" };
-        private const string FloorPart = "Shadow_Box"; // the dark box around the room: its bottom is the floor
+        private const string WallsPart = "Walls"; // the grid room, floor and ceiling included
         private const string StencilMasked = "RSE/StandardStencilMasked";
 
         private sealed class Piece
@@ -77,7 +77,7 @@ namespace StbcRevival
                 yield break;
             }
             room = read;
-            Plugin.Log.LogInfo($"PvP: holodeck room read ({room.Pieces.Count} pieces, {room.Combined.VertexCount} vertices in its scene)");
+            Plugin.Log.LogInfo($"PvP: holodeck room read ({room.Pieces.Count} pieces, {room.Combined.VertexCount} vertices in its scene, floor middle {room.FloorMiddle})");
         }
 
         // ---- Reading (background thread) ----------------------------------------------------------------
@@ -138,21 +138,26 @@ namespace StbcRevival
                 if (combined == 0 || result.Pieces.Count == 0) throw new InvalidDataException("no holodeck pieces found");
                 result.Combined = MeshAsset.Read(scene.At(scene.Find(combined)));
 
-                // Where it stands: the box's lowest point, under the middle of the walls.
-                float floor = float.MaxValue, minX = float.MaxValue, maxX = float.MinValue, minZ = float.MaxValue, maxZ = float.MinValue;
-                foreach (var piece in result.Pieces)
+                // Where it stands: the walls' floor (their most crowded height near the bottom: the floor panels,
+                // about a metre above the dark box's bottom), under the middle of the walls.
+                float minX = float.MaxValue, maxX = float.MinValue, minZ = float.MaxValue, maxZ = float.MinValue, minY = float.MaxValue;
+                var heights = new Dictionary<int, int>();
+                foreach (var piece in result.Pieces.Where(p => p.Name == WallsPart))
                     foreach (var s in piece.SubMeshes)
                     {
                         var sub = result.Combined.SubMeshes[s];
                         for (uint v = sub.FirstVertex; v < sub.FirstVertex + sub.VertexCount; v++)
                         {
                             var p = result.Combined.Get(0, (int)v);
-                            if (piece.Name == FloorPart) floor = Math.Min(floor, p[1]);
-                            else if (piece.Name == "Walls") { minX = Math.Min(minX, p[0]); maxX = Math.Max(maxX, p[0]); minZ = Math.Min(minZ, p[2]); maxZ = Math.Max(maxZ, p[2]); }
+                            minX = Math.Min(minX, p[0]); maxX = Math.Max(maxX, p[0]); minZ = Math.Min(minZ, p[2]); maxZ = Math.Max(maxZ, p[2]);
+                            minY = Math.Min(minY, p[1]);
+                            int key = (int)Math.Round(p[1] * 10);
+                            heights[key] = heights.TryGetValue(key, out var n) ? n + 1 : 1;
                         }
                     }
-                if (floor == float.MaxValue || minX == float.MaxValue) throw new InvalidDataException("no floor box or walls among the pieces");
-                result.FloorMiddle = new Vector3((minX + maxX) / 2, floor, (minZ + maxZ) / 2);
+                if (minX == float.MaxValue) throw new InvalidDataException("no walls among the pieces");
+                var floorLevel = heights.Where(h => h.Key / 10f < minY + 1.5f).OrderByDescending(h => h.Value).First().Key / 10f;
+                result.FloorMiddle = new Vector3((minX + maxX) / 2, floorLevel, (minZ + maxZ) / 2);
                 return result;
             }
             finally
