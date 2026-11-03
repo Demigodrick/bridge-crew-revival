@@ -211,6 +211,10 @@ namespace StbcRevival
                         int slot = i + 4;
                         shipBToggle.onValueChanged.AddListener(on => Plugin.Log.LogInfo($"PvP: ship B {role} picked {(on ? "on" : "off")} (slot {slot})"));
                     }
+                    // Each control is for one hand, by the side of the table it's on (the mouse uses the hand on
+                    // that side); ship A's rows are on the other side, so either hand.
+                    foreach (var interaction in copy.GetComponentsInChildren<HandInteraction>(true))
+                        if (SideRestriction != null) SideRestriction.SetValue(interaction, Enum.Parse(SideRestriction.FieldType, "Either"));
                     copy.SetActive(false);
                     layout.ShipB.Add(copy);
                     wider.SetValue(clone, i + 4);
@@ -315,6 +319,7 @@ namespace StbcRevival
         }
 
         private static readonly MethodInfo GetText = AccessTools.Method(typeof(TMP_Text), "get_text");
+        private static readonly FieldInfo SideRestriction = AccessTools.Field(typeof(HandInteraction), "_sideRestriction");
 
         // ---- Diagnostics: ship B's rows and the mouse ----------------------------------------------
 
@@ -358,7 +363,7 @@ namespace StbcRevival
                         var lists = animators.Select(a =>
                             ((gathered?.GetValue(a) as IList)?.Contains(interaction) == true ? "gathered" : "not gathered")
                             + (available?.Invoke(a, new object[] { interaction }) is true ? "+available" : "")).ToArray();
-                        Plugin.Log.LogInfo($"PvP: [diag] slot {i} {Describe(interaction)}: enabled {interaction.enabled}, interactable {interaction.Interactable}, "
+                        Plugin.Log.LogInfo($"PvP: [diag] slot {i} {Describe(interaction)}: enabled {interaction.enabled}, interactable {interaction.Interactable}, hand {SideRestriction?.GetValue(interaction)}, "
                             + $"active {interaction.gameObject.activeInHierarchy}, console {(AccessTools.Field(typeof(HandInteraction), "KHDENOMKIJE")?.GetValue(interaction) as Component)?.name ?? "none"}, "
                             + $"mouse collider {(mouse == null ? "none" : $"{(mouse.enabled ? "on" : "off")} at {mouse.bounds.center} size {mouse.bounds.size}")}, "
                             + $"hands: {string.Join(" / ", lists)}");
