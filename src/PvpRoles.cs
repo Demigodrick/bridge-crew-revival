@@ -62,6 +62,13 @@ namespace StbcRevival
             Hook(briefing, "Awake", postfix: nameof(BriefingAwake_Postfix));
             Hook(briefing, "BJBJFCFIDOA", prefix: nameof(ShowSlot_Prefix));   // shows a slot's player on its row
             Hook(briefing, "GLFEOIFJEHE", prefix: nameof(Launch_Prefix), finalizer: nameof(Launch_Finalizer));
+            // What the mouse hovers and presses in the briefing room (ship B's rows not taking clicks).
+            var pointer = AccessTools.TypeByName("SVR.LAOGNJEBFCP");
+            foreach (var m in new[] { "OnEnter", "OnDown" })
+            {
+                var target = pointer == null ? null : AccessTools.Method(pointer, m, new[] { typeof(HandInteraction) });
+                if (target != null) harmony.Patch(target, prefix: new HarmonyMethod(typeof(PvpRoles), m == "OnEnter" ? nameof(PointerEnter_Prefix) : nameof(PointerDown_Prefix)));
+            }
             var spawn = AccessTools.TypeByName("NovaSpawnManager");
             var seating = spawn == null ? null : AccessTools.Inner(spawn, "<SpawnNewlyAddedPlayerOnClients>c__Iterator1F3");
             seatPlayerField = seating == null ? null : AccessTools.Field(seating, "PNGLMGLMLJM");
@@ -156,6 +163,7 @@ namespace StbcRevival
             public List<GameObject> MissionPanel;
             public readonly List<Graphic> Cleared = new List<Graphic>();
             public bool Shown, Settled;
+            public float DiagnoseAt = -1f;
         }
 
         private static readonly Dictionary<ConsoleBriefingRoom, Layout> layouts = new Dictionary<ConsoleBriefingRoom, Layout>();
@@ -289,6 +297,12 @@ namespace StbcRevival
                     {
                         layout.Settled = true;
                         Settle(entry.Key, layout);
+                        layout.DiagnoseAt = Time.unscaledTime + 3f;
+                    }
+                    if (layout.DiagnoseAt > 0f && Time.unscaledTime >= layout.DiagnoseAt)
+                    {
+                        layout.DiagnoseAt = -1f;
+                        Diagnose(entry.Key, layout);
                     }
                     // The console renames some roles itself (the Next Generation's names): ship A's labels kept.
                     if (Time.frameCount % 15 == 0)
@@ -301,6 +315,61 @@ namespace StbcRevival
         }
 
         private static readonly MethodInfo GetText = AccessTools.Method(typeof(TMP_Text), "get_text");
+
+        // ---- Diagnostics: ship B's rows and the mouse ----------------------------------------------
+
+        private static bool InPvpBriefing => layouts.Count > 0 && layouts.Values.Any(l => l.Shown);
+
+        private static string Describe(HandInteraction interaction) =>
+            interaction == null ? "nothing" : $"{interaction.transform.parent?.name}/{interaction.name}{(layouts.Values.Any(l => l.ShipB.Any(r => r != null && interaction.transform.IsChildOf(r.transform))) ? " (ship B)" : "")}";
+
+        private static void PointerEnter_Prefix(HandInteraction __0)
+        {
+            if (InPvpBriefing) Plugin.Log.LogInfo("PvP: [diag] mouse over " + Describe(__0));
+        }
+
+        private static void PointerDown_Prefix(HandInteraction __0)
+        {
+            if (InPvpBriefing) Plugin.Log.LogInfo("PvP: [diag] mouse pressed " + Describe(__0));
+        }
+
+        // Each ship B role control next to its ship A original: enabled, interactable, the mouse's collider, and
+        // whether the local player's hands list it as one they can use.
+        private static void Diagnose(ConsoleBriefingRoom console, Layout layout)
+        {
+            try
+            {
+                var manager = AccessTools.Method(AccessTools.TypeByName("HandAnimatorManager"), "get_Instance")?.Invoke(null, null);
+                var animators = (AccessTools.Field(manager?.GetType(), "AFBJOJJNCEA")?.GetValue(manager) as IDictionary)?.Keys.Cast<object>().ToList() ?? new List<object>();
+                var gathered = AccessTools.Field(AccessTools.TypeByName("HandAnimator"), "DPAFLMHJMEC");
+                var available = AccessTools.Method(AccessTools.TypeByName("HandAnimator"), "IsInteractionAvailable");
+                var animatorConsole = AccessTools.Field(AccessTools.TypeByName("HandAnimator"), "KHDENOMKIJE");
+                Plugin.Log.LogInfo($"PvP: [diag] console {console.name}: {animators.Count} hand animators, on consoles "
+                    + string.Join(", ", animators.Select(a => (animatorConsole?.GetValue(a) as Component)?.name ?? "none").ToArray()));
+                if (!(RoleInfos?.GetValue(console) is Array infos)) return;
+                var toggleField = AccessTools.Field(infos.GetType().GetElementType(), "RoleToggle");
+                for (int i = 0; i < infos.Length; i++)
+                {
+                    var toggle = toggleField?.GetValue(infos.GetValue(i)) as Toggle;
+                    if (toggle == null || (i % 4 != 1 && i < 4)) continue; // ship A's helm, for comparison, and all of ship B's
+                    foreach (var interaction in toggle.GetComponentsInChildren<HandInteraction>(true).Concat(toggle.GetComponentsInParent<HandInteraction>(true)).Distinct())
+                    {
+                        var mouse = AccessTools.Field(typeof(HandInteraction), "JJGDKFLEHLH")?.GetValue(interaction) as Collider;
+                        var lists = animators.Select(a =>
+                            ((gathered?.GetValue(a) as IList)?.Contains(interaction) == true ? "gathered" : "not gathered")
+                            + (available?.Invoke(a, new object[] { interaction }) is true ? "+available" : "")).ToArray();
+                        Plugin.Log.LogInfo($"PvP: [diag] slot {i} {Describe(interaction)}: enabled {interaction.enabled}, interactable {interaction.Interactable}, "
+                            + $"active {interaction.gameObject.activeInHierarchy}, console {(AccessTools.Field(typeof(HandInteraction), "KHDENOMKIJE")?.GetValue(interaction) as Component)?.name ?? "none"}, "
+                            + $"mouse collider {(mouse == null ? "none" : $"{(mouse.enabled ? "on" : "off")} at {mouse.bounds.center} size {mouse.bounds.size}")}, "
+                            + $"hands: {string.Join(" / ", lists)}");
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                Plugin.Log.LogWarning("PvP: [diag] ship B rows: " + e.Message);
+            }
+        }
 
         // Ship B's rows sit where the mission panel was, but in the role list's part of the console. With a mouse,
         // a console only takes clicks for the area the view has zoomed to (CameraFocusArea, which knows the
