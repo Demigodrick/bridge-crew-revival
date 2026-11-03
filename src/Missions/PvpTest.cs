@@ -139,7 +139,9 @@ namespace StbcRevival.Missions
         // The ship the game gave the crew (MissionManager.NJHADEBHMNN's choice): retro, TNG or the Aegis.
         private static string PlayerShipPrefab()
         {
-            string field = Loader.JCEFNOJHCKO ? "_retroPlayerCraftPrefabPath" : Loader.IOMGCNMDDCK ? "_TNGPlayerCraftPrefabPath" : "_playerCraftPrefabPath";
+            // A PvP room: ship B's captain's pick (PvpShipChoice); else the ship the game gave the crew.
+            string field = PvpLobby.InPvpRoom ? PvpShipChoice.ShipBPrefabField()
+                         : Loader.JCEFNOJHCKO ? "_retroPlayerCraftPrefabPath" : Loader.IOMGCNMDDCK ? "_TNGPlayerCraftPrefabPath" : "_playerCraftPrefabPath";
             var path = AccessTools.Field(typeof(Mission.MissionManager), field)?.GetValue(Mission.MissionManager.IEFBKOMBFGO) as string;
             return string.IsNullOrEmpty(path) ? "Sector/Ships/Ship - Aegis" : path;
         }

@@ -409,6 +409,16 @@ Check("  ConsoleMainMenu/GameModeInfo.ModeSelectionToggle", modeInfo?.GetField("
 Check("  OCCEGCFNLPH.BeginPublicMatchmaking(int)", game.GetType("OCCEGCFNLPH")?.GetMethods(Inst).FirstOrDefault(m => m.Name == "BeginPublicMatchmaking" && m.GetParameters().Length == 1 && m.GetParameters()[0].ParameterType.Name == "Int32"));
 Check("  NovaPlayerManager.MaxNumPlayers", game.GetType("NovaPlayerManager")?.GetField("MaxNumPlayers", Inst));
 
+// PvP ship choice: each captain's ship, each crew's bridge
+var shipLoader = game.GetType("Loader");
+foreach (var f in new[] { "KHGLJDMCEFE", "LJILDCNBPAN" })
+    Check($"Loader.{f} (pvp ship flags)", shipLoader?.GetField(f, Inst));
+foreach (var m in new[] { "NGNOCCOOOBM", "IFNGPJDAMAF", "PFMBDEEEHHL", "KHFHCAELMKD" })
+    Check($"  ConsoleBriefingRoom.{m} (ship toggles)", game.GetType("ConsoleBriefingRoom")?.GetMethod(m, Inst));
+Check("  MissionManager.NJHADEBHMNN (player ship spawn)", game.GetType("Mission.MissionManager")?.GetMethod("NJHADEBHMNN", Inst));
+foreach (var f in new[] { "_captainNecessaryGO", "_launchGameButton", "_selectionPanel", "_missionRecapPanel", "_gameLaunchPanel" })
+    Check($"  ConsoleBriefingRoom.{f}", game.GetType("ConsoleBriefingRoom")?.GetField(f, Inst));
+
 // Player volumes (escape menu player options: the voice volume slider down to muted)
 var voip = game.GetType("VoIpManager");
 Check("VoIpManager.SetVolumeForPlayer (player volumes)", voip?.GetMethod("SetVolumeForPlayer", Inst));

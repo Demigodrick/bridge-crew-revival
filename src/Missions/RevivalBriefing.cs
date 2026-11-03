@@ -274,6 +274,12 @@ namespace StbcRevival.Missions
         // the current ship (as the console does for an Ongoing Voyage).
         private static void SetInteractable_Prefix(Selectable __0, ref bool __1)
         {
+            // A PvP room: each ship's captain picks their own ship (PvpShipChoice), any but the one picked.
+            if (__0 != null && PvpLobby.InPvpRoom && shipToggles.ContainsKey(__0))
+            {
+                __1 = PvpShipChoice.CanPick() && !((Toggle)__0).isOn;
+                return;
+            }
             if (__0 != null && !__1 && shipToggles.TryGetValue(__0, out var console) && choosingRevival.Contains(console))
                 __1 = !((Toggle)__0).isOn;
         }
