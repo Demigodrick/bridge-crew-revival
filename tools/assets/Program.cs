@@ -5,6 +5,7 @@
 //   names <file> [classId] [filter]   objects (path ID, class, size, name), e.g. names sharedassets6.assets 43 Klingon
 //   renderers <file> [mesh filter]    skinned mesh renderers: their mesh and materials, followed into the other files
 //   material <file> <path ID>        a material: shader, keywords, textures (format, size, where), values
+//   tree <file> [depth] [root filter]  a scene's hierarchy: names, local positions, component class IDs
 //   prefab <file> <renderer path ID>  the renderer's prefab: its root's name and children (local position, rotation)
 //   fit <file> <renderer path ID>     where each bind pose puts the head mesh's middle, against the eyes in Head space
 //   mesh <file> <name or path ID>              a mesh's counts: vertices, channels, bind poses, blend shapes, sub-meshes
@@ -86,6 +87,30 @@ switch (args[0])
         }
         Console.WriteLine("  floats: " + string.Join(", ", m.Floats.Select(f => $"{f.Key}={f.Value}")));
         Console.WriteLine("  colours: " + string.Join(", ", m.Colors.Select(c => $"{c.Key}=({string.Join(",", c.Value.Select(v => v.ToString("0.###")))})")));
+        break;
+    }
+    case "tree":
+    {
+        // A scene's hierarchy: every root and its children (name, local position, component class IDs), to a depth.
+        int depth = args.Length > 2 ? int.Parse(args[2]) : 3;
+        string filter = args.Length > 3 ? args[3] : null;
+        GameObjectAsset Go(PPtr p) => GameObjectAsset.Read(assets.At(assets.Find(p.PathId)));
+        TransformAsset Tr(PPtr p) => TransformAsset.Read(assets.At(assets.Find(p.PathId)));
+        string F(float[] v) => "(" + string.Join(", ", v.Select(x => x.ToString("0.##"))) + ")";
+        void Show(TransformAsset t, int level)
+        {
+            var go = Go(t.GameObject);
+            var classes = string.Join(",", go.Components.Select(c => c.Key).Where(k => k != 4 && k != 224));
+            Console.WriteLine($"{new string(' ', level * 2)}{go.Name} {F(t.Position)}{(classes.Length > 0 ? " [" + classes + "]" : "")}{(t.Children.Count > 0 ? $" {t.Children.Count} children" : "")}");
+            if (level + 1 < depth) foreach (var c in t.Children) Show(Tr(c), level + 1);
+        }
+        foreach (var e in assets.Objects.Where(o => o.ClassId == 4 || o.ClassId == 224))
+        {
+            var t = TransformAsset.Read(assets.At(e));
+            if (!t.Father.IsNull) continue;
+            if (filter != null && !Go(t.GameObject).Name.Contains(filter, StringComparison.OrdinalIgnoreCase)) continue;
+            Show(t, 0);
+        }
         break;
     }
     case "prefab":

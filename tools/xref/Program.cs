@@ -303,7 +303,8 @@ switch (args[0])
                 {
                     var ins = g.Body.Instructions.Where(i => i.OpCode.Code != Code.Nop).ToList();
                     var fld = ins.Select(i => i.Operand).OfType<FieldReference>().ToList();
-                    if (fld.Count == 1 && ins.Count <= 4 && fld[0].Resolve() is { } fd && fd.DeclaringType == t && obf.IsMatch(fd.Name) && taken.Add(Camel(name)) && New(t, fd.Name))
+                    // A plain getter: loads the field and returns it (no calls: "return list.Count" isn't the list).
+                    if (fld.Count == 1 && ins.Count <= 4 && !ins.Any(i => i.OpCode.FlowControl == FlowControl.Call) && fld[0].Resolve() is { } fd && fd.DeclaringType == t && obf.IsMatch(fd.Name) && taken.Add(Camel(name)) && New(t, fd.Name))
                     {
                         Console.WriteLine($"{t.FullName}::{fd.Name} = {Camel(name)}");
                         Given(t).Add(Camel(name));
