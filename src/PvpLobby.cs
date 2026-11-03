@@ -72,14 +72,22 @@ namespace StbcRevival
                 var quick = toggles.FirstOrDefault(t => t.Mode == 0)?.Toggle;
                 if (quick == null) return;
 
-                // Below the lowest mode, a row further on: the step between the two lowest rows.
+                // The GAME MODE box holds four rows, from half a row above the top one to half a row below the
+                // bottom one (the AVATAR button is just under it); space five rows evenly in that span instead.
                 var parent = quick.transform.parent;
                 var rows = toggles.Select(t => t.Toggle.transform).Where(t => t.parent == parent).OrderByDescending(t => t.localPosition.y).ToList();
                 Plugin.Log.LogInfo("PvP: main menu modes at " + string.Join(", ", toggles.Select(t => $"{t.Mode} {t.Toggle.name} {t.Toggle.transform.localPosition}").ToArray()));
                 var copy = (GameObject)UnityEngine.Object.Instantiate(quick.gameObject, parent);
                 copy.name = "PvP Mode Toggle";
-                var step = rows.Count >= 2 ? rows[rows.Count - 1].localPosition - rows[rows.Count - 2].localPosition : new Vector3(0f, -((RectTransform)quick.transform).rect.height, 0f);
-                copy.transform.localPosition = (rows.Count > 0 ? rows[rows.Count - 1].localPosition : quick.transform.localPosition) + step;
+                rows.Add(copy.transform);
+                if (rows.Count >= 3)
+                {
+                    Vector3 top = rows[0].localPosition, bottom = rows[rows.Count - 2].localPosition;
+                    var oldStep = (bottom - top) / (rows.Count - 2);
+                    var newStep = oldStep * (rows.Count - 1) / rows.Count;
+                    var first = top - oldStep / 2f + newStep / 2f;
+                    for (int i = 0; i < rows.Count; i++) rows[i].localPosition = first + newStep * i;
+                }
                 copy.transform.SetAsLastSibling();
                 var toggle = copy.GetComponent<Toggle>();
                 toggle.onValueChanged.RemoveAllListeners();
