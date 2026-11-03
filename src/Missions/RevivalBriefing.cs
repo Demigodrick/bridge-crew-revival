@@ -233,8 +233,13 @@ namespace StbcRevival.Missions
 
                 if (procedural.isOn) procedural.isOn = false;
                 if (campaign.isOn) campaign.isOn = false;
-                procedural.interactable = chooser;
-                campaign.interactable = chooser;
+                // A PvP room's mission is PvP: the other game types can't be picked there (the ship still can).
+                bool pvp = PvpLobby.InPvpRoom;
+                procedural.interactable = chooser && !pvp;
+                campaign.interactable = chooser && !pvp;
+                if (pvp)
+                    foreach (var label in new[] { "_proceduralMissionToggleText", "_campaignMissionToggleText" })
+                        if (Field<TMP_Text>(console, label) is TMP_Text text) SetColour(text, Colour(console, "_disabledOptionsColor"));
                 if (chooser && Loader.GetMissionType() != Loader.DAPMGBKPDNM.Procedural) ResetMissionType();
 
                 // Ships as for an Ongoing Voyage (the console greys their names unless Ongoing Voyages is
