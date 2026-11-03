@@ -397,6 +397,18 @@ Check("  VOPlaybackManager.IEFBKOMBFGO", (MemberInfo)voPlayback?.GetField("IEFBK
 Check("  Bridge.NewConsoleMessageRPC", game.GetType("Bridge")?.GetMethod("NewConsoleMessageRPC", Inst));
 Check("  VoIpManager.GMFCCIFGKDN (pvp: voice chat per ship)", game.GetType("VoIpManager")?.GetMethod("GMFCCIFGKDN", Inst));
 
+// PvP on the main menu: a PVP game mode that runs Quick match for PvP rooms (game mode 7, eight players)
+var pvpMenu = game.GetType("ConsoleMainMenu");
+foreach (var f in new[] { "_gameModeInfos", "FNCLHAJMFJC", "_gameModeDescriptionText" })
+    Check($"ConsoleMainMenu.{f} (pvp menu)", pvpMenu?.GetField(f, Inst));
+foreach (var m in new[] { "Start", "MHOIHOKNNFC", "OnPlayGame" })
+    Check($"  ConsoleMainMenu.{m}", pvpMenu?.GetMethod(m, Inst));
+var modeInfo = pvpMenu?.GetNestedType("GameModeInfo", BindingFlags.Public | BindingFlags.NonPublic);
+Check("  ConsoleMainMenu/GameModeInfo.Mode", modeInfo?.GetField("Mode", Inst));
+Check("  ConsoleMainMenu/GameModeInfo.ModeSelectionToggle", modeInfo?.GetField("ModeSelectionToggle", Inst));
+Check("  OCCEGCFNLPH.BeginPublicMatchmaking(int)", game.GetType("OCCEGCFNLPH")?.GetMethods(Inst).FirstOrDefault(m => m.Name == "BeginPublicMatchmaking" && m.GetParameters().Length == 1 && m.GetParameters()[0].ParameterType.Name == "Int32"));
+Check("  NovaPlayerManager.MaxNumPlayers", game.GetType("NovaPlayerManager")?.GetField("MaxNumPlayers", Inst));
+
 // Player volumes (escape menu player options: the voice volume slider down to muted)
 var voip = game.GetType("VoIpManager");
 Check("VoIpManager.SetVolumeForPlayer (player volumes)", voip?.GetMethod("SetVolumeForPlayer", Inst));

@@ -98,6 +98,14 @@ namespace StbcRevival.Missions
             Plugin.Log.LogInfo($"Revival missions: briefing selection {(mission ?? "cleared")}");
         }
 
+        /// <summary>Pick a Revival mission for the room, as the captain's toggle does (host only).</summary>
+        internal static void Choose(string mission)
+        {
+            SetRoomSelection(mission);
+            Loader.SetMissionType(Loader.DAPMGBKPDNM.Procedural);
+            if (Loader.EJLNDBGLIFL.GetMissionTableName() == null) Loader.SelectNextProceduralMissionTable();
+        }
+
         private static object Room() =>
             Patches.PhotonNetworkType?.GetMethod("get_room", BindingFlags.Public | BindingFlags.Static)?.Invoke(null, null);
 
@@ -273,7 +281,7 @@ namespace StbcRevival.Missions
         {
             var selected = RoomSelection();
             if (selected == null) return true;
-            if (IsChooser(console))
+            if (IsChooser(console) && !PvpLobby.InPvpRoom) // a PvP room keeps its mission
             {
                 int n = RevivalMissions.All.Length, i = Array.IndexOf(RevivalMissions.All, selected);
                 SetRoomSelection(RevivalMissions.All[((i < 0 ? 0 : i) + by + n) % n]);

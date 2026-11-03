@@ -19,13 +19,12 @@ namespace StbcRevival.Missions
         internal const string Evacuation = "Evacuation";
         internal const string KobayashiMaru = "KobayashiMaru"; // the game's own, from the campaign, in any ship
         internal const string FreeRoam = "FreeRoam"; // the developers' own exploration mission, as shipped
-        internal const string PvpTest = "PvpTest";   // debug: two player ships ([Debug] PvpTest)
+        internal const string PvpTest = "PvpTest";   // two player ships: a PvP room's mission (PvpLobby), not in the list
 
         /// <summary>The Revival missions, in the order the briefing's next/previous buttons step through them.</summary>
-        internal static string[] All => Plugin.PvpTest.Value ? WithPvp : Missions;
+        internal static string[] All => Missions;
 
         private static readonly string[] Missions = { LastStand, FleetBattle, Patrol, Evacuation, KobayashiMaru, FreeRoam };
-        private static readonly string[] WithPvp = { LastStand, FleetBattle, Patrol, Evacuation, KobayashiMaru, FreeRoam, PvpTest };
 
         /// <summary>The Revival mission the next launch should run, or null for the game's own missions.</summary>
         internal static Type Selected
@@ -71,7 +70,7 @@ namespace StbcRevival.Missions
         internal static string Name(string mission) =>
             mission == LastStand ? "LAST STAND" : mission == FleetBattle ? "FLEET BATTLE" : mission == Patrol ? "PATROL"
             : mission == Evacuation ? "STELLAR EVACUATION" : mission == KobayashiMaru ? "KOBAYASHI MARU"
-            : mission == FreeRoam ? "FREE ROAM" : mission == PvpTest ? "PVP TEST" : "REVIVAL MISSION";
+            : mission == FreeRoam ? "FREE ROAM" : mission == PvpTest ? "PVP" : "REVIVAL MISSION";
 
         internal static string Description(string mission)
         {
@@ -98,8 +97,8 @@ namespace StbcRevival.Missions
                            + "(the developers' own exploration mission, left in the game). Sector: "
                            + (string.IsNullOrEmpty(map) ? "The Trench." : map.Substring(map.LastIndexOf('/') + 1) + ".");
                 case PvpTest:
-                    return "Testing player vs player: a second player ship, PvP B, appears ahead of yours as an enemy. "
-                           + "Destroy it to win. The crew is split between the ships in joining order (the host on yours).";
+                    return "Ship against ship: two crews of up to four. Pick a role under SHIP A or SHIP B; the AI crew "
+                           + "runs the empty stations. Destroy the other ship to win.";
                 default:
                     return "";
             }

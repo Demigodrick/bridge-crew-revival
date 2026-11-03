@@ -127,6 +127,7 @@ namespace StbcRevival
             PvpConsoles.Patch(harmony);
             PvpRoles.Patch(harmony);
             PvpRelay.Patch(harmony);
+            PvpLobby.Patch(harmony);
             var consoleAI = AccessTools.Method(typeof(AI.USSAegisCrew), "IsConsoleAI");
             var crewVoice = AccessTools.Method(typeof(AI.USSAegisCrew), "CrewbotPlayVO");
             if (crewVoice == null) Plugin.Log.LogWarning("PvP: USSAegisCrew.CrewbotPlayVO not found; the other ship's crew calls out its status on your bridge");
@@ -231,6 +232,7 @@ namespace StbcRevival
         {
             PvpRoles.Update();
             PvpRelay.Update();
+            PvpLobby.Update();
             if (!Active)
             {
                 if (others.Count > 0 || exploded.Count > 0)

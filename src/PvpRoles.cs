@@ -253,7 +253,7 @@ namespace StbcRevival
         }
 
         // The VR hands reach only the controls they collected when the console loaded.
-        private static void TellHands(ConsoleBase console)
+        internal static void TellHands(ConsoleBase console)
         {
             try
             {
@@ -364,10 +364,12 @@ namespace StbcRevival
             if (room == null || manager == null)
             {
                 widened = false;
+                // Matchmaking for PvP (no room yet) looks for eight; back to four for anything else.
+                if (manager != null && manager.MaxNumPlayers == Slots && !PvpLobby.Picked) manager.MaxNumPlayers = 4;
                 return;
             }
             int players = Convert.ToInt32(room.GetType().GetMethod("get_playerCount")?.Invoke(room, null) ?? 0);
-            bool want = PvpPrototype.Active && (players >= 4 || widened);
+            bool want = PvpLobby.InPvpRoom || (PvpPrototype.Active && (players >= 4 || widened));
             if (!PvpPrototype.Active && players > 4) want = true; // can't shrink below who's in
             manager.MaxNumPlayers = want ? Slots : 4;
             if (!(photon.GetMethod("get_isMasterClient", Static)?.Invoke(null, null) is bool master) || !master) return;

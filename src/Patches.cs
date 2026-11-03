@@ -229,7 +229,7 @@ namespace StbcRevival
             PauseMenuTweaks.Patch(harmony);
             VrRoomPanels.Patch(harmony);
             Missions.RevivalMissions.Patch(harmony);
-            PvpPrototype.Patch(harmony); // for everyone: it acts only when the host picks the PvP test ([Debug] PvpTest shows it)
+            PvpPrototype.Patch(harmony); // for everyone: it acts only in a PvP room ([Debug] PvpTest shows PVP on the main menu)
             SpeciesCreatorOptions.Patch(harmony);
             RevivalSettings.Patch(harmony);
             SteamFriendAdd.Patch(harmony);

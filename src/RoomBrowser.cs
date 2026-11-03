@@ -339,7 +339,7 @@ namespace StbcRevival
 
         // Room properties as Bridge Crew sets them (OOLKIMEFIPC): C3 GameMode, C6 CurrentGamePhase.
         private static string ModeName(int? mode) =>
-            Translation.T(mode == 0 ? "Public" : mode == 1 ? "Solo" : mode == 2 ? "Private" : mode == 3 ? "Tutorial" : "Unknown");
+            Translation.T(mode == 0 ? "Public" : mode == 1 ? "Solo" : mode == 2 ? "Private" : mode == 3 ? "Tutorial" : mode == PvpLobby.GameMode ? "PvP" : "Unknown");
 
         private static string PhaseName(int? phase) =>
             Translation.T(phase == 1 ? "Shuttle" : phase == 2 ? "Briefing room" : phase == 4 ? "Intro" : phase == null ? "?" : "In mission");
