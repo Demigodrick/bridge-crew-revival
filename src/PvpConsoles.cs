@@ -302,10 +302,26 @@ namespace StbcRevival
 
         public static NovaStation StationForRole(FLCHMJJDKDL role, NovaPlayerInfo player)
         {
+            if (InPvpBriefing && player != null) return BriefingSeat(role, player);
             var station = getStationByRole.Invoke(null, new object[] { role }) as NovaStation;
             if (!Active || station == null || player == null || player.AOMGCCGDJJC) return station;
             if (PvpShips.Of(PvpShips.Player(player.NJNHJKEPFAK)) != "B") return station;
             return twinOf.TryGetValue(station, out var copy) && copy != null ? copy : station;
+        }
+
+        // The briefing room's chairs have no role: a swap there moves a player to the table of the slot they hold
+        // (ship B's slots: the copies), to the chair in the slot's place at that table (the role sent is the slot's
+        // place, 0-3), or else any free one there; or nowhere (their own chair) if they hold no slot.
+        private static NovaStation BriefingSeat(FLCHMJJDKDL place, NovaPlayerInfo player)
+        {
+            var current = player.Station as NovaStation;
+            var ship = PvpRoles.ShipOfSlot(player.NJNHJKEPFAK);
+            if (ship == null || !(stationList.GetValue(null) is IList list)) return current;
+            var table = list.Cast<object>().OfType<NovaStation>().Where(s => s != null && copies.Contains(s) == (ship == "B")).ToList();
+            var wanted = table.FirstOrDefault(s => s.name.StartsWith("Station " + (int)place));
+            var seat = wanted != null && !(wanted.Pawn as UnityEngine.Object) ? wanted : table.FirstOrDefault(s => !(s.Pawn as UnityEngine.Object));
+            Plugin.Log.LogInfo($"PvP: player {player.NJNHJKEPFAK} to table {ship}: {(seat == null ? "no free chair" : seat.name)}");
+            return seat ?? current;
         }
 
         // The copies' next/previous stations (station cycling) pointed at the originals: link them to each other.

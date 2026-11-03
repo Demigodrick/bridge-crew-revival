@@ -63,6 +63,7 @@ namespace StbcRevival
             Hook(briefing, "BatchUpdate", postfix: nameof(BriefingRefresh_Postfix));
             Hook(briefing, "BJBJFCFIDOA", prefix: nameof(ShowSlot_Prefix));   // shows a slot's player on its row
             Hook(briefing, "GLFEOIFJEHE", prefix: nameof(Launch_Prefix), finalizer: nameof(Launch_Finalizer));
+            Hook(briefing, "JJJBJCNIJBD", postfix: nameof(RolePicked_Postfix)); // a role toggle (slot, on)
             // What the mouse hovers and presses in the briefing room (ship B's rows not taking clicks).
             var pointer = AccessTools.TypeByName("SVR.LAOGNJEBFCP");
             foreach (var m in new[] { "OnEnter", "OnDown" })
@@ -326,6 +327,34 @@ namespace StbcRevival
         }
 
         private static readonly MethodInfo GetText = AccessTools.Method(typeof(TMP_Text), "get_text");
+
+        // Picking a role on the other table's ship, in a PvP room's briefing room: the game's own station swap
+        // (a fade, then the host seats you; PvpConsoles.BriefingSeat picks the chair at that table).
+        private static void RolePicked_Postfix(int __0, bool __1)
+        {
+            if (!__1 || !InBriefing || !PvpLobby.InPvpRoom) return;
+            try
+            {
+                // The console also sets these toggles itself to show who holds a slot: only a slot that's free
+                // (asked for just now) or this player's (the host assigns its own at once) is a pick.
+                var roles = Roles;
+                var slots = roles == null ? null : Assigned(roles);
+                var holder = slots != null && __0 < slots.Length ? slots[__0] : null;
+                if (holder != null && holder != NDIOGIGMPBH.DIMFCNEMMPD) return;
+                var me = AccessTools.Method(typeof(NovaPlayerManager), "get_LocalPlayer")?.Invoke(NovaPlayerManager.IEFBKOMBFGO, null) as NovaPlayerInfo;
+                var seat = me?.Station as NovaStation;
+                if (seat == null || PvpConsoles.IsCopy(seat) == (__0 >= 4)) return;
+                var spawn = AccessTools.Method(AccessTools.TypeByName("NovaSpawnManager"), "get_Instance")?.Invoke(null, null);
+                var swap = spawn == null ? null : AccessTools.Method(spawn.GetType(), "SwapStations");
+                if (swap == null) return;
+                swap.Invoke(spawn, new object[] { (FLCHMJJDKDL)(__0 % 4), false });
+                Plugin.Log.LogInfo($"PvP: moving to table {(__0 >= 4 ? "B" : "A")} for slot {__0}");
+            }
+            catch (Exception e)
+            {
+                Plugin.Log.LogWarning("PvP: moving to the other table: " + e.Message);
+            }
+        }
 
         private static GameObject SelectionPage(ConsoleBriefingRoom console) =>
             AccessTools.Field(typeof(ConsoleBriefingRoom), "_selectionPanel")?.GetValue(console) as GameObject;
