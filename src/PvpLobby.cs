@@ -158,7 +158,7 @@ namespace StbcRevival
 
         // Ship A's table moves left and ship B's (a copy, with the station copies PvpConsoles makes) sits right,
         // along the room's width; what stands between them is put away.
-        private static readonly Vector3 TableA = new Vector3(-1.9f, 0f, 0f), TableB = new Vector3(1.9f, 0f, 0f);
+        private static readonly Vector3 TableA = new Vector3(-5f, 0f, 0f), TableB = new Vector3(5f, 0f, 0f); // the holodeck is 24 m across
         private static readonly string[] TableParts = { "BriefingRoom_Table", "BriefingRoom_Table_ProjectorEffect", "Mdl_AegisBriefingRoom" };
         private static readonly string[] InTheWay =
         {
