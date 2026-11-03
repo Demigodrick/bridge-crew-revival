@@ -60,6 +60,7 @@ namespace StbcRevival
             Hook(roles, "NetworkDeserialize", prefix: nameof(Receive_Prefix));
             var briefing = typeof(ConsoleBriefingRoom);
             Hook(briefing, "Awake", postfix: nameof(BriefingAwake_Postfix));
+            Hook(briefing, "BatchUpdate", postfix: nameof(BriefingRefresh_Postfix));
             Hook(briefing, "BJBJFCFIDOA", prefix: nameof(ShowSlot_Prefix));   // shows a slot's player on its row
             Hook(briefing, "GLFEOIFJEHE", prefix: nameof(Launch_Prefix), finalizer: nameof(Launch_Finalizer));
             // What the mouse hovers and presses in the briefing room (ship B's rows not taking clicks).
@@ -168,7 +169,7 @@ namespace StbcRevival
             public readonly List<KeyValuePair<TMP_Text, string>> ShipALabels = new List<KeyValuePair<TMP_Text, string>>();
             public List<GameObject> MissionPanel;
             public readonly List<Graphic> Cleared = new List<Graphic>();
-            public bool Shown, Settled;
+            public bool Shown, Settled, PageWasShown;
             public float DiagnoseAt = -1f;
         }
 
@@ -302,8 +303,13 @@ namespace StbcRevival
                     if (!show) continue;
                     // The console switches some of these on itself (the lock icon, the experience warning).
                     foreach (var part in layout.MissionPanel) if (part != null && part.activeSelf) part.SetActive(false);
-                    // A frame after showing (the rows laid out): into the mission panel's focus area, and clear what's under them.
-                    if (!layout.Settled && Time.frameCount % 2 == 0)
+                    // The role and mission page (after a mission the console shows the results first): each time it
+                    // appears, a frame later (the rows laid out), clear what's under ship B's rows.
+                    var page = SelectionPage(entry.Key);
+                    bool pageShown = page == null || page.activeInHierarchy;
+                    if (pageShown && !layout.PageWasShown) layout.Settled = false;
+                    layout.PageWasShown = pageShown;
+                    if (pageShown && !layout.Settled && Time.frameCount % 2 == 0)
                     {
                         layout.Settled = true;
                         Settle(entry.Key, layout);
@@ -314,17 +320,25 @@ namespace StbcRevival
                         layout.DiagnoseAt = -1f;
                         Diagnose(entry.Key, layout);
                     }
-                    // The console renames some roles itself (the Next Generation's names): ship A's labels kept.
-                    if (Time.frameCount % 15 == 0)
-                        foreach (var label in layout.ShipALabels)
-                            if (label.Key != null && GetText?.Invoke(label.Key, null) as string != "SHIP A " + label.Value)
-                                label.Key.SetLocalizedText("SHIP A " + label.Value);
                 }
             }
             RoomSize();
         }
 
         private static readonly MethodInfo GetText = AccessTools.Method(typeof(TMP_Text), "get_text");
+
+        private static GameObject SelectionPage(ConsoleBriefingRoom console) =>
+            AccessTools.Field(typeof(ConsoleBriefingRoom), "_selectionPanel")?.GetValue(console) as GameObject;
+
+        // The console renames roles in its refresh (by ship: the Next Generation's names), so ship A's labels go back
+        // on after it.
+        private static void BriefingRefresh_Postfix(ConsoleBriefingRoom __instance)
+        {
+            if (!layouts.TryGetValue(__instance, out var layout) || !layout.Shown) return;
+            foreach (var label in layout.ShipALabels)
+                if (label.Key != null && GetText?.Invoke(label.Key, null) as string != "SHIP A " + label.Value)
+                    label.Key.SetLocalizedText("SHIP A " + label.Value);
+        }
         private static readonly FieldInfo SideRestriction = AccessTools.Field(typeof(HandInteraction), "_sideRestriction");
 
         // ---- Diagnostics: ship B's rows and the mouse ----------------------------------------------
@@ -436,8 +450,13 @@ namespace StbcRevival
                 foreach (var label in layout.ShipALabels)
                     if (label.Key != null) kept.Add(Bounds(canvas, label.Key.rectTransform));
                 var cleared = new List<string>();
+                // Not the results (after a mission) or launch screens.
+                var screens = new[] { "_missionRecapPanel", "_gameLaunchPanel" }
+                    .Select(f => AccessTools.Field(typeof(ConsoleBriefingRoom), f)?.GetValue(console) as GameObject)
+                    .Where(g => g != null).Select(g => g.transform).ToList();
                 foreach (var graphic in console.GetComponentsInChildren<Graphic>(false))
                 {
+                    if (screens.Any(t => graphic.transform.IsChildOf(t))) continue;
                     if (!graphic.enabled || mine.Contains(graphic.transform) || graphic.GetComponentInParent<Selectable>() != null) continue;
                     if (rows.Any(r => r.transform.IsChildOf(graphic.transform))) continue;
                     var rect = Bounds(canvas, graphic.rectTransform);
