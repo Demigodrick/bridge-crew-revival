@@ -6,6 +6,7 @@
 //   renderers <file> [mesh filter]    skinned mesh renderers: their mesh and materials, followed into the other files
 //   material <file> <path ID>        a material: shader, keywords, textures (format, size, where), values
 //   tree <file> [depth] [root filter]  a scene's hierarchy: names, local positions, component class IDs
+//   drawn <file> <name filter>     drawn objects under matching ones: mesh, materials, static batching
 //   prefab <file> <renderer path ID>  the renderer's prefab: its root's name and children (local position, rotation)
 //   fit <file> <renderer path ID>     where each bind pose puts the head mesh's middle, against the eyes in Head space
 //   mesh <file> <name or path ID>              a mesh's counts: vertices, channels, bind poses, blend shapes, sub-meshes
@@ -110,6 +111,72 @@ switch (args[0])
             if (!t.Father.IsNull) continue;
             if (filter != null && !Go(t.GameObject).Name.Contains(filter, StringComparison.OrdinalIgnoreCase)) continue;
             Show(t, 0);
+        }
+        break;
+    }
+    case "drawn":
+    {
+        // Under the roots whose name contains a filter: each drawn object's mesh (name, file) and materials, and
+        // whether it's statically batched (a combined mesh's sub-meshes).
+        string filter = args[2];
+        GameObjectAsset Go(PPtr p) => GameObjectAsset.Read(assets.At(assets.Find(p.PathId)));
+        TransformAsset Tr(PPtr p) => TransformAsset.Read(assets.At(assets.Find(p.PathId)));
+        string MeshName(PPtr p) => p.FileId == 0 && assets.Find(p.PathId) is { } e ? $"{assets.NameOf(e)} #{p.PathId}" : $"{assets.FileOf(p)}:{p.PathId}";
+        var meshes = new Dictionary<long, MeshAsset>();
+        // Where a batched renderer's sub-meshes sit (the combined mesh's vertices are in the scene's space).
+        string Extent(MeshFilterAsset? mf, MeshRendererAsset mr)
+        {
+            if (mf == null || mf.Mesh.FileId != 0) return "";
+            if (!meshes.TryGetValue(mf.Mesh.PathId, out var mesh)) meshes[mf.Mesh.PathId] = mesh = MeshAsset.Read(assets.At(assets.Find(mf.Mesh.PathId)));
+            int stride = mesh.Channels.Where(c => c.Stream == 0 && c.Dimension > 0).Sum(c => c.Dimension * (c.Format == 0 ? 4 : c.Format == 1 ? 2 : 1));
+            var min = new System.Numerics.Vector3(float.MaxValue); var max = new System.Numerics.Vector3(float.MinValue);
+            foreach (var i in mr.SubsetIndices)
+            {
+                var sub = mesh.SubMeshes[(int)i];
+                for (uint v = sub.FirstVertex; v < sub.FirstVertex + sub.VertexCount; v++)
+                {
+                    int at = (int)v * stride;
+                    var p = new System.Numerics.Vector3(BitConverter.ToSingle(mesh.VertexData, at), BitConverter.ToSingle(mesh.VertexData, at + 4), BitConverter.ToSingle(mesh.VertexData, at + 8));
+                    min = System.Numerics.Vector3.Min(min, p); max = System.Numerics.Vector3.Max(max, p);
+                }
+            }
+            string F(System.Numerics.Vector3 v) => $"({v.X:0.0}, {v.Y:0.0}, {v.Z:0.0})";
+            // How much of it lies flat at its lowest (a floor) and highest (a ceiling).
+            var low = new System.Numerics.Vector3(float.MaxValue); var lowMax = new System.Numerics.Vector3(float.MinValue);
+            foreach (var i in mr.SubsetIndices)
+            {
+                var sub = mesh.SubMeshes[(int)i];
+                for (uint v = sub.FirstVertex; v < sub.FirstVertex + sub.VertexCount; v++)
+                {
+                    int at = (int)v * stride;
+                    var p = new System.Numerics.Vector3(BitConverter.ToSingle(mesh.VertexData, at), BitConverter.ToSingle(mesh.VertexData, at + 4), BitConverter.ToSingle(mesh.VertexData, at + 8));
+                    if (p.Y > min.Y + 0.1f) continue;
+                    low = System.Numerics.Vector3.Min(low, p); lowMax = System.Numerics.Vector3.Max(lowMax, p);
+                }
+            }
+            return $"from {F(min)} to {F(max)}; at its lowest, x {low.X:0.0} to {lowMax.X:0.0}, z {low.Z:0.0} to {lowMax.Z:0.0}";
+        }
+        void Show(TransformAsset t, string path)
+        {
+            var go = Go(t.GameObject);
+            path = path + "/" + go.Name;
+            var filterRef = go.Component(33);
+            var rendererRef = go.Component(23);
+            if (!rendererRef.IsNull)
+            {
+                var mr = MeshRendererAsset.Read(assets.At(assets.Find(rendererRef.PathId)));
+                var mf = filterRef.IsNull ? null : MeshFilterAsset.Read(assets.At(assets.Find(filterRef.PathId)));
+                Console.WriteLine($"{path}: mesh {(mf == null ? "-" : MeshName(mf.Mesh))}{(mr.Enabled ? "" : " (off)")}, "
+                    + $"materials {string.Join(" ", mr.Materials.Select(m => m.FileId == 0 ? assets.NameOf(assets.Find(m.PathId)) : $"{assets.FileOf(m)}:{m.PathId}"))}"
+                    + (mr.StaticBatchRoot.IsNull && mr.SubsetIndices.Count == 0 ? "" : $", batched: sub-meshes {string.Join(",", mr.SubsetIndices)} {Extent(mf, mr)}"));
+            }
+            foreach (var c in t.Children) Show(Tr(c), path);
+        }
+        foreach (var e in assets.Objects.Where(o => o.ClassId == 4))
+        {
+            var t = TransformAsset.Read(assets.At(e));
+            var name = Go(t.GameObject).Name;
+            if (name.Contains(filter)) Show(t, "");
         }
         break;
     }

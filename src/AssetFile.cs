@@ -308,6 +308,39 @@ namespace StbcRevival
         }
     }
 
+    /// <summary>A MeshFilter (class 33): which mesh a GameObject draws.</summary>
+    internal sealed class MeshFilterAsset
+    {
+        public PPtr GameObject, Mesh;
+
+        public static MeshFilterAsset Read(BinaryReader r) => new MeshFilterAsset { GameObject = AssetFile.ReadPPtr(r), Mesh = AssetFile.ReadPPtr(r) };
+    }
+
+    /// <summary>A MeshRenderer (class 23) as Unity 5.4 serializes it: on or off, its materials, and for a
+    /// statically batched one, the sub-meshes of the combined mesh it draws.</summary>
+    internal sealed class MeshRendererAsset
+    {
+        public PPtr GameObject, StaticBatchRoot;
+        public bool Enabled;
+        public List<PPtr> Materials;
+        public List<uint> SubsetIndices;
+
+        public static MeshRendererAsset Read(BinaryReader r)
+        {
+            var m = new MeshRendererAsset { GameObject = AssetFile.ReadPPtr(r) };
+            m.Enabled = r.ReadBoolean();
+            r.ReadBytes(5);   // cast shadows, receive shadows, motion vectors, light probes, reflection probes
+            AssetFile.Align(r);
+            r.ReadBytes(4);   // lightmap indices (static, dynamic)
+            r.ReadBytes(32);  // lightmap tiling and offset (static, dynamic)
+            m.Materials = AssetFile.ReadPPtrs(r);
+            m.SubsetIndices = new List<uint>();
+            for (int n = r.ReadInt32(), i = 0; i < n; i++) m.SubsetIndices.Add(r.ReadUInt32());
+            m.StaticBatchRoot = AssetFile.ReadPPtr(r);
+            return m;
+        }
+    }
+
     /// <summary>A Mesh as Unity 5.4 serializes it (class 43), the parts a skinned, blend-shaped head needs.</summary>
     internal sealed class MeshAsset
     {
@@ -406,6 +439,47 @@ namespace StbcRevival
             m.VertexData = AssetFile.ReadBytes(r);
             m.EndOfVertexData = r.BaseStream.Position;
             return m;
+        }
+
+        /// <summary>One vertex's value in a channel (0 position, 1 normal, 2 colour, 3-6 uv sets, 7 tangent), as
+        /// floats, from 5.4's formats: 0 float, 1 half, 2 byte (0-1). Streams follow each other, 16-byte aligned.</summary>
+        public float[] Get(int channel, int vertex)
+        {
+            if (streamStart == null)
+            {
+                streamStart = new int[4];
+                streamStride = new int[4];
+                foreach (var c in Channels) if (c.Dimension > 0) streamStride[c.Stream] += c.Dimension * FormatSize(c.Format);
+                int offset = 0;
+                for (int s = 0; s < 4; s++)
+                {
+                    streamStart[s] = offset;
+                    offset = (offset + streamStride[s] * (int)VertexCount + 15) & ~15;
+                }
+            }
+            var ch = Channels[channel];
+            var values = new float[ch.Dimension];
+            int at = streamStart[ch.Stream] + vertex * streamStride[ch.Stream] + ch.Offset;
+            for (int i = 0; i < values.Length; i++)
+                values[i] = ch.Format == 0 ? BitConverter.ToSingle(VertexData, at + i * 4)
+                          : ch.Format == 1 ? Half(BitConverter.ToUInt16(VertexData, at + i * 2))
+                          : VertexData[at + i] / 255f;
+            return values;
+        }
+
+        public bool Has(int channel) => channel < Channels.Count && Channels[channel].Dimension > 0;
+
+        private int[] streamStart, streamStride;
+
+        private static int FormatSize(byte format) => format == 0 ? 4 : format == 1 ? 2 : 1;
+
+        private static float Half(ushort h)
+        {
+            int sign = (h >> 15) & 1, exponent = (h >> 10) & 31, mantissa = h & 1023;
+            float value = exponent == 0 ? mantissa / 1024f * (float)Math.Pow(2, -14)
+                        : exponent == 31 ? float.PositiveInfinity
+                        : (1 + mantissa / 1024f) * (float)Math.Pow(2, exponent - 15);
+            return sign == 1 ? -value : value;
         }
 
         private static float[] Floats(BinaryReader r, int count)

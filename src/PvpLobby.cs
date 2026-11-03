@@ -165,7 +165,17 @@ namespace StbcRevival
             "BriefingRoom_SideTable", "Communicator", "Glasses", "SaurianBrandy", "Platter001", "BriefingRoom_TriDChess", "BriefingRoom_LoungeChair",
         };
         private static readonly List<GameObject> putAway = new List<GameObject>();
-        private static string dressedScene;
+        private static string dressedScene, holodeckScene;
+
+        // The briefing room's own shell, swapped for the holodeck's room once that's built (HolodeckRoom): its
+        // walls, ceiling, floor, window and dome, doors, the view outside, and the models and screens on its walls.
+        private static readonly string[] Shell =
+        {
+            "BriefingRoom_WallsAndCeiling", "Aegis_BriefingRoomCeiling", "Bridge_Door_Controls (1)", "Bridge_Door_Controls (2)",
+            "BriefingRoom_Steps", "BriefingRoom_Floor", "FloorTrim", "BriefingRoom_Dome", "PlantPot", "DogWood", "Window", "Screen",
+            "ModelGlass", "Enterprise_ScaleModele", "BridgeDoor_A", "BridgeDoor_A (1)", "Distance_Nebula_01", "StarsParticles", "Mdl_Aegis",
+            "Gold Ships", "Gold Ships TNG", "StarFleetLogo", "BreifingRoom_Art_01", "BriefingRoom_LongTable",
+        };
 
         /// <summary>A briefing station and its ship B copy (PvpConsoles), as the station wakes: to their tables.</summary>
         internal static void PlaceStations(NovaStation original, NovaStation copy)
@@ -184,6 +194,7 @@ namespace StbcRevival
             if (dressedScene == id)
             {
                 foreach (var thing in putAway) if (thing != null && thing.activeSelf) thing.SetActive(false); // the decor's own code turns some on
+                if (holodeckScene != id && !HolodeckRoom.Failed && HolodeckRoom.Ready(Plugin.Instance)) BuildHolodeck(scene, id);
                 return;
             }
             dressedScene = id;
@@ -206,6 +217,26 @@ namespace StbcRevival
                 }
             foreach (var thing in putAway) thing.SetActive(false);
             Plugin.Log.LogInfo($"PvP: briefing room set for two tables ({tables} table parts copied, {putAway.Count} things put away)");
+        }
+
+        // The holodeck's room around the tables, its floor where the chairs stand; then the briefing room's shell goes.
+        private static void BuildHolodeck(Scene scene, string id)
+        {
+            holodeckScene = id;
+            var chair = UnityEngine.Object.FindObjectsOfType<NovaStation>().FirstOrDefault(st => st.gameObject.scene == scene);
+            float floor = chair != null ? chair.transform.position.y : 0f;
+            var built = HolodeckRoom.Build(scene, new Vector3(0f, floor, 0f));
+            if (built == null) return;
+            int hidden = 0;
+            foreach (var root in scene.GetRootGameObjects())
+                foreach (var t in root.GetComponentsInChildren<Transform>(true))
+                    if (Array.IndexOf(Shell, t.name) >= 0 && !t.IsChildOf(built.transform))
+                    {
+                        t.gameObject.SetActive(false);
+                        putAway.Add(t.gameObject);
+                        hidden++;
+                    }
+            Plugin.Log.LogInfo($"PvP: briefing room swapped for the holodeck (floor at {floor:0.00}, {hidden} parts of the room hidden)");
         }
 
         /// <summary>Once a second: the host of a PvP room keeps the PvP mission picked in the briefing room.</summary>

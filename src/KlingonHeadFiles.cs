@@ -92,27 +92,7 @@ namespace StbcRevival
                     head.HeadEyeMid = Quaternion.Inverse(Q(headBone.Rotation)) * ((left + right) * 0.5f - V(headBone.Position));
                     head.EyeSpacing = (left - right).magnitude;
 
-                    foreach (var link in renderer.Materials)
-                    {
-                        var file = Open(assets, link);
-                        var materialEntry = file.Find(link.PathId) ?? throw new InvalidDataException($"{character}: material {link} missing");
-                        var plan = new MaterialPlan { Material = MaterialAsset.Read(file.At(materialEntry)) };
-                        plan.Shader = ShaderName(Open(file, plan.Material.Shader), plan.Material.Shader.PathId);
-                        foreach (var env in plan.Material.Textures)
-                        {
-                            if (env.Texture.IsNull) continue;
-                            var texFile = Open(file, env.Texture);
-                            var texEntry = texFile.Find(env.Texture.PathId) ?? throw new InvalidDataException($"{plan.Material.Name}: texture {env.Name} missing");
-                            var texture = TextureAsset.Read(texFile.At(texEntry));
-                            plan.Textures.Add(new KeyValuePair<MaterialAsset.TexEnv, TexturePlan>(env, new TexturePlan
-                            {
-                                Key = Path.GetFileName(texFile.Path) + ":" + env.Texture.PathId,
-                                Texture = texture,
-                                Pixels = texture.Data.Length > 0 ? texture.Data : Stream(dataDir, texture),
-                            }));
-                        }
-                        head.Materials.Add(plan);
-                    }
+                    foreach (var link in renderer.Materials) head.Materials.Add(ReadMaterial(dataDir, Open, assets, link));
                     heads[character] = head;
                 }
             }
@@ -121,6 +101,30 @@ namespace StbcRevival
                 foreach (var file in files.Values) file.Dispose();
             }
             return heads;
+        }
+
+        /// <summary>A material a renderer links to, with its shader's name and its textures' pixels (open: the
+        /// asset file a link from a file points into, opened once).</summary>
+        internal static MaterialPlan ReadMaterial(string dataDir, Func<AssetFile, PPtr, AssetFile> open, AssetFile from, PPtr link)
+        {
+            var file = open(from, link);
+            var materialEntry = file.Find(link.PathId) ?? throw new InvalidDataException($"material {link} missing in {file.Path}");
+            var plan = new MaterialPlan { Material = MaterialAsset.Read(file.At(materialEntry)) };
+            plan.Shader = ShaderName(open(file, plan.Material.Shader), plan.Material.Shader.PathId);
+            foreach (var env in plan.Material.Textures)
+            {
+                if (env.Texture.IsNull) continue;
+                var texFile = open(file, env.Texture);
+                var texEntry = texFile.Find(env.Texture.PathId) ?? throw new InvalidDataException($"{plan.Material.Name}: texture {env.Name} missing");
+                var texture = TextureAsset.Read(texFile.At(texEntry));
+                plan.Textures.Add(new KeyValuePair<MaterialAsset.TexEnv, TexturePlan>(env, new TexturePlan
+                {
+                    Key = Path.GetFileName(texFile.Path) + ":" + env.Texture.PathId,
+                    Texture = texture,
+                    Pixels = texture.Data.Length > 0 ? texture.Data : Stream(dataDir, texture),
+                }));
+            }
+            return plan;
         }
 
         // A 5.4 shader's name is the start of its text: Shader "RSE/SimpleSkinSinglePass" { ...
