@@ -112,24 +112,29 @@ namespace StbcRevival
             Plugin.Log.LogInfo("PvP: PVP picked on the main menu");
         }
 
-        // Another mode picked: PVP isn't any more, and the menu's mode is "none", so the game's switch updates
-        // the description even if it's the mode Play last set (Play_Prefix).
-        private static void ModePicked_Prefix(ConsoleMainMenu __instance)
+        // Another mode picked: PVP isn't any more. The menu also calls this every frame with its current mode
+        // (BatchUpdate), so only a different mode counts.
+        private static void ModePicked_Prefix(ConsoleMainMenu __instance, object __0)
         {
-            if (!Picked) return;
+            if (!Picked || ModeField == null || Convert.ToInt32(__0) == Convert.ToInt32(ModeField.GetValue(__instance))) return;
             Picked = false;
-            ModeField?.SetValue(__instance, Enum.ToObject(ModeField.FieldType, 4));
+            Plugin.Log.LogInfo("PvP: another game mode picked on the main menu");
         }
 
         private static void Play_Prefix(ConsoleMainMenu __instance)
         {
-            if (Picked) ModeField?.SetValue(__instance, Enum.ToObject(ModeField.FieldType, 0)); // Quick, as PvP
+            if (!Picked) return;
+            ModeField?.SetValue(__instance, Enum.ToObject(ModeField.FieldType, 0)); // Quick, as PvP
+            Plugin.Log.LogInfo("PvP: play pressed with PVP picked");
         }
 
         private static void Matchmaking_Prefix(ref int __0)
         {
             if (!Picked) return;
             __0 = GameMode;
+            // The menu's mode back to "none" (Play set Quick), so picking Quick afterwards counts as a change.
+            foreach (var menu in UnityEngine.Object.FindObjectsOfType<ConsoleMainMenu>())
+                ModeField?.SetValue(menu, Enum.ToObject(ModeField.FieldType, 4));
             if (NovaPlayerManager.IEFBKOMBFGO != null) NovaPlayerManager.IEFBKOMBFGO.MaxNumPlayers = PvpRoles.Slots;
             Plugin.Log.LogInfo($"PvP: looking for a PvP crew (game mode {GameMode}, {PvpRoles.Slots} players), or hosting one");
         }
