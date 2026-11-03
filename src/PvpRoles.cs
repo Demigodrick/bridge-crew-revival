@@ -154,7 +154,8 @@ namespace StbcRevival
             public readonly List<GameObject> ShipB = new List<GameObject>();
             public readonly List<KeyValuePair<TMP_Text, string>> ShipALabels = new List<KeyValuePair<TMP_Text, string>>();
             public List<GameObject> MissionPanel;
-            public bool Shown;
+            public readonly List<Graphic> Cleared = new List<Graphic>();
+            public bool Shown, Settled;
         }
 
         private static readonly Dictionary<ConsoleBriefingRoom, Layout> layouts = new Dictionary<ConsoleBriefingRoom, Layout>();
@@ -185,7 +186,7 @@ namespace StbcRevival
                     copy.name = row.name + " (ship B)";
                     var rect = row as RectTransform;
                     float width = rect != null && rect.rect.width > 1f ? rect.rect.width : 400f;
-                    copy.transform.localPosition = row.localPosition + new Vector3(width * 1.1f, 0f, 0f);
+                    copy.transform.localPosition = row.localPosition + new Vector3(width * 1.18f, 0f, 0f);
                     var clone = Activator.CreateInstance(infoType);
                     roleField.SetValue(clone, (FLCHMJJDKDL)((int)(FLCHMJJDKDL)roleField.GetValue(info) + 4));
                     foreach (var part in parts)
@@ -197,6 +198,11 @@ namespace StbcRevival
                             text.SetLocalizedText("SHIP B " + role);
                     if (parts.FirstOrDefault(p => p.Name == "RoleText")?.GetValue(info) is TMP_Text shipALabel)
                         layout.ShipALabels.Add(new KeyValuePair<TMP_Text, string>(shipALabel, role));
+                    if (parts.FirstOrDefault(p => p.Name == "RoleToggle")?.GetValue(clone) is Toggle shipBToggle)
+                    {
+                        int slot = i + 4;
+                        shipBToggle.onValueChanged.AddListener(on => Plugin.Log.LogInfo($"PvP: ship B {role} picked {(on ? "on" : "off")} (slot {slot})"));
+                    }
                     copy.SetActive(false);
                     layout.ShipB.Add(copy);
                     wider.SetValue(clone, i + 4);
@@ -265,15 +271,120 @@ namespace StbcRevival
                         foreach (var label in layout.ShipALabels)
                             if (label.Key != null) label.Key.SetLocalizedText(show ? "SHIP A " + label.Value : label.Value);
                         if (layout.MissionPanel == null) layout.MissionPanel = MissionPanel(entry.Key);
-                        if (!show) foreach (var part in layout.MissionPanel) if (part != null) part.SetActive(true);
+                        if (!show)
+                        {
+                            foreach (var part in layout.MissionPanel) if (part != null) part.SetActive(true);
+                            foreach (var graphic in layout.Cleared) if (graphic != null) graphic.enabled = true;
+                            layout.Cleared.Clear();
+                        }
                         layout.Shown = show;
+                        layout.Settled = false;
                         if (show) TellHands(entry.Key);
                     }
+                    if (!show) continue;
                     // The console switches some of these on itself (the lock icon, the experience warning).
-                    if (show) foreach (var part in layout.MissionPanel) if (part != null && part.activeSelf) part.SetActive(false);
+                    foreach (var part in layout.MissionPanel) if (part != null && part.activeSelf) part.SetActive(false);
+                    // A frame after showing (the rows laid out): into the mission panel's focus area, and clear what's under them.
+                    if (!layout.Settled && Time.frameCount % 2 == 0)
+                    {
+                        layout.Settled = true;
+                        Settle(entry.Key, layout);
+                    }
+                    // The console renames some roles itself (the Next Generation's names): ship A's labels kept.
+                    if (Time.frameCount % 15 == 0)
+                        foreach (var label in layout.ShipALabels)
+                            if (label.Key != null && GetText?.Invoke(label.Key, null) as string != "SHIP A " + label.Value)
+                                label.Key.SetLocalizedText("SHIP A " + label.Value);
                 }
             }
             RoomSize();
+        }
+
+        private static readonly MethodInfo GetText = AccessTools.Method(typeof(TMP_Text), "get_text");
+
+        // Ship B's rows sit where the mission panel was, but in the role list's part of the console. With a mouse,
+        // a console only takes clicks for the area the view has zoomed to (CameraFocusArea, which knows the
+        // controls in its own children), so they move into the mission panel's area (where they're drawn). Then
+        // the panel's leftovers under them go: small pictures and lines (the panel's frame, the arrows' boxes),
+        // never a control, a row, or anything bigger than a row.
+        private static void Settle(ConsoleBriefingRoom console, Layout layout)
+        {
+            try
+            {
+                var rows = layout.ShipB.Where(r => r != null).ToList();
+                if (rows.Count == 0) return;
+                var picture = AccessTools.Field(typeof(ConsoleBriefingRoom), "_missionPreviewImage")?.GetValue(console) as Component;
+                var area = picture != null ? picture.GetComponentInParent<CameraFocusArea>() : null;
+                var rowArea = rows[0].transform.parent.GetComponentInParent<CameraFocusArea>();
+                Plugin.Log.LogInfo($"PvP: ship B rows in focus area {rowArea?.name ?? "none"}, mission panel's {area?.name ?? "none"}");
+                if (area != null && area != rowArea && area.GetComponentInParent<Canvas>() == rows[0].GetComponentInParent<Canvas>())
+                {
+                    foreach (var row in rows) row.transform.SetParent(area.transform, true);
+                    TellHands(console);
+                    Plugin.Log.LogInfo($"PvP: ship B rows moved into focus area {area.name}");
+                }
+
+                var canvas = rows[0].GetComponentInParent<Canvas>()?.transform;
+                if (canvas == null) return;
+                var rects = rows.Select(r => Bounds(canvas, r)).ToList();
+                var mine = new HashSet<Transform>(rows.SelectMany(r => r.GetComponentsInChildren<Transform>(true)));
+                // Kept clear: the game type and ship boxes (around their toggles) and ship A's rows.
+                var kept = new[] { "_proceduralMissionToggle", "_campaignMissionToggle", "_aegisToggle", "_enterpriseToggle", "_tngToggle" }
+                    .Select(f => AccessTools.Field(typeof(ConsoleBriefingRoom), f)?.GetValue(console) as Component)
+                    .Where(c => c != null).Select(c => Bounds(canvas, c.gameObject)).ToList();
+                foreach (var label in layout.ShipALabels)
+                    if (label.Key != null) kept.Add(Bounds(canvas, label.Key.rectTransform));
+                var cleared = new List<string>();
+                foreach (var graphic in console.GetComponentsInChildren<Graphic>(false))
+                {
+                    if (!graphic.enabled || mine.Contains(graphic.transform) || graphic.GetComponentInParent<Selectable>() != null) continue;
+                    if (rows.Any(r => r.transform.IsChildOf(graphic.transform))) continue;
+                    var rect = Bounds(canvas, graphic.rectTransform);
+                    if (kept.Any(k => k.Overlaps(rect))) continue;
+                    for (int i = 0; i < rects.Count; i++)
+                    {
+                        if (!rect.Overlaps(rects[i]) || rect.width * rect.height > rects[i].width * rects[i].height) continue;
+                        graphic.enabled = false;
+                        layout.Cleared.Add(graphic);
+                        cleared.Add(graphic.name);
+                        break;
+                    }
+                }
+                Plugin.Log.LogInfo($"PvP: under ship B's rows, {cleared.Count} hidden: {string.Join(", ", cleared.Distinct().ToArray())}");
+                foreach (var row in rows)
+                {
+                    var toggle = row.GetComponentInChildren<Toggle>(true);
+                    Plugin.Log.LogInfo($"PvP: {row.name}: toggle {(toggle == null ? "none" : $"interactable {toggle.interactable}, on {toggle.isOn}")}, "
+                        + $"hand interactions {row.GetComponentsInChildren<HandInteraction>(true).Length}, at {Bounds(canvas, row)}");
+                }
+            }
+            catch (Exception e)
+            {
+                Plugin.Log.LogWarning("PvP: laying out ship B's rows: " + e.Message);
+            }
+        }
+
+        // An object's extent on the canvas (all its rect transforms), in the canvas's own units.
+        private static Rect Bounds(Transform canvas, GameObject row)
+        {
+            var parts = row.GetComponentsInChildren<RectTransform>(true).Select(t => Bounds(canvas, t)).Where(r => r.width > 0f && r.height > 0f).ToList();
+            if (parts.Count == 0) return new Rect();
+            float xMin = parts.Min(r => r.xMin), yMin = parts.Min(r => r.yMin), xMax = parts.Max(r => r.xMax), yMax = parts.Max(r => r.yMax);
+            return Rect.MinMaxRect(xMin, yMin, xMax, yMax);
+        }
+
+        private static readonly Vector3[] corners = new Vector3[4];
+
+        private static Rect Bounds(Transform canvas, RectTransform t)
+        {
+            t.GetWorldCorners(corners);
+            float xMin = float.MaxValue, yMin = float.MaxValue, xMax = float.MinValue, yMax = float.MinValue;
+            foreach (var corner in corners)
+            {
+                var p = canvas.InverseTransformPoint(corner);
+                xMin = Mathf.Min(xMin, p.x); yMin = Mathf.Min(yMin, p.y); xMax = Mathf.Max(xMax, p.x); yMax = Mathf.Max(yMax, p.y);
+            }
+            return Rect.MinMaxRect(xMin, yMin, xMax, yMax);
         }
 
         // The mission panel (name, picture, description, next/previous): what holds all of them, unless that holds
