@@ -78,13 +78,36 @@ namespace StbcRevival
 
         private static bool VoiceChat_Prefix(byte __0, object __1, int __2)
         {
-            if (__0 != 125 || !PvpPrototype.Active || GamePhaseManager.IEFBKOMBFGO == null
-                || GamePhaseManager.IEFBKOMBFGO.GetCurrentGamePhase() != typeof(GamePhase_Bridge)) return true;
+            if (__0 != 125 || GamePhaseManager.IEFBKOMBFGO == null) return true;
+            var phase = GamePhaseManager.IEFBKOMBFGO.GetCurrentGamePhase();
+            if (phase == typeof(GamePhase_BriefingRoom) && PvpLobby.InPvpRoom) return LobbyVoice(__1, __2);
+            if (!PvpPrototype.Active || phase != typeof(GamePhase_Bridge)) return true;
             var player = PvpShips.Player(__2);
             if (player == null || PvpShips.Of(player) == PvpShips.Mine) return true;
             if (__1 is SVR.Network.PLPKPDFOLDL packet) SVR.Network.PLPKPDFOLDL.Release(packet); // back to its pool, as the game does
             if (toldOtherShip.Add(__2)) Plugin.Log.LogInfo($"PvP: voice chat from player {__2} (the other ship) not played here");
             return false;
+        }
+
+        // The PvP lobby: a player at the other table isn't heard when either of you chose TABLE CHAT.
+        private static bool LobbyVoice(object packet, int actor)
+        {
+            var player = PvpShips.Player(actor);
+            bool theirs = player != null && PvpShips.Props(player)?[PvpRoles.ChatKey] as string == "T";
+            if (!PvpRoles.TableChat && !theirs) return true;
+            var mine = TableOf(PvpShips.Actor(PvpShips.Me));
+            var their = TableOf(actor);
+            if (mine == null || their == null || mine == their) return true;
+            if (packet is SVR.Network.PLPKPDFOLDL voice) SVR.Network.PLPKPDFOLDL.Release(voice);
+            return false;
+        }
+
+        // A player's table in the PvP lobby: the second set of chairs (PvpConsoles' copies) is table B.
+        private static string TableOf(int actor)
+        {
+            var info = NovaPlayerManager.IEFBKOMBFGO?.GetInfoForPlayer(actor);
+            var seat = info?.Station as NovaStation;
+            return seat == null ? null : PvpConsoles.IsCopy(seat) ? "B" : "A";
         }
 
         /// <summary>Each frame (checked a few times a second): play this ship's new lines here.</summary>

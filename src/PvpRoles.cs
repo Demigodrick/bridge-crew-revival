@@ -171,6 +171,7 @@ namespace StbcRevival
             public List<GameObject> MissionPanel;
             public readonly List<Graphic> Cleared = new List<Graphic>();
             public bool Shown, Settled, PageWasShown;
+            public Toggle RoomChat, TableChat;
             public float DiagnoseAt = -1f;
         }
 
@@ -299,6 +300,7 @@ namespace StbcRevival
                         }
                         layout.Shown = show;
                         layout.Settled = false;
+                        if (show && layout.RoomChat == null) BuildChat(entry.Key, layout);
                         if (show) TellHands(entry.Key);
                     }
                     if (!show) continue;
@@ -360,13 +362,112 @@ namespace StbcRevival
             AccessTools.Field(typeof(ConsoleBriefingRoom), "_selectionPanel")?.GetValue(console) as GameObject;
 
         // The console renames roles in its refresh (by ship: the Next Generation's names), so ship A's labels go back
-        // on after it.
+        // on after it; and launching needs both ships' captains.
         private static void BriefingRefresh_Postfix(ConsoleBriefingRoom __instance)
         {
             if (!layouts.TryGetValue(__instance, out var layout) || !layout.Shown) return;
             foreach (var label in layout.ShipALabels)
                 if (label.Key != null && GetText?.Invoke(label.Key, null) as string != "SHIP A " + label.Value)
                     label.Key.SetLocalizedText("SHIP A " + label.Value);
+            BothCaptains(__instance);
+            ShowChat(layout);
+        }
+
+        // ---- Both captains -------------------------------------------------------------------------
+
+        private static readonly MethodInfo SetInteractable = AccessTools.Method(AccessTools.TypeByName("KHDFGIINMKJ"), "SetInteractable", new[] { typeof(Selectable), typeof(bool) });
+
+        /// <summary>Both ships have a captain (slots 0 and 4).</summary>
+        internal static bool BothCaptains()
+        {
+            var slots = Roles == null ? null : Assigned(Roles);
+            return slots != null && slots.Length > 4 && slots[0] != null && slots[4] != null;
+        }
+
+        // The console enables launch for ship A's captain and warns while there's no captain (slot 0): in a PvP
+        // room, both slot 0 and slot 4.
+        private static void BothCaptains(ConsoleBriefingRoom console)
+        {
+            bool both = BothCaptains();
+            var warning = AccessTools.Field(typeof(ConsoleBriefingRoom), "_captainNecessaryGO")?.GetValue(console) as GameObject;
+            if (warning != null)
+            {
+                if (warning.activeSelf == both) warning.SetActive(!both);
+                foreach (var text in warning.GetComponentsInChildren<TMP_Text>(true))
+                    if (GetText?.Invoke(text, null) as string != BothCaptainsText) text.SetLocalizedText(BothCaptainsText);
+            }
+            if (!both && AccessTools.Field(typeof(ConsoleBriefingRoom), "_launchGameButton")?.GetValue(console) is Button launch && launch.interactable)
+                SetInteractable?.Invoke(null, new object[] { launch, false });
+        }
+
+        private const string BothCaptainsText = "BOTH SHIPS NEED A CAPTAIN TO PROCEED";
+
+        // ---- Voice chat: the room or your table ----------------------------------------------------
+
+        internal const string ChatKey = "PVC"; // player property: "T" while talking to (and hearing) only their table
+        private static bool tableChat;
+
+        /// <summary>This player's lobby voice chat is their table only.</summary>
+        internal static bool TableChat => tableChat;
+
+        // The game type box (Campaign, Ongoing Voyages, Revival Missions: a PvP room's mission is fixed) is hidden;
+        // in its place, under its heading renamed VOICE CHAT, two copies of its toggles: ROOM CHAT and TABLE CHAT.
+        private static void BuildChat(ConsoleBriefingRoom console, Layout layout)
+        {
+            try
+            {
+                var campaign = AccessTools.Field(typeof(ConsoleBriefingRoom), "_campaignMissionToggle")?.GetValue(console) as Toggle;
+                var procedural = AccessTools.Field(typeof(ConsoleBriefingRoom), "_proceduralMissionToggle")?.GetValue(console) as Toggle;
+                var group = procedural?.transform.parent;
+                var panel = group?.parent;
+                if (campaign == null || panel == null) return;
+                Toggle Copy(Toggle from, string label)
+                {
+                    var go = (GameObject)UnityEngine.Object.Instantiate(from.gameObject, from.transform.parent, false);
+                    go.transform.SetParent(panel, true);
+                    go.name = label;
+                    var toggle = go.GetComponent<Toggle>();
+                    toggle.onValueChanged.RemoveAllListeners();
+                    toggle.group = null;
+                    toggle.interactable = true;
+                    foreach (var text in go.GetComponentsInChildren<TMP_Text>(true)) text.SetLocalizedText(label);
+                    return toggle;
+                }
+                layout.RoomChat = Copy(campaign, "ROOM CHAT");
+                layout.TableChat = Copy(procedural, "TABLE CHAT");
+                layout.RoomChat.onValueChanged.AddListener(on => { if (on && !showingChat) SetTableChat(false); });
+                layout.TableChat.onValueChanged.AddListener(on => { if (on && !showingChat) SetTableChat(true); });
+                group.gameObject.SetActive(false);
+                foreach (var text in panel.GetComponentsInChildren<TMP_Text>(true))
+                    if (text.name == "GameType_label") text.SetLocalizedText("VOICE CHAT");
+                Plugin.Log.LogInfo("PvP: briefing console's game type box swapped for ROOM CHAT / TABLE CHAT");
+            }
+            catch (Exception e)
+            {
+                Plugin.Log.LogWarning("PvP: adding the chat toggles: " + e.Message);
+            }
+        }
+
+        private static bool showingChat;
+
+        // The toggles show the setting (and stay on: picking the one that's on keeps it), in the console's colours.
+        private static void ShowChat(Layout layout)
+        {
+            if (layout.RoomChat == null || layout.TableChat == null) return;
+            showingChat = true;
+            try
+            {
+                if (layout.RoomChat.isOn == tableChat) layout.RoomChat.isOn = !tableChat;
+                if (layout.TableChat.isOn != tableChat) layout.TableChat.isOn = tableChat;
+            }
+            finally { showingChat = false; }
+        }
+
+        private static void SetTableChat(bool on)
+        {
+            tableChat = on;
+            PhotonProps.Set(PvpShips.Me, ChatKey, on ? "T" : "R");
+            Plugin.Log.LogInfo($"PvP: lobby voice chat: {(on ? "your table only" : "the whole room")}");
         }
         private static readonly FieldInfo SideRestriction = AccessTools.Field(typeof(HandInteraction), "_sideRestriction");
 

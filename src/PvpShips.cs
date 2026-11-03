@@ -92,6 +92,6 @@ namespace StbcRevival
 
         private static object Get(object target, string getter) => target.GetType().GetMethod(getter, All)?.Invoke(target, null);
 
-        private static IDictionary Props(object owner) => Get(owner, "get_customProperties") as IDictionary;
+        internal static IDictionary Props(object owner) => Get(owner, "get_customProperties") as IDictionary;
     }
 }
