@@ -1333,3 +1333,70 @@ NPCHailingManager::BCDMJJCICNO = Views
 # ---- Voice chat ----------------------------------------------------------------------------------------------
 DaikonForge.VoIP.UnityMicrophoneInputDevice::FJNHDGFAOLB = DeviceName
 DaikonForge.VoIP.AudioInputDeviceBase::GMNCBFBICKK = DeviceName     # the Wwise template's device
+
+# ---- Hands and the mouse (how a console control gets hovered and pressed) ------------------------------------
+HandAnimator::DPAFLMHJMEC = _consoleInteractions                # every HandInteraction under the console it's on
+HandAnimator::BDHOELKPOIF = _availableInteractions             # the ones this hand can use now (mouse picks from these)
+HandAnimator::NMPLKOMLFJB = _availableCount
+HandAnimator::MLNEOCMIDFM = RebuildAvailableInteractions        # when _interactionsChanged
+HandAnimator::OLMKBPANPIO = _interactionsChanged
+HandAnimator::LIIIDIDGPDE = AddIfAvailable                      # enabled, active, Interactable, for this hand's side (mouse: by station-local x)
+HandAnimator::GBNAFACIFDJ = AddAllIfAvailable
+HandAnimator::OHLJJIOEMOB = _handIndex                          # 0 left, 1 right
+HandAnimator::KHDENOMKIJE = _console
+HandAnimator::OIMPBCDHKCO = _crewbotUIOpen?
+HandAnimatorManager::AFBJOJJNCEA = _animatorConsoles            # HandAnimator -> the console it's on
+HandInteraction::KHDENOMKIJE = _console                         # GetComponentInParent<ConsoleBase> in Awake
+HandInteraction::ENNMBACIHDK = _scaleAndAxesHelper              # child made in Awake; holds the triggers and wrist targets
+HandInteraction::LHLHCOKENFJ = _trigger
+HandInteraction::ACJDCMNNOBE = _triggerCollider
+HandInteraction::JMLDIGCLEKF = _mouseTrigger
+HandInteraction::JJGDKFLEHLH = _mouseTriggerCollider            # what the mouse ray hits
+HandInteraction::JMEKCPLBKPH = _autoBoxRect                     # the parent RectTransform an AutoBox trigger sizes to
+HandInteraction::FNEBLCGEKJK = _listener                        # ConsoleInteractionListener: hover/press visuals
+HandInteraction::ABIBGAEOOID = _listenerProxy
+HandInteraction::ILJCILIJPBI = NotifyAnimationController
+HandInteraction::HAAGLHAEEIK = _triggerLayer                    # "UIInteractionTrigger"
+HandInteraction/NFAIOKAJAKA = HandSide                          # Left, Right, Either (_sideRestriction)
+SVR.DBCHFMCICGK = Pointer                                       # NovaInputModule's per-hand pointers
+SVR.LAOGNJEBFCP = HandPointer
+SVR.LAOGNJEBFCP::MKFMPHDNBNF = PickMouseTarget                  # closest available interaction under the mouse ray
+SVR.LAOGNJEBFCP::OLAAMPGIKLE = _handAnimator
+SVR.NovaInputModule::LOMFPFADPHP = _pointers
+
+# ---- Briefing room roles -------------------------------------------------------------------------------------
+ConsoleBriefingRoom::JJJBJCNIJBD = OnRoleToggled                # (slot, on): AssignPlayerRole / UnassignPreviousRole
+ConsoleBriefingRoom::BJBJFCFIDOA = ShowRoleSlot                 # per frame, every slot of AssignedPlayerRoles
+ConsoleBriefingRoom::GJNNNPEOJIA = RowForRole                   # index into _playerRoleInfos by Role
+ConsoleBriefingRoom::GLFEOIFJEHE = LaunchGame                   # sets each player's Role from their slot
+
+# ---- Main menu and matchmaking -------------------------------------------------------------------------------
+ConsoleMainMenu/OLAKOFEOAPB = GameMode                          # Quick 0, Solo 1, Private 2, Tutorial 3, COUNT 4 (the room's C3)
+ConsoleMainMenu::FNCLHAJMFJC = _gameMode
+ConsoleMainMenu::MHOIHOKNNFC = SelectGameMode                   # also called every frame from BatchUpdate with the current mode
+ConsoleMainMenu::LGDJMJNHEKC = StartGame
+ConsoleMainMenu::KLDALFOLLKO = TryStartPublicMatch
+ConsoleMainMenu::FBEKLKFJBDB = TryStartPrivateMatch
+ConsoleMainMenu::LLBINBCCHAC = CanSkipMicCheck
+ConsoleMainMenu::KPBIMPFMPBP = StartMicCheck
+ConsoleMainMenu::FGINPOBBBAN = _startingMatch
+ConsoleMainMenu::FMNCPAJIHNJ = _matchmaking
+ConsoleMainMenu::JKOEGLOEGKD = _instance
+ConsoleMainMenu::PKOIDGNDHFO = OpenRegionPage
+ConsoleMainMenu::GLFCDJFLJDK = RegionLeft
+ConsoleMainMenu::BJNFFMDAOGH = RegionRight
+ConsoleMainMenu::FMNEJELNGFC = RegionAccept
+OCCEGCFNLPH = Matchmaking                                       # BeginPublicMatchmaking(mode), CreatePrivateMatch, CreateOfflineMatch
+OCCEGCFNLPH::DONHPOEPDOJ = _matchmaker
+MNEBKAIKACA = Matchmaker                                        # one search: join a briefing room with a seat, or make a room
+MNEBKAIKACA/ADAIKEGPOMD = MatchmakingGoal
+MNEBKAIKACA/GGDCEKNFEBB = MatchmakingState
+MNEBKAIKACA::OKPIKBIEMAJ = _state
+MNEBKAIKACA::IHAJKODOPHF = _goal
+MNEBKAIKACA::DJPNDGJAALD = JoinRandomBriefingRoom               # SQL filter: C0 language, C3 mode, C1 < max, C4, C6 briefing, C8, C9 TNG
+MNEBKAIKACA::GFILIMBONHF = ExcludeBannedRooms
+OOLKIMEFIPC = RoomProperties                                    # C0 language, C1 players, C2 max, C3 mode, C6 phase, C7 name, C9 TNG
+OOLKIMEFIPC::DHIBADKNCEB = MakeRoomPropertyTable
+NDIOGIGMPBH = PhotonNetwork
+FGBFJKPGFGJ = RoomOptions
+PBKJIGDCCLO = MatchmakingMode
