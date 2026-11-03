@@ -38,7 +38,7 @@ namespace StbcRevival
             new Option
             {
                 Label = "Klingon", Gender = "Male", BaseToggle = "_humanRaceToggle", BaseSpecies = "Human", PickMethod = "DADHMIIKIME", Log = "Klingon head",
-                Chosen = () => Plugin.KlingonHead.Value > 0, Choose = on => Plugin.KlingonHead.Value = on ? Math.Max(1, Plugin.KlingonHead.Value) : 0,
+                Chosen = () => Plugin.KlingonHead.Value > 0, Choose = on => Plugin.KlingonHead.Value = on ? Plugin.KlingonHeadChoice.Value : 0,
             },
         };
 

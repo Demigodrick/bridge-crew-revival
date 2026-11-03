@@ -195,7 +195,6 @@ namespace StbcRevival
             Add("KLINGON", "KLINGONE");
             Add("Romulan", "Romulaner");
             Add("Klingon", "Klingone");
-            Add("Klingon head: OFF", "Klingonenkopf: AUS");
             Add("Klingon head: CAPTAIN", "Klingonenkopf: KAPITÄN");
             Add("Klingon head: FLAGSHIP CAPTAIN", "Klingonenkopf: FLAGGSCHIFF-KAPITÄN");
             Add("Crews listed: TNG only", "Angezeigte Crews: nur TNG");

@@ -57,6 +57,7 @@ namespace StbcRevival
         internal static ConfigEntry<UnityEngine.KeyCode> GameDumpKey;
         internal static ConfigEntry<bool> RomulanFace;
         internal static ConfigEntry<int> KlingonHead;
+        internal static ConfigEntry<int> KlingonHeadChoice;
         internal static ConfigEntry<string> MapOverride;
         internal static ConfigEntry<int> FleetBattleSize;
         internal static ConfigEntry<int> EvacuationMinutes;
@@ -146,6 +147,9 @@ namespace StbcRevival
             KlingonHead = Config.Bind("Avatar", "KlingonHead", 0,
                 new ConfigDescription("Wear a Klingon captain's head: 0 off, 1 the captain, 2 the flagship's captain. Male Human character presets only; crewmates with the mod see it too. "
                                       + "The heads are loaded from the bridge's assets as the game starts.", new AcceptableValueRange<int>(0, 2)));
+            KlingonHeadChoice = Config.Bind("Avatar", "KlingonHeadChoice", Math.Max(1, KlingonHead.Value),
+                new ConfigDescription("Which Klingon captain's head the character creator's KLINGON wears: 1 the captain, 2 the flagship's captain "
+                                      + "(Revival settings changes it).", new AcceptableValueRange<int>(1, 2)));
             GameDumpKey = Config.Bind("Debug", "GameDumpKey", UnityEngine.KeyCode.F9,
                 "Testing only: describes the game's state (hail-screen characters, player avatars, sound, the scene) to BepInEx/game-dump.txt.");
             VoiceCommands = Config.Bind("Voice", "VoiceCommands", true,

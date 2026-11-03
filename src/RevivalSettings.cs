@@ -54,15 +54,16 @@ namespace StbcRevival
             Switch("Skip mic check", () => Plugin.SkipMicCheck, restart: true),
             Switch("Voice commands", () => Plugin.VoiceCommands, restart: true),
             Switch("Voice orders from any station", () => Plugin.VoiceAnyStation),
-            Switch("Romulan face", () => Plugin.RomulanFace),
+            // Which Klingon captain's head the creator's KLINGON wears (wearing one or not is the creator's).
             new Entry
             {
-                Text = () => "Klingon head: " + KlingonHead.Names[Mathf.Clamp(Plugin.KlingonHead.Value, 0, 2)].ToUpperInvariant(),
+                Text = () => "Klingon head: " + KlingonHead.Names[HeadChoice()].ToUpperInvariant(),
                 Button = () => "Change",
                 Press = () =>
                 {
-                    Plugin.KlingonHead.Value = (Plugin.KlingonHead.Value + 1) % 3;
-                    Plugin.Log.LogInfo($"Revival settings: Klingon head {KlingonHead.Names[Plugin.KlingonHead.Value]}");
+                    Plugin.KlingonHeadChoice.Value = HeadChoice() == 1 ? 2 : 1;
+                    if (Plugin.KlingonHead.Value > 0) Plugin.KlingonHead.Value = Plugin.KlingonHeadChoice.Value; // wearing one: the new one
+                    Plugin.Log.LogInfo($"Revival settings: Klingon head {KlingonHead.Names[HeadChoice()]}");
                 },
             },
             Switch("Chime when someone joins", () => Plugin.PlayerJoinedAlert),
@@ -89,6 +90,8 @@ namespace StbcRevival
                 Press = () => { if (Blocklist.Count > 0) Blocklist.Clear(); },
             },
         };
+
+        private static int HeadChoice() => Mathf.Clamp(Plugin.KlingonHeadChoice.Value, 1, 2);
 
         private static string ContentName(CrewContent content) =>
             content == CrewContent.NextGenerationOnly ? "TNG only" : content == CrewContent.NoNextGeneration ? "no TNG" : "any";
