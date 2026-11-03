@@ -17,6 +17,7 @@
 //   suggest <Type>                 names.map lines for its obfuscated properties (from their accessors' names)
 //                                  and the fields their plain getters return
 //   suggest-all                    the same for every type, leaving out what names.map already has
+//   stats                          what live code still has obfuscated, and what more rules could name
 //   dump [dir]                     every type decompiled to <dir>/<namespace>/<type>.cs (default decompiled/, gitignored)
 //
 // names.map (next to this file) gives obfuscated names readable ones, per type; src and dump decompile with it
@@ -221,6 +222,51 @@ switch (args[0])
             .Concat(all.Select(m => m.DeclaringType.FullName + "::" + m.Name))
             .Where(n => re.IsMatch(n)).Distinct().OrderBy(n => n);
         foreach (var n in names) Console.WriteLine(n);
+        break;
+    }
+    case "stats":
+    {
+        // What's still obfuscated with both maps applied (live code only), and how much a few more mechanical
+        // rules could name.
+        ApplyMap(new[] { "names.auto.map", "names.map" }.Select(f => Path.Combine(Here(), f)).Where(File.Exists).SelectMany(File.ReadAllLines).ToArray());
+        bool O(string n) => obf.IsMatch(n);
+        var liveTypes = new HashSet<TypeDefinition>(live.Select(m => m.DeclaringType));
+        Console.WriteLine($"types: {types.Count(t => O(t.Name))} of {types.Count} obfuscated ({types.Count(t => O(t.Name) && liveTypes.Contains(t))} with live code)");
+        Console.WriteLine($"live methods: {live.Count(m => O(m.Name))} of {live.Count} obfuscated");
+        var liveFields = live.Where(m => m.HasBody).SelectMany(m => m.Body.Instructions).Select(i => i.Operand).OfType<FieldReference>()
+            .Select(f => f.Resolve()).Where(f => f != null && f.Module == asm.MainModule).Distinct().ToList();
+        Console.WriteLine($"fields used by live code: {liveFields.Count(f => O(f.Name))} of {liveFields.Count} obfuscated");
+        var props = types.SelectMany(t => t.Properties).ToList();
+        Console.WriteLine($"properties: {props.Count(p => O(p.Name))} of {props.Count} obfuscated");
+
+        // Rule: event handlers, Events.AddListener<T>(handler) with T named -> On<T>.
+        int handlers = 0, components = 0, wrappers = 0, typed = 0;
+        var handlerSet = new HashSet<MethodDefinition>();
+        foreach (var m in live.Where(m => m.HasBody))
+        {
+            var ins = m.Body.Instructions;
+            for (int i = 0; i + 2 < ins.Count; i++)
+                if (ins[i].OpCode.Code == Code.Ldftn && ins[i].Operand is MethodReference h && SafeResolve(h) is { } hd && O(hd.Name)
+                    && ins.Skip(i).Take(4).Any(x => x.Operand is MethodReference c && c.Name.Contains("AddListener") && c is GenericInstanceMethod g && !O(g.GenericArguments[0].Name)))
+                    handlerSet.Add(hd);
+        }
+        handlers = handlerSet.Count;
+        // Rule: fields only ever stored from GetComponent*<T>() -> _t.
+        foreach (var f in liveFields.Where(f => O(f.Name) && !O(f.FieldType.Name) && !f.FieldType.IsPrimitive))
+        {
+            var stores = live.Where(m => m.HasBody).SelectMany(m => m.Body.Instructions.Where(x => (x.OpCode.Code == Code.Stfld || x.OpCode.Code == Code.Stsfld) && x.Operand is FieldReference r && r.Resolve() == f)).ToList();
+            if (stores.Count > 0 && stores.All(x => x.Previous?.Operand is MethodReference c && c.Name.StartsWith("GetComponent"))) components++;
+            // Rule: the only field of its type in its class -> _typeName.
+            if (f.DeclaringType.Fields.Count(o => o.FieldType.FullName == f.FieldType.FullName) == 1) typed++;
+        }
+        // Rule: methods whose body is one call to a named method (forwarders) -> that name.
+        foreach (var m in live.Where(m => O(m.Name) && m.HasBody))
+        {
+            var calls = m.Body.Instructions.Where(x => x.OpCode.FlowControl == FlowControl.Call).ToList();
+            if (calls.Count == 1 && calls[0].Operand is MethodReference c && !O(c.Name) && m.Body.Instructions.Count <= 8) wrappers++;
+        }
+        Console.WriteLine($"more rules could name: {handlers} event handlers (On<Event>), {components} GetComponent fields, "
+            + $"{typed} fields the only one of their (named) type in their class, {wrappers} one-call forwarders");
         break;
     }
     case "suggest":
