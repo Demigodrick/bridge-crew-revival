@@ -123,6 +123,10 @@ namespace StbcRevival
         // The bridge (the briefing room has stations too: only the bridge gets a second set).
         private static bool OnBridge => GamePhaseManager.IEFBKOMBFGO != null && GamePhaseManager.IEFBKOMBFGO.GetCurrentGamePhase() == typeof(GamePhase_Bridge);
 
+        // A PvP room's briefing room: four more stations around a second table (PvpLobby places them).
+        private static bool InPvpBriefing => PvpLobby.InPvpRoom && GamePhaseManager.IEFBKOMBFGO != null
+                                             && GamePhaseManager.IEFBKOMBFGO.GetCurrentGamePhase() == typeof(GamePhase_BriefingRoom);
+
         /// <summary>Is this station (or console) part of the second set, ship B's?</summary>
         internal static bool IsCopy(NovaStation station) => station != null && copies.Contains(station);
 
@@ -186,7 +190,8 @@ namespace StbcRevival
 
         private static void StationAwake_Postfix(NovaStation __instance)
         {
-            if (copying || !Active || !OnBridge || copies.Contains(__instance) || twinOf.ContainsKey(__instance)) return;
+            bool briefing = InPvpBriefing;
+            if (copying || !(briefing || (Active && OnBridge)) || copies.Contains(__instance) || twinOf.ContainsKey(__instance)) return;
             ForgetOldBridge();
             NovaStation copy;
             copying = true;
@@ -220,6 +225,7 @@ namespace StbcRevival
                 consoleParent.SetValue(data, parent);
             }
             Plugin.Log.LogInfo($"PvP: station {__instance.name} ({__instance.OGBAPMIPPID}) copied for ship B");
+            if (briefing) PvpLobby.PlaceStations(__instance, copy);
         }
 
         // The copies go after the originals (in role order among themselves), so station 4-7 are ship B's and

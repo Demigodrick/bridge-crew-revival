@@ -1,11 +1,13 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using HarmonyLib;
 using StbcRevival.Missions;
 using TMPro;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
 namespace StbcRevival
@@ -152,9 +154,64 @@ namespace StbcRevival
             }
         }
 
+        // ---- The briefing room: two tables ----------------------------------------------------------
+
+        // Ship A's table moves left and ship B's (a copy, with the station copies PvpConsoles makes) sits right,
+        // along the room's width; what stands between them is put away.
+        private static readonly Vector3 TableA = new Vector3(-1.9f, 0f, 0f), TableB = new Vector3(1.9f, 0f, 0f);
+        private static readonly string[] TableParts = { "BriefingRoom_Table", "BriefingRoom_Table_ProjectorEffect", "Mdl_AegisBriefingRoom" };
+        private static readonly string[] InTheWay =
+        {
+            "BriefingRoom_SideTable", "Communicator", "Glasses", "SaurianBrandy", "Platter001", "BriefingRoom_TriDChess", "BriefingRoom_LoungeChair",
+        };
+        private static readonly List<GameObject> putAway = new List<GameObject>();
+        private static string dressedScene;
+
+        /// <summary>A briefing station and its ship B copy (PvpConsoles), as the station wakes: to their tables.</summary>
+        internal static void PlaceStations(NovaStation original, NovaStation copy)
+        {
+            original.transform.position += TableA;
+            copy.transform.position += TableB;
+            Plugin.Log.LogInfo($"PvP: briefing station {original.name} at table A, its copy at table B");
+        }
+
+        // The tables themselves, and what's in the way, once the briefing room's scene is in (stations wake first).
+        private static void DressBriefingRoom()
+        {
+            var scene = SceneManager.GetSceneByName("Aegis_Briefing_Room");
+            if (!scene.IsValid() || !scene.isLoaded || !InPvpRoom) { if (!scene.IsValid() || !scene.isLoaded) dressedScene = null; return; }
+            var id = scene.GetHashCode().ToString();
+            if (dressedScene == id)
+            {
+                foreach (var thing in putAway) if (thing != null && thing.activeSelf) thing.SetActive(false); // the decor's own code turns some on
+                return;
+            }
+            dressedScene = id;
+            putAway.Clear();
+            int tables = 0;
+            foreach (var root in scene.GetRootGameObjects())
+                foreach (var t in root.GetComponentsInChildren<Transform>(true))
+                {
+                    var name = t.name;
+                    if (TableParts.Contains(name))
+                    {
+                        var copy = (GameObject)UnityEngine.Object.Instantiate(t.gameObject, t.parent, true);
+                        copy.name = name + " (table B)";
+                        t.position += TableA;
+                        copy.transform.position = t.position - TableA + TableB;
+                        tables++;
+                    }
+                    else if (InTheWay.Any(n => name.StartsWith(n)) && (t.parent == null || !InTheWay.Any(n => t.parent.name.StartsWith(n))))
+                        putAway.Add(t.gameObject);
+                }
+            foreach (var thing in putAway) thing.SetActive(false);
+            Plugin.Log.LogInfo($"PvP: briefing room set for two tables ({tables} table parts copied, {putAway.Count} things put away)");
+        }
+
         /// <summary>Once a second: the host of a PvP room keeps the PvP mission picked in the briefing room.</summary>
         internal static void Update()
         {
+            DressBriefingRoom();
             if (Time.unscaledTime < nextCheck) return;
             nextCheck = Time.unscaledTime + 1f;
             if (!InPvpRoom || !(Patches.PhotonNetworkType?.GetMethod("get_isMasterClient", Static)?.Invoke(null, null) is true)) return;

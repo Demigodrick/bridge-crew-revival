@@ -585,6 +585,8 @@ namespace StbcRevival
         private static FieldInfo seatPlayerField;
         private static string seatingShip; // the ship of the player the game is seating, while it does
 
+        private static bool InBriefing => GamePhaseManager.IEFBKOMBFGO != null && GamePhaseManager.IEFBKOMBFGO.GetCurrentGamePhase() == typeof(GamePhase_BriefingRoom);
+
         private static void Seating_Prefix(object __instance, out string __state)
         {
             __state = seatingShip;
@@ -620,7 +622,7 @@ namespace StbcRevival
             for (int i = 0; i < stations.Count; i++)
             {
                 if (!(stations[i] is NovaStation station) || PvpConsoles.IsCopy(station) != onB) continue;
-                if (station.OGBAPMIPPID == FLCHMJJDKDL.Captain) continue;
+                if (station.OGBAPMIPPID == FLCHMJJDKDL.Captain && !InBriefing) continue; // the briefing room's tables seat four each
                 if (Pawn.GetValue(station) as UnityEngine.Object) continue;
                 __result = i;
                 return;
