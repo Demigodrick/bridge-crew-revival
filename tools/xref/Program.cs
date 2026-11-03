@@ -16,7 +16,8 @@
 //   names <regex>                  identifiers (types, members) matching a regex
 //   suggest <Type>                 names.map lines for its obfuscated properties (from their accessors' names)
 //                                  and the fields their plain getters return
-//   suggest-all                    the same for every type, leaving out what names.map already has
+//   suggest-all                    the same for every type, then names from how live code uses things
+//                                  (see SuggestByUse at the end), leaving out what names.map already has
 //   stats                          what live code still has obfuscated, and what more rules could name
 //   dump [dir]                     every type decompiled to <dir>/<namespace>/<type>.cs (default decompiled/, gitignored)
 //
@@ -284,6 +285,9 @@ switch (args[0])
             }
         string Camel(string n) => "_" + char.ToLowerInvariant(n[0]) + n.Substring(1);
         bool New(TypeDefinition t, string member) => !mapped.Contains($"{t.FullName}::{member}") && !mapped.Contains($"{t.Name}::{member}");
+        var given = new Dictionary<TypeDefinition, HashSet<string>>(); // names handed out per type, by any rule
+        HashSet<string> Given(TypeDefinition t) => given.TryGetValue(t, out var g) ? g : given[t] = new HashSet<string>(
+            t.Fields.Select(f => f.Name).Concat(t.Methods.Select(m => m.Name)).Concat(t.Properties.Select(p => p.Name)).Where(n => !obf.IsMatch(n)));
         foreach (var t in only != null ? new List<TypeDefinition> { only } : types)
         {
             var taken = new HashSet<string>(t.Fields.Select(f => f.Name));
@@ -294,15 +298,21 @@ switch (args[0])
                 var name = acc.Name.Substring(acc.Name.IndexOf('_') + 1);
                 if (obf.IsMatch(name) || name.Contains('.')) continue;
                 if (New(t, p.Name)) Console.WriteLine($"{t.FullName}::{p.Name} = {name}");
+                Given(t).Add(name);
                 if (p.GetMethod is { HasBody: true } g)
                 {
                     var ins = g.Body.Instructions.Where(i => i.OpCode.Code != Code.Nop).ToList();
                     var fld = ins.Select(i => i.Operand).OfType<FieldReference>().ToList();
                     if (fld.Count == 1 && ins.Count <= 4 && fld[0].Resolve() is { } fd && fd.DeclaringType == t && obf.IsMatch(fd.Name) && taken.Add(Camel(name)) && New(t, fd.Name))
+                    {
                         Console.WriteLine($"{t.FullName}::{fd.Name} = {Camel(name)}");
+                        Given(t).Add(Camel(name));
+                        mapped.Add($"{t.FullName}::{fd.Name}");
+                    }
                 }
             }
         }
+        if (only == null) SuggestByUse(mapped, Given);
         break;
     }
     default:
@@ -319,3 +329,91 @@ static MethodDefinition? SafeResolve(MethodReference mr)
 static IEnumerable<TypeDefinition> Nested(TypeDefinition t) => t.NestedTypes.SelectMany(n => new[] { n }.Concat(Nested(n)));
 
 static string Here([CallerFilePath] string path = "") => Path.GetDirectoryName(path)!;
+
+// suggest-all's rules from how live code uses things (after the accessor names), each name unique in its type:
+//   event handlers (Events.AddListener<T>(handler), T named)  -> On<T>
+//   fields only ever stored from GetComponent*<T>()            -> _t
+//   one-call forwarders (a short body calling a named method)  -> that method's name
+//   a field that's the only one of its (named) type in its class -> _type, as a guess (_maybe)
+// Type names count as named when they're readable or names.map names them.
+void SuggestByUse(HashSet<string> mapped, Func<TypeDefinition, HashSet<string>> given)
+{
+    var typeNames = new Dictionary<string, string>();
+    foreach (var line in File.ReadAllLines(Path.Combine(Here(), "names.map")))
+    {
+        var parts = line.Split('#')[0].Split('=');
+        if (parts.Length != 2 || parts[0].Contains("::")) continue;
+        var name = parts[1].Trim().TrimEnd('?');
+        if (T(parts[0].Trim()) is { } t) typeNames[t.FullName] = name.Substring(name.LastIndexOf('.') + 1);
+    }
+    string? Named(TypeReference t)
+    {
+        if (t is GenericInstanceType || t.IsGenericParameter || t.IsPointer || t.IsByReference) return null;
+        if (t is Mono.Cecil.ArrayType a) return Named(a.ElementType) is { } e ? e + "s" : null;
+        var full = t.FullName;
+        if (typeNames.TryGetValue(full, out var n)) return n;
+        var name = t.Name;
+        if (obf.IsMatch(name) || name.Contains('`') || name.Contains('<') || t.IsPrimitive) return null;
+        if (t.Namespace == "System" && name is "String" or "Object" or "Action" or "Type" or "Delegate") return null;
+        return name;
+    }
+    string Lower(string n) => char.ToLowerInvariant(n[0]) + n.Substring(1);
+    bool Free(MemberReference m) => obf.IsMatch(m.Name) && !mapped.Contains($"{m.DeclaringType.FullName}::{m.Name}") && !mapped.Contains($"{m.DeclaringType.Name}::{m.Name}");
+    string Unique(TypeDefinition t, string name)
+    {
+        var taken = given(t);
+        var result = name;
+        for (int i = 2; taken.Contains(result); i++) result = name + i;
+        taken.Add(result);
+        return result;
+    }
+    void Emit(MemberReference m, string name, string why)
+    {
+        mapped.Add($"{m.DeclaringType.FullName}::{m.Name}");
+        Console.WriteLine($"{m.DeclaringType.FullName}::{m.Name} = {name}{(why.Length > 0 ? "    # " + why : "")}");
+    }
+    var bodies = live.Where(m => m.HasBody).ToList();
+
+    // Event handlers.
+    foreach (var m in bodies)
+    {
+        var ins = m.Body.Instructions;
+        for (int i = 0; i < ins.Count; i++)
+        {
+            if (ins[i].OpCode.Code != Code.Ldftn || !(ins[i].Operand is MethodReference h) || !(SafeResolve(h) is { } hd) || !Free(hd)) continue;
+            var add = ins.Skip(i).Take(4).Select(x => x.Operand).OfType<GenericInstanceMethod>().FirstOrDefault(c => c.Name.Contains("AddListener"));
+            if (add != null && Named(add.GenericArguments[0]) is { } evt)
+                Emit(hd, Unique(hd.DeclaringType, "On" + evt), "");
+        }
+    }
+    // Fields: by what's stored in them, or their type.
+    var stores = new Dictionary<FieldDefinition, List<Instruction>>();
+    foreach (var m in bodies)
+        foreach (var x in m.Body.Instructions)
+            if ((x.OpCode.Code == Code.Stfld || x.OpCode.Code == Code.Stsfld) && x.Operand is FieldReference r && r.Resolve() is { } fd && fd.Module == asm.MainModule)
+            {
+                if (!stores.TryGetValue(fd, out var l)) stores[fd] = l = new();
+                l.Add(x);
+            }
+    var used = new HashSet<FieldDefinition>(bodies.SelectMany(m => m.Body.Instructions).Select(x => x.Operand).OfType<FieldReference>()
+        .Select(f => f.Resolve()).Where(f => f != null && f.Module == asm.MainModule)!);
+    foreach (var f in used.Where(f => Free(f) && !f.Name.Contains('<')).OrderBy(f => f.DeclaringType.FullName).ThenBy(f => f.Name))
+    {
+        var type = Named(f.FieldType);
+        if (type == null) continue;
+        var prefix = f.IsStatic ? "s_" : "_";
+        if (stores.TryGetValue(f, out var st) && st.All(x => x.Previous?.Operand is MethodReference c && c.Name.StartsWith("GetComponent")))
+            Emit(f, Unique(f.DeclaringType, prefix + Lower(type)), "GetComponent");
+        else if (f.DeclaringType.Fields.Count(o => o.FieldType.FullName == f.FieldType.FullName) == 1)
+            Emit(f, Unique(f.DeclaringType, prefix + Lower(type)) + "?", "");
+    }
+    // One-call forwarders.
+    foreach (var m in live.Where(m => Free(m) && m.HasBody && !m.IsConstructor).OrderBy(m => m.DeclaringType.FullName))
+    {
+        var calls = m.Body.Instructions.Where(x => x.OpCode.FlowControl == FlowControl.Call).ToList();
+        if (calls.Count != 1 || m.Body.Instructions.Count > 8 || !(calls[0].Operand is MethodReference c) || obf.IsMatch(c.Name) || c.Name.StartsWith(".")) continue;
+        var name = c.Name.StartsWith("get_") ? "Get" + c.Name.Substring(4) : c.Name.StartsWith("set_") ? "Set" + c.Name.Substring(4) : c.Name;
+        if (name.Contains('<') || name.Contains('.')) continue;
+        Emit(m, Unique(m.DeclaringType, name), "forwards to " + c.DeclaringType.Name + "." + c.Name);
+    }
+}
