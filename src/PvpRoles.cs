@@ -147,9 +147,17 @@ namespace StbcRevival
 
         // ---- The briefing room's ship B rows ------------------------------------------------------
 
-        private static readonly List<GameObject> shipBRows = new List<GameObject>();
-        private static ConsoleBriefingRoom rowsFor;
-        private static bool rowsShown;
+        // Each briefing console (one per station view) has its own rows: ship B's copies, ship A's labels to
+        // rename, and the mission panel, which a PvP room doesn't need (the mission is PvP).
+        private sealed class Layout
+        {
+            public readonly List<GameObject> ShipB = new List<GameObject>();
+            public readonly List<KeyValuePair<TMP_Text, string>> ShipALabels = new List<KeyValuePair<TMP_Text, string>>();
+            public List<GameObject> MissionPanel;
+            public bool Shown;
+        }
+
+        private static readonly Dictionary<ConsoleBriefingRoom, Layout> layouts = new Dictionary<ConsoleBriefingRoom, Layout>();
 
         // Before the console's Start, which wires each row's toggle to its role number (4–7 for these).
         private static void BriefingAwake_Postfix(ConsoleBriefingRoom __instance)
@@ -162,7 +170,7 @@ namespace StbcRevival
                 var parts = AccessTools.GetDeclaredFields(infoType).Where(f => typeof(Component).IsAssignableFrom(f.FieldType)).ToList();
                 var wider = Array.CreateInstance(infoType, 8);
                 Array.Copy(infos, wider, 4);
-                shipBRows.Clear();
+                var layout = new Layout();
                 for (int i = 0; i < 4; i++)
                 {
                     var info = infos.GetValue(i);
@@ -177,23 +185,25 @@ namespace StbcRevival
                     copy.name = row.name + " (ship B)";
                     var rect = row as RectTransform;
                     float width = rect != null && rect.rect.width > 1f ? rect.rect.width : 400f;
-                    copy.transform.localPosition = row.localPosition + new Vector3(width * 1.05f, 0f, 0f);
+                    copy.transform.localPosition = row.localPosition + new Vector3(width * 1.1f, 0f, 0f);
                     var clone = Activator.CreateInstance(infoType);
                     roleField.SetValue(clone, (FLCHMJJDKDL)((int)(FLCHMJJDKDL)roleField.GetValue(info) + 4));
                     foreach (var part in parts)
                         if (part.GetValue(info) is Component original && original != null)
                             part.SetValue(clone, Counterpart(row, copy.transform, original));
+                    var role = RoleName((int)(FLCHMJJDKDL)roleField.GetValue(info));
                     foreach (var text in copy.GetComponentsInChildren<TMP_Text>(true))
                         if (text == (parts.FirstOrDefault(p => p.Name == "RoleText")?.GetValue(clone) as Component))
-                            text.SetLocalizedText("SHIP B " + RoleName((int)(FLCHMJJDKDL)roleField.GetValue(info)));
+                            text.SetLocalizedText("SHIP B " + role);
+                    if (parts.FirstOrDefault(p => p.Name == "RoleText")?.GetValue(info) is TMP_Text shipALabel)
+                        layout.ShipALabels.Add(new KeyValuePair<TMP_Text, string>(shipALabel, role));
                     copy.SetActive(false);
-                    shipBRows.Add(copy);
+                    layout.ShipB.Add(copy);
                     wider.SetValue(clone, i + 4);
                 }
                 RoleInfos.SetValue(__instance, wider);
-                rowsFor = __instance;
-                rowsShown = false;
-                Plugin.Log.LogInfo($"PvP: briefing room role list has ship B rows ({shipBRows.Count}, shown with the PvP test)");
+                layouts[__instance] = layout;
+                Plugin.Log.LogInfo($"PvP: briefing room role list has ship B rows ({layout.ShipB.Count}, shown in a PvP room)");
             }
             catch (Exception e)
             {
@@ -242,14 +252,54 @@ namespace StbcRevival
         /// <summary>Each frame: ship B's rows shown while the PvP test is picked; the room's size.</summary>
         internal static void Update()
         {
-            bool show = PvpPrototype.Active && rowsFor != null;
-            if (show != rowsShown && shipBRows.Count > 0)
+            if (layouts.Count > 0)
             {
-                foreach (var row in shipBRows) if (row != null) row.SetActive(show);
-                rowsShown = show;
-                if (show) TellHands(rowsFor);
+                bool show = PvpPrototype.Active;
+                foreach (var console in layouts.Keys.Where(c => c == null).ToList()) layouts.Remove(console);
+                foreach (var entry in layouts)
+                {
+                    var layout = entry.Value;
+                    if (show != layout.Shown)
+                    {
+                        foreach (var row in layout.ShipB) if (row != null) row.SetActive(show);
+                        foreach (var label in layout.ShipALabels)
+                            if (label.Key != null) label.Key.SetLocalizedText(show ? "SHIP A " + label.Value : label.Value);
+                        if (layout.MissionPanel == null) layout.MissionPanel = MissionPanel(entry.Key);
+                        if (!show) foreach (var part in layout.MissionPanel) if (part != null) part.SetActive(true);
+                        layout.Shown = show;
+                        if (show) TellHands(entry.Key);
+                    }
+                    // The console switches some of these on itself (the lock icon, the experience warning).
+                    if (show) foreach (var part in layout.MissionPanel) if (part != null && part.activeSelf) part.SetActive(false);
+                }
             }
             RoomSize();
+        }
+
+        // The mission panel (name, picture, description, next/previous): what holds all of them, unless that holds
+        // anything else the console shows (roles, game type, ship, launch), else each part on its own.
+        private static List<GameObject> MissionPanel(ConsoleBriefingRoom console)
+        {
+            Component Part(string name) => AccessTools.Field(typeof(ConsoleBriefingRoom), name)?.GetValue(console) as Component;
+            var pieces = new[] { "_missionName", "_missionDescriptionText", "_missionPreviewImage", "_nextMissionButton", "_previousMissionButton" }
+                .Select(Part).Where(c => c != null).Select(c => c.transform).ToList();
+            var extras = new[] { "_lockIcon", "_experienceWarningText" }.Select(Part).Where(c => c != null).Select(c => c.gameObject);
+            var keep = new[] { "_proceduralMissionToggle", "_campaignMissionToggle", "_aegisToggle", "_tngToggle", "_launchGameButton", "_hostNameText" }
+                .Select(Part).Where(c => c != null).Select(c => c.transform).ToList();
+            if (RoleInfos?.GetValue(console) is Array infos)
+                foreach (var info in infos)
+                    if (info != null)
+                        keep.AddRange(AccessTools.GetDeclaredFields(info.GetType()).Select(f => f.GetValue(info) as Component).Where(c => c != null).Select(c => c.transform));
+            if (pieces.Count == 0) return extras.ToList();
+            for (var holder = pieces[0]; holder != null && holder != console.transform; holder = holder.parent)
+            {
+                if (!pieces.All(t => t == holder || t.IsChildOf(holder))) continue;
+                if (keep.Any(t => t == holder || t.IsChildOf(holder))) break;
+                Plugin.Log.LogInfo($"PvP: briefing room mission panel ({holder.name}) hidden in a PvP room");
+                return new[] { holder.gameObject }.Concat(extras).ToList();
+            }
+            Plugin.Log.LogInfo("PvP: briefing room mission panel's parts hidden in a PvP room");
+            return pieces.Select(t => t.gameObject).Concat(extras).ToList();
         }
 
         // The VR hands reach only the controls they collected when the console loaded.
