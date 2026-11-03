@@ -69,6 +69,12 @@ namespace StbcRevival
                 var target = pointer == null ? null : AccessTools.Method(pointer, m, new[] { typeof(HandInteraction) });
                 if (target != null) harmony.Patch(target, prefix: new HarmonyMethod(typeof(PvpRoles), m == "OnEnter" ? nameof(PointerEnter_Prefix) : nameof(PointerDown_Prefix)));
             }
+            // The game's update loop swallows errors; the hands' are logged (ship B's rows froze them).
+            foreach (var type in new[] { "HandAnimator", "HandInteractionGrid", "HandInteraction" })
+            {
+                var update = AccessTools.Method(AccessTools.TypeByName(type), "BatchUpdate");
+                if (update != null) harmony.Patch(update, finalizer: new HarmonyMethod(typeof(PvpRoles), nameof(HandUpdate_Finalizer)));
+            }
             var spawn = AccessTools.TypeByName("NovaSpawnManager");
             var seating = spawn == null ? null : AccessTools.Inner(spawn, "<SpawnNewlyAddedPlayerOnClients>c__Iterator1F3");
             seatPlayerField = seating == null ? null : AccessTools.Field(seating, "PNGLMGLMLJM");
@@ -328,6 +334,16 @@ namespace StbcRevival
         private static string Describe(HandInteraction interaction) =>
             interaction == null ? "nothing" : $"{interaction.transform.parent?.name}/{interaction.name}{(layouts.Values.Any(l => l.ShipB.Any(r => r != null && interaction.transform.IsChildOf(r.transform))) ? " (ship B)" : "")}";
 
+        private static readonly HashSet<string> handErrors = new HashSet<string>();
+
+        private static Exception HandUpdate_Finalizer(Exception __exception, object __instance)
+        {
+            if (__exception != null && InPvpBriefing && handErrors.Count < 6
+                && handErrors.Add(__instance?.GetType().Name + __exception.GetType().Name + __exception.StackTrace))
+                Plugin.Log.LogWarning($"PvP: [diag] {__instance?.GetType().Name} ({(__instance as Component)?.name}) update failed: {__exception}");
+            return __exception;
+        }
+
         private static void PointerEnter_Prefix(HandInteraction __0)
         {
             if (InPvpBriefing) Plugin.Log.LogInfo("PvP: [diag] mouse over " + Describe(__0));
@@ -367,6 +383,17 @@ namespace StbcRevival
                             + $"active {interaction.gameObject.activeInHierarchy}, console {(AccessTools.Field(typeof(HandInteraction), "KHDENOMKIJE")?.GetValue(interaction) as Component)?.name ?? "none"}, "
                             + $"mouse collider {(mouse == null ? "none" : $"{(mouse.enabled ? "on" : "off")} at {mouse.bounds.center} size {mouse.bounds.size}")}, "
                             + $"hands: {string.Join(" / ", lists)}");
+                        var grid = AccessTools.Field(typeof(HandInteraction), "_grid")?.GetValue(interaction) as Component;
+                        var poses = AccessTools.Field(typeof(HandInteraction), "_poses")?.GetValue(interaction) as Array;
+                        var poseText = poses == null ? "none" : string.Join("; ", poses.Cast<object>().Select(pose =>
+                        {
+                            var t = Traverse.Create(pose);
+                            var clips = t.Field("Animations").GetValue<AnimationClip[]>();
+                            var turns = t.Field("LocalWristRotations").GetValue<Quaternion[]>();
+                            var spots = t.Field("LocalWristPositions").GetValue<Vector3[]>();
+                            return $"L {clips?[0]?.name ?? "-"} {spots?[0]} {turns?[0]} | R {clips?[1]?.name ?? "-"} {spots?[1]} {turns?[1]}";
+                        }).ToArray());
+                        Plugin.Log.LogInfo($"PvP: [diag]   grid {(grid == null ? "none" : grid.name + " on " + grid.transform.parent?.name)}, {poses?.Length ?? 0} poses: {poseText}");
                     }
                 }
             }
