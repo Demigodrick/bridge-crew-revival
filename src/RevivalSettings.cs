@@ -299,6 +299,32 @@ namespace StbcRevival
             Retitle(menu);
         }
 
+        // While a popup is open the hands use only the controls it had when it opened (HandAnimator: popup shown,
+        // JCBMFLAAFND), and the rows are made just after: a hand whose list lacks them gets the popup's again.
+        private static readonly Type AnimatorType = AccessTools.TypeByName("HandAnimator");
+        private static readonly FieldInfo PopupShown = AccessTools.Field(AnimatorType, "PEDDEKPBJDL");
+        private static readonly FieldInfo PopupObject = AccessTools.Field(AnimatorType, "IFEKJBGJJOI");
+        private static readonly FieldInfo PopupControls = AccessTools.Field(AnimatorType, "JCBMFLAAFND");
+        private static readonly FieldInfo ControlsChanged = AccessTools.Field(AnimatorType, "OLMKBPANPIO");
+
+        private static void OfferRows(ConsoleMainMenu menu, Page page)
+        {
+            var first = page.Rows.FirstOrDefault(r => r != null)?.GetComponentInChildren<HandInteraction>(true);
+            if (first == null || PopupControls == null || !(Field(menu, "_regionSelectGO") is GameObject region)) return;
+            var manager = AccessTools.Method(AccessTools.TypeByName("HandAnimatorManager"), "get_Instance")?.Invoke(null, null);
+            if (!(AccessTools.Field(manager?.GetType(), "AFBJOJJNCEA")?.GetValue(manager) is System.Collections.IDictionary animators)) return;
+            foreach (var animator in animators.Keys)
+            {
+                if (!(PopupShown?.GetValue(animator) is true) || !(PopupObject?.GetValue(animator) is GameObject popup) || popup == null) continue;
+                if (!(popup == region || region.transform.IsChildOf(popup.transform) || popup.transform.IsChildOf(region.transform))) continue;
+                if (PopupControls.GetValue(animator) is HandInteraction[] controls && Array.IndexOf(controls, first) >= 0) continue;
+                var root = region.transform.IsChildOf(popup.transform) ? popup : region;
+                PopupControls.SetValue(animator, root.GetComponentsInChildren<HandInteraction>());
+                ControlsChanged?.SetValue(animator, true);
+                Plugin.Log.LogInfo("Revival settings: the hands told about the settings rows");
+            }
+        }
+
         // The page's heading: the text on it that isn't its value line or a button's.
         private static TMP_Text Heading(ConsoleMainMenu menu, GameObject region)
         {
@@ -313,7 +339,11 @@ namespace StbcRevival
         internal static void Update()
         {
             if (!Active) return;
-            foreach (var menu in pages.Keys.Where(m => m != null).ToList()) CoverMainMenu(menu);
+            foreach (var menu in pages.Keys.Where(m => m != null).ToList())
+            {
+                CoverMainMenu(menu);
+                if (pages[menu].HidMain) OfferRows(menu, pages[menu]);
+            }
             if (diagnoseAt > 0f && Time.unscaledTime >= diagnoseAt)
             {
                 diagnoseAt = -1f;
