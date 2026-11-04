@@ -305,32 +305,38 @@ namespace StbcRevival
         private static void TakePlaces()
         {
             var found = new List<Destination>();
+            var skipped = new Dictionary<string, int>();
             try
             {
                 var me = Bridge.AGAFPEFMEGB?.DADHBNBICAJ as Sector.SectorBody;
                 var here = me == null ? null : me.ALPAOOKFIEE;
                 var mission = Mission.MissionManager.IEFBKOMBFGO;
                 var open = mission == null ? null : Traverse.Create(mission).Property("MLPNEABKIJD").GetValue() as Dictionary<int, bool>;
+                // Places not visited yet are attic bodies (placeholders until you're there), still open on the map.
                 if (here != null && open != null)
                     foreach (var body in UnityEngine.Object.FindObjectsOfType<Sector.SectorBody>())
                     {
-                        if (body == null || body is Sector.AtticSectorBody || body == me) continue;
+                        if (body == null || body == me) continue;
                         var t = body.ALPAOOKFIEE;
-                        if (t == null || t == here.ContainerTransform || t.System != here.System) continue;
-                        if (!open.TryGetValue(body.CDLFNBGDJIB.value, out var ok) || !ok) continue;
+                        if (t == null || t == here.ContainerTransform) { skipped["here"] = Count(skipped, "here") + 1; continue; }
+                        if (t.System != here.System) { skipped["other system"] = Count(skipped, "other system") + 1; continue; }
+                        if (!open.TryGetValue(body.CDLFNBGDJIB.value, out var ok) || !ok) { skipped["not open"] = Count(skipped, "not open") + 1; continue; }
                         var key = t.SystemNode == null ? null : t.SystemNode.SystemMapName;
-                        if (string.IsNullOrEmpty(key)) continue;
+                        if (string.IsNullOrEmpty(key)) { skipped["no name"] = Count(skipped, "no name") + 1; continue; }
                         string name;
                         try { name = SVR.Localization.GetLocalizedText(key); }
                         catch { name = key; }
                         var words = NameWords(name ?? "");
-                        if (words.Length == 0) continue;
+                        if (words.Length == 0) { skipped["no words"] = Count(skipped, "no words") + 1; continue; }
                         float distance = (float)Vector3d.Distance(t.Position, here.Position);
                         var same = found.FindIndex(d => d.Name == name);
                         if (same >= 0 && found[same].Distance <= distance) continue;
                         var place = new Destination { Location = body, Name = name, Words = words, Distance = distance };
                         if (same >= 0) found[same] = place; else found.Add(place);
                     }
+                if (found.Count == 0)
+                    Plugin.Log.LogInfo($"Voice commands: no impulse places: ship {(here == null ? "not found" : "found")}, {(open == null ? "no" : open.Count(kv => kv.Value).ToString())} open on the mission, left out: "
+                                       + string.Join(", ", skipped.Select(kv => $"{kv.Key} {kv.Value}").ToArray()));
             }
             catch (Exception e)
             {
@@ -339,6 +345,8 @@ namespace StbcRevival
             places = found;
             Plugin.Log.LogInfo($"Voice commands: impulse places: {(found.Count == 0 ? "none" : string.Join(", ", found.Select(d => $"{d.Name} ({string.Join(" ", d.Words)})").ToArray()))}");
         }
+
+        private static int Count(Dictionary<string, int> counts, string key) => counts.TryGetValue(key, out var n) ? n : 0;
 
         private static readonly Type MapTargetPicked = AccessTools.TypeByName("NEGGPIBDOPI");
         private static readonly Type EventBus = AccessTools.TypeByName("CIFDOFLFGEA");
