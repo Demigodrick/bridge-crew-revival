@@ -177,7 +177,6 @@ namespace StbcRevival
                 new[] { "Skip mic check", "Mikrofon-Check überspringen", "restart" },
                 new[] { "Voice commands", "Sprachbefehle", "restart" },
                 new[] { "Voice orders from any station", "Sprachbefehle von jeder Station", "" },
-                new[] { "Romulan face", "Romulaner-Gesicht", "" },
                 new[] { "Chime when someone joins", "Signalton, wenn jemand beitritt", "" },
                 new[] { "Public crews in VR", "Öffentliche Crews in VR", "" },
                 new[] { "Hide full crews", "Volle Crews ausblenden", "" },
@@ -187,6 +186,7 @@ namespace StbcRevival
             })
             {
                 string later = setting[2] == "restart" ? " (next launch)" : "", spaeter = setting[2] == "restart" ? " (nächster Start)" : "";
+                Add($"{setting[0]}{later}", $"{setting[1]}{spaeter}"); // the settings list: a ticked row is on
                 Add($"{setting[0]}: ON{later}", $"{setting[1]}: AN{spaeter}");
                 Add($"{setting[0]}: OFF{later}", $"{setting[1]}: AUS{spaeter}");
             }
@@ -202,6 +202,7 @@ namespace StbcRevival
             Add("Crews listed: any", "Angezeigte Crews: alle");
             Add("Blocked players: none (block someone after kicking them)", "Gesperrte Spieler: keine (sperre jemanden, nachdem du ihn rausgeworfen hast)");
             Add("Blocked players: {0}", "Gesperrte Spieler: {0}");
+            Add("Blocked players: {0} (unblock all)", "Gesperrte Spieler: {0} (alle entsperren)");
 
             Add("PUBLIC CREWS", "ÖFFENTLICHE CREWS");
             Add("Steam multiplayer mod", "Steam-Multiplayer-Mod");

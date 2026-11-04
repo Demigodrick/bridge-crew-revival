@@ -1,21 +1,25 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using BepInEx.Configuration;
 using HarmonyLib;
+using TMPro;
 using UnityEngine;
+using UnityEngine.UI;
 
 namespace StbcRevival
 {
     /// <summary>
     /// Steam mode: the shuttle console's "Select region" (Photon Cloud regions, meaningless without Ubisoft's
-    /// servers) becomes "Revival settings", the mod's on/off settings in the game:
-    ///   - The region page's arrows (ConsoleMainMenu GLFCDJFLJDK / BJNFFMDAOGH) step through the settings, its
-    ///     text shows the one picked and whether it's on, and its accept button (FMNEJELNGFC, which set the
-    ///     region) switches it. The last entry, "Back", returns to the main menu.
+    /// servers) becomes "Revival settings", the mod's settings in the game, as a list on the whole screen:
+    ///   - Two columns of the main menu's own GAME MODE toggles (copies), a row per setting. An on/off setting
+    ///     is ticked while it's on, and a click switches it; a setting with a few values shows the one picked
+    ///     and a click moves to the next; joining a crew by room code (SteamVR's keyboard, VrKeyboard) and
+    ///     unblocking players act on a click.
+    ///   - The region page's own parts (its background, arrows and value line) are hidden while it shows the
+    ///     list; its heading says REVIVAL SETTINGS and its accept button (FMNEJELNGFC) is BACK.
     ///   - Changes are saved to stbc.revival.cfg straight away (BepInEx saves on set).
-    ///   - Also on the page: joining a crew by room code (SteamVR's keyboard, VrKeyboard) and which crews are
-    ///     listed (any, The Next Generation only, none).
     /// Other modes keep the region page as it was (it picks the Photon Cloud region there).
     /// </summary>
     internal static class RevivalSettings
@@ -23,18 +27,18 @@ namespace StbcRevival
         private const BindingFlags All = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
         private const string Title = "Revival settings";
 
-        // A line on the page: its text (label and value) and what the accept button says and does.
+        // A row: its text, whether it's ticked (on/off settings only) and what a click does.
         private sealed class Entry
         {
             public Func<string> Text;
-            public Func<string> Button;
+            public Func<bool> Ticked = () => false;
             public Action Press;
         }
 
         private static Entry Switch(string label, Func<ConfigEntry<bool>> setting, bool restart = false) => new Entry
         {
-            Text = () => $"{label}: {(setting().Value ? "ON" : "OFF")}{(restart ? " (next launch)" : "")}",
-            Button = () => setting().Value ? "Turn off" : "Turn on",
+            Text = () => label + (restart ? " (next launch)" : ""),
+            Ticked = () => setting().Value,
             Press = () =>
             {
                 setting().Value = !setting().Value;
@@ -47,7 +51,6 @@ namespace StbcRevival
             new Entry
             {
                 Text = () => VrKeyboard.Status ?? "Join a crew by its room code",
-                Button = () => "Type code",
                 Press = () => VrKeyboard.Open(Translation.T("Room or share code"), 24, code => RoomBrowser.Join(code)),
             },
             Switch("Skip intro videos", () => Plugin.SkipIntro, restart: true),
@@ -58,7 +61,6 @@ namespace StbcRevival
             new Entry
             {
                 Text = () => "Klingon head: " + KlingonHead.Names[HeadChoice()].ToUpperInvariant(),
-                Button = () => "Change",
                 Press = () =>
                 {
                     Plugin.KlingonHeadChoice.Value = HeadChoice() == 1 ? 2 : 1;
@@ -71,7 +73,6 @@ namespace StbcRevival
             new Entry
             {
                 Text = () => "Crews listed: " + ContentName(Plugin.CrewContentFilter.Value),
-                Button = () => "Change",
                 Press = () =>
                 {
                     var next = (CrewContent)(((int)Plugin.CrewContentFilter.Value + 1) % 3);
@@ -85,8 +86,7 @@ namespace StbcRevival
             Switch("Check for updates", () => Plugin.CheckForUpdates),
             new Entry
             {
-                Text = () => Blocklist.Count == 0 ? "Blocked players: none (block someone after kicking them)" : $"Blocked players: {Blocklist.Count}",
-                Button = () => Blocklist.Count == 0 ? "-" : "Unblock all",
+                Text = () => Blocklist.Count == 0 ? "Blocked players: none (block someone after kicking them)" : $"Blocked players: {Blocklist.Count} (unblock all)",
                 Press = () => { if (Blocklist.Count > 0) Blocklist.Clear(); },
             },
         };
@@ -96,11 +96,22 @@ namespace StbcRevival
         private static string ContentName(CrewContent content) =>
             content == CrewContent.NextGenerationOnly ? "TNG only" : content == CrewContent.NoNextGeneration ? "no TNG" : "any";
 
-        private static int index;
+        // The list's layout, in the page's own units (the shuttle screen is about 800 by 400): two columns, the
+        // rows a toggle's height and a half apart, under the heading and above BACK.
+        private const float ColumnLeft = -340f, ColumnRight = 30f, FirstRow = 112f, RowStep = 33f, LabelWidth = 300f;
+        private static readonly Vector3 HeadingAt = new Vector3(0f, 158f, -1f), BackAt = new Vector3(0f, -160f, 0.01f);
+
+        private sealed class Page
+        {
+            public readonly List<Toggle> Rows = new List<Toggle>();
+            public readonly List<TMP_Text> Labels = new List<TMP_Text>();
+        }
+
+        private static readonly Dictionary<ConsoleMainMenu, Page> pages = new Dictionary<ConsoleMainMenu, Page>();
+        private static bool showing; // the list is being set to the settings: its toggles' changes aren't clicks
         private static float nextRetitle;
 
         private static bool Active => SteamMode.Enabled;
-        private static bool OnBack => index == Entries.Length;
 
         internal static void Patch(Harmony harmony)
         {
@@ -115,104 +126,155 @@ namespace StbcRevival
                 return;
             }
             harmony.Patch(open, postfix: new HarmonyMethod(typeof(RevivalSettings), nameof(Open_Postfix)));
-            harmony.Patch(left, prefix: new HarmonyMethod(typeof(RevivalSettings), nameof(Left_Prefix)));
-            harmony.Patch(right, prefix: new HarmonyMethod(typeof(RevivalSettings), nameof(Right_Prefix)));
+            harmony.Patch(left, prefix: new HarmonyMethod(typeof(RevivalSettings), nameof(Arrow_Prefix)));
+            harmony.Patch(right, prefix: new HarmonyMethod(typeof(RevivalSettings), nameof(Arrow_Prefix)));
             harmony.Patch(accept, prefix: new HarmonyMethod(typeof(RevivalSettings), nameof(Accept_Prefix)));
         }
 
         private static void Open_Postfix(ConsoleMainMenu __instance)
         {
             if (!Active) return;
-            index = 0;
+            if (!pages.ContainsKey(__instance)) Build(__instance);
             Show(__instance);
         }
 
-        private static bool Left_Prefix(ConsoleMainMenu __instance)
-        {
-            if (!Active) return true;
-            index = (index + Entries.Length) % (Entries.Length + 1);
-            Show(__instance);
-            return false;
-        }
+        // The arrows are hidden: nothing to step through.
+        private static bool Arrow_Prefix() => !Active;
 
-        private static bool Right_Prefix(ConsoleMainMenu __instance)
-        {
-            if (!Active) return true;
-            index = (index + 1) % (Entries.Length + 1);
-            Show(__instance);
-            return false;
-        }
-
-        // Accept: switch the setting shown, or on "Back", back to the main menu (without touching the region).
+        // Accept is BACK: back to the main menu (without touching the region).
         private static bool Accept_Prefix(ConsoleMainMenu __instance)
         {
             if (!Active) return true;
-            if (OnBack)
-            {
-                index = 0;
-                var state = AccessTools.Field(typeof(ConsoleMainMenu), "CKGKIBEGPOA")?.GetValue(__instance);
-                var setState = state?.GetType().GetMethod("SetState", All);
-                var main = setState == null ? null : Enum.Parse(setState.GetParameters()[0].ParameterType, "Main");
-                setState?.Invoke(state, new[] { main });
-                return false;
-            }
-            Entries[index].Press();
-            Show(__instance);
+            var state = AccessTools.Field(typeof(ConsoleMainMenu), "CKGKIBEGPOA")?.GetValue(__instance);
+            var setState = state?.GetType().GetMethod("SetState", All);
+            var main = setState == null ? null : Enum.Parse(setState.GetParameters()[0].ParameterType, "Main");
+            setState?.Invoke(state, new[] { main });
             return false;
         }
 
+        // ---- The list ----------------------------------------------------------------------------------
+
+        // A row per setting, made from the GAME MODE list's first toggle; the page's own parts put away.
+        private static void Build(ConsoleMainMenu menu)
+        {
+            var page = new Page();
+            pages[menu] = page;
+            try
+            {
+                var region = Field(menu, "_regionSelectGO") as GameObject;
+                var infos = Field(menu, "_gameModeInfos") as Array;
+                var template = infos?.Cast<object>().Select(i => Traverse.Create(i).Field("ModeSelectionToggle").GetValue<Toggle>()).FirstOrDefault(t => t != null);
+                if (region == null || template == null)
+                {
+                    Plugin.Log.LogWarning("Revival settings: the region page or a GAME MODE toggle wasn't found; no settings list");
+                    return;
+                }
+                var keep = new[] { Field(menu, "_regionAcceptBtn") as Component }.Where(c => c != null).Select(c => c.transform).ToList();
+                var heading = Heading(menu, region);
+                if (heading != null) keep.Add(heading.transform);
+                foreach (Transform part in region.transform)
+                    if (!keep.Any(k => k == part || k.IsChildOf(part))) part.gameObject.SetActive(false);
+                if (heading != null) heading.transform.localPosition = HeadingAt;
+                if (Field(menu, "_regionAcceptBtn") is Component back) back.transform.localPosition = BackAt;
+
+                int perColumn = (Entries.Length + 1) / 2;
+                for (int i = 0; i < Entries.Length; i++)
+                {
+                    var entry = Entries[i];
+                    var go = (GameObject)UnityEngine.Object.Instantiate(template.gameObject, region.transform, false);
+                    go.name = "Revival setting " + i;
+                    go.SetActive(true);
+                    go.transform.localPosition = new Vector3(i < perColumn ? ColumnLeft : ColumnRight, FirstRow - (i % perColumn) * RowStep, template.transform.localPosition.z);
+                    var toggle = go.GetComponent<Toggle>();
+                    toggle.onValueChanged.RemoveAllListeners();
+                    toggle.group = null;
+                    toggle.interactable = true;
+                    toggle.onValueChanged.AddListener(_ => Clicked(menu, entry));
+                    // The right column is on the other hand's side of the console from the toggle it copies.
+                    foreach (var hand in go.GetComponentsInChildren<HandInteraction>(true))
+                        AccessTools.Field(typeof(HandInteraction), "_sideRestriction")?.SetValue(hand, Enum.Parse(AccessTools.Field(typeof(HandInteraction), "_sideRestriction").FieldType, "Either"));
+                    var label = go.GetComponentsInChildren<TMP_Text>(true).FirstOrDefault();
+                    if (label != null)
+                    {
+                        label.rectTransform.sizeDelta = new Vector2(LabelWidth, label.rectTransform.sizeDelta.y);
+                        // TextMeshPro's names are obfuscated here: enableAutoSizing, fontSizeMax / fontSizeMin
+                        // (from fontSize), enableWordWrapping.
+                        label.BMAIEFHKPMA = true;
+                        label.LOBPGECEJCD = label.ACEGMMMIHCN;
+                        label.CNPBHPONNJK = label.ACEGMMMIHCN * 0.5f;
+                        label.GADKGKMKHCE = false;
+                    }
+                    page.Rows.Add(toggle);
+                    page.Labels.Add(label);
+                }
+                PvpRoles.TellHands(menu);
+                Plugin.Log.LogInfo($"Revival settings: {Entries.Length} settings listed in two columns");
+            }
+            catch (Exception e)
+            {
+                Plugin.Log.LogWarning("Revival settings: building the list: " + e.Message);
+            }
+        }
+
+        private static void Clicked(ConsoleMainMenu menu, Entry entry)
+        {
+            if (showing) return;
+            entry.Press();
+            Show(menu);
+        }
+
+        // Every row's text and tick from the settings (they can change elsewhere: the F7 window, the keyboard).
         private static void Show(ConsoleMainMenu menu)
         {
-            string text, button;
-            if (OnBack)
+            if (!pages.TryGetValue(menu, out var page)) return;
+            showing = true;
+            try
             {
-                text = "Back to the main menu";
-                button = "Back";
+                for (int i = 0; i < page.Rows.Count; i++)
+                {
+                    if (page.Labels[i] != null) SetText(page.Labels[i], Entries[i].Text());
+                    bool ticked = Entries[i].Ticked();
+                    if (page.Rows[i] != null && page.Rows[i].isOn != ticked) page.Rows[i].isOn = ticked;
+                }
+                if (Field(menu, "_regionAcceptBtn") is Component back)
+                    foreach (var tmp in Texts(back.gameObject)) SetText(tmp, "Back");
             }
-            else
+            finally
             {
-                text = Entries[index].Text();
-                button = Entries[index].Button();
+                showing = false;
             }
-            if (Field(menu, "_regionSelectRegionText") is Component label)
-            {
-                SetText(label, text);
-                label.GetType().GetProperty("enableAutoSizing")?.SetValue(label, true, null);
-            }
-            if (Field(menu, "_regionAcceptBtn") is Component accept)
-                foreach (var tmp in Texts(accept.gameObject)) SetText(tmp, button);
             Retitle(menu);
         }
 
-        // The main menu's button and the page's heading say "Revival settings" (checked once a second, as the
-        // game's localizer sets them when the console appears).
+        // The page's heading: the text on it that isn't its value line or a button's.
+        private static TMP_Text Heading(ConsoleMainMenu menu, GameObject region)
+        {
+            var value = Field(menu, "_regionSelectRegionText") as Component;
+            return region.GetComponentsInChildren<TMP_Text>(true)
+                .Where(t => t != value && t.GetComponentInParent<Selectable>() == null)
+                .OrderByDescending(t => t.transform.localPosition.y).FirstOrDefault();
+        }
+
+        // The main menu's button and the page's heading say "Revival settings", and the list keeps up with the
+        // settings (checked once a second, as the game's localizer sets the texts when the console appears).
         internal static void Update()
         {
             if (!Active || Time.unscaledTime < nextRetitle) return;
             nextRetitle = Time.unscaledTime + 1f;
             foreach (var menu in UnityEngine.Object.FindObjectsOfType<ConsoleMainMenu>())
-                Retitle(menu);
+            {
+                if (pages.ContainsKey(menu)) Show(menu);
+                else Retitle(menu);
+            }
+            foreach (var gone in pages.Keys.Where(m => m == null).ToList()) pages.Remove(gone);
         }
 
         private static void Retitle(ConsoleMainMenu menu)
         {
             if (Field(menu, "_regionSelectButton") is Component button)
                 foreach (var tmp in Texts(button.gameObject)) SetText(tmp, Title);
-            // The page's heading: any text on it that isn't the value line or the accept button's.
-            if (Field(menu, "_regionSelectGO") is GameObject page)
-            {
-                var value = Field(menu, "_regionSelectRegionText") as Component;
-                var accept = Field(menu, "_regionAcceptBtn") as Component;
-                foreach (var tmp in Texts(page))
-                {
-                    if (tmp == value || (accept != null && tmp.transform.IsChildOf(accept.transform))) continue;
-                    var current = tmp.GetType().GetProperty("text")?.GetValue(tmp, null) as string ?? "";
-                    if (current.IndexOf("region", StringComparison.OrdinalIgnoreCase) >= 0 || current == Title.ToUpperInvariant())
-                        SetText(tmp, Title.ToUpperInvariant());
-                    else if (current.IndexOf("Warning", StringComparison.OrdinalIgnoreCase) >= 0 || current.IndexOf("perform", StringComparison.OrdinalIgnoreCase) >= 0)
-                        SetText(tmp, "Saved straight away. Arrows pick a setting.");
-                }
-            }
+            if (Field(menu, "_regionSelectGO") is GameObject region && Heading(menu, region) is TMP_Text heading)
+                SetText(heading, Title.ToUpperInvariant());
         }
 
         private static object Field(ConsoleMainMenu menu, string name) => AccessTools.Field(typeof(ConsoleMainMenu), name)?.GetValue(menu);
