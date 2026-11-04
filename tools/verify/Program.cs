@@ -305,6 +305,14 @@ Check("  WarpPanel.HBKEIMBBMHI (current location)", warpPanel?.GetMethod("HBKEIM
 foreach (var f in new[] { "JBDJGIKEICO", "KHDENOMKIJE" }) Check($"  WarpPanel.{f} (locations, console)", warpPanel?.GetField(f, Inst));
 Check("  WarpMapLocation.<JOEKIOLDNAF>k__BackingField (system)", warpLocation?.GetField("<JOEKIOLDNAF>k__BackingField", Inst));
 Check("  WarpMapLocation.KGPNEONLCJN (pickable)", warpLocation?.GetProperty("KGPNEONLCJN", Inst));
+// Voice "impulse to <place>": the mission's open places, the captain's map pick, the impulse manager
+Check("  MissionManager.MLPNEABKIJD (POIAvailable)", game.GetType("Mission.MissionManager")?.GetProperty("MLPNEABKIJD", Inst));
+Check("  ConsoleShipInterface.INBICICINJG (POITarget)", game.GetType("ConsoleShipInterface")?.GetProperty("INBICICINJG", Inst));
+Check("  NEGGPIBDOPI(body, station) (map target picked)", game.GetType("NEGGPIBDOPI")?.GetConstructors(Inst).FirstOrDefault(c => c.GetParameters().Length == 2));
+Check("  CIFDOFLFGEA.Send (event bus)", game.GetType("CIFDOFLFGEA")?.GetMethod("Send", AnyS));
+Check("  BaseSpacecraft.GCOAODPDBEI (engines)", game.GetType("Sector.Spacecraft.BaseSpacecraft")?.GetProperty("GCOAODPDBEI", Inst));
+foreach (var prop in new[] { "PBBNLCBNGHH", "MCNGOGECDLC" })
+    Check($"  impulse manager {prop} (plotted, destination)", game.GetType("Sector.Spacecraft.POLCIGDAIKK")?.GetProperty(prop, Inst));
 Check("  NKEPKEMCLNH(bool) (voice button event)", game.GetType("NKEPKEMCLNH")?.GetConstructors(Inst).FirstOrDefault(c => c.GetParameters().Length == 1));
 var commandManager = game.GetType("AI.CommandManager");
 foreach (var m in new[] { "TriggerCommand", "UpdateSimpleOrders", "PlayInvalidCommandVO" })

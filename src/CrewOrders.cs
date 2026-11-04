@@ -39,7 +39,7 @@ namespace StbcRevival
         /// <summary>The captain's console's own actions, never sent to the host.</summary>
         internal static bool AtConsole(string one) =>
             one == "RedAlertOn" || one == "RedAlertOff" || one == "AnswerHail" || one == "StatusReport"
-            || one.StartsWith("Course:", StringComparison.Ordinal);
+            || one.StartsWith("Course:", StringComparison.Ordinal) || one.StartsWith("Impulse:", StringComparison.Ordinal);
 
         /// <summary>The orders a non-captain can give: the other stations' AI crew's. Null when none are left.</summary>
         internal static string ForMyStation(string command)

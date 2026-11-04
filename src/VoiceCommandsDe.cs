@@ -147,6 +147,7 @@ namespace StbcRevival
         private static string[] CourseForNow => german ? DeCourseFor : new[] { "for" };
         private static string[] CourseToNow => german ? DeCourseFor : new[] { "for", "to" };
         private static string[] NearestNow => german ? DeNearest : new[] { "nearest", "closest" };
+        private static string[] ImpulseNow => german ? DeImpulse : new[] { "impulse" };
         private static string[] NumberNamesNow => german ? DeNumberNames : new[] { "one", "two", "three", "four", "five", "six", "seven", "eight", "nine" };
         private static HashSet<string> NumbersNow => german ? DeNumberSet : Numbers;
 

@@ -192,11 +192,30 @@ namespace StbcRevival
         private static readonly string[] CourseWords = { "course", "plot", "set", "destination", "head", "warp", "go", "take", "fly" };
 
         // The destination named (or the nearest one), as "Course:<index>" plus warp prepared; with "engage" or
-        // "make it so" in the same breath, warp engaged too. Null: no destination heard.
+        // "make it so" in the same breath, warp engaged too; with "impulse", a place in this system the same way
+        // ("Impulse:<index>", impulse prepared). Null: no destination heard.
         private static string Course(HashSet<string> w, Func<string[], bool> any)
         {
+            // "Impulse to <place>": a place in this system (Impulse:<index>), never a warp course.
+            if (any(ImpulseNow))
+            {
+                int place = Named(places, w, any);
+                if (place < 0) return null;
+                lastPrepared = "Impulse";
+                return $"Impulse:{place},PrepareImpulse" + (WantsEngage(w) ? ",EngageImpulse" : "");
+            }
             var list = destinations;
             if (list.Count == 0 || !any(CourseWordsNow) && !any(CourseForNow)) return null;
+            int best = Named(list, w, any);
+            if (best < 0) return null;
+            lastPrepared = "Warp";
+            return $"Course:{best},PrepareWarp" + (WantsEngage(w) ? ",EngageWarp" : "");
+        }
+
+        // The destination named (or the nearest one, if asked): its index, or -1.
+        private static int Named(List<Destination> list, HashSet<string> w, Func<string[], bool> any)
+        {
+            if (list.Count == 0) return -1;
             int best = -1;
             if (any(NearestNow))
             {
@@ -216,11 +235,9 @@ namespace StbcRevival
                     if (score > top) { top = score; best = i; tie = false; }
                     else if (score == top && score > 0) tie = true;
                 }
-                if (top == 0 || tie) return null;
+                if (top == 0 || tie) return -1;
             }
-            if (best < 0) return null;
-            lastPrepared = "Warp";
-            return $"Course:{best},PrepareWarp" + (WantsEngage(w) ? ",EngageWarp" : "");
+            return best;
         }
 
         // The helm's warp map: your ship's helm console's (PvP has two), else any.
@@ -272,6 +289,121 @@ namespace StbcRevival
             }
             destinations = found;
             Plugin.Log.LogInfo($"Voice commands: destinations: {(found.Count == 0 ? $"none ({maps} warp maps, {total} locations)" : string.Join(", ", found.Select(d => $"{d.Name} ({string.Join(" ", d.Words)})").ToArray()))}");
+            TakePlaces();
+        }
+
+        // ---- Impulse courses: "impulse to <place>" ------------------------------------------------------
+        // The helm's system map lists the places in this system an impulse jump can go to (the mission's
+        // MissionManager.POIAvailable, by body id); clicking one sets the console's POITarget and sends the
+        // "map target picked" event (NEGGPIBDOPI), and the AI helm takes the captain's pick as its own target
+        // (ImpulsePanel), which plots the course (SimpleEngineServer, on the host). Voice does as the captain's
+        // console does.
+
+        private static List<Destination> places = new List<Destination>(); // taken on the main thread
+
+        // Main thread, button down: the places in this system open for an impulse jump (not where you are).
+        private static void TakePlaces()
+        {
+            var found = new List<Destination>();
+            try
+            {
+                var me = Bridge.AGAFPEFMEGB?.DADHBNBICAJ as Sector.SectorBody;
+                var here = me == null ? null : me.ALPAOOKFIEE;
+                var mission = Mission.MissionManager.IEFBKOMBFGO;
+                var open = mission == null ? null : Traverse.Create(mission).Property("MLPNEABKIJD").GetValue() as Dictionary<int, bool>;
+                if (here != null && open != null)
+                    foreach (var body in UnityEngine.Object.FindObjectsOfType<Sector.SectorBody>())
+                    {
+                        if (body == null || body is Sector.AtticSectorBody || body == me) continue;
+                        var t = body.ALPAOOKFIEE;
+                        if (t == null || t == here.ContainerTransform || t.System != here.System) continue;
+                        if (!open.TryGetValue(body.CDLFNBGDJIB.value, out var ok) || !ok) continue;
+                        var key = t.SystemNode == null ? null : t.SystemNode.SystemMapName;
+                        if (string.IsNullOrEmpty(key)) continue;
+                        string name;
+                        try { name = SVR.Localization.GetLocalizedText(key); }
+                        catch { name = key; }
+                        var words = NameWords(name ?? "");
+                        if (words.Length == 0) continue;
+                        float distance = (float)Vector3d.Distance(t.Position, here.Position);
+                        var same = found.FindIndex(d => d.Name == name);
+                        if (same >= 0 && found[same].Distance <= distance) continue;
+                        var place = new Destination { Location = body, Name = name, Words = words, Distance = distance };
+                        if (same >= 0) found[same] = place; else found.Add(place);
+                    }
+            }
+            catch (Exception e)
+            {
+                Plugin.Log.LogWarning("Voice commands: the system's impulse places: " + e.Message);
+            }
+            places = found;
+            Plugin.Log.LogInfo($"Voice commands: impulse places: {(found.Count == 0 ? "none" : string.Join(", ", found.Select(d => $"{d.Name} ({string.Join(" ", d.Words)})").ToArray()))}");
+        }
+
+        private static readonly Type MapTargetPicked = AccessTools.TypeByName("NEGGPIBDOPI");
+        private static readonly Type EventBus = AccessTools.TypeByName("CIFDOFLFGEA");
+
+        // As the captain picking it on their map: the captain's console's map target, and the event the AI helm
+        // takes it from. False if it couldn't be picked.
+        private static bool PlotImpulse(int index)
+        {
+            var list = places;
+            var captain = Bridge.PKCFGMELINM;
+            if (index < 0 || index >= list.Count || captain == null || !(list[index].Location is Sector.SectorBody body) || body == null) return false;
+            var console = captain.BJLCFFKCFFN;
+            if (console == null) return false;
+            Traverse.Create(console).Property("INBICICINJG").SetValue(body);
+            var picked = Activator.CreateInstance(MapTargetPicked, body, FLCHMJJDKDL.Captain);
+            AccessTools.Method(EventBus, "Send")?.Invoke(null, new[] { picked });
+            impulseBody = body;
+            Plugin.Log.LogInfo($"Voice commands: impulse course for {list[index].Name}");
+            return true;
+        }
+
+        // The crew's part of an impulse order (prepare, engage) waits for the course: the helm can't prepare
+        // impulse until it's plotted, which takes a few seconds.
+        private static Sector.SectorBody impulseBody;
+        private static string afterPlot;
+        private static float afterPlotUntil;
+        private const float PlotWait = 10f;
+
+        private static void WaitForPlot(string crew)
+        {
+            afterPlot = crew;
+            afterPlotUntil = Time.time + PlotWait;
+        }
+
+        // Main thread, each frame: send the waiting orders once the course is plotted (or after a while anyway,
+        // so the crew answers for itself if it couldn't be).
+        private static void SendAfterPlot()
+        {
+            if (afterPlot == null) return;
+            bool plotted = ImpulsePlottedTo(impulseBody);
+            if (!plotted && Time.time < afterPlotUntil) return;
+            var crew = afterPlot;
+            afterPlot = null;
+            if (!plotted) Plugin.Log.LogInfo("Voice commands: no impulse course plotted yet; the helm is told anyway");
+            if (CrewOrders.IAmHost) Run(crew);
+            else CrewOrders.SendToHost(crew);
+        }
+
+        // The ship's impulse course is plotted, to that place (engines.ImpulseManager: IsImpulseCoursePlotted,
+        // DestinationSectorBody).
+        private static bool ImpulsePlottedTo(Sector.SectorBody body)
+        {
+            try
+            {
+                var craft = Bridge.AGAFPEFMEGB?.DADHBNBICAJ;
+                if (craft == null) return false;
+                var impulse = Traverse.Create(Traverse.Create(craft).Property("GCOAODPDBEI").GetValue()).Property("POLCIGDAIKK");
+                var manager = Traverse.Create(impulse.GetValue());
+                return manager.Property("PBBNLCBNGHH").GetValue() is bool plotted && plotted
+                       && ReferenceEquals(manager.Property("MCNGOGECDLC").GetValue(), body);
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         private static readonly HashSet<string> Numbers = new HashSet<string> { "one", "two", "three", "four", "five", "six", "seven", "eight", "nine" };
@@ -560,6 +692,7 @@ namespace StbcRevival
         {
             keyHeld = Plugin.VoiceCommands.Value && Input.GetKey(Plugin.PushToTalkKey.Value);
             CrewOrders.Update();
+            SendAfterPlot();
             if (!pendingResult) return;
             pendingResult = false;
             Finish(pendingCommand);
@@ -582,6 +715,11 @@ namespace StbcRevival
             var crew = command.Split(',').Where(c => !CrewOrders.AtConsole(c)).ToArray();
             if (console.Length > 0) Run(string.Join(",", console));
             if (crew.Length == 0) return;
+            if (console.Any(c => c.StartsWith("Impulse:", StringComparison.Ordinal)))
+            {
+                if (impulseBody != null) WaitForPlot(string.Join(",", crew));
+                return; // no place picked: nothing to prepare
+            }
             if (CrewOrders.IAmHost) Run(string.Join(",", crew));
             else CrewOrders.SendToHost(string.Join(",", crew));
         }
@@ -611,6 +749,12 @@ namespace StbcRevival
                 {
                     AccessTools.Method(typeof(VoiceRecognitionManager), one == "AnswerHail" ? "CBNKANAPHCI" : "OAJJFCNDHJK")
                         ?.Invoke(VoiceRecognitionManager.IEFBKOMBFGO, null);
+                    continue;
+                }
+                if (one.StartsWith("Impulse:", StringComparison.Ordinal))
+                {
+                    impulseBody = null;
+                    PlotImpulse(int.Parse(one.Substring("Impulse:".Length)));
                     continue;
                 }
                 if (one.StartsWith("Course:", StringComparison.Ordinal))
@@ -693,7 +837,7 @@ namespace StbcRevival
             string command = null;
             try
             {
-                var words = WordsNow.Concat(destinations.SelectMany(d => d.Words)).Distinct();
+                var words = WordsNow.Concat(destinations.SelectMany(d => d.Words)).Concat(places.SelectMany(d => d.Words)).Distinct();
                 var grammar = "[" + string.Join(",", words.Select(w => "\"" + w + "\"").ToArray()) + ",\"[unk]\"]";
                 var recogniser = Vosk.RecognizerNewGrm(model, SampleRate, Vosk.Str(grammar));
                 if (recogniser == IntPtr.Zero) throw new Exception("the recogniser didn't start");
@@ -716,20 +860,24 @@ namespace StbcRevival
             pendingResult = true;
         }
 
-        // A course order with a word the recogniser didn't know, and no destination picked from it.
+        // A course order with a word the recogniser didn't know, and no destination picked from it: an impulse
+        // order ("impulse to [unk]") looks among this system's places, any other among the warp map's systems.
         private static bool NeedsName(string text, string command)
         {
-            if (string.IsNullOrEmpty(text) || !text.Contains("[unk]") || destinations.Count == 0) return false;
-            if (command != null && command.StartsWith("Course:", StringComparison.Ordinal)) return false;
+            if (string.IsNullOrEmpty(text) || !text.Contains("[unk]")) return false;
+            if (command != null && (command.StartsWith("Course:", StringComparison.Ordinal) || command.StartsWith("Impulse:", StringComparison.Ordinal))) return false;
             var w = new HashSet<string>(text.Split(' '));
-            return CourseWordsNow.Any(w.Contains) || CourseToNow.Any(w.Contains);
+            if (ImpulseNow.Any(w.Contains)) return places.Count > 0;
+            return destinations.Count > 0 && (CourseWordsNow.Any(w.Contains) || CourseToNow.Any(w.Contains));
         }
 
         // The destination whose name is spelled most like what an unrestricted listen heard (alone, or two words
-        // run together: "donna to" for Donatu); with one destination on the map, that one. Null if unsure.
+        // run together: "donna to" for Donatu); with one destination to choose from, that one. Null if unsure.
         private static string GuessDestination(byte[] pcm, string text)
         {
-            var list = destinations;
+            var w = new HashSet<string>(text.Split(' '));
+            bool impulse = ImpulseNow.Any(w.Contains);
+            var list = impulse ? places : destinations;
             int best = -1;
             string heard = null;
             if (list.Count == 1) best = 0;
@@ -750,11 +898,11 @@ namespace StbcRevival
                 }
                 if (top < 0.6 || top - second < 0.1) best = -1;
             }
-            Plugin.Log.LogInfo($"Voice commands: course name {(heard != null ? $"heard as \"{heard}\"" : "(the only system on the map)")} → {(best < 0 ? "no match" : list[best].Name)}");
+            Plugin.Log.LogInfo($"Voice commands: {(impulse ? "impulse place" : "course name")} {(heard != null ? $"heard as \"{heard}\"" : "(the only one)")} → {(best < 0 ? "no match" : list[best].Name)}");
             if (best < 0) return null;
-            var w = new HashSet<string>(text.Split(' '));
-            lastPrepared = "Warp";
-            return $"Course:{best},PrepareWarp" + (WantsEngage(w) ? ",EngageWarp" : "");
+            lastPrepared = impulse ? "Impulse" : "Warp";
+            return impulse ? $"Impulse:{best},PrepareImpulse" + (WantsEngage(w) ? ",EngageImpulse" : "")
+                           : $"Course:{best},PrepareWarp" + (WantsEngage(w) ? ",EngageWarp" : "");
         }
 
         // 1 for the same spelling, 0 for nothing alike (edit distance over the longer length).
