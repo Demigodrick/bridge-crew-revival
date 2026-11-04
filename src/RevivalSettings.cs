@@ -237,7 +237,12 @@ namespace StbcRevival
                     toggle.onValueChanged.RemoveAllListeners();
                     toggle.group = null;
                     toggle.interactable = true;
-                    toggle.onValueChanged.AddListener(_ => Clicked(menu, entry));
+                    // Only a click on the showing page: the game switches the page's toggles off when it hides it
+                    // (starting a match), and that mustn't switch the settings.
+                    toggle.onValueChanged.AddListener(on =>
+                    {
+                        if (go.activeInHierarchy && IsOpen && on != entry.Ticked()) Clicked(menu, entry);
+                    });
                     // The right column is on the other hand's side of the console from the toggle it copies.
                     foreach (var hand in go.GetComponentsInChildren<HandInteraction>(true))
                         AccessTools.Field(typeof(HandInteraction), "_sideRestriction")?.SetValue(hand, Enum.Parse(AccessTools.Field(typeof(HandInteraction), "_sideRestriction").FieldType, "Either"));
