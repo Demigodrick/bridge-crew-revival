@@ -243,7 +243,9 @@ namespace StbcRevival.Missions
                 if (chooser && Loader.GetMissionType() != Loader.DAPMGBKPDNM.Procedural) ResetMissionType();
 
                 // Ships as for an Ongoing Voyage (the console greys their names unless Ongoing Voyages is
-                // selected). Next/previous step through the Revival missions (see Next_Prefix).
+                // selected). Next/previous step through the Revival missions (see Next_Prefix). In a PvP room
+                // each ship's captain picks theirs, so the names are bright for both captains.
+                bool picker = pvp ? PvpShipChoice.CanPick() : chooser;
                 foreach (var ship in ShipFields)
                 {
                     var toggle = Field<Toggle>(console, ship);
@@ -251,7 +253,7 @@ namespace StbcRevival.Missions
                     var label = Field<TMP_Text>(console, ship + "Text");
                     bool tng = ship == "_tngToggle";
                     if (label != null)
-                        SetColour(label, Colour(console, (toggle.isOn || chooser)
+                        SetColour(label, Colour(console, (toggle.isOn || picker)
                             ? (tng ? "_enabledOptionsColorTNG" : "_enabledOptionsColor")
                             : (tng ? "_disabledOptionsColorTNG" : "_disabledOptionsColor")));
                 }
