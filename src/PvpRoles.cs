@@ -490,12 +490,12 @@ namespace StbcRevival
 
         private static void PointerEnter_Prefix(HandInteraction __0)
         {
-            if (InPvpBriefing) Plugin.Log.LogInfo("PvP: [diag] mouse over " + Describe(__0));
+            if (InPvpBriefing || RevivalSettings.IsOpen) Plugin.Log.LogInfo("[diag] mouse over " + Describe(__0));
         }
 
         private static void PointerDown_Prefix(HandInteraction __0)
         {
-            if (InPvpBriefing) Plugin.Log.LogInfo("PvP: [diag] mouse pressed " + Describe(__0));
+            if (InPvpBriefing || RevivalSettings.IsOpen) Plugin.Log.LogInfo("[diag] mouse pressed " + Describe(__0));
         }
 
         // Each ship B role control next to its ship A original: enabled, interactable, the mouse's collider, and
@@ -517,33 +517,45 @@ namespace StbcRevival
                 {
                     var toggle = toggleField?.GetValue(infos.GetValue(i)) as Toggle;
                     if (toggle == null || (i % 4 != 1 && i < 4)) continue; // ship A's helm, for comparison, and all of ship B's
-                    foreach (var interaction in toggle.GetComponentsInChildren<HandInteraction>(true).Concat(toggle.GetComponentsInParent<HandInteraction>(true)).Distinct())
-                    {
-                        var mouse = AccessTools.Field(typeof(HandInteraction), "JJGDKFLEHLH")?.GetValue(interaction) as Collider;
-                        var lists = animators.Select(a =>
-                            ((gathered?.GetValue(a) as IList)?.Contains(interaction) == true ? "gathered" : "not gathered")
-                            + (available?.Invoke(a, new object[] { interaction }) is true ? "+available" : "")).ToArray();
-                        Plugin.Log.LogInfo($"PvP: [diag] slot {i} {Describe(interaction)}: enabled {interaction.enabled}, interactable {interaction.Interactable}, hand {SideRestriction?.GetValue(interaction)}, "
-                            + $"active {interaction.gameObject.activeInHierarchy}, console {(AccessTools.Field(typeof(HandInteraction), "KHDENOMKIJE")?.GetValue(interaction) as Component)?.name ?? "none"}, "
-                            + $"mouse collider {(mouse == null ? "none" : $"{(mouse.enabled ? "on" : "off")} at {mouse.bounds.center} size {mouse.bounds.size}")}, "
-                            + $"hands: {string.Join(" / ", lists)}");
-                        var grid = AccessTools.Field(typeof(HandInteraction), "_grid")?.GetValue(interaction) as Component;
-                        var poses = AccessTools.Field(typeof(HandInteraction), "_poses")?.GetValue(interaction) as Array;
-                        var poseText = poses == null ? "none" : string.Join("; ", poses.Cast<object>().Select(pose =>
-                        {
-                            var t = Traverse.Create(pose);
-                            var clips = t.Field("Animations").GetValue<AnimationClip[]>();
-                            var turns = t.Field("LocalWristRotations").GetValue<Quaternion[]>();
-                            var spots = t.Field("LocalWristPositions").GetValue<Vector3[]>();
-                            return $"L {clips?[0]?.name ?? "-"} {spots?[0]} {turns?[0]} | R {clips?[1]?.name ?? "-"} {spots?[1]} {turns?[1]}";
-                        }).ToArray());
-                        Plugin.Log.LogInfo($"PvP: [diag]   grid {(grid == null ? "none" : grid.name + " on " + grid.transform.parent?.name)}, {poses?.Length ?? 0} poses: {poseText}");
-                    }
+                    DescribeControl($"slot {i}", toggle);
                 }
             }
             catch (Exception e)
             {
                 Plugin.Log.LogWarning("PvP: [diag] ship B rows: " + e.Message);
+            }
+        }
+
+        /// <summary>A control's hand interactions: enabled, interactable, hand side, the mouse's collider, whether
+        /// the local player's hands list it as one they can use, and its hand poses (debugging clicks).</summary>
+        internal static void DescribeControl(string what, Component control)
+        {
+            if (control == null) return;
+            var manager = AccessTools.Method(AccessTools.TypeByName("HandAnimatorManager"), "get_Instance")?.Invoke(null, null);
+            var animators = (AccessTools.Field(manager?.GetType(), "AFBJOJJNCEA")?.GetValue(manager) as IDictionary)?.Keys.Cast<object>().ToList() ?? new List<object>();
+            var gathered = AccessTools.Field(AccessTools.TypeByName("HandAnimator"), "DPAFLMHJMEC");
+            var available = AccessTools.Method(AccessTools.TypeByName("HandAnimator"), "IsInteractionAvailable");
+    foreach (var interaction in control.GetComponentsInChildren<HandInteraction>(true).Concat(control.GetComponentsInParent<HandInteraction>(true)).Distinct())
+    {
+                var mouse = AccessTools.Field(typeof(HandInteraction), "JJGDKFLEHLH")?.GetValue(interaction) as Collider;
+                var lists = animators.Select(a =>
+                    ((gathered?.GetValue(a) as IList)?.Contains(interaction) == true ? "gathered" : "not gathered")
+                    + (available?.Invoke(a, new object[] { interaction }) is true ? "+available" : "")).ToArray();
+                Plugin.Log.LogInfo($"[diag] {what} {Describe(interaction)}: enabled {interaction.enabled}, interactable {interaction.Interactable}, hand {SideRestriction?.GetValue(interaction)}, "
+                    + $"active {interaction.gameObject.activeInHierarchy}, console {(AccessTools.Field(typeof(HandInteraction), "KHDENOMKIJE")?.GetValue(interaction) as Component)?.name ?? "none"}, "
+                    + $"mouse collider {(mouse == null ? "none" : $"{(mouse.enabled ? "on" : "off")} at {mouse.bounds.center} size {mouse.bounds.size}")}, "
+                    + $"hands: {string.Join(" / ", lists)}");
+                var grid = AccessTools.Field(typeof(HandInteraction), "_grid")?.GetValue(interaction) as Component;
+                var poses = AccessTools.Field(typeof(HandInteraction), "_poses")?.GetValue(interaction) as Array;
+                var poseText = poses == null ? "none" : string.Join("; ", poses.Cast<object>().Select(pose =>
+                {
+                    var t = Traverse.Create(pose);
+                    var clips = t.Field("Animations").GetValue<AnimationClip[]>();
+                    var turns = t.Field("LocalWristRotations").GetValue<Quaternion[]>();
+                    var spots = t.Field("LocalWristPositions").GetValue<Vector3[]>();
+                    return $"L {clips?[0]?.name ?? "-"} {spots?[0]} {turns?[0]} | R {clips?[1]?.name ?? "-"} {spots?[1]} {turns?[1]}";
+                }).ToArray());
+                Plugin.Log.LogInfo($"[diag]   grid {(grid == null ? "none" : grid.name + " on " + grid.transform.parent?.name)}, {poses?.Length ?? 0} poses: {poseText}");
             }
         }
 

@@ -100,7 +100,7 @@ namespace StbcRevival
         // rows a toggle's height and a half apart, under the heading and above BACK.
         private const float ColumnLeft = -340f, ColumnRight = 30f, FirstRow = 112f, RowStep = 33f, LabelWidth = 300f;
         private static readonly Vector3 HeadingAt = new Vector3(0f, 158f, -1f), BackAt = new Vector3(0f, -160f, 0.01f);
-        private static readonly Vector2 BackingSize = new Vector2(820f, 380f);
+        private static readonly Vector2 BackingSize = new Vector2(800f, 360f); // the page's units: heading to BACK, both columns
 
         private sealed class Page
         {
@@ -114,6 +114,11 @@ namespace StbcRevival
         private static float nextRetitle;
 
         private static bool Active => SteamMode.Enabled;
+
+        /// <summary>The settings list is on screen.</summary>
+        internal static bool IsOpen => pages.Values.Any(p => p.HidMain);
+
+        private static float diagnoseAt = -1f;
 
         internal static void Patch(Harmony harmony)
         {
@@ -139,6 +144,7 @@ namespace StbcRevival
             if (!pages.ContainsKey(__instance)) Build(__instance);
             Show(__instance);
             CoverMainMenu(__instance);
+            diagnoseAt = Time.unscaledTime + 2f;
         }
 
         // The main menu's page stays on under the region page (it's a popup): hidden while the list shows, back
@@ -210,8 +216,12 @@ namespace StbcRevival
                     backing.SetActive(true);
                     backing.transform.SetAsFirstSibling();
                     backing.transform.localPosition = new Vector3(0f, -2f, panel.transform.localPosition.z);
-                    backing.transform.localScale = Vector3.one;
-                    ((RectTransform)backing.transform).sizeDelta = BackingSize;
+                    // Its own size on screen kept (it's scaled under the page's background), stretched to the list.
+                    var scale = new Vector3(panel.transform.lossyScale.x / region.transform.lossyScale.x,
+                                            panel.transform.lossyScale.y / region.transform.lossyScale.y, 1f);
+                    backing.transform.localScale = scale;
+                    ((RectTransform)backing.transform).sizeDelta = new Vector2(BackingSize.x / scale.x, BackingSize.y / scale.y);
+                    Plugin.Log.LogInfo($"Revival settings: backing scaled {scale}, {BackingSize} on the page");
                 }
                 if (Field(menu, "_regionAcceptBtn") is Component back) back.transform.localPosition = BackAt;
 
@@ -304,6 +314,16 @@ namespace StbcRevival
         {
             if (!Active) return;
             foreach (var menu in pages.Keys.Where(m => m != null).ToList()) CoverMainMenu(menu);
+            if (diagnoseAt > 0f && Time.unscaledTime >= diagnoseAt)
+            {
+                diagnoseAt = -1f;
+                foreach (var entry in pages.Where(e => e.Key != null))
+                {
+                    PvpRoles.DescribeControl("settings row 1", entry.Value.Rows.FirstOrDefault());
+                    PvpRoles.DescribeControl("settings last row", entry.Value.Rows.LastOrDefault());
+                    PvpRoles.DescribeControl("settings BACK", Field(entry.Key, "_regionAcceptBtn") as Component);
+                }
+            }
             if (Time.unscaledTime < nextRetitle) return;
             nextRetitle = Time.unscaledTime + 1f;
             foreach (var menu in UnityEngine.Object.FindObjectsOfType<ConsoleMainMenu>())
