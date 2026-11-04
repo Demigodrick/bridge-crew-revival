@@ -100,11 +100,13 @@ namespace StbcRevival
         // rows a toggle's height and a half apart, under the heading and above BACK.
         private const float ColumnLeft = -340f, ColumnRight = 30f, FirstRow = 112f, RowStep = 33f, LabelWidth = 300f;
         private static readonly Vector3 HeadingAt = new Vector3(0f, 158f, -1f), BackAt = new Vector3(0f, -160f, 0.01f);
+        private static readonly Vector2 BackingSize = new Vector2(820f, 380f);
 
         private sealed class Page
         {
             public readonly List<Toggle> Rows = new List<Toggle>();
             public readonly List<TMP_Text> Labels = new List<TMP_Text>();
+            public bool HidMain;
         }
 
         private static readonly Dictionary<ConsoleMainMenu, Page> pages = new Dictionary<ConsoleMainMenu, Page>();
@@ -136,6 +138,25 @@ namespace StbcRevival
             if (!Active) return;
             if (!pages.ContainsKey(__instance)) Build(__instance);
             Show(__instance);
+            CoverMainMenu(__instance);
+        }
+
+        // The main menu's page stays on under the region page (it's a popup): hidden while the list shows, back
+        // once it's gone (checked every frame).
+        private static void CoverMainMenu(ConsoleMainMenu menu)
+        {
+            if (!pages.TryGetValue(menu, out var page) || !(Field(menu, "_mainMenuGO") is GameObject main)) return;
+            bool open = Field(menu, "_regionSelectGO") is GameObject region && region.activeInHierarchy;
+            if (open && main.activeSelf)
+            {
+                main.SetActive(false);
+                page.HidMain = true;
+            }
+            else if (!open && page.HidMain)
+            {
+                main.SetActive(true);
+                page.HidMain = false;
+            }
         }
 
         // The arrows are hidden: nothing to step through.
@@ -145,6 +166,11 @@ namespace StbcRevival
         private static bool Accept_Prefix(ConsoleMainMenu __instance)
         {
             if (!Active) return true;
+            if (pages.TryGetValue(__instance, out var page) && page.HidMain && Field(__instance, "_mainMenuGO") is GameObject mainPage)
+            {
+                mainPage.SetActive(true);
+                page.HidMain = false;
+            }
             var state = AccessTools.Field(typeof(ConsoleMainMenu), "CKGKIBEGPOA")?.GetValue(__instance);
             var setState = state?.GetType().GetMethod("SetState", All);
             var main = setState == null ? null : Enum.Parse(setState.GetParameters()[0].ParameterType, "Main");
@@ -175,6 +201,18 @@ namespace StbcRevival
                 foreach (Transform part in region.transform)
                     if (!keep.Any(k => k == part || k.IsChildOf(part))) part.gameObject.SetActive(false);
                 if (heading != null) heading.transform.localPosition = HeadingAt;
+                // A backing for the list: the page's own panel, stretched over the whole screen, behind the rows.
+                var panel = region.GetComponentsInChildren<Image>(true).FirstOrDefault(im => im.name == "MessageBG");
+                if (panel != null)
+                {
+                    var backing = (GameObject)UnityEngine.Object.Instantiate(panel.gameObject, region.transform, false);
+                    backing.name = "Revival settings backing";
+                    backing.SetActive(true);
+                    backing.transform.SetAsFirstSibling();
+                    backing.transform.localPosition = new Vector3(0f, -2f, panel.transform.localPosition.z);
+                    backing.transform.localScale = Vector3.one;
+                    ((RectTransform)backing.transform).sizeDelta = BackingSize;
+                }
                 if (Field(menu, "_regionAcceptBtn") is Component back) back.transform.localPosition = BackAt;
 
                 int perColumn = (Entries.Length + 1) / 2;
@@ -196,7 +234,12 @@ namespace StbcRevival
                     var label = go.GetComponentsInChildren<TMP_Text>(true).FirstOrDefault();
                     if (label != null)
                     {
-                        label.rectTransform.sizeDelta = new Vector2(LabelWidth, label.rectTransform.sizeDelta.y);
+                        // Wider to the right only: it still starts just right of the tick box.
+                        var rect = label.rectTransform;
+                        float left = rect.localPosition.x - rect.rect.width * rect.pivot.x;
+                        rect.sizeDelta = new Vector2(rect.sizeDelta.x + LabelWidth - rect.rect.width, rect.sizeDelta.y);
+                        rect.localPosition = new Vector3(left + LabelWidth * rect.pivot.x, rect.localPosition.y, rect.localPosition.z);
+                        label.AEDOGHDAPML = EGJGCPILBBH.Left; // alignment: TextAlignmentOptions.Left
                         // TextMeshPro's names are obfuscated here: enableAutoSizing, fontSizeMax / fontSizeMin
                         // (from fontSize), enableWordWrapping.
                         label.BMAIEFHKPMA = true;
@@ -259,7 +302,9 @@ namespace StbcRevival
         // settings (checked once a second, as the game's localizer sets the texts when the console appears).
         internal static void Update()
         {
-            if (!Active || Time.unscaledTime < nextRetitle) return;
+            if (!Active) return;
+            foreach (var menu in pages.Keys.Where(m => m != null).ToList()) CoverMainMenu(menu);
+            if (Time.unscaledTime < nextRetitle) return;
             nextRetitle = Time.unscaledTime + 1f;
             foreach (var menu in UnityEngine.Object.FindObjectsOfType<ConsoleMainMenu>())
             {
