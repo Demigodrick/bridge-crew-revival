@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
@@ -312,18 +313,20 @@ namespace StbcRevival
                 var here = me == null ? null : me.ALPAOOKFIEE;
                 var mission = Mission.MissionManager.IEFBKOMBFGO;
                 var open = mission == null ? null : Traverse.Create(mission).Property("MLPNEABKIJD").GetValue() as Dictionary<int, bool>;
-                // Places not visited yet are attic bodies (placeholders until you're there), still open on the map. The
-                // mission keys its open places by the place's map entry (SystemTransform.id), not the body's own id.
+                // The mission keys its open places by map entry (SystemTransform.id), and builds them from the sector's
+                // map entries (FindBodies), not the bodies loaded in the scene: so do the same, for this system.
+                var entries = here != null && open != null ? SystemEntries(mission, here.System) : new List<SystemTransform>();
                 if (here != null && open != null)
-                    foreach (var body in UnityEngine.Object.FindObjectsOfType<Sector.SectorBody>())
+                    foreach (var t in entries)
                     {
-                        if (body == null || body == me) continue;
-                        var t = body.ALPAOOKFIEE;
-                        if (t == null || t == here.ContainerTransform) { skipped["here"] = Count(skipped, "here") + 1; continue; }
+                        if (t == null || t == here) continue;
+                        var body = t.SectorBody as Sector.SectorBody;
+                        if (t == here.ContainerTransform) { skipped["here"] = Count(skipped, "here") + 1; continue; }
                         if (t.System != here.System) { skipped["other system"] = Count(skipped, "other system") + 1; continue; }
                         if (!open.TryGetValue(t.id.value, out var ok) || !ok) { skipped["not open"] = Count(skipped, "not open") + 1; continue; }
                         var key = t.SystemNode == null ? null : t.SystemNode.SystemMapName;
                         if (string.IsNullOrEmpty(key)) { skipped["no name"] = Count(skipped, "no name") + 1; continue; }
+                        if (body == null) { skipped["no body"] = Count(skipped, "no body") + 1; continue; }
                         string name;
                         try { name = SVR.Localization.GetLocalizedText(key); }
                         catch { name = key; }
@@ -336,7 +339,7 @@ namespace StbcRevival
                         if (same >= 0) found[same] = place; else found.Add(place);
                     }
                 if (found.Count == 0)
-                    Plugin.Log.LogInfo($"Voice commands: no impulse places: ship {(here == null ? "not found" : "found")}, {(open == null ? "no" : open.Count(kv => kv.Value).ToString())} open on the mission, left out: "
+                    Plugin.Log.LogInfo($"Voice commands: no impulse places: ship {(here == null ? "not found" : "found")}, {(open == null ? "no" : open.Count(kv => kv.Value).ToString())} open on the mission, {entries.Count} map entries here, left out: "
                                        + string.Join(", ", skipped.Select(kv => $"{kv.Key} {kv.Value}").ToArray()));
             }
             catch (Exception e)
@@ -345,6 +348,32 @@ namespace StbcRevival
             }
             places = found;
             Plugin.Log.LogInfo($"Voice commands: impulse places: {(found.Count == 0 ? "none" : string.Join(", ", found.Select(d => $"{d.Name} ({string.Join(" ", d.Words)})").ToArray()))}");
+        }
+
+        // The sector's map entries in a system (MissionManager.Sector.FindBodies().InThisSystem(system), searched;
+        // the search's Count and Item are KLNOKFCAMGO and JGKPJIGDKBH).
+        private static List<SystemTransform> SystemEntries(object mission, Map.SystemRoot system)
+        {
+            var entries = new List<SystemTransform>();
+            var sector = Traverse.Create(mission).Property("GCDDPJCIJOK").GetValue();
+            var bodies = sector == null ? null : AccessTools.Method(sector.GetType(), "FindBodies")?.Invoke(sector, null);
+            if (bodies == null) return entries;
+            var search = AccessTools.Method(bodies.GetType(), "InThisSystem")?.Invoke(bodies, new object[] { system }) ?? bodies;
+            try
+            {
+                AccessTools.Method(search.GetType(), "Search")?.Invoke(search, null);
+                var count = Traverse.Create(search).Property("KLNOKFCAMGO").GetValue() is int n ? n : 0;
+                var item = AccessTools.Method(search.GetType(), "get_JGKPJIGDKBH", new[] { typeof(int) })
+                           ?? search.GetType().GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
+                               .FirstOrDefault(m => m.ReturnType == typeof(SystemTransform) && m.GetParameters().Length == 1 && m.GetParameters()[0].ParameterType == typeof(int));
+                for (int i = 0; i < count && item != null; i++)
+                    if (item.Invoke(search, new object[] { i }) is SystemTransform t) entries.Add(t);
+            }
+            finally
+            {
+                AccessTools.Method(search.GetType(), "Destroy")?.Invoke(search, null);
+            }
+            return entries;
         }
 
         private static int Count(Dictionary<string, int> counts, string key) => counts.TryGetValue(key, out var n) ? n : 0;
