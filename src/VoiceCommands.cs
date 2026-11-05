@@ -200,7 +200,7 @@ namespace StbcRevival
             // "Impulse to <place>": a place in this system (Impulse:<index>), never a warp course.
             if (any(ImpulseNow))
             {
-                int place = Named(places, w, any);
+                int place = Named(places, w, any, nearestOnTie: true);
                 if (place < 0) return null;
                 lastPrepared = "Impulse";
                 return $"Impulse:{place},PrepareImpulse" + (WantsEngage(w) ? ",EngageImpulse" : "");
@@ -213,8 +213,9 @@ namespace StbcRevival
             return $"Course:{best},PrepareWarp" + (WantsEngage(w) ? ",EngageWarp" : "");
         }
 
-        // The destination named (or the nearest one, if asked): its index, or -1.
-        private static int Named(List<Destination> list, HashSet<string> w, Func<string[], bool> any)
+        // The destination named (or the nearest one, if asked): its index, or -1. Two names heard equally well: the
+        // nearer one with nearestOnTie (several places share a name, "Planetary Orbit"), else no answer.
+        private static int Named(List<Destination> list, HashSet<string> w, Func<string[], bool> any, bool nearestOnTie = false)
         {
             if (list.Count == 0) return -1;
             int best = -1;
@@ -225,18 +226,24 @@ namespace StbcRevival
             }
             else
             {
-                // Most of a name's words heard wins (a number alone, "four" for "IV", isn't enough); a tie between two
-                // names is no answer.
+                // The most of a name's words heard wins, then the most of its words (a number alone, "four" for "IV",
+                // isn't enough): "planetary orbit venov one" is Venov I's planetary orbit, "venov one" Venov I itself.
+                int topHeard = 0;
                 double top = 0;
                 bool tie = false;
                 for (int i = 0; i < list.Count; i++)
                 {
                     if (!list[i].Words.Any(x => w.Contains(x) && !NumbersNow.Contains(x))) continue;
-                    double score = (double)list[i].Words.Count(w.Contains) / list[i].Words.Length;
-                    if (score > top) { top = score; best = i; tie = false; }
-                    else if (score == top && score > 0) tie = true;
+                    int heard = list[i].Words.Count(w.Contains);
+                    double score = (double)heard / list[i].Words.Length;
+                    if (heard > topHeard || heard == topHeard && score > top) { topHeard = heard; top = score; best = i; tie = false; }
+                    else if (heard == topHeard && score == top)
+                    {
+                        if (!nearestOnTie) tie = true;
+                        else if (list[i].Distance < list[best].Distance) best = i;
+                    }
                 }
-                if (top == 0 || tie) return -1;
+                if (topHeard == 0 || tie) return -1;
             }
             return best;
         }
@@ -332,6 +339,19 @@ namespace StbcRevival
                         catch { name = key; }
                         var words = NameWords(name ?? "");
                         if (words.Length == 0) { skipped["no words"] = Count(skipped, "no words") + 1; continue; }
+                        // What it's at, for the places sharing a name ("Planetary Orbit" at each planet): its words count too.
+                        var parentKey = t.ContainerTransform == null || t.ContainerTransform.SystemNode == null ? null : t.ContainerTransform.SystemNode.SystemMapName;
+                        if (!string.IsNullOrEmpty(parentKey) && parentKey != key)
+                        {
+                            string parent;
+                            try { parent = SVR.Localization.GetLocalizedText(parentKey); }
+                            catch { parent = parentKey; }
+                            if (!string.IsNullOrEmpty(parent) && parent != name)
+                            {
+                                name += $" ({parent})";
+                                words = words.Concat(NameWords(parent)).Distinct().ToArray();
+                            }
+                        }
                         float distance = (float)Vector3d.Distance(t.Position, here.Position);
                         var same = found.FindIndex(d => d.Name == name);
                         if (same >= 0 && found[same].Distance <= distance) continue;
@@ -435,8 +455,12 @@ namespace StbcRevival
                 if (craft == null) return false;
                 var impulse = Traverse.Create(Traverse.Create(craft).Property("GCOAODPDBEI").GetValue()).Property("POLCIGDAIKK");
                 var manager = Traverse.Create(impulse.GetValue());
-                return manager.Property("PBBNLCBNGHH").GetValue() is bool plotted && plotted
-                       && ReferenceEquals(manager.Property("MCNGOGECDLC").GetValue(), body);
+                // The same place, if not the same object (a place's attic body is swapped for the real one).
+                var to = manager.Property("MCNGOGECDLC").GetValue() as Sector.SectorBody;
+                bool plotted = manager.Property("PBBNLCBNGHH").GetValue() is bool p && p;
+                if (Time.time >= afterPlotUntil && afterPlot != null)
+                    Plugin.Log.LogInfo($"Voice commands: impulse course plotted {plotted}, to {(to == null ? "nothing" : to.name)}");
+                return plotted && to != null && body != null && (to == body || to.ALPAOOKFIEE == body.ALPAOOKFIEE);
             }
             catch
             {
@@ -446,7 +470,8 @@ namespace StbcRevival
 
         private static readonly HashSet<string> Numbers = new HashSet<string> { "one", "two", "three", "four", "five", "six", "seven", "eight", "nine" };
 
-        // "Theta Novae IV" → theta, novae, four: lower case, letters only, Roman and Arabic numerals as words.
+        // "Theta Novae IV" → theta, novae, four: lower case, letters only, Roman and Arabic numerals as words (a
+        // longer number digit by digit).
         private static string[] NameWords(string name)
         {
             var n = NumberNamesNow;
@@ -461,6 +486,8 @@ namespace StbcRevival
             {
                 if (raw.Length == 0) continue;
                 if (numbers.TryGetValue(raw, out var number)) words.Add(number);
+                else if (raw.All(char.IsDigit)) // "MR-401": four, zero, one
+                    words.AddRange(raw.Select(c => c == '0' ? (german ? "null" : "zero") : n[c - '1']));
                 else if (raw.All(c => c >= 'a' && c <= 'z') && raw != "system") words.Add(raw);
             }
             return words.Distinct().ToArray();
