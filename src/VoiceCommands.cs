@@ -312,7 +312,8 @@ namespace StbcRevival
                 var here = me == null ? null : me.ALPAOOKFIEE;
                 var mission = Mission.MissionManager.IEFBKOMBFGO;
                 var open = mission == null ? null : Traverse.Create(mission).Property("MLPNEABKIJD").GetValue() as Dictionary<int, bool>;
-                // Places not visited yet are attic bodies (placeholders until you're there), still open on the map.
+                // Places not visited yet are attic bodies (placeholders until you're there), still open on the map. The
+                // mission keys its open places by the place's map entry (SystemTransform.id), not the body's own id.
                 if (here != null && open != null)
                     foreach (var body in UnityEngine.Object.FindObjectsOfType<Sector.SectorBody>())
                     {
@@ -320,7 +321,7 @@ namespace StbcRevival
                         var t = body.ALPAOOKFIEE;
                         if (t == null || t == here.ContainerTransform) { skipped["here"] = Count(skipped, "here") + 1; continue; }
                         if (t.System != here.System) { skipped["other system"] = Count(skipped, "other system") + 1; continue; }
-                        if (!open.TryGetValue(body.CDLFNBGDJIB.value, out var ok) || !ok) { skipped["not open"] = Count(skipped, "not open") + 1; continue; }
+                        if (!open.TryGetValue(t.id.value, out var ok) || !ok) { skipped["not open"] = Count(skipped, "not open") + 1; continue; }
                         var key = t.SystemNode == null ? null : t.SystemNode.SystemMapName;
                         if (string.IsNullOrEmpty(key)) { skipped["no name"] = Count(skipped, "no name") + 1; continue; }
                         string name;
