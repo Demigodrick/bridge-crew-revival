@@ -612,11 +612,11 @@ namespace StbcRevival
         private static int tapStart;
         private static bool chatCut; // recording ourselves ended the microphone under voice chat: start it again
 
-        private static DaikonForge.VoIP.AudioInputDeviceBase ChatInput() =>
+        internal static DaikonForge.VoIP.AudioInputDeviceBase ChatInput() =>
             VoIpManager.IEFBKOMBFGO == null ? null : VoIpManager.IEFBKOMBFGO.GetLocalMicrophoneInputDevice();
 
         // The microphone voice chat records from (by input class). False if the class isn't one this knows.
-        private static bool ChatDevice(DaikonForge.VoIP.AudioInputDeviceBase input, out string device)
+        internal static bool ChatDevice(DaikonForge.VoIP.AudioInputDeviceBase input, out string device)
         {
             device = null;
             // Looked up quietly (AccessTools.Field warns about the one a class doesn't have).

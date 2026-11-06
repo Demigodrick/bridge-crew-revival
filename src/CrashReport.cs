@@ -229,7 +229,7 @@ namespace StbcRevival
 
                 Directory.CreateDirectory(ReportsDir);
                 var zip = Path.Combine(ReportsDir, $"crash-{last.Started.ToLocalTime():yyyy-MM-dd_HHmmss}.zip");
-                BugReport.Zip.Write(zip, files);
+                File.WriteAllBytes(zip, BugReport.Zip.Write(files));
                 Plugin.Log.LogInfo($"Crash report: saved {zip} ({files.Count} files)");
                 reportReady = zip;
             }

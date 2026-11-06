@@ -245,6 +245,8 @@ namespace StbcRevival
             ControllerGrace.Patch(harmony);
             Excelsior.Patch(harmony);
             VoiceJitter.Patch(harmony);
+            PerfLog.Patch(harmony);
+            CrewLogs.Patch();
             if (SteamMode.Enabled) CrewPassword.Patch(harmony);
             if (Plugin.Diagnostics.Value)
                 StbcRevival.Diagnostics.Apply(harmony, photonNetwork);

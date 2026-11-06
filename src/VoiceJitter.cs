@@ -156,6 +156,18 @@ namespace StbcRevival
             }
         }
 
+        // Whose voice: the player object it sits under ("Players/Player - <name> (remote)/UDPWwiseDFVoIPTemplate").
+        private static string Name(WwiseAudioPlayer player)
+        {
+            for (var t = player.transform; t != null; t = t.parent)
+                if (t.name.StartsWith("Player - ", StringComparison.Ordinal))
+                {
+                    string name = t.name.Substring("Player - ".Length);
+                    return name.EndsWith(" (remote)", StringComparison.Ordinal) ? name.Substring(0, name.Length - " (remote)".Length) : name;
+                }
+            return player.gameObject.name;
+        }
+
         private static void Report()
         {
             foreach (var kv in new List<KeyValuePair<WwiseAudioPlayer, Speaker>>(speakers))
@@ -172,7 +184,7 @@ namespace StbcRevival
                 int lost = missing - s.LastMissing;
                 s.LastMissing = missing;
                 if (s.Bursts == 0 && s.DryOuts == 0 && lost == 0) continue;
-                Plugin.Log.LogInfo($"Voice chat from {player.gameObject.name}: last 30 s, {s.Bursts} bursts of speech, ran dry {s.DryOuts} times "
+                Plugin.Log.LogInfo($"Voice chat from {Name(player)}: last 30 s, {s.Bursts} bursts of speech, ran dry {s.DryOuts} times "
                                    + $"(a burst's end counts once), held again mid-burst {s.Rebuffers} times, {lost} frames lost on the way; "
                                    + $"cushion {Math.Max(s.CushionMs, Plugin.VoiceJitterBufferMs.Value)} ms");
                 s.Bursts = s.DryOuts = s.Rebuffers = 0;

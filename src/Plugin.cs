@@ -54,6 +54,7 @@ namespace StbcRevival
         internal static ConfigEntry<CrewContent> CrewContentFilter;
         internal static ConfigEntry<bool> PlayerJoinedAlert;
         internal static ConfigEntry<UnityEngine.KeyCode> BugReportKey;
+        internal static ConfigEntry<UnityEngine.KeyCode> CrewLogsKey;
         internal static ConfigEntry<UnityEngine.KeyCode> GameDumpKey;
         internal static ConfigEntry<bool> RomulanFace;
         internal static ConfigEntry<int> KlingonHead;
@@ -142,6 +143,8 @@ namespace StbcRevival
                 "When someone joins your crew: a chime, and the game's taskbar entry flashes if the window isn't in front. Handy while waiting with the headset off.");
             BugReportKey = Config.Bind("Debug", "BugReportKey", UnityEngine.KeyCode.F10,
                 "Saves the logs and settings needed for a bug report as one zip in the game folder.");
+            CrewLogsKey = Config.Bind("Debug", "CrewLogsKey", UnityEngine.KeyCode.F11,
+                "Asks your crewmates for their logs: each one with the mod is asked whether to send theirs (the zip BugReportKey saves), and those that agree arrive in the game folder's CrewLogs folder.");
             RomulanFace = Config.Bind("Avatar", "RomulanFace", false,
                 "Wear the Romulan captain's face. Female Vulcan character presets only; crewmates with the mod see it too.");
             KlingonHead = Config.Bind("Avatar", "KlingonHead", 0,
@@ -260,6 +263,8 @@ namespace StbcRevival
             Safely("update check", UpdateCheck.Update);
             Safely("player joined alert", StbcRevival.PlayerJoinedAlert.Update);
             Safely("bug report", BugReport.Update);
+            Safely("crew logs", CrewLogs.Update);
+            Safely("performance log", PerfLog.Update);
             Safely("game dump", GameDump.Update);
             Safely("romulan face", StbcRevival.RomulanFace.Update);
             Safely("klingon head", StbcRevival.KlingonHead.Update);

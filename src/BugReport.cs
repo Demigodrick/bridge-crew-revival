@@ -39,7 +39,10 @@ namespace StbcRevival
             catch { /* not in a scene with popups */ }
         }
 
-        private static void Save(string zipPath)
+        private static void Save(string zipPath) => File.WriteAllBytes(zipPath, Build());
+
+        /// <summary>The report as zip bytes (also what a crewmate sends when asked for their log, CrewLogs).</summary>
+        internal static byte[] Build()
         {
             var files = new List<KeyValuePair<string, byte[]>>
             {
@@ -68,7 +71,7 @@ namespace StbcRevival
             Add("stbc.revival.cfg", Path.Combine(Paths.ConfigPath, "stbc.revival.cfg"));
             Add("BepInEx.cfg", Path.Combine(Paths.ConfigPath, "BepInEx.cfg"));
             Add("stbc.revival.import.txt", Path.Combine(Paths.ConfigPath, "stbc.revival.import.txt"));
-            Zip.Write(zipPath, files);
+            return Zip.Write(files);
         }
 
         private static KeyValuePair<string, byte[]> Entry(string name, byte[] data) => new KeyValuePair<string, byte[]>(name, data);
@@ -98,14 +101,16 @@ namespace StbcRevival
             return s.ToString();
         }
 
-        /// <summary>Minimal zip writer (stored, no compression): .NET 3.5 has no zip support.</summary>
+        /// <summary>Minimal zip writer: .NET 3.5 has no zip support. Entries are deflated where this game's Mono can
+        /// (its DeflateStream needs a native helper that isn't always there), else stored.</summary>
         internal static class Zip
         {
             private static readonly uint[] CrcTable = BuildTable();
+            private static bool deflateFailed;
 
-            internal static void Write(string path, List<KeyValuePair<string, byte[]>> files)
+            internal static byte[] Write(List<KeyValuePair<string, byte[]>> files)
             {
-                using (var stream = new FileStream(path, FileMode.Create, FileAccess.Write))
+                var stream = new MemoryStream();
                 using (var w = new BinaryWriter(stream))
                 {
                     var central = new MemoryStream();
@@ -117,13 +122,17 @@ namespace StbcRevival
                     {
                         var name = Encoding.UTF8.GetBytes(file.Key);
                         uint crc = Crc(file.Value), offset = (uint)stream.Position, size = (uint)file.Value.Length;
+                        var data = Deflate(file.Value);
+                        ushort method = (ushort)(data != null ? 8 : 0);
+                        data = data ?? file.Value;
+                        uint packed = (uint)data.Length;
                         // Local file header.
-                        w.Write(0x04034b50u); w.Write((ushort)20); w.Write((ushort)0x0800); w.Write((ushort)0);
-                        w.Write(time); w.Write(date); w.Write(crc); w.Write(size); w.Write(size);
-                        w.Write((ushort)name.Length); w.Write((ushort)0); w.Write(name); w.Write(file.Value);
+                        w.Write(0x04034b50u); w.Write((ushort)20); w.Write((ushort)0x0800); w.Write(method);
+                        w.Write(time); w.Write(date); w.Write(crc); w.Write(packed); w.Write(size);
+                        w.Write((ushort)name.Length); w.Write((ushort)0); w.Write(name); w.Write(data);
                         // Central directory entry.
-                        c.Write(0x02014b50u); c.Write((ushort)20); c.Write((ushort)20); c.Write((ushort)0x0800); c.Write((ushort)0);
-                        c.Write(time); c.Write(date); c.Write(crc); c.Write(size); c.Write(size);
+                        c.Write(0x02014b50u); c.Write((ushort)20); c.Write((ushort)20); c.Write((ushort)0x0800); c.Write(method);
+                        c.Write(time); c.Write(date); c.Write(crc); c.Write(packed); c.Write(size);
                         c.Write((ushort)name.Length); c.Write((ushort)0); c.Write((ushort)0); c.Write((ushort)0); c.Write((ushort)0);
                         c.Write(0u); c.Write(offset); c.Write(name);
                     }
@@ -133,6 +142,26 @@ namespace StbcRevival
                     w.Write(0x06054b50u); w.Write((ushort)0); w.Write((ushort)0);
                     w.Write((ushort)files.Count); w.Write((ushort)files.Count);
                     w.Write((uint)central.Length); w.Write(centralOffset); w.Write((ushort)0);
+                }
+                return stream.ToArray();
+            }
+
+            // Raw deflate (what a zip entry holds), or null to store it as it is.
+            private static byte[] Deflate(byte[] data)
+            {
+                if (deflateFailed || data.Length < 256) return null;
+                try
+                {
+                    var packed = new MemoryStream();
+                    using (var deflate = new System.IO.Compression.DeflateStream(packed, System.IO.Compression.CompressionMode.Compress, true))
+                        deflate.Write(data, 0, data.Length);
+                    return packed.Length < data.Length ? packed.ToArray() : null;
+                }
+                catch (Exception e)
+                {
+                    deflateFailed = true;
+                    Plugin.Log.LogInfo("Bug report: no compression in this game (" + e.GetType().Name + "); files stored as they are");
+                    return null;
                 }
             }
 

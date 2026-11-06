@@ -112,6 +112,7 @@ namespace StbcRevival
         {
             if (!Enabled || Server == null) return;
             if (!steamReady && SteamName.SteamInitialized()) InitSteam();
+            CountHitch();
             if (steamReady)
             {
                 Poll(ToHostChannel, relayHost.OnPacket);
@@ -412,6 +413,19 @@ namespace StbcRevival
             return link;
         }
 
+        // Long frames: the crew's packets (voice too) are read and passed on once a frame, here, so while a frame
+        // lasts nothing moves, and on the host that holds up everyone's voice. Counted for the link report.
+        private const float HitchSeconds = 0.1f;
+        private static int hitches;
+        private static float longestFrame;
+
+        private static void CountHitch()
+        {
+            float frame = Time.unscaledDeltaTime;
+            if (frame >= HitchSeconds) hitches++;
+            if (frame > longestFrame) longestFrame = frame;
+        }
+
         private static void LinkReport()
         {
             float now = Time.realtimeSinceStartup;
@@ -419,6 +433,12 @@ namespace StbcRevival
             nextLinkSample = now + 2f;
             bool report = now >= nextLinkReport;
             if (report) nextLinkReport = now + LinkReportSeconds;
+            if (report && links.Count > 0)
+            {
+                Plugin.Log.LogInfo($"Steam mode: last {LinkReportSeconds:0} s, {hitches} frames of {HitchSeconds * 1000:0}+ ms (nothing sent or received during them), longest {longestFrame * 1000:0} ms");
+                hitches = 0;
+                longestFrame = 0f;
+            }
             foreach (var kv in links.ToList())
             {
                 var link = kv.Value;
