@@ -11,7 +11,7 @@ using UnityEngine.UI;
 namespace StbcRevival
 {
     /// <summary>
-    /// Steam mode: the shuttle console's "Select region" (Photon Cloud regions, meaningless without Ubisoft's
+    /// Steam mode and SelfHosted: the shuttle console's "Select region" (Photon Cloud regions, meaningless without Ubisoft's
     /// servers) becomes "Revival settings", the mod's settings in the game, as a list on the whole screen:
     ///   - Two columns of the main menu's own GAME MODE toggles (copies), a row per setting. An on/off setting
     ///     is ticked while it's on, and a click switches it; a setting with a few values shows the one picked
@@ -113,7 +113,7 @@ namespace StbcRevival
         private static bool showing; // the list is being set to the settings: its toggles' changes aren't clicks
         private static float nextRetitle;
 
-        private static bool Active => SteamMode.Enabled;
+        private static bool Active => SteamMode.Enabled || Plugin.Mode.Value == PhotonMode.SelfHosted;
 
         /// <summary>The settings list is on screen.</summary>
         internal static bool IsOpen => pages.Values.Any(p => p.HidMain);
