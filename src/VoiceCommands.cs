@@ -40,7 +40,7 @@ namespace StbcRevival
             // helm
             "speed", "full", "half", "quarter", "impulse", "ahead", "stop", "reverse", "maximum", "go", "warp", "prepare",
             "ready", "plot", "course", "set", "engage", "punch", "jump", "make", "it", "so", "approach", "intercept",
-            "close", "move", "away", "evade", "retreat", "avoid", "toward", "towards", "head", "fly",
+            "close", "move", "away", "evade", "retreat", "avoid", "toward", "towards", "head", "fly", "follow", "pursue", "chase",
             // tactical
             "fire", "phasers", "phaser", "torpedoes", "torpedo", "photon", "arm", "disarm", "cease", "hold", "target",
             "targeting", "clear", "engines", "engine", "weapons", "shields", "shield", "comms", "communications",
@@ -137,7 +137,9 @@ namespace StbcRevival
             if (w.Contains("fire")) return torpedoes ? "FireTorpedoes" : "FirePhasers";
 
             // Helm movement and speed.
-            if (any(new[] { "approach", "intercept", "close", "toward", "towards" })) return "MoveTo";
+            // "Follow the target": the game has no follow order; Move To is the nearest (and "follow" has to be listened
+            // for, or it's heard as "full", full speed).
+            if (any(new[] { "approach", "intercept", "close", "toward", "towards", "follow", "pursue", "chase" })) return "MoveTo";
             if (any(new[] { "away", "evade", "retreat", "avoid" })) return "MoveAwayFrom";
             if (target && any(new[] { "move", "head", "fly", "go" })) return "MoveTo"; // "move to the target", "head for the target"
             if (w.Contains("stop")) return "SetSpeedStop";

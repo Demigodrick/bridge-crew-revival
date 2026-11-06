@@ -52,7 +52,7 @@ namespace StbcRevival
         private static readonly string[] DeCourseFor = G("für", "nach", "zu", "zum", "zur", "auf", "richtung");
         private static readonly string[] DeNearest = G("nächste", "nächsten", "nächstes", "nächster");
         private static readonly string[] DeApproach = G("annähern", "nähern", "nähere", "abfangen", "herangehen", "ansteuern", "angreifen",
-            "verfolgen", "anfliegen");
+            "verfolgen", "verfolge", "folgen", "folge", "anfliegen");
         private static readonly string[] DeAway = G("entfernen", "fliehen", "flieh", "flüchten", "flucht", "rückzug", "zurückziehen", "meiden", "vermeiden", "abdrehen");
         private static readonly string[] DeMove = G("bewegen", "fliegen", "flieg", "fliege", "gehen", "geh", "gehe", "steuern", "richtung", "kurs");
         private static readonly string[] DeStop = G("stopp", "stop", "anhalten", "stoppen", "stillstand", "bremsen", "abbremsen");
