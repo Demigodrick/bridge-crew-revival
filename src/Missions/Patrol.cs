@@ -23,6 +23,8 @@ namespace StbcRevival.Missions
     ///   - Rescue: a disabled freighter with survivors; scan it for life signs, beam them aboard.
     ///   - Ambush: offered as a rescue, but Klingons decloak around you as you close in; rescue the survivors
     ///     and beat off the ambush.
+    /// One assignment in twenty, a Borg cube warps in partway through and attacks: destroy it, warp out, or
+    /// hold out until it warps away.
     /// Warping out of the assignment's system abandons it (it counts as failed) and a new one is offered.
     /// Between assignments (before accepting the next), flying within 5 km of a space station repairs and
     /// restocks the ship. Raiders grow in number as assignments are completed. Leave through the pause menu.
@@ -53,6 +55,8 @@ namespace StbcRevival.Missions
         private const double AmbushRange = 10000;  // metres from the freighter when the ambush is sprung
         private const double EngageRange = 20000;  // metres from the site when raiders there come for you
         private const double MinTravel = 30000;    // a site at least this far from the warp arrival, if there is one
+        private const int BorgChance = 20;         // one assignment in this many has a Borg cube turn up
+        private const float BorgStays = 240f;      // seconds the cube attacks before it warps away
         private static readonly Tag[] SiteTags =
         {
             Tag.ImpulseDestination, Tag.Planet, Tag.Moon, Tag.SpaceStation, Tag.Asteroid, Tag.Anomaly, Tag.Nebula,
@@ -137,6 +141,11 @@ namespace StbcRevival.Missions
                 jobSystem = target;
                 yield return Task.KNMMMJOOBHC.WithTime(3f); // out of warp
                 PickSite();
+                if (random.Next(BorgChance) == 0)
+                {
+                    var system = target;
+                    Objective.AddStep("borg " + (++spawnCount), Task.MFLJBKCDBMC.WithSubtaskCoroutine(() => Borg(system)));
+                }
                 IEnumerable<Step> run = job == 0 ? Hunt() : job == 1 ? Defend() : Rescue(job == 3);
                 foreach (var step in run) yield return step;
                 yield return Task.BCJDEKKIHDD.RemoveAllMarkers();
@@ -173,6 +182,50 @@ namespace StbcRevival.Missions
             foreach (var step in UntilGone(raiders, () => false)) yield return step;
             succeeded = !abandoned;
             yield return Task.NECMCDDOFJB.RemoveSubDirective(Directive, line);
+        }
+
+        // The Borg: a cube warps in near you a while into the assignment (alongside it, not in its place) and
+        // attacks. Set up as the game's own chance Borg encounters in Ongoing Voyage (BorgPhaseExplore: 4000
+        // hull, no regeneration), so it can be beaten. It warps away again after BorgStays; leave the system
+        // and it's left behind.
+        private IEnumerator<Step> Borg(Map.SystemRoot system)
+        {
+            float wait = 30 + random.Next(0, 120);
+            Plugin.Log.LogInfo($"Patrol: a Borg cube will turn up in {wait:0} s");
+            yield return Task.KNMMMJOOBHC.WithTime(wait);
+            if (Objective.KALBLMGFNIN != system)
+            {
+                Plugin.Log.LogInfo("Patrol: no Borg cube after all, the ship has left the system");
+                yield break;
+            }
+            var cube = new BodyRef();
+            yield return Task.BFMBGDIDKEI.UsingSpawner(MakeSpawner("Sector/Ships/Ship - Borg Cube", "Borg cube", Tag.Enemy))
+                .UsingSpawnMode(AI.POGGHNHDBAL.Warp).ApplyingConfigurators(typeof(BorgVariants.BorgPhaseExplore))
+                .AtAngleAndDistanceFromBody(player, random.Next(0, 360), 8000 + random.Next(0, 4000)).FaceOtherBody(player).OutputTo(cube);
+            float arrived = UnityEngine.Time.time;
+            Plugin.Log.LogInfo($"Patrol: Borg cube warping in ({(cube.AHMPFHDGMKJ as UnityEngine.Object)?.name ?? "not spawned"})");
+            string line = "A Borg cube has arrived! Destroy it or warp out";
+            yield return Task.ABHANLLBILL.WithEventID("PLAY_NPC_WARP_IN").ContinueImmediately();
+            yield return Task.OKLDNLKLLFJ.WithGroup("State_Group_Mus_Dyn").WithState("Tension");
+            yield return Task.NECMCDDOFJB.AddSubDirectives(Directive, line);
+            yield return Task.NDFEDBHFGFB.TellAI(cube).ToAddObjectives(player).OfObjectiveType(AIObjective.Attack);
+
+            string outcome;
+            for (;;)
+            {
+                yield return Task.KNMMMJOOBHC.WithTime(2f);
+                if (Objective.KALBLMGFNIN != system) { outcome = "left behind"; break; }
+                if (!LastStandWaves.Alive(cube, UnityEngine.Time.time - arrived < 20f)) { outcome = "destroyed"; break; }
+                if (UnityEngine.Time.time - arrived >= BorgStays) { outcome = "warped away"; break; }
+            }
+            Plugin.Log.LogInfo($"Patrol: Borg cube {outcome}");
+            yield return Task.NECMCDDOFJB.RemoveSubDirective(Directive, line);
+            if (outcome == "left behind") yield break;
+            if (outcome == "warped away") yield return Task.OONDNDHIEDI.TellAI(cube).UsingMode(AI.POGGHNHDBAL.Warp);
+            string after = outcome == "destroyed" ? "The Borg cube is destroyed" : "The Borg cube has warped away";
+            yield return Task.NECMCDDOFJB.AddSubDirectives(Directive, after);
+            yield return Task.KNMMMJOOBHC.WithTime(10f);
+            yield return Task.NECMCDDOFJB.RemoveSubDirective(Directive, after);
         }
 
         // A disabled freighter; two waves of raiders after it. Lost if it's destroyed.
@@ -220,22 +273,21 @@ namespace StbcRevival.Missions
             // The survivors: the game's rescue encounters load them as "People" cargo; a plain spawn has none,
             // which leaves no life signs to find and nothing to beam. A plain freighter has no cargo bay either, and
             // the game's cargo task does nothing without one, so they're put aboard as Stellar Evacuation does: into a
-            // cargo bay (added), shared with the crew's games, with its life signs and cargo made targetable.
+            // cargo bay (added), shared with the crew's games. Its life signs and cargo are left to be found by a scan.
             int survivors = 8 + random.Next(0, 13);
             yield return Task.KNMMMJOOBHC.WithTime(1f); // the freighter fully in
             StellarEvacuationObjective.PutPeople(wreck, survivors, "Patrol");
-            StellarEvacuationObjective.Beamable(wreck, "Patrol");
+            Unscanned(wreck);
             Plugin.Log.LogInfo($"Patrol: rescue freighter with {survivors} survivors (reads back {StellarEvacuationObjective.People(wreck)})");
             yield return Task.BCJDEKKIHDD.AddMarker(new[] { wreck });
             yield return Task.PAMPNJNPLCI.OfPOIChild(wreck); // as the game's rescue missions do with their target
 
-            // Its shields down and the transporter count started from the outset: they used to wait for a full
-            // scan of its life signs, and when that scan never registered (as can happen with these freighters)
-            // nothing could be beamed across and the assignment couldn't be finished. Scanning still tells you
-            // who's aboard; it's no longer what lets you beam them.
+            // Its shields down and the transporter count started from the outset. The transporter itself won't lock
+            // on until the freighter's been scanned (the game's own check); see Scanned for a scan that misses them.
             yield return Task.CIAHOPCODGJ.WithTargets(wreck).SetShieldHealthPercent(0f);
             yield return Task.HOHEEDLMMPH.Reset().WithCargoType(Sector.CargoTypes.People).WithDescriptionString(Directive, "Beam the survivors aboard");
-            bool rescued = false;
+            CountBeamsFrom(wreck);
+            bool rescued = false, scanned = false, peopleOn = StellarEvacuationObjective.People(wreck) > 0;
             string steps = "rescue " + (++spawnCount);
             Objective.AddStep(steps,
                 Task.LJAGNEPFGJO.IsEqualTo(100f),
@@ -269,6 +321,13 @@ namespace StbcRevival.Missions
                 if (!rescued) yield return Task.CIAHOPCODGJ.WithTargets(wreck).SetShieldHealthPercent(0f); // kept down: a ship's shields recharge // first: out of its system the freighter is gone from view, not lost
                 lost = !LastStandWaves.Alive(wreck, justSpawned);
                 if (lost) break;
+                if (!scanned && (scanned = Scanned(wreck))) Plugin.Log.LogInfo("Patrol: the freighter's been scanned; its survivors can be beamed");
+                // Also by the freighter's own count, as Stellar Evacuation does, should the game's count miss a beam.
+                if (!rescued && peopleOn && StellarEvacuationObjective.People(wreck) == 0 && StellarEvacuationObjective.People(player) > 0)
+                {
+                    rescued = true;
+                    Plugin.Log.LogInfo($"Patrol: the survivors are aboard ({StellarEvacuationObjective.People(player)} on the ship)");
+                }
                 // Sprung on approach (or at the latest once the survivors are aboard, if beamed from further out).
                 if (ambush && !sprung && (Distance(player, wreck) <= AmbushRange || rescued))
                 {
@@ -282,7 +341,7 @@ namespace StbcRevival.Missions
                     foreach (var step in SpawnRaiders(RaiderCount() + 1, raiders, player, Ambushers, 5000f, 4000)) yield return step;
                     started = UnityEngine.Time.time; // the new ships count as alive while they appear
                 }
-                bool raidersLeft = sprung && raiders.Any(r => LastStandWaves.Alive(r, UnityEngine.Time.time - started < 10f));
+                bool raidersLeft = sprung && Remaining(raiders, UnityEngine.Time.time - started < 10f) > 0;
                 if (rescued && (!ambush || (sprung && !raidersLeft))) break;
             }
             yield return Task.CLNFMDFOFKL.WithNames(steps, steps + " scanned");
@@ -325,6 +384,9 @@ namespace StbcRevival.Missions
                 yield return Task.BFMBGDIDKEI.UsingSpawner(MakeSpawner(pool[random.Next(pool.Length)], "Raider", Tag.Enemy))
                     .AtAngleAndDistanceFromBody(around, angle, OffSurface(around, distance + random.Next(0, spread))).FaceOtherBody(around).OutputTo(ship);
             }
+            // No disengaging: a Bird of Prey's is to cloak and slip away, and the assignment then waits on a
+            // ship no one can find.
+            yield return Task.GLACCPHKCDO.TellAI(spawned.ToArray());
             if (attack)
                 foreach (var step in Attack(spawned, target)) yield return step;
             into.AddRange(spawned);
@@ -408,6 +470,71 @@ namespace StbcRevival.Missions
             return string.IsNullOrEmpty(name) ? " (marked; set an impulse course)" : $" near {name} (set an impulse course)";
         }
 
+        // The freighter as a ship not yet scanned: its life signs and cargo added as systems to find, and nothing
+        // about it known (as the game's own missions do with a ship to investigate; the game's RPC, so on every
+        // player's game), so the transporter won't lock on until the crew has scanned it. Only for a body with ship
+        // data (GetTargetInfo), as StellarEvacuationObjective.Beamable: the captain's order checks need it.
+        private static void Unscanned(BodyRef body)
+        {
+            try
+            {
+                var sector = body?.AHMPFHDGMKJ as Sector.SectorBody;
+                if (!(sector?.GetDetectable() is Sector.TargetableComponent targetable) || sector.GetTargetInfo() == null)
+                {
+                    Plugin.Log.LogInfo($"Patrol: {sector?.name ?? "the freighter"} has no ship data; its life signs can't be scanned for");
+                    return;
+                }
+                targetable.AddTargetableSubsystem(ShipSystem.Life);
+                targetable.AddTargetableSubsystem(ShipSystem.Cargo);
+                targetable.SetSubsystemKnown(ShipSystem.All, false);
+                Plugin.Log.LogInfo($"Patrol: {sector.name} to be scanned ({targetable.GetAllSubsystems().Length} systems)");
+            }
+            catch (Exception e)
+            {
+                Plugin.Log.LogWarning("Patrol: leaving the freighter to be scanned: " + e.Message);
+                StellarEvacuationObjective.Beamable(body, "Patrol");
+            }
+        }
+
+        // Whether the freighter's been scanned: its life signs and cargo found. These freighters' scans haven't
+        // always found the two systems added to them, which left nothing to beam from, so a scan that's found
+        // everything else counts and makes them known too.
+        private static bool Scanned(BodyRef body)
+        {
+            try
+            {
+                if (!((body?.AHMPFHDGMKJ as Sector.SectorBody)?.GetDetectable() is Sector.TargetableComponent targetable)) return true;
+                if (targetable.IsSubsystemKnown(ShipSystem.Life) && targetable.IsSubsystemKnown(ShipSystem.Cargo)) return true;
+                var others = targetable.GetAllSubsystems().Where(x => x != ShipSystem.Life && x != ShipSystem.Cargo).ToList();
+                if (others.Count == 0 || !others.All(targetable.IsSubsystemKnown)) return false;
+                Plugin.Log.LogInfo("Patrol: the freighter's scan didn't find its life signs; made known with the rest");
+                StellarEvacuationObjective.Beamable(body, "Patrol");
+                return true;
+            }
+            catch (Exception e)
+            {
+                Plugin.Log.LogWarning("Patrol: freighter scan: " + e.Message);
+                return true;
+            }
+        }
+
+        // The game's transporter count only follows ships registered as sources, which it does as they spawn;
+        // the survivors are put aboard after that, so the freighter is registered here once they are. Without it
+        // beaming them across never counted, and the assignment couldn't be finished.
+        private static void CountBeamsFrom(BodyRef body)
+        {
+            try
+            {
+                var monitor = ((Mission.MissionManager)Mission.MissionManager.IEFBKOMBFGO).GNMPCGLFMBM;
+                monitor.MonitorSectorBody(body.AHMPFHDGMKJ);
+                Plugin.Log.LogInfo($"Patrol: transporter count following the freighter ({monitor.Progress():0}% beamed)");
+            }
+            catch (Exception e)
+            {
+                Plugin.Log.LogWarning("Patrol: counting the survivors beamed across: " + e.Message);
+            }
+        }
+
         // Left the assignment's system: the assignment is given up.
         private bool Abandoned()
         {
@@ -430,8 +557,74 @@ namespace StbcRevival.Missions
                 yield return Task.KNMMMJOOBHC.WithTime(2f);
                 if (Abandoned() || stop()) yield break; // abandoned first: out of the system, what was fought over is out of view, not lost
                 bool justSpawned = UnityEngine.Time.time - started < 10f;
-                if (!ships.Any(s => LastStandWaves.Alive(s, justSpawned))) yield break;
+                if (Remaining(ships, justSpawned) == 0) yield break;
             }
+        }
+
+        // ---- Raiders' fates ---------------------------------------------------------------------------
+        // A raider is gone when destroyed, or when it has stayed cloaked for CloakedGone: a cloaked ship can't be
+        // found or targeted (a Bird of Prey still cloaks in a fight), so it has slipped away. Each change is
+        // logged, and every StatusEvery what's left: where it is, its hull, whether it's cloaked.
+        private const float CloakedGone = 60f, StatusEvery = 60f;
+        private readonly Dictionary<BodyRef, string> fates = new Dictionary<BodyRef, string>();
+        private readonly Dictionary<BodyRef, float> cloakedSince = new Dictionary<BodyRef, float>();
+        private float nextStatus;
+        private static readonly System.Reflection.MethodInfo CloakActive = HarmonyLib.AccessTools.Method(typeof(AI.AgentShip), "get_IsCloakActive");
+
+        private int Remaining(List<BodyRef> ships, bool justSpawned)
+        {
+            float now = UnityEngine.Time.time;
+            int left = 0;
+            foreach (var ship in ships)
+            {
+                if (fates.ContainsKey(ship)) continue;
+                string name = ShipName(ship);
+                if (!LastStandWaves.Alive(ship, justSpawned))
+                {
+                    fates[ship] = "destroyed";
+                    Plugin.Log.LogInfo($"Patrol: {name} destroyed");
+                    continue;
+                }
+                if (Cloaked(ship))
+                {
+                    if (!cloakedSince.TryGetValue(ship, out float since))
+                    {
+                        cloakedSince[ship] = since = now;
+                        Plugin.Log.LogInfo($"Patrol: {name} cloaked");
+                    }
+                    if (now - since >= CloakedGone)
+                    {
+                        fates[ship] = "slipped away";
+                        Plugin.Log.LogInfo($"Patrol: {name} stayed cloaked {CloakedGone:0} s; it has slipped away");
+                        continue;
+                    }
+                }
+                else if (cloakedSince.Remove(ship)) Plugin.Log.LogInfo($"Patrol: {name} decloaked");
+                left++;
+            }
+            if (left > 0 && now >= nextStatus)
+            {
+                nextStatus = now + StatusEvery;
+                Plugin.Log.LogInfo($"Patrol: {left} raider{(left == 1 ? "" : "s")} left: " + string.Join(", ", ships.Where(x => !fates.ContainsKey(x)).Select(Status).ToArray()));
+            }
+            return left;
+        }
+
+        private static bool Cloaked(BodyRef ship)
+        {
+            try { return ship.AHMPFHDGMKJ is AI.AgentShip agent && CloakActive?.Invoke(agent, null) is true; }
+            catch { return false; }
+        }
+
+        private static string ShipName(BodyRef ship) => (ship.AHMPFHDGMKJ as UnityEngine.Object)?.name ?? "a raider";
+
+        private string Status(BodyRef ship)
+        {
+            string hull = "?";
+            try { if (ship.AHMPFHDGMKJ?.GetTargetInfo() is var info && info != null) hull = $"{info.GBNCJMFFIDI:0}"; }
+            catch { }
+            double d = Distance(player, ship);
+            return $"{ShipName(ship)} ({(d == double.MaxValue ? "?" : $"{d / 1000:0.#}")} km, hull {hull}{(Cloaked(ship) ? ", cloaked" : "")})";
         }
 
         // The name of a space station within repair range in this system, or null. A station is what the game tags
