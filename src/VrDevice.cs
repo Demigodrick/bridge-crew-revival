@@ -14,10 +14,12 @@ namespace StbcRevival
     /// <summary>
     /// [VR] Device: which VR runtime the game starts. Once loaded, the game (InitialLoader's SelectVRMode)
     /// always asks Unity for Oculus first and SteamVR only if that fails, whatever the -vrmode launch option
-    /// started. Headsets that pass themselves off as Oculus without the Oculus runtime (a Quest through
-    /// Virtual Desktop) crash natively in the game's 2016 Oculus plugin there: Unity shuts SteamVR down,
-    /// loads Oculus and falls over. SteamVR puts SteamVR first; Auto does that when the game was launched
-    /// with -vrmode openvr or when the Oculus runtime can't be loaded; Oculus keeps the game's own order.
+    /// started, and plays without VR when neither loads (or with the non_vr launch option, when it asks for
+    /// neither). Asking for Oculus crashes natively in the game's 2016 Oculus plugin when an Oculus runtime
+    /// is found but won't load (see OculusRuntimeLoads): with that, a PC crashes at startup whether a
+    /// headset is on or not. SteamVR puts SteamVR first; Auto does that when the game was launched with
+    /// -vrmode openvr or when the Oculus runtime is missing or won't load; Oculus keeps the game's own order.
+    /// Whenever SteamVR goes first, Oculus is only asked for after it if its runtime loads.
     /// </summary>
     internal static class VrDevice
     {
@@ -25,17 +27,30 @@ namespace StbcRevival
         private static FieldInfo wantVr;  // false with the non_vr launch option
         private static FieldInfo devices; // the device list it asks for
         private static FieldInfo current; // what it yields
+        private static string[] order;    // what the game asks for instead
 
         // Safe to patch from plugin Awake (and it must be: the game picks the device early in its first
         // scene): the selection touches no Photon or network types (see Patches.ApplyDeferred).
         internal static void Patch(Harmony harmony)
         {
-            string why;
-            if (!SteamVRFirst(out why))
+            if (Plugin.VrDevice.Value == VrDeviceChoice.Oculus)
             {
-                Plugin.Log.LogInfo("VR device: the game's order, Oculus first (" + why + ")");
+                Plugin.Log.LogInfo("VR device: the game's order, Oculus first ([VR] Device = Oculus)");
                 return;
             }
+            string runtime;
+            bool oculusLoads = OculusRuntimeLoads(out runtime);
+            string why;
+            if (Plugin.VrDevice.Value == VrDeviceChoice.SteamVR) why = "[VR] Device = SteamVR";
+            else if (LaunchedForOpenVR()) why = "launched with -vrmode openvr";
+            else if (!oculusLoads) why = runtime;
+            else
+            {
+                Plugin.Log.LogInfo("VR device: the game's order, Oculus first (Oculus runtime loads: " + runtime + ")");
+                return;
+            }
+            order = oculusLoads ? new[] { "OpenVR", "Oculus" } : new[] { "OpenVR" };
+
             var select = AccessTools.TypeByName("InitialLoader")?.GetNestedTypes(BindingFlags.NonPublic)
                 .FirstOrDefault(t => t.Name.StartsWith("<SelectVRMode>"));
             var moveNext = select == null ? null : AccessTools.Method(select, "MoveNext");
@@ -50,31 +65,16 @@ namespace StbcRevival
                 return;
             }
             harmony.Patch(moveNext, prefix: new HarmonyMethod(typeof(VrDevice), nameof(Select_Prefix)));
-            Plugin.Log.LogInfo("VR device: SteamVR first, then Oculus (" + why + ")");
+            Plugin.Log.LogInfo(oculusLoads
+                ? "VR device: SteamVR first, then Oculus (" + why + ")"
+                : "VR device: SteamVR only, no Oculus (" + why + (why == runtime ? "" : "; " + runtime) + ")");
         }
 
-        private static bool SteamVRFirst(out string why)
+        private static bool LaunchedForOpenVR()
         {
-            switch (Plugin.VrDevice.Value)
-            {
-                case VrDeviceChoice.SteamVR: why = "[VR] Device = SteamVR"; return true;
-                case VrDeviceChoice.Oculus: why = "[VR] Device = Oculus"; return false;
-            }
             var args = Environment.GetCommandLineArgs();
             int at = Array.FindIndex(args, a => a.Equals("-vrmode", StringComparison.OrdinalIgnoreCase));
-            if (at >= 0 && at + 1 < args.Length && args[at + 1].Equals("openvr", StringComparison.OrdinalIgnoreCase))
-            {
-                why = "launched with -vrmode openvr";
-                return true;
-            }
-            string runtime;
-            if (!OculusRuntimeLoads(out runtime))
-            {
-                why = runtime;
-                return true;
-            }
-            why = "Oculus runtime loads: " + runtime;
-            return false;
+            return at >= 0 && at + 1 < args.Length && args[at + 1].Equals("openvr", StringComparison.OrdinalIgnoreCase);
         }
 
         private const string RuntimeDll = "LibOVRRT64_1.dll";
@@ -143,7 +143,6 @@ namespace StbcRevival
         private static bool Select_Prefix(object __instance, ref bool __result)
         {
             if ((int)state.GetValue(__instance) != 0 || !(bool)wantVr.GetValue(__instance)) return true;
-            var order = new[] { "OpenVR", "Oculus" };
             devices.SetValue(__instance, order);
             VRSettings.LoadDeviceByName(order);
             current.SetValue(__instance, null);

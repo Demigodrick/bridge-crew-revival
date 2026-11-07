@@ -391,12 +391,13 @@
         <p>No. Consoles and standalone headsets can't load mods, so it's PC with PC only.</p>
       </details>
       <details>
-        <summary>The game crashes on startup in VR (Quest with Virtual Desktop).</summary>
-        <p>The game tries the Oculus runtime first, which crashes with some headsets that aren't Oculus Rifts.
-          The mod starts SteamVR first when the Oculus (Meta) runtime is missing or won't load. If the game
-          still crashes, in Steam right-click Star Trek: Bridge Crew, choose Properties, and add <code>-vrmode openvr</code>
-          to the Launch Options. The mod then starts SteamVR instead. To always use SteamVR, set
-          <code>Device = SteamVR</code> under <code>[VR]</code> in <code>BepInEx/config/stbc.revival.cfg</code>.</p>
+        <summary>The game crashes on startup (Quest with Virtual Desktop, or with no headset on).</summary>
+        <p>The game tries the Oculus runtime, which crashes when the Oculus (Meta) runtime is on the PC but
+          won't load, with a headset on or not. The mod then starts SteamVR only, or the game without VR
+          when no headset is on. The mod can only do that from 0.7.28, and it can't update itself if the game
+          crashes before the shuttle: install the latest version by hand. If the game still crashes, in Steam
+          right-click Star Trek: Bridge Crew, choose Properties, and add <code>-non_vr</code> to the Launch Options
+          to play without VR, and send us the crash report (below).</p>
       </details>
       <details>
         <summary>The game crashed. What should I send?</summary>
