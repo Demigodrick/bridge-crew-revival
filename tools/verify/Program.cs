@@ -202,6 +202,9 @@ foreach (var m in new[] { "get_ActiveSystem", "FindSystemDifferentThan", "FindAl
 var moveTo = game.GetType("Mission.Scripting.Framework.Tasks.FNICGFPIEOL")?.GetProperty("LAADENAGNCO", Inst)?.PropertyType;
 Check("  Task.LAADENAGNCO (AIMoveTo) TellAI / ToDestination (escort convoy)", moveTo?.GetMethods(Inst).FirstOrDefault(x => x.Name == "TellAI") is not null
     && moveTo.GetMethods(Inst).FirstOrDefault(x => x.Name == "ToDestination") is not null ? moveTo : null);
+Check("  Sector.DIENHALJFIO (ITargetable) SetSubsystemKnown / GetUnknownSubsystemCount (research scans)", game.GetType("Sector.DIENHALJFIO") is { } itarget
+    && itarget.GetMethod("SetSubsystemKnown") is not null && itarget.GetMethod("GetUnknownSubsystemCount") is not null ? itarget : null);
+Check("  Sector.NHGGGDMADKM.Science / All (research scans)", game.GetType("Sector.NHGGGDMADKM") is { } sys && sys.GetField("Science") is not null && sys.GetField("All") is not null ? sys : null);
 Check("  Sector.NHGGGDMADKM.Life (rescue life signs)", game.GetType("Sector.NHGGGDMADKM")?.GetField("Life"));
 Check("  Sector.CargoTypes.People (rescue survivors)", game.GetType("Sector.CargoTypes")?.GetField("People"));
 Check("  SystemTransform.Position / BaseName / System", game.GetType("SystemTransform") is { } st && st.GetProperty("Position") is not null

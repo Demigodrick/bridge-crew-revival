@@ -26,6 +26,8 @@ namespace StbcRevival.Missions
     ///   - Escort: freighters waiting at the site for an escort fly a route to another body of the system, through
     ///     a waypoint when one lies on the way; delivered when they get there, failed if they're all lost. One
     ///     escort in two, raiders attack the convoy on the way (sometimes Klingons decloaking around it).
+    ///   - Research: unidentified objects scattered about the site; scan them all. Now and then raiders
+    ///     turn up after the first scan.
     /// One assignment in twenty, a Borg cube warps in partway through and attacks: destroy it, warp out, or
     /// hold out until it warps away.
     /// Warping out of the assignment's system abandons it (it counts as failed) and a new one is offered.
@@ -151,7 +153,7 @@ namespace StbcRevival.Missions
                     Objective.AddStep(borg, Task.MFLJBKCDBMC.WithSubtaskCoroutine(() => Borg(system)));
                     yield return Task.KKALNAMJCNH.WithName(borg); // a step added while another runs waits to be started
                 }
-                IEnumerable<Step> run = job == 0 ? Hunt() : job == 1 ? Defend() : job == 4 ? Escort() : Rescue(job == 3);
+                IEnumerable<Step> run = job == 0 ? Hunt() : job == 1 ? Defend() : job == 4 ? Escort() : job == 5 ? Research() : Rescue(job == 3);
                 foreach (var step in run) yield return step;
                 yield return Task.BCJDEKKIHDD.RemoveAllMarkers();
 
@@ -530,6 +532,148 @@ namespace StbcRevival.Missions
                                + $"{arrived} of {size} freighters arrived, {lost} lost");
             if (fight != null) yield return Task.NECMCDDOFJB.RemoveSubDirective(Directive, fight);
             yield return Task.NECMCDDOFJB.RemoveSubDirective(Directive, line);
+        }
+
+        // Research: unidentified objects scattered about the site, to scan. They're the scannable props of the
+        // game's Explore mission (Prop - ScannableObjectA-D), set up as it does: their science readings made
+        // unknown, then the scan trigger on the whole object at 100. Each scan shows what it found, in the
+        // game's own words. A scan the trigger misses counts once everything about the object is known. One
+        // survey in ResearchRaidChance, raiders come for the ship after the first scan, as the game's research
+        // mission calls in enemy patrols on its science reports; the survey needs only the scans.
+        private const int ResearchRaidChance = 4;  // one survey in this many is interrupted by raiders
+        private static readonly string[] Scannables =
+        {
+            "Sector/System/Prop - ScannableObjectA", "Sector/System/Prop - ScannableObjectB",
+            "Sector/System/Prop - ScannableObjectC", "Sector/System/Prop - ScannableObjectD",
+        };
+        private static readonly string[] Discoveries = // Explore's result_Crystal, Fragment, Graviton, Verteron, by prop
+        {
+            "12862|Crystallized Protomatter discovered", "12863|String Fragment discovered",
+            "12864|Graviton Stream discovered", "12861|Verteron Pocket discovered",
+        };
+
+        private IEnumerable<Step> Research()
+        {
+            int count = 3 + random.Next(0, 3);
+            string Line(int done) => $"Scan the unidentified objects{Near()} ({done} of {count})";
+            string line = Line(0);
+            yield return Task.NECMCDDOFJB.AddSubDirectives(Directive, line);
+
+            var objects = new List<BodyRef>();
+            var kinds = new List<int>();
+            float angle = random.Next(0, 360);
+            for (int i = 0; i < count; i++)
+            {
+                var body = new BodyRef();
+                int kind = random.Next(Scannables.Length);
+                angle += 360f / count + random.Next(-25, 25);
+                float distance = site == player ? 6000f + random.Next(0, 9000) : OffSurface(site, 2000f + random.Next(0, 6000));
+                yield return Task.BFMBGDIDKEI.UsingSpawner(Objective.MNKGANNGIKK.WithPrefab(Scannables[kind]).InSystem(Objective.KALBLMGFNIN)
+                        .AssignName($"Unidentified object {++spawnCount}").AddTags(Tag.Spawned))
+                    .AtAngleAndDistanceFromBody(site, angle, distance).OutputTo(body);
+                objects.Add(body);
+                kinds.Add(kind);
+            }
+            yield return Task.KNMMMJOOBHC.WithTime(1f); // the objects fully in
+            var done = new bool[count];
+            var unknown = new bool[count]; // something about it left to find, so "all known" means scanned
+            var steps = new string[count];
+            for (int i = 0; i < count; i++)
+            {
+                unknown[i] = Unknown(objects[i]);
+                int n = i;
+                steps[i] = "scan " + (++spawnCount);
+                Objective.AddStep(steps[i],
+                    Task.JAIMKEDGFEG.WhenTargetSubsystem(objects[i], ShipSystem.All).IsEqualTo(100f),
+                    Task.MFLJBKCDBMC.WithAction(() => done[n] = true));
+                yield return Task.KKALNAMJCNH.WithName(steps[i]);
+            }
+            Plugin.Log.LogInfo($"Patrol: {count} objects to scan{(site == player ? " around the ship" : $" around {BodyName(site) ?? "the site"}")}: "
+                               + string.Join(", ", objects.Select((o, i) => $"{ShipName(o)} ({DisplayName(Discoveries[kinds[i]])}, {Km(Distance(player, o))} km)").ToArray()));
+            yield return Task.BCJDEKKIHDD.AddMarker(objects.ToArray());
+
+            bool raid = random.Next(ResearchRaidChance) == 0, sprung = false;
+            var raiders = new List<BodyRef>();
+            string found = null, fight = null;
+            int scanned = 0;
+            float raidAt = 0;
+            var counted = new bool[count];
+            for (;;)
+            {
+                yield return Task.KNMMMJOOBHC.WithTime(2f);
+                if (Abandoned()) break;
+                for (int i = 0; i < count; i++)
+                {
+                    if (counted[i]) continue;
+                    if (!done[i] && unknown[i] && Known(objects[i]))
+                    {
+                        done[i] = true;
+                        Plugin.Log.LogInfo($"Patrol: {ShipName(objects[i])} fully known without the scan trigger; counted as scanned");
+                    }
+                    if (!done[i]) continue;
+                    counted[i] = true;
+                    scanned++;
+                    Plugin.Log.LogInfo($"Patrol: {ShipName(objects[i])} scanned, {scanned} of {count}: {DisplayName(Discoveries[kinds[i]])}");
+                    yield return Task.NECMCDDOFJB.RemoveSubDirective(Directive, line);
+                    if (found != null) yield return Task.NECMCDDOFJB.RemoveSubDirective(Directive, found);
+                    line = Line(scanned);
+                    found = DisplayName(Discoveries[kinds[i]]) ?? "Readings recorded";
+                    yield return Task.NECMCDDOFJB.AddSubDirectives(Directive, line);
+                    yield return Task.NECMCDDOFJB.AddSubDirectives(Directive, found);
+                }
+                if (raid && !sprung && scanned > 0)
+                {
+                    sprung = true;
+                    raidAt = UnityEngine.Time.time;
+                    Plugin.Log.LogInfo("Patrol: the survey has drawn raiders");
+                    yield return Task.OKLDNLKLLFJ.WithGroup("State_Group_Mus_Dyn").WithState("Tension");
+                    fight = "Raiders are closing on the ship! Drive them off";
+                    yield return Task.NECMCDDOFJB.AddSubDirectives(Directive, fight);
+                    foreach (var step in SpawnRaiders(Math.Max(1, RaiderCount() - 1), raiders, player, distance: 15000f, spread: 6000)) yield return step;
+                }
+                if (fight != null && Remaining(raiders, UnityEngine.Time.time - raidAt < 10f) == 0)
+                {
+                    Plugin.Log.LogInfo("Patrol: the raiders are driven off");
+                    yield return Task.NECMCDDOFJB.RemoveSubDirective(Directive, fight);
+                    yield return Task.OKLDNLKLLFJ.WithGroup("State_Group_Mus_Dyn").WithState("Explore");
+                    fight = null;
+                }
+                if (scanned == count) break;
+            }
+            yield return Task.CLNFMDFOFKL.WithNames(steps);
+            succeeded = !abandoned;
+            Plugin.Log.LogInfo($"Patrol: survey {(abandoned ? "abandoned" : "complete")}, {scanned} of {count} objects scanned");
+            if (fight != null) yield return Task.NECMCDDOFJB.RemoveSubDirective(Directive, fight);
+            if (found != null) yield return Task.NECMCDDOFJB.RemoveSubDirective(Directive, found);
+            yield return Task.NECMCDDOFJB.RemoveSubDirective(Directive, line);
+            // Raiders still about stay in the system.
+        }
+
+        // An object's science readings made unknown, as Explore does with its scannables, so there's a scan to do.
+        // Whether anything about it is then left to find.
+        private static bool Unknown(BodyRef body)
+        {
+            try
+            {
+                if ((body?.AHMPFHDGMKJ as Sector.SectorBody)?.GetDetectable() is Sector.DIENHALJFIO targetable)
+                {
+                    targetable.SetSubsystemKnown(ShipSystem.Science, false);
+                    if (targetable.GetUnknownSubsystemCount() > 0) return true;
+                    Plugin.Log.LogInfo($"Patrol: {ShipName(body)} has nothing unknown to scan for; left to the scan trigger");
+                }
+                else Plugin.Log.LogInfo($"Patrol: {ShipName(body)} isn't scannable");
+            }
+            catch (Exception e)
+            {
+                Plugin.Log.LogWarning("Patrol: leaving an object to be scanned: " + e.Message);
+            }
+            return false;
+        }
+
+        private static bool Known(BodyRef body)
+        {
+            try { return (body?.AHMPFHDGMKJ as Sector.SectorBody)?.GetDetectable() is Sector.DIENHALJFIO targetable && targetable.GetUnknownSubsystemCount() == 0; }
+            catch { return false; }
         }
 
         // The convoy's route from the site: a destination among the nearest few bodies at least MinLeg off,
@@ -983,14 +1127,15 @@ namespace StbcRevival.Missions
             catch { return system.SystemName; }
         }
 
-        private const int Jobs = 5;
+        private const int Jobs = 6;
 
-        private static string JobName(int job) => job == 0 ? "hunt" : job == 1 ? "defend" : job == 2 ? "rescue" : job == 3 ? "ambush" : "escort";
+        private static string JobName(int job) => job == 0 ? "hunt" : job == 1 ? "defend" : job == 2 ? "rescue" : job == 3 ? "ambush" : job == 4 ? "escort" : "research";
 
         // An ambush is offered as a rescue: it's a trap.
         private static string Offer(int job) => job == 0 ? "raiders are attacking shipping"
             : job == 1 ? "a disabled freighter is under attack"
             : job == 4 ? "a convoy of freighters needs an escort"
+            : job == 5 ? "sensors have picked up unidentified objects to survey"
             : "a freighter is adrift with survivors aboard";
 
         private Spawner MakeSpawner(string prefab, string role, Tag allegiance) =>
