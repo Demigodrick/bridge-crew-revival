@@ -1400,3 +1400,55 @@ OOLKIMEFIPC::DHIBADKNCEB = MakeRoomPropertyTable
 NDIOGIGMPBH = PhotonNetwork
 FGBFJKPGFGJ = RoomOptions
 PBKJIGDCCLO = MatchmakingMode
+
+# ---- Cargo, transporters and scans (Patrol's rescue freighters) -----------------------------------------------
+Mission.GNMPCGLFMBM = CargoCollectionMonitor                    # MissionManager's: counts cargo beamed to the player from registered sources
+Mission.GNMPCGLFMBM::HHGGCNKBLCO = _goals                       # the cargo types watched, each with its directive (MonitorCargoCollected)
+Mission.GNMPCGLFMBM::JBDENLKIIGB = _sources                     # bodies registered as sources: only at spawn (MonitorSectorBody), if they hold the cargo then
+Mission.GNMPCGLFMBM::CKFCAMEAGLB = _playerCargo                 # the player ship's count per type
+Mission.GNMPCGLFMBM::HPHAKCNFMGM = OnCargoTransported           # master only; ignores a beam from a body not in _sources
+Mission.GNMPCGLFMBM::AMMPIAIOHMB = UpdateDirectives             # counter = taken from sources; Completed when every source is emptied
+Mission.GNMPCGLFMBM::PADBBNNAELD = OnBodyUnspawned              # a source unspawned before it's emptied: Failed
+Mission.GNMPCGLFMBM/ILHHEDFEBIB = CargoGoal                     # Type, Description, ItemName, Directive
+Mission.GNMPCGLFMBM/LDKEICAKIGD = CargoCount                    # Body, Cargo, Type, StartCount, Count, EndingCount, Succeeded, Failed
+Mission.MissionManager::GNMPCGLFMBM = CargoCollectionMonitor
+Mission.MAMPFJJJIAG = IMissionManager                           # MissionManager.Instance's type: cast to MissionManager for the monitors
+Mission.Scripting.Framework.Tasks.HOHEEDLMMPH = MonitorCargoTask        # Reset, Type, Desc, ItemName: MonitorCargoCollected(...)
+Mission.Scripting.Framework.Tasks.ALEBDLNBAJG = MonitorCargoBuilder     # Task.CargoTransfer: Reset().WithCargoType(...).WithDescriptionString(...)
+Mission.Scripting.Framework.Tasks.LJAGNEPFGJO = CargoProgressCondition  # CargoCollectionMonitor.Progress(), 0-100
+Mission.Scripting.Framework.MMFBBHCPMPL = Directive             # an objective line: DescriptionString, ShowCounter, CurrentCount, TotalCount, State
+Mission.Scripting.Framework.MMFBBHCPMPL/JPNDFFGFNGI = DirectiveState
+Mission.PDDPJHHHAHH = DirectiveRemovedEvent?                    # sent with a directive's description as a monitor drops it
+Sector.LLIDJPNKNMK = CargoTransportedEvent                      # Source, Destination, CargoTypeIndex, ItemCountToTransport
+FGKBKKEIAOJ = BodyUnspawnedEvent                                # body: sent by SectorSpawnManager.Multicast_UnspawnBody
+DGHCMKEKBIA = GameEvent                                         # base of everything sent on Events
+Sector.MHCKJBBLBCD = CargoBay                                   # SectorBody.GetCargo() / AddCargo(): CurrentCargo (counts per CargoTypes)
+Sector.TargetableComponent::DMKONHHIHKG = _subsystemKnown       # per ShipSystem: scanned. All = every one in _subsystems; transport needs Life/Cargo known
+
+# ---- Spawning and despawning ----------------------------------------------------------------------------------
+Mission.Scripting.Framework.Tasks.JCEPJBBMGBC = SpawnBuilder    # Task.Spawn: UsingSpawner, UsingSpawnMode, ApplyingConfigurators, AtAngleAndDistanceFromBody, OutputTo
+Mission.Scripting.Framework.Tasks.NECDGMOMLCO = DespawnBuilder  # Task.AIDespawn: TellAI(...).UsingMode(SpawnMode.Warp)
+Mission.Scripting.Framework.Tasks.GHJMLEADNJH = DisableDisengageBuilder  # Task.AIDisableDisengage: TellAI(ships) (no cloaking away)
+Mission.Scripting.Framework.Tasks.NBIPMIDMOAJ = ConfigureDisengageBuilder # Task.AIConfigureDisengage: SetThreshold, Enable, Disable
+AI.POGGHNHDBAL = SpawnMode                                      # Warp: arrives / leaves with the warp effect
+Sector.Spacecraft.POLCIGDAIKK = ImpulseManager                  # engines' ImpulseManager: IsImpulseCoursePlotted, DestinationSectorBody
+Sector.NLDEHCLBMMK = BodySearch                                 # Sector.FindBodies(): InThisSystem, Search, Count, Item, Destroy
+NEGGPIBDOPI = POISelectedEvent                                  # (body, station): a console picked a place for an impulse course
+
+# ---- Photon events and players ----------------------------------------------------------------------------------
+CBBCCGMALMP = PhotonPlayer
+CGJCFMCOBMJ = RaiseEventOptions                                 # TargetActors, Receivers, CachingOption
+NDIOGIGMPBH/MJMPNDIBFHD = EventCallback                         # PhotonNetwork.OnEventCall(code, content, senderId); the game uses 125 for voice
+
+# ---- Voice chat -------------------------------------------------------------------------------------------------
+DaikonForge.VoIP.AudioPlayerBase::NIPDKJAKHCO = _trackingSource                 # an AudioSource that tracks Wwise's playback: stops when the voice runs dry
+DaikonForge.VoIP.AudioPlayerBase::BOAFPOJBLCN = _sampleRate
+DaikonForge.VoIP.VoiceControllerBase::PLHMCJMKMOC = _missingFrames      # frames the decoder filled in (never arrived)
+DaikonForge.VoIP.VoiceControllerBase::MPLBMKMECKG = ReceiveAudio        # (packet, volume): a remote speaker's encoded frame in
+DaikonForge.VoIP.KKEBEFOIKGH = VoicePacket
+DaikonForge.VoIP.DHEDECPPLGP = SampleBuffer                     # pooled array: Length, Items, CopyTo, CopyFrom, Resize
+DaikonForge.VoIP.NOEPDDNKGOM = SpeakerMode                      # Local, Remote
+VoIpManager::GMFCCIFGKDN = OnPhotonEvent                        # event 125 only: to the sender's UDPNetworkVoiceController
+VoIpManager::PFKNMPPKOFP = _voipPlayers                         # actor number -> VoipPlayer
+VoIpManager/PIHAFAACGLJ = VoipPlayer                            # View, Player, VoiceController
+SVR.Network.PLPKPDFOLDL = PooledReader                          # Read, Release, Length, Pos
