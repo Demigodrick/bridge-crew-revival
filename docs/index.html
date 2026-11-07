@@ -393,8 +393,8 @@
       <details>
         <summary>The game crashes on startup in VR (Quest with Virtual Desktop).</summary>
         <p>The game tries the Oculus runtime first, which crashes with some headsets that aren't Oculus Rifts.
-          The mod starts SteamVR first when the Oculus (Meta) app isn't installed. If it is installed, or the
-          game still crashes, in Steam right-click Star Trek: Bridge Crew, choose Properties, and add <code>-vrmode openvr</code>
+          The mod starts SteamVR first when the Oculus (Meta) runtime is missing or won't load. If the game
+          still crashes, in Steam right-click Star Trek: Bridge Crew, choose Properties, and add <code>-vrmode openvr</code>
           to the Launch Options. The mod then starts SteamVR instead. To always use SteamVR, set
           <code>Device = SteamVR</code> under <code>[VR]</code> in <code>BepInEx/config/stbc.revival.cfg</code>.</p>
       </details>

@@ -2,6 +2,8 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.InteropServices;
+using System.Text;
 using HarmonyLib;
 using UnityEngine.VR;
 
@@ -15,7 +17,7 @@ namespace StbcRevival
     /// started. Headsets that pass themselves off as Oculus without the Oculus runtime (a Quest through
     /// Virtual Desktop) crash natively in the game's 2016 Oculus plugin there: Unity shuts SteamVR down,
     /// loads Oculus and falls over. SteamVR puts SteamVR first; Auto does that when the game was launched
-    /// with -vrmode openvr or when no Oculus runtime is installed; Oculus keeps the game's own order.
+    /// with -vrmode openvr or when the Oculus runtime can't be loaded; Oculus keeps the game's own order.
     /// </summary>
     internal static class VrDevice
     {
@@ -65,39 +67,74 @@ namespace StbcRevival
                 why = "launched with -vrmode openvr";
                 return true;
             }
-            string runtime = OculusRuntime();
-            if (runtime == null)
+            string runtime;
+            if (!OculusRuntimeLoads(out runtime))
             {
-                why = "no Oculus runtime installed";
+                why = runtime;
                 return true;
             }
-            why = "Oculus runtime at " + runtime;
+            why = "Oculus runtime loads: " + runtime;
             return false;
         }
 
-        // Where the Oculus runtime (LibOVRRT64_1.dll, which the game's Oculus plugin loads) is, or null.
-        // The Oculus/Meta app installs it in System32; OculusBase is the app's own folder. Without it the
-        // plugin has nothing to talk to, and with a headset that answers as Oculus it crashes instead of
-        // failing over to SteamVR.
-        private static string OculusRuntime()
+        private const string RuntimeDll = "LibOVRRT64_1.dll";
+
+        [DllImport("kernel32", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern uint SearchPathW(string path, string fileName, string extension, uint bufferLength,
+            StringBuilder buffer, IntPtr filePart);
+
+        [DllImport("kernel32", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern IntPtr LoadLibraryW(string fileName);
+
+        [DllImport("kernel32")]
+        private static extern bool FreeLibrary(IntPtr module);
+
+        // Whether the game's Oculus plugin (OVRPlugin 1.10) can load the Oculus runtime; what describes it either
+        // way. The plugin looks for LibOVRRT64_1.dll in %LIBOVR_DLL_DIR%, then on Windows' search path (the
+        // game's folder, System32, PATH...), checks its signature and LoadLibraryW's it. When nothing is found
+        // it fails cleanly and the game moves on to SteamVR. But when the file is there and won't load (a
+        // broken or partly removed Oculus/Meta app, a missing dependency), its loader reports success, with its
+        // error code still at the 0 it starts at, and the plugin calls ovr_Initialize through the null pointer
+        // it never filled in: an access violation at address 0 in OVRPlugin.dll. So load it here first, the same
+        // way, and put SteamVR first unless it loads. (It's let go again; the plugin loads it for itself.)
+        private static bool OculusRuntimeLoads(out string what)
         {
-            const string dll = "LibOVRRT64_1.dll";
             try
             {
-                string path = Path.Combine(Environment.SystemDirectory, dll);
-                if (File.Exists(path)) return path;
-                string baseDir = Environment.GetEnvironmentVariable("OculusBase");
-                if (!string.IsNullOrEmpty(baseDir))
+                string path = null;
+                string dir = Environment.GetEnvironmentVariable("LIBOVR_DLL_DIR");
+                if (!string.IsNullOrEmpty(dir))
                 {
-                    path = Path.Combine(Path.Combine(Path.Combine(baseDir, "Support"), "oculus-runtime"), dll);
-                    if (File.Exists(path)) return path;
+                    string inDir = Path.Combine(dir, RuntimeDll);
+                    if (File.Exists(inDir)) path = inDir;
                 }
-                return null;
+                if (path == null)
+                {
+                    var found = new StringBuilder(1024);
+                    uint length = SearchPathW(null, RuntimeDll, null, (uint)found.Capacity, found, IntPtr.Zero);
+                    if (length > 0 && length < found.Capacity) path = found.ToString();
+                }
+                if (path == null)
+                {
+                    what = "no Oculus runtime installed";
+                    return false;
+                }
+                IntPtr module = LoadLibraryW(path);
+                if (module == IntPtr.Zero)
+                {
+                    int error = Marshal.GetLastWin32Error();
+                    what = "the Oculus runtime at " + path + " doesn't load (Windows error " + error + ")";
+                    return false;
+                }
+                FreeLibrary(module);
+                what = path;
+                return true;
             }
             catch (Exception e)
             {
                 // Can't tell: keep the game's order, as before.
-                return "(couldn't check: " + e.GetType().Name + ")";
+                what = "couldn't check (" + e.GetType().Name + ": " + e.Message + ")";
+                return true;
             }
         }
 
