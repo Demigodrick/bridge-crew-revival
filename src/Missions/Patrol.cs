@@ -144,7 +144,9 @@ namespace StbcRevival.Missions
                 if (random.Next(BorgChance) == 0)
                 {
                     var system = target;
-                    Objective.AddStep("borg " + (++spawnCount), Task.MFLJBKCDBMC.WithSubtaskCoroutine(() => Borg(system)));
+                    string borg = "borg " + (++spawnCount);
+                    Objective.AddStep(borg, Task.MFLJBKCDBMC.WithSubtaskCoroutine(() => Borg(system)));
+                    yield return Task.KKALNAMJCNH.WithName(borg); // a step added while another runs waits to be started
                 }
                 IEnumerable<Step> run = job == 0 ? Hunt() : job == 1 ? Defend() : Rescue(job == 3);
                 foreach (var step in run) yield return step;
