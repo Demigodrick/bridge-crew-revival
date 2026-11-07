@@ -108,6 +108,11 @@ namespace StbcRevival
                          .Where(m => m.Name == "takeHit" && !m.IsAbstract))
                 PatchEntry(harmony, hit, part, leave, $"{hit.DeclaringType.Name}.takeHit");
             PatchEntry(harmony, AccessTools.Method(typeof(BaseSpacecraft), "JOKMKFDGBIE"), part, leave, "BaseSpacecraft.JOKMKFDGBIE");
+            // A hit only lowers the hull: the ship's subsystem alert monitor (GBLGBMIHCHN) notices it in the ship's
+            // next Update and sends "subsystem damaged" (and destroyed, repaired, at minimum or maximum power),
+            // with no ship in it. Outside any ship's code, the other ship's reached your ship's handlers, which put
+            // "Hull damaged" up on your bridge.
+            PatchEntry(harmony, AccessTools.DeclaredMethod(typeof(PlayerSpacecraft), "Update"), part, leave, "PlayerSpacecraft.Update");
             var graph = AccessTools.TypeByName("Sector.Spacecraft.Subsystems.CIMNOCCODAC");
             gridGraph = AccessTools.Field(typeof(EngineerPowerGrid), "CFPJPPMLGKH");
             var graphEntry = new HarmonyMethod(typeof(PvpRouting), nameof(Graph_Prefix));

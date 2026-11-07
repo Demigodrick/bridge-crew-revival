@@ -90,6 +90,46 @@ namespace StbcRevival
             if (swap != null && getStationByRole != null)
                 harmony.Patch(swap, transpiler: new HarmonyMethod(typeof(PvpConsoles), nameof(Swap_Transpiler)));
             else Plugin.Log.LogWarning("PvP: the role station swap wasn't found; ship B's players may be moved to ship A's consoles");
+            PatchViewscreen(harmony);
+        }
+
+        // ---- The viewscreen ---------------------------------------------------------------------------
+        // The bridge has one viewscreen, and the game's captain console drives it as if it were the only one:
+        // setting a view mode (SetViewScreen) tells every camera on the bridge (ViewscreenModeChangedEvent),
+        // points its ship's view camera at the viewscreen's picture (SetupViewscreenCameras), swaps the
+        // viewscreen glass's material (SetViewscreenMaterial), and from then on moves that camera each frame
+        // (UpdateViewscreenCamera: the external chase view, the tactical zoom). The other ship's captain console
+        // sits on your bridge too (its twin, taking that captain's state), so when they changed view, their
+        // ship's camera drew into your viewscreen as well: the wrong ship outside, two maps over each other, and
+        // the view flicking between both captains' modes. That console now only remembers the mode it's given.
+
+        private static readonly AccessTools.FieldRef<ConsoleCaptain, ConsoleCaptain.EGJLFAIFPGC> CaptainViewMode =
+            AccessTools.FieldRefAccess<ConsoleCaptain, ConsoleCaptain.EGJLFAIFPGC>("OBPHPIAELAB"); // _currentViewscreenMode
+
+        private static void PatchViewscreen(Harmony harmony)
+        {
+            var setView = AccessTools.Method(typeof(ConsoleCaptain), "SetViewScreen");
+            if (setView == null) Plugin.Log.LogWarning("PvP: ConsoleCaptain.SetViewScreen not found; the other captain's view modes reach your viewscreen");
+            else harmony.Patch(setView, prefix: new HarmonyMethod(typeof(PvpConsoles), nameof(SetViewScreen_Prefix)));
+            var own = new HarmonyMethod(typeof(PvpConsoles), nameof(OwnCaptainOnly_Prefix));
+            foreach (var name in new[] { "BPPOGPIHPOC", "BIDAEFBJNJC", "GDMNDIOHHMN" }) // SetupViewscreenCameras, SetViewscreenMaterial, UpdateViewscreenCamera
+            {
+                var method = AccessTools.GetDeclaredMethods(typeof(ConsoleCaptain)).FirstOrDefault(m => m.Name == name);
+                if (method == null) Plugin.Log.LogWarning($"PvP: ConsoleCaptain.{name} not found; the other captain's console may still draw on your viewscreen");
+                else harmony.Patch(method, prefix: own);
+            }
+        }
+
+        // The other ship's captain console, on your bridge (on the bridge, with both console sets).
+        private static bool OtherCaptain(ConsoleCaptain console) => Active && copies.Count > 0 && IsCopy(console) != OnB;
+
+        private static bool OwnCaptainOnly_Prefix(ConsoleCaptain __instance) => !OtherCaptain(__instance);
+
+        private static bool SetViewScreen_Prefix(ConsoleCaptain __instance, ConsoleCaptain.EGJLFAIFPGC __0, bool __1)
+        {
+            if (!OtherCaptain(__instance)) return true;
+            if (__1) CaptainViewMode(__instance) = __0;
+            return false;
         }
 
         private sealed class Hook

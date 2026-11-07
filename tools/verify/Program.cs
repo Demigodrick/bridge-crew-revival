@@ -313,6 +313,14 @@ Check("  CIFDOFLFGEA.Send (event bus)", game.GetType("CIFDOFLFGEA")?.GetMethod("
 Check("  BaseSpacecraft.GCOAODPDBEI (engines)", game.GetType("Sector.Spacecraft.BaseSpacecraft")?.GetProperty("GCOAODPDBEI", Inst));
 foreach (var prop in new[] { "PBBNLCBNGHH", "MCNGOGECDLC" })
     Check($"  impulse manager {prop} (plotted, destination)", game.GetType("Sector.Spacecraft.POLCIGDAIKK")?.GetProperty(prop, Inst));
+// PvP: the other captain console off your viewscreen, ship checks as their own ship, a destroyed ship off the maps
+var captain = game.GetType("ConsoleCaptain");
+Check("  ConsoleCaptain.SetViewScreen", captain?.GetMethod("SetViewScreen", Inst));
+foreach (var m in new[] { "BPPOGPIHPOC", "BIDAEFBJNJC", "GDMNDIOHHMN" }) Check($"  ConsoleCaptain.{m} (viewscreen cameras, material, camera update)", captain?.GetMethods(Inst).FirstOrDefault(x => x.Name == m && x.DeclaringType == captain));
+Check("  ConsoleCaptain.OBPHPIAELAB (view mode)", captain?.GetField("OBPHPIAELAB", Inst));
+Check("  PlayerSpacecraft.Update (subsystem alerts)", game.GetType("Sector.Spacecraft.PlayerSpacecraft")?.GetMethod("Update", Inst | BindingFlags.DeclaredOnly));
+Check("  SectorBody.PMPGNBBGOLI (show on nav map)", game.GetType("Sector.SectorBody")?.GetMethod("PMPGNBBGOLI", Inst));
+Check("  Sector.EEKAKKNBAIH(body) (body died)", game.GetType("Sector.EEKAKKNBAIH")?.GetConstructors(Inst).FirstOrDefault(c => c.GetParameters().Length == 1));
 // Direct voice (DirectVoice), crew logs (CrewLogs) and the performance log (PerfLog)
 var networkCore = game.GetType("SVR.Network.NetworkCore");
 Check("  NetworkCore.SendEvent (voice frames out)", networkCore?.GetMethods(Inst).FirstOrDefault(m => m.Name == "SendEvent" && m.GetParameters().Length == 5));

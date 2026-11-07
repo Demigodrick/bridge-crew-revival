@@ -446,6 +446,7 @@ namespace StbcRevival
             foreach (var renderer in ship.GetComponentsInChildren<Renderer>(true)) renderer.enabled = false;
             foreach (var collider in ship.GetComponentsInChildren<Collider>(true)) collider.enabled = false;
             DropContact(ship);
+            Died(ship);
             if (model == null)
             {
                 Plugin.Log.LogInfo($"PvP: {ship.name} destroyed, no explosion found");
@@ -480,6 +481,25 @@ namespace StbcRevival
             catch (Exception e)
             {
                 Plugin.Log.LogWarning("PvP: couldn't take the destroyed ship off the maps: " + (e.InnerException ?? e).Message);
+            }
+        }
+
+        // What an AI ship's death sends (AgentShip.Die), which a player ship's never does (it ends the mission
+        // instead): the nav maps drop their icon for it (NavMapManager.RemoveBody, only on this or an unspawn),
+        // and the helm's and captain's target reticles let go of it. Off the nav map too, should a rebuild
+        // after a warp list it again.
+        private static readonly MethodInfo ShowOnNavMap = AccessTools.Method(typeof(SectorBody), "PMPGNBBGOLI"); // SetShowOnNavMap
+
+        private static void Died(PlayerSpacecraft ship)
+        {
+            try
+            {
+                ShowOnNavMap?.Invoke(ship, new object[] { false });
+                CIFDOFLFGEA.Send(new Sector.EEKAKKNBAIH(ship)); // BodyDiedEvent
+            }
+            catch (Exception e)
+            {
+                Plugin.Log.LogWarning("PvP: couldn't tell the maps the ship has gone: " + e.Message);
             }
         }
 
