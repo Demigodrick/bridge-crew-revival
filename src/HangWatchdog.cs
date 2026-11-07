@@ -98,6 +98,7 @@ namespace StbcRevival
                         Plugin.Log.LogWarning(sawFrame
                             ? $"Hang watchdog: the game hasn't run a frame for {idle:0} s"
                             : $"Hang watchdog: the game hasn't run its first frame {idle:0} s after the mod loaded");
+                        Plugin.Log.LogWarning("Hang watchdog: " + OtherInstances.Describe(out _));
                     }
                     if (idle >= nextDumpAt && dumps < MaxDumps)
                     {

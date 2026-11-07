@@ -95,6 +95,12 @@ namespace StbcRevival
             Log = Logger;
             Instance = this;
             CrashReport.Start(); // first: this run's own log, and a report if the last run crashed
+            Safely("other instances", () =>
+            {
+                var state = OtherInstances.Describe(out bool suspicious);
+                if (suspicious) Log.LogWarning("Startup: " + state + " (a leftover game or a stuck Steam Input lock can freeze this one at startup: end stbc.exe in Task Manager, or restart Steam)");
+                else Log.LogInfo("Startup: " + state);
+            });
             Safely("openssl sha fix", OpenSslShaFix.Apply); // before anything uses HTTPS: see OpenSslShaFix
             UpdateCheck.CleanUp();
 

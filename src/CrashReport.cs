@@ -206,6 +206,9 @@ namespace StbcRevival
                     if (hangs.Count > 0) notes.AppendLine($"The game froze (no frames) and the hang watchdog saved {hangs.Count} dump(s): {string.Join(", ", hangs.Select(Path.GetFileName).ToArray())}");
                 }
 
+                // A frozen run may still be there, holding Steam Input's lock (see OtherInstances).
+                notes.AppendLine("Now: " + OtherInstances.Describe(out _));
+
                 // Unity's crash folder (<date>_<time> in the game folder), if it caught the crash.
                 var since = last.Started.AddMinutes(-1);
                 var crashDirs = Directory.GetDirectories(Paths.GameRootPath)
