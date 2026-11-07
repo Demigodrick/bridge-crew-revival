@@ -360,6 +360,19 @@ Check("  ImpulseManager.JCIEFGHGMMP (its ship)", impulseManager?.GetField("JCIEF
 foreach (var prop in new[] { "KANLFOJDHPL", "HHBBMNCINCA" }) Check($"  ImpulseManager.{prop} (phase, operating)", impulseManager?.GetProperty(prop, Inst));
 Check("  engines.UpdateImpulse", game.GetType("Sector.Spacecraft.Subsystems.SimpleEngine")?.GetMethod("UpdateImpulse", Inst));
 Check("  PooledReader.LLPAKGEPJJP (Pos)", pooled?.GetProperty("LLPAKGEPJJP", Inst));
+// After a station repair: the subsystem alarm stopped, the Enterprise-D's lighting and backwall terminal back (LastStandBridgeRepair)
+var tngLighting = game.GetType("TNGBridgeLightingManager");
+foreach (var f in new[] { "DNHINGPBHIF", "_auxiliaryPowerDamagePercent", "_auxiliaryPowerCeilingLightColor", "CCJAGAHKINP", "ODNFNELKJDL", "FPCJABMGCHB", "_backwallScienceTerminalMesh" })
+    Check($"  TNGBridgeLightingManager.{f}", tngLighting?.GetField(f, Inst));
+Check("  TNGBridgeLightingManager.StartLightingEvent", tngLighting?.GetMethod("StartLightingEvent", Inst));
+var bridgeLighting = game.GetType("BridgeLightingManager");
+foreach (var f in new[] { "_reflectionProbe", "_defaultReflectionsMap", "_redAlertReflectionsMap", "_defaultCharacterLight1", "_defaultCharacterLight2", "_defaultCharacterLight3", "_redAlertCharacterLight1", "_redAlertCharacterLight2", "_redAlertCharacterLight3" })
+    Check($"  BridgeLightingManager.{f}", bridgeLighting?.GetField(f, Inst));
+Check("  BridgeLightingManager.CNNEPNDIIHM (red alert)", bridgeLighting?.GetProperty("CNNEPNDIIHM", Inst));
+var shipSounds = game.GetType("PlayerSpacecraftSoundManager");
+Check("  PlayerSpacecraftSoundManager.PlaySubsystemAlarmRepaired", shipSounds?.GetMethod("PlaySubsystemAlarmRepaired", Inst));
+foreach (var f in new[] { "_subsystemAlarmRepairPercentage", "IPPNEKGMGCF" }) Check($"  PlayerSpacecraftSoundManager.{f}", shipSounds?.GetField(f, Inst));
+Check("  PersistentBridgeDamageEffect._bridgeLightingEventId", game.GetType("PersistentBridgeDamageEffect")?.GetField("_bridgeLightingEventId", Inst));
 // Direct voice (DirectVoice), crew logs (CrewLogs) and the performance log (PerfLog)
 var networkCore = game.GetType("SVR.Network.NetworkCore");
 Check("  NetworkCore.SendEvent (voice frames out)", networkCore?.GetMethods(Inst).FirstOrDefault(m => m.Name == "SendEvent" && m.GetParameters().Length == 5));
