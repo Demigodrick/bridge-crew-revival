@@ -26,7 +26,7 @@ namespace StbcRevival
     {
         public const string Guid = "stbc.revival";
         public const string Name = "Bridge Crew Revival";
-        public const string Version = "0.7.26";
+        public const string Version = "0.7.27";
 
         internal static ManualLogSource Log;
 
