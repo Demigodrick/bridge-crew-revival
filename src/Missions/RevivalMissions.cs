@@ -67,6 +67,16 @@ namespace StbcRevival.Missions
             }
         }
 
+        // Patrol has no end of its own: you leave it from the pause menu, which the game counts as aborted and
+        // shows as a failure. With an assignment completed, it's a success.
+        private static void EndRequest_Prefix(Mission.BEEEGBFNGFJ __0)
+        {
+            if (__0 == null || Selected != typeof(PatrolSequence) || PatrolObjective.Completed < 1) return;
+            if (__0.MissionStatus != Mission.GPJGLFHMNJO.aborted && __0.MissionStatus != Mission.GPJGLFHMNJO.captainLeft) return;
+            Plugin.Log.LogInfo($"Patrol: left after {PatrolObjective.Completed} assignment(s) completed: a success");
+            __0.MissionStatus = Mission.GPJGLFHMNJO.success;
+        }
+
         internal static string Name(string mission) =>
             mission == LastStand ? "LAST STAND" : mission == FleetBattle ? "FLEET BATTLE" : mission == Patrol ? "PATROL"
             : mission == Evacuation ? "STELLAR EVACUATION" : mission == KobayashiMaru ? "KOBAYASHI MARU"
@@ -109,6 +119,9 @@ namespace StbcRevival.Missions
 
         internal static void Patch(Harmony harmony)
         {
+            var endRequest = AccessTools.Method(typeof(MissionManager), "IEMAFLJNBBM"); // OnEndMissionRequestEvent
+            if (endRequest == null) Plugin.Log.LogWarning("Revival missions: MissionManager's end request not found; quitting Patrol shows a failure");
+            else harmony.Patch(endRequest, prefix: new HarmonyMethod(typeof(RevivalMissions), nameof(EndRequest_Prefix)));
             var generate = AccessTools.Method(typeof(MissionManager), nameof(MissionManager.GenerateProceduralMission));
             if (generate == null)
             {

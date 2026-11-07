@@ -83,6 +83,10 @@ namespace StbcRevival.Missions
         private readonly System.Random random = new System.Random(Guid.NewGuid().GetHashCode());
         private BodyRef player;
         private int completed, failed, spawnCount;
+
+        /// <summary>Assignments completed in the patrol running now (Patrol never ends by itself: quitting it after
+        /// at least one counts as a success, RevivalMissions.EndRequest_Prefix).</summary>
+        internal static int Completed;
         private bool succeeded, abandoned;
         private Map.SystemRoot jobSystem;
         private BodyRef site;      // where the assignment is: a body of the system, or the player if none was found
@@ -91,6 +95,7 @@ namespace StbcRevival.Missions
 
         public override void StartScript()
         {
+            Completed = 0;
             player = Objective.FFKKADIEOGP;
             Objective.AddStep("patrol", Task.MFLJBKCDBMC.WithSubtaskCoroutine(Patrol));
         }
@@ -158,6 +163,7 @@ namespace StbcRevival.Missions
                 yield return Task.BCJDEKKIHDD.RemoveAllMarkers();
 
                 if (succeeded) completed++; else failed++;
+                Completed = completed;
                 Plugin.Log.LogInfo($"Patrol: {JobName(job)} {(succeeded ? "complete" : abandoned ? "abandoned" : "failed")}; {completed} done, {failed} failed");
                 yield return Task.HHNFJKHGEPH.WithMissionResult($"Assignments completed: {completed}", false);
                 yield return Task.OKLDNLKLLFJ.WithGroup("State_Group_Mus_Dyn").WithState("Explore");

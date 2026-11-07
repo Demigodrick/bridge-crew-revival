@@ -373,6 +373,9 @@ var shipSounds = game.GetType("PlayerSpacecraftSoundManager");
 Check("  PlayerSpacecraftSoundManager.PlaySubsystemAlarmRepaired", shipSounds?.GetMethod("PlaySubsystemAlarmRepaired", Inst));
 foreach (var f in new[] { "_subsystemAlarmRepairPercentage", "IPPNEKGMGCF" }) Check($"  PlayerSpacecraftSoundManager.{f}", shipSounds?.GetField(f, Inst));
 Check("  PersistentBridgeDamageEffect._bridgeLightingEventId", game.GetType("PersistentBridgeDamageEffect")?.GetField("_bridgeLightingEventId", Inst));
+// Patrol: leaving after a completed assignment is a success (RevivalMissions.EndRequest_Prefix)
+Check("  MissionManager.IEMAFLJNBBM (end mission request)", game.GetType("Mission.MissionManager")?.GetMethod("IEMAFLJNBBM", Inst));
+Check("  Mission.BEEEGBFNGFJ.MissionStatus", game.GetType("Mission.BEEEGBFNGFJ")?.GetField("MissionStatus", Inst));
 // Direct voice (DirectVoice), crew logs (CrewLogs) and the performance log (PerfLog)
 var networkCore = game.GetType("SVR.Network.NetworkCore");
 Check("  NetworkCore.SendEvent (voice frames out)", networkCore?.GetMethods(Inst).FirstOrDefault(m => m.Name == "SendEvent" && m.GetParameters().Length == 5));
