@@ -208,6 +208,13 @@ namespace StbcRevival
                 return $"Impulse:{place},PrepareImpulse" + (WantsEngage(w) ? ",EngageImpulse" : "");
             }
             var list = destinations;
+            if (german && (w.Contains("zwo") || w.Contains("ein")))
+            {
+                // "zwo" is "zwei" and "ein" "eins", as the names' numerals are (NameWords): without it "Theta Novae zwo" ties.
+                w = new HashSet<string>(w);
+                if (w.Contains("zwo")) w.Add("zwei");
+                if (w.Contains("ein")) w.Add("eins");
+            }
             if (list.Count == 0 || !any(CourseWordsNow) && !any(CourseForNow)) return null;
             int best = Named(list, w, any);
             if (best < 0) return null;
