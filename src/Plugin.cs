@@ -201,7 +201,7 @@ namespace StbcRevival
             ControllerGraceSeconds = Config.Bind("VR", "ControllerGraceSeconds", 30f,
                 "How long a VR controller the headset stops reporting (resting controllers often go to sleep) still counts as connected before the game's \"controllers disconnected\" warning shows. 0 = the game's own behaviour (at once).");
             VrDevice = Config.Bind("VR", "Device", VrDeviceChoice.Auto,
-                "Which VR runtime the game starts: the game tries Oculus first, which crashes some headsets that aren't Oculus Rifts (a Quest through Virtual Desktop). SteamVR = try SteamVR first; Oculus = the game's own order; Auto = SteamVR first when the game is launched with -vrmode openvr.");
+                "Which VR runtime the game starts: the game tries Oculus first, which crashes some headsets that aren't Oculus Rifts (a Quest through Virtual Desktop). SteamVR = try SteamVR first; Oculus = the game's own order; Auto = SteamVR first when the game is launched with -vrmode openvr or no Oculus runtime is installed (the Oculus/Meta app).");
             ShuttleWasd = Config.Bind("Shuttle", "WasdControls", false,
                 "Experimental, doesn't work yet: fly the main-menu shuttle with the keyboard (W/S forward/back, A/D turn, Q/E down/up, Shift faster).");
             ShuttleSpeed = Config.Bind("Shuttle", "Speed", 20f, "Shuttle keyboard speed (scene units per second).");
