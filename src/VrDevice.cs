@@ -64,7 +64,8 @@ namespace StbcRevival
                 Plugin.Log.LogWarning("VR device: the game's VR selection wasn't found; it picks as it always did");
                 return;
             }
-            harmony.Patch(moveNext, prefix: new HarmonyMethod(typeof(VrDevice), nameof(Select_Prefix)));
+            harmony.Patch(moveNext, prefix: new HarmonyMethod(typeof(VrDevice), nameof(Select_Prefix)),
+                postfix: new HarmonyMethod(typeof(VrDevice), nameof(Select_Postfix)));
             Plugin.Log.LogInfo(oculusLoads
                 ? "VR device: SteamVR first, then Oculus (" + why + ")"
                 : "VR device: SteamVR only, no Oculus (" + why + (why == runtime ? "" : "; " + runtime) + ")");
@@ -140,6 +141,35 @@ namespace StbcRevival
 
         // The first step of SelectVRMode, with the list the other way round; the rest (enabling VR once a
         // device is loaded) is the game's.
+        // The game's selection done (the iterator's last step): what it got, and when it went without VR, no device
+        // left loading. Unity keeps retrying a requested device that fails to start, on the main thread, every
+        // frame: with SteamVR and no headset each try starts vrserver, is refused (no headset; or, from SteamVR's
+        // own Oculus driver, VRInitError_VendorSpecific_OculusRuntimeBadInstall, 1114, with the same broken
+        // Oculus runtime) and waits 5 s for vrserver to exit before killing it, so the desktop game ran a frame
+        // every 6 s until it froze. Loading the None device ("") stops that; the game had already settled on desktop.
+        private static bool selectionDone;
+
+        private static void Select_Postfix(object __instance, bool __result)
+        {
+            if (__result || selectionDone || !(bool)wantVr.GetValue(__instance)) return;
+            selectionDone = true;
+            try
+            {
+                if (VRSettings.enabled)
+                {
+                    Plugin.Log.LogInfo($"VR device: {VRSettings.loadedDeviceName} started ({VRDevice.model})");
+                    return;
+                }
+                Plugin.Log.LogInfo($"VR device: none started (loaded: '{VRSettings.loadedDeviceName}'); playing without VR, "
+                                   + "and no VR device left loading (Unity would keep retrying it every frame)");
+                VRSettings.LoadDeviceByName("");
+            }
+            catch (Exception e)
+            {
+                Plugin.Log.LogWarning("VR device: couldn't stop the VR device loading: " + e.Message);
+            }
+        }
+
         private static bool Select_Prefix(object __instance, ref bool __result)
         {
             if ((int)state.GetValue(__instance) != 0 || !(bool)wantVr.GetValue(__instance)) return true;
