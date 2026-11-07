@@ -21,8 +21,8 @@ namespace StbcRevival
     ///   - and copies the engine's log (stbc_Data/output_log.txt: its native lines, stack traces and crash details,
     ///     most of which never reach BepInEx) to &lt;date-time&gt;.unity.txt, following it four times a second;
     ///   - a marker (BepInEx/sessions/running.txt) lives for as long as the game runs, removed on a clean quit;
-    ///   - found at launch, the last run didn't close properly: its session log, Unity's crash folder, Windows'
-    ///     "Application Error" entries for stbc.exe, SteamVR's logs and the mod's settings go into
+    ///   - found at launch, the last run didn't close properly: its session log, the hang watchdog's dumps (see
+    ///     HangWatchdog), Unity's crash folder, Windows' "Application Error" and "Application Hang" entries for stbc.exe, SteamVR's logs and the mod's settings go into
     ///     BepInEx/crash-reports/crash-&lt;date-time&gt;.zip, with Steam IDs, the Windows user name, your Steam name, the
     ///     names of players you were in a room with (kept in the marker as they're seen) and the block list's names
     ///     blanked (people attach these on GitHub);
@@ -36,6 +36,9 @@ namespace StbcRevival
         private static string SessionsDir => Path.Combine(Paths.BepInExRootPath, "sessions");
         private static string ReportsDir => Path.Combine(Paths.BepInExRootPath, "crash-reports");
         private static string Marker => Path.Combine(SessionsDir, "running.txt");
+
+        /// <summary>BepInEx/sessions/&lt;this run&gt; without an extension (for the hang watchdog's dumps), or null.</summary>
+        internal static string SessionPathPrefix => sessionName == null ? null : Path.Combine(SessionsDir, Path.GetFileNameWithoutExtension(sessionName));
 
         private static SessionLog session;
         private static string sessionName;
@@ -63,7 +66,7 @@ namespace StbcRevival
                 BepInEx.Logging.Logger.Listeners.Add(session);
                 FollowEngineLog(Path.Combine(Application.dataPath, "output_log.txt"), Path.Combine(SessionsDir, EngineCopy(sessionName)));
                 WriteMarker();
-                foreach (var pattern in new[] { "*.log", "*.unity.txt" })
+                foreach (var pattern in new[] { "*.log", "*.unity.txt", "*.hang-1.dmp", "*.hang-2.dmp" })
                     foreach (var old in Directory.GetFiles(SessionsDir, pattern).OrderByDescending(f => f).Skip(SessionsKept))
                         TryDelete(old);
                 if (last != null)
@@ -194,6 +197,15 @@ namespace StbcRevival
                 if (last.Log != null) Add("output_log.txt", Path.Combine(SessionsDir, EngineCopy(last.Log)));
                 if (last.Log == null || !File.Exists(Path.Combine(SessionsDir, EngineCopy(last.Log)))) notes.AppendLine("No copy of the engine's log for that run.");
 
+                // The hang watchdog's dumps, if that run froze.
+                if (last.Log != null)
+                {
+                    var hangs = Directory.GetFiles(SessionsDir, Path.GetFileNameWithoutExtension(last.Log) + ".hang-*.dmp").OrderBy(f => f).ToList();
+                    foreach (var dump in hangs)
+                        if (new FileInfo(dump).Length <= 64L * 1024 * 1024) Add("hang/" + Path.GetFileName(dump), dump, false);
+                    if (hangs.Count > 0) notes.AppendLine($"The game froze (no frames) and the hang watchdog saved {hangs.Count} dump(s): {string.Join(", ", hangs.Select(Path.GetFileName).ToArray())}");
+                }
+
                 // Unity's crash folder (<date>_<time> in the game folder), if it caught the crash.
                 var since = last.Started.AddMinutes(-1);
                 var crashDirs = Directory.GetDirectories(Paths.GameRootPath)
@@ -252,14 +264,14 @@ namespace StbcRevival
             return s.ToString();
         }
 
-        // The "Application Error" and "Windows Error Reporting" entries since that run started, for stbc.exe
+        // The "Application Error", "Application Hang" and "Windows Error Reporting" entries since that run started, for stbc.exe
         // (wevtutil, part of Windows; no admin needed). Null if they can't be read.
         private static string WindowsErrors(DateTime sinceUtc)
         {
             if (UnderWine()) return null;
             try
             {
-                var query = "*[System[(Provider[@Name='Application Error'] or Provider[@Name='Windows Error Reporting']) and " +
+                var query = "*[System[(Provider[@Name='Application Error'] or Provider[@Name='Application Hang'] or Provider[@Name='Windows Error Reporting']) and " +
                             $"TimeCreated[@SystemTime>='{sinceUtc.AddMinutes(-1):yyyy-MM-ddTHH:mm:ss}.000Z']]]";
                 var start = new ProcessStartInfo("wevtutil", $"qe Application /q:\"{query}\" /f:text /c:30")
                 {
@@ -272,7 +284,7 @@ namespace StbcRevival
                     // One entry per "Event[n]:" block; only the game's.
                     var entries = Regex.Split(output, @"(?m)^(?=Event\[\d+\]:)")
                         .Where(e => e.IndexOf("stbc", StringComparison.OrdinalIgnoreCase) >= 0).ToList();
-                    return entries.Count > 0 ? string.Join("\n", entries.ToArray()) : "No Application Error entries for stbc.exe since that run started.";
+                    return entries.Count > 0 ? string.Join("\n", entries.ToArray()) : "No Application Error, Application Hang or Windows Error Reporting entries for stbc.exe since that run started.";
                 }
             }
             catch (Exception e)

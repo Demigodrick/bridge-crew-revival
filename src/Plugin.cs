@@ -82,6 +82,7 @@ namespace StbcRevival
         internal static ConfigEntry<string> PlayerName;
         internal static ConfigEntry<string> ExtraDevConfig;
         internal static ConfigEntry<bool> Diagnostics;
+        internal static ConfigEntry<float> HangWatchdogSeconds;
         internal static ConfigEntry<string> TraceTypes;
         internal static ConfigEntry<UnityEngine.KeyCode> BrowserKey;
         internal static ConfigEntry<bool> ShortRoomCodes;
@@ -231,6 +232,10 @@ namespace StbcRevival
                 "Log game network errors (with stack traces), Photon status changes and failed operations to BepInEx/LogOutput.log.");
             TraceTypes = Config.Bind("Debug", "TraceTypes", "",
                 "Diagnostics: comma-separated game type names whose method calls are logged (first 10 calls each).");
+            HangWatchdogSeconds = Config.Bind("Debug", "HangWatchdogSeconds", 30f,
+                "When the game runs no frame for this long (a freeze), log it and save a dump of the game to BepInEx/sessions "
+                + "for the next crash report (and a second one if it's still stuck four times as long later). 0 = off.");
+            HangWatchdog.Start(HangWatchdogSeconds.Value);
 
             DevConfig.Build();
 
@@ -252,6 +257,7 @@ namespace StbcRevival
 
         private void Update()
         {
+            HangWatchdog.Beat(); // first: the watchdog only needs to know a frame ran
             Safely("openssl sha fix", OpenSslShaFix.Apply);
             if (!deferredApplied)
             {
