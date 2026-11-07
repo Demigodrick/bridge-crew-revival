@@ -118,6 +118,7 @@ namespace StbcRevival
                 Poll(ToHostChannel, relayHost.OnPacket);
                 Poll(ToClientChannel, relayClient.OnPacket);
                 Flush();
+                DirectVoice.Update();
                 PendingLobbyJoin();
                 LinkReport();
             }

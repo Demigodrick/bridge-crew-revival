@@ -313,6 +313,20 @@ Check("  CIFDOFLFGEA.Send (event bus)", game.GetType("CIFDOFLFGEA")?.GetMethod("
 Check("  BaseSpacecraft.GCOAODPDBEI (engines)", game.GetType("Sector.Spacecraft.BaseSpacecraft")?.GetProperty("GCOAODPDBEI", Inst));
 foreach (var prop in new[] { "PBBNLCBNGHH", "MCNGOGECDLC" })
     Check($"  impulse manager {prop} (plotted, destination)", game.GetType("Sector.Spacecraft.POLCIGDAIKK")?.GetProperty(prop, Inst));
+// Direct voice (DirectVoice), crew logs (CrewLogs) and the performance log (PerfLog)
+var networkCore = game.GetType("SVR.Network.NetworkCore");
+Check("  NetworkCore.SendEvent (voice frames out)", networkCore?.GetMethods(Inst).FirstOrDefault(m => m.Name == "SendEvent" && m.GetParameters().Length == 5));
+var pooled = game.GetType("SVR.Network.PLPKPDFOLDL");
+foreach (var m in new[] { "Acquire", "Release", "Write", "Seek" }) Check($"  PooledReader.{m}", pooled?.GetMethods(Inst | BindingFlags.Static).FirstOrDefault(x => x.Name == m));
+foreach (var prop in new[] { "PICFPDJILEK", "CDBPFHDELDP" }) Check($"  PooledReader.{prop} (length, buffer)", pooled?.GetProperty(prop, Inst));
+var voipManager = game.GetType("VoIpManager");
+Check("  VoIpManager.GMFCCIFGKDN (Photon event in)", voipManager?.GetMethod("GMFCCIFGKDN", Inst));
+Check("  VoIpManager.PFKNMPPKOFP (players by actor)", voipManager?.GetField("PFKNMPPKOFP", Inst));
+var photonNetwork = game.GetType("NDIOGIGMPBH");
+Check("  PhotonNetwork.RaiseEvent", photonNetwork?.GetMethod("RaiseEvent", AnyS));
+Check("  PhotonNetwork.OnEventCall", photonNetwork?.GetField("OnEventCall", AnyS));
+Check("  PhotonNetwork.PGJDPPDBGBL (inRoom)", photonNetwork?.GetProperty("PGJDPPDBGBL", AnyS));
+foreach (var prop in new[] { "KLNDGCGHADM", "GPICMMEIAPM", "PCDMCKFFBAC" }) Check($"  PhotonPlayer.{prop} (ID, name, properties)", game.GetType("CBBCCGMALMP")?.GetProperty(prop, Inst));
 Check("  NKEPKEMCLNH(bool) (voice button event)", game.GetType("NKEPKEMCLNH")?.GetConstructors(Inst).FirstOrDefault(c => c.GetParameters().Length == 1));
 var commandManager = game.GetType("AI.CommandManager");
 foreach (var m in new[] { "TriggerCommand", "UpdateSimpleOrders", "PlayInvalidCommandVO" })

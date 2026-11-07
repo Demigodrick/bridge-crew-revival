@@ -51,7 +51,12 @@ namespace StbcRevival
 
         private static void RaiseEvent_Prefix(byte __0)
         {
-            if (__0 != VoiceEvent) return;
+            if (__0 == VoiceEvent) VoiceFrameSent();
+        }
+
+        /// <summary>A voice frame of yours sent (also by DirectVoice, when one goes only directly to crewmates).</summary>
+        internal static void VoiceFrameSent()
+        {
             lock (voiceLock)
             {
                 long now = clock.ElapsedMilliseconds;

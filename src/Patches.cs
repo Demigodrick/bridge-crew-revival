@@ -246,6 +246,7 @@ namespace StbcRevival
             Excelsior.Patch(harmony);
             VoiceJitter.Patch(harmony);
             PerfLog.Patch(harmony);
+            DirectVoice.Patch(harmony);
             CrewLogs.Patch();
             if (SteamMode.Enabled) CrewPassword.Patch(harmony);
             if (Plugin.Diagnostics.Value)
