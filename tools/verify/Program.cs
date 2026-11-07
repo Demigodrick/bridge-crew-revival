@@ -321,10 +321,42 @@ Check("  ConsoleCaptain.OBPHPIAELAB (view mode)", captain?.GetField("OBPHPIAELAB
 Check("  PlayerSpacecraft.Update (subsystem alerts)", game.GetType("Sector.Spacecraft.PlayerSpacecraft")?.GetMethod("Update", Inst | BindingFlags.DeclaredOnly));
 Check("  SectorBody.PMPGNBBGOLI (show on nav map)", game.GetType("Sector.SectorBody")?.GetMethod("PMPGNBBGOLI", Inst));
 Check("  Sector.EEKAKKNBAIH(body) (body died)", game.GetType("Sector.EEKAKKNBAIH")?.GetConstructors(Inst).FirstOrDefault(c => c.GetParameters().Length == 1));
+var pooled = game.GetType("SVR.Network.PLPKPDFOLDL");
+// PvP: each crew's own space, and impulse for both ships (PvpSpace)
+var simSpace = game.GetType("SimulationSpace");
+foreach (var f in new[] { "JKOEGLOEGKD", "PFHOOFGPFMM", "GOMEHHDMBGH", "ENKPDCIALPO", "GCBHEHCMONM", "MKHNNJBFKPH", "CPEGBLPAMIF", "UnitToMeterScale", "UnitToSkyboxScale" })
+    Check($"  SimulationSpace.{f}", simSpace?.GetField(f, Inst | BindingFlags.Static));
+foreach (var m in new[] { "get_FloatingOrigin", "get_ImpulseOverride", "KPKBCKPCLDG", "get_ImpulseCooldownSynced", "EEAIEGFANPN", "Multicast_ResyncFloatingOrigin", "NetworkDeserialize", "FixedUpdate" })
+    Check($"  SimulationSpace.{m}", simSpace?.GetMethods(Inst | BindingFlags.Static).FirstOrDefault(x => x.Name == m));
+Check("  SimulationSpace.NNOJBJMFJPJ (ShiftID)", simSpace?.GetProperty("NNOJBJMFJPJ", AnyS));
+var shipState = simSpace?.GetNestedType("CBAACGKKEDM", BindingFlags.NonPublic | BindingFlags.Public);
+Check("  SimulationSpace/CBAACGKKEDM(double) (ShipState)", shipState?.GetConstructors(Inst).FirstOrDefault(c => c.GetParameters().Length == 1));
+foreach (var f in new[] { "Pos", "Rot" }) Check($"  ShipState.{f}", shipState?.GetField(f, Inst));
+Check("  StateBuffer.RecordState", simSpace?.GetField("ENKPDCIALPO", Inst)?.FieldType.GetMethod("RecordState", Inst));
+Check("  SVR.Network.NetworkTime.TimeInSeconds", game.GetType("SVR.Network.GFFJGHDGIFB")?.GetMethod("TimeInSeconds", AnyS));
+var nsb = game.GetType("NetworkSectorBody");
+var nsbState = nsb?.GetNestedType("JLDAPIFNCII", BindingFlags.NonPublic | BindingFlags.Public);
+foreach (var f in new[] { "ShiftId", "Position", "Flags" }) Check($"  NetworkSectorBody/State.{f}", nsbState?.GetField(f, Inst));
+Check("  NetworkSectorBody.PMLPAFENGBE (ApplyState)", nsb?.GetMethod("PMLPAFENGBE", Inst));
+var sysTransform = game.GetType("SystemTransform");
+Check("  SystemTransform.Deserialize", sysTransform?.GetMethod("Deserialize", Inst));
+foreach (var f in new[] { "_shiftId", "_trackingStartPosition", "_newTrackingStartPosition", "_trackingInSkybox", "_changeToApply", "_lastSyncTime" })
+    Check($"  SystemTransform.{f}", sysTransform?.GetField(f, Inst));
+var syncManager = game.GetType("SyncPointManager");
+foreach (var m in new[] { "SyncWithOtherPlayers", "ClearSyncPoint", "PlayerReachedSyncPointRPC", "COHPFJGKNCF", "PNPLACHMLIP" })
+    Check($"  SyncPointManager.{m}", syncManager?.GetMethods(Inst).FirstOrDefault(x => x.Name == m));
+Check("  SyncPointManager.KHOCLLMDFFF (sync points)", syncManager?.GetField("KHOCLLMDFFF", Inst));
+var syncPoint = syncManager?.GetNestedType("NKOICHOJBOC", BindingFlags.NonPublic | BindingFlags.Public);
+foreach (var f in new[] { "PlayersSynced", "Synced" }) Check($"  SyncPoint.{f}", syncPoint?.GetField(f, Inst));
+var impulseManager = game.GetType("Sector.Spacecraft.POLCIGDAIKK");
+Check("  ImpulseManager.Update", impulseManager?.GetMethod("Update", Inst));
+Check("  ImpulseManager.JCIEFGHGMMP (its ship)", impulseManager?.GetField("JCIEFGHGMMP", Inst));
+foreach (var prop in new[] { "KANLFOJDHPL", "HHBBMNCINCA" }) Check($"  ImpulseManager.{prop} (phase, operating)", impulseManager?.GetProperty(prop, Inst));
+Check("  engines.UpdateImpulse", game.GetType("Sector.Spacecraft.Subsystems.SimpleEngine")?.GetMethod("UpdateImpulse", Inst));
+Check("  PooledReader.LLPAKGEPJJP (Pos)", pooled?.GetProperty("LLPAKGEPJJP", Inst));
 // Direct voice (DirectVoice), crew logs (CrewLogs) and the performance log (PerfLog)
 var networkCore = game.GetType("SVR.Network.NetworkCore");
 Check("  NetworkCore.SendEvent (voice frames out)", networkCore?.GetMethods(Inst).FirstOrDefault(m => m.Name == "SendEvent" && m.GetParameters().Length == 5));
-var pooled = game.GetType("SVR.Network.PLPKPDFOLDL");
 foreach (var m in new[] { "Acquire", "Release", "Write", "Seek" }) Check($"  PooledReader.{m}", pooled?.GetMethods(Inst | BindingFlags.Static).FirstOrDefault(x => x.Name == m));
 foreach (var prop in new[] { "PICFPDJILEK", "CDBPFHDELDP" }) Check($"  PooledReader.{prop} (length, buffer)", pooled?.GetProperty(prop, Inst));
 var voipManager = game.GetType("VoIpManager");

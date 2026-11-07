@@ -72,6 +72,7 @@ namespace StbcRevival
         internal static ConfigEntry<VrDeviceChoice> VrDevice;
         internal static ConfigEntry<int> VoiceJitterBufferMs;
         internal static ConfigEntry<bool> DirectVoice;
+        internal static ConfigEntry<bool> PvpSeparateSpace;
         internal static ConfigEntry<string> BlockedPlayers;
         internal static ConfigEntry<string> VoiceVolumes;
         internal static ConfigEntry<bool> ExcelsiorTest;
@@ -182,6 +183,8 @@ namespace StbcRevival
                 "Testing only: every Ongoing Voyage you host runs the Revival mission Last Stand instead.");
             PvpTest = Config.Bind("Debug", "PvpTest", false,
                 "Testing only: adds PVP to the main menu's game modes: Quick match for two crews of up to four, ship against ship. Players joining a PvP crew don't need it.");
+            PvpSeparateSpace = Config.Bind("Debug", "PvpSeparateSpace", true,
+                "Testing only: in the PvP test, the crew of the ship the host isn't on keeps its own space around its ship, and either ship can use impulse. Off: both crews share the host's space, as the game does.");
             PvpTestShip = Config.Bind("Debug", "PvpTestShip", "Auto",
                 "Testing only, the PvP test mission: the player ship you crew. Auto: the crew is split, in joining order from the host: A, B, A, B (2 players: one each; 3: two on A; 4: two each). A or B: that ship.");
             CheckForUpdates = Config.Bind("Updates", "CheckForUpdates", true,
@@ -281,6 +284,7 @@ namespace StbcRevival
             Safely("restock sync", StbcRevival.Missions.RestockSync.Update);
             Safely("excelsior", Excelsior.Update);
             Safely("pvp prototype", PvpPrototype.Update);
+            Safely("pvp space", PvpSpace.Update);
             Safely("mod version check", ModVersionCheck.Update);
             Safely("host hand-off", HostHandoff.Update);
             Safely("voice commands", StbcRevival.VoiceCommands.Update);

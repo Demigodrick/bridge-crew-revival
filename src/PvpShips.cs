@@ -60,6 +60,8 @@ namespace StbcRevival
 
         internal static object Me => Patches.PhotonNetworkType?.GetMethod("get_player", Static)?.Invoke(null, null);
 
+        internal static object[] AllPlayers => Players;
+
         private static object[] Players =>
             Patches.PhotonNetworkType?.GetMethod("get_playerList", Static)?.Invoke(null, null) is Array list ? list.Cast<object>().Where(p => p != null).ToArray() : new object[0];
 

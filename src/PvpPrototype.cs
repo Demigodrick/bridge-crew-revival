@@ -127,6 +127,7 @@ namespace StbcRevival
             PvpConsoles.Patch(harmony);
             PvpRoles.Patch(harmony);
             PvpRelay.Patch(harmony);
+            PvpSpace.Patch(harmony);
             PvpLobby.Patch(harmony);
             PvpShipChoice.Patch(harmony);
             var consoleAI = AccessTools.Method(typeof(AI.USSAegisCrew), "IsConsoleAI");
