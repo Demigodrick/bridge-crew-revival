@@ -16,14 +16,16 @@ namespace StbcRevival.Missions
 {
     /// <summary>
     /// Stellar Evacuation (Revival Missions): a star is about to erupt and a station in its system has to be
-    /// emptied. Warp there; a transport waits an impulse jump from the station. The station's people are
-    /// ready for the transporter a group at a time: scan the station, beam the group aboard, impulse to
-    /// the transport and drop them off (within DeliverRange, as the game's own rescues "deliver survivors to
-    /// safety"), then go back for the next group. [Revival] EvacuationMinutes sets the time (15 by default).
-    /// Centred on Perseph (in the Trench). The station is the loaded one near the ship (found by tag or name: the
-    /// map's tagged bodies elsewhere are unloaded placeholders). Each group waits in an escape pod by it (the
+    /// emptied. Warp there; a transport waits an impulse jump from the station. The station's Survivors people
+    /// are already out in PodCount escape pods around it: scan each pod (it's left unscanned, so the
+    /// transporter won't lock on before), beam its people aboard, impulse to the transport and drop them off
+    /// (within DeliverRange, as the game's own rescues "deliver survivors to safety"), and go back for more.
+    /// Meanwhile an enemy arrives every EnemyEvery seconds or so, for the ship or now and then a pod or the
+    /// transport; a pod destroyed takes its people with it. [Revival] EvacuationMinutes sets the time (15 by
+    /// default). Centred on Perseph (in the Trench). The station is the loaded one near the ship (found by tag
+    /// or name: the map's tagged bodies elsewhere are unloaded placeholders). The pods carry the people (the
     /// station can't be the transporter's target: the captain's order checks need ship data it hasn't got);
-    /// the pod's count is set on every player's game (the host shares it as a room property, "EVC"). Where there's a StarManager star
+    /// their counts are set on every player's game (the host shares them as a room property, "EVC"). Where there's a StarManager star
     /// (the E3 demo sector), the eruption is the E3 demo's own: that sector's star
     /// (tagged Star and Enemy) has a StarManager whose animation goes through "event1", "event2",
     /// "preCataclysm" and "cataclysm" (sent to every player), with the demo's warnings from the comms officer.
@@ -58,6 +60,8 @@ namespace StbcRevival.Missions
         private const float TransportDistance = 20000f; // metres from the station to the transport (no quarantine point)
         private const float FinalCountdown = 60f;       // the game's eruption: a minute from the blast to the end
         private const string ExplosionPrefab = "Sector/System/Mission 02 Prefabs/StarExplosion";
+        private const int Survivors = 90, PodCount = 6;      // everyone, out in the pods from the start
+        private const int EnemyEveryMin = 40, EnemyEveryMax = 90; // seconds between enemies (each gap random)
         private const string Home = "Perseph";
         private const string EscapePod = "Sector/Ships/Ship - EscapePodFull"; // the E3 demo's survivors' pods
         // The transport: a Starfleet ship, so it shows as friendly (a freighter is neutral whatever its tags, and
@@ -76,16 +80,26 @@ namespace StbcRevival.Missions
         };
 
         private readonly System.Random random = new System.Random(Guid.NewGuid().GetHashCode());
-        private BodyRef player, station, transport, pod;
+        private BodyRef player, station, transport;
         private Map.SystemRoot system;
         private BodyRef quarantine; // the quarantine point (a placeholder: only its position is used)
-        private int stationPeople;  // as last seen while the station was loaded
+
+        // An escape pod and its people (as last seen while it was loaded).
+        private sealed class Pod
+        {
+            public BodyRef Body;
+            public int Number, People;
+            public object LastLive;  // its loaded body when last seen (a new one means it reloaded)
+            public bool HullSeen;    // has shown hull (so none left means destroyed)
+            public bool Scanned;
+        }
+
+        private readonly List<Pod> pods = new List<Pod>();
         private UnityEngine.Component star; // the E3 star's StarManager (its eruption animation), if the system has it
         private static readonly Type StarManagerType = HarmonyLib.AccessTools.TypeByName("StarManager"); // internal to the game
-        private int total, placed, saved, lostPeople, spawnCount;
+        private int total, saved, lostPeople, spawnCount;
         private bool lost, erupting, spawningTransport;
-        private object lastLive;   // the station's loaded body when last seen (a new one means it reloaded)
-        private string notice;     // a short-lived line under the objective (group ready, people transferred)
+        private string notice;     // a short-lived line under the objective (a pod scanned, people transferred)
         private float noticeUntil;
 
         public override void StartScript()
@@ -122,7 +136,7 @@ namespace StbcRevival.Missions
             // The countdown starts as you arrive (before anything else, so a hitch below can't hold it up).
             star = CriticalStar(system);
             Plugin.Log.LogInfo(star != null ? $"Stellar evacuation: the star's own eruption ({star.name})" : "Stellar evacuation: no erupting star here; the blast-wave effect stands in");
-            total = 10 * random.Next(6, 11); // 60-100 people
+            total = Survivors;
             int minutes = Math.Max(3, Math.Min(30, Plugin.EvacuationMinutes.Value));
             float end = UnityEngine.Time.time + minutes * 60f;
             yield return Task.NECMCDDOFJB.WithDescriptionString(Directive).WithTimer(minutes * 60.0 - FinalCountdown);
@@ -171,24 +185,38 @@ namespace StbcRevival.Missions
                 yield return Task.KDNOMKAPDKG.TellAI(transport).ToDisable(); // holds position
                 Plugin.Log.LogInfo($"Stellar evacuation: transport {Distance(station, transport) / 1000:0} km from the station");
             }
-            Plugin.Log.LogInfo($"Stellar evacuation: {total} people on {stationName} in {systemName}, {minutes} minutes");
+            Plugin.Log.LogInfo($"Stellar evacuation: {total} people from {stationName} in {systemName}, {minutes} minutes");
+
+            // Everyone's out in the pods already, spread around the station, each to be scanned before its people
+            // can be beamed aboard.
+            ClearPeople();
+            float podAngle = random.Next(0, 360);
+            for (int i = 0; i < PodCount; i++)
+            {
+                int group = total / PodCount + (i < total % PodCount ? 1 : 0);
+                var body = new BodyRef();
+                podAngle += 360f / PodCount + random.Next(-15, 15);
+                yield return Task.BFMBGDIDKEI.UsingSpawner(MakeSpawner(EscapePod, "Escape pod", Tag.Friendly))
+                    .AtAngleAndDistanceFromBody(station, podAngle, 1500f + random.Next(0, 1500)).OutputTo(body);
+                PutPeople(body, group);
+                Unscanned(body);
+                pods.Add(new Pod { Body = body, Number = i + 1, People = group, LastLive = body.AHMPFHDGMKJ });
+            }
+            Plugin.Log.LogInfo($"Stellar evacuation: {pods.Count} escape pods out, {pods.Sum(p => p.People)} people in them");
             yield return Mark();
 
             string how = quarantine != null
-                ? $"At {stationName}, scan each escape pod and beam the people aboard, then impulse to Quarantine, where a transport takes them"
-                : $"At {stationName}, scan each escape pod and beam the people aboard, then impulse to the transport to drop them off";
+                ? $"At {stationName}, scan the escape pods and beam their people aboard, then impulse to Quarantine, where a transport takes them"
+                : $"At {stationName}, scan the escape pods and beam their people aboard, then impulse to the transport to drop them off";
             yield return Task.NECMCDDOFJB.AddSubDirectives(Directive, how);
             string status = Status(0);
             yield return Task.NECMCDDOFJB.AddSubDirectives(Directive, status);
 
             bool warned1 = false, warned2 = false, warned3 = false;
-            bool ready = true;  // the next group can go onto the pad (the last one's been dropped off)
-            float placedAt = 0; bool warnedEmpty = false;
             float said45 = 0, said30 = 0, said20 = 0, said10 = 0;
-            float nextRaid = UnityEngine.Time.time + random.Next(120, 180);
-            int raids = 0;
-            var raiding = new List<BodyRef>(); // the last raid's ships
-            float raidAt = 0;
+            float nextEnemy = UnityEngine.Time.time + random.Next(EnemyEveryMin, EnemyEveryMax + 1);
+            int enemies = 0;
+            bool everyoneOff = false;
             for (;;)
             {
                 yield return Task.KNMMMJOOBHC.WithTime(1f);
@@ -201,67 +229,60 @@ namespace StbcRevival.Missions
                     break;
                 }
 
-                // The current group's escape pod, read only while it's loaded (you're at the station); if it
-                // unloaded and came back without them, they go back aboard.
+                // The pods, read only while they're loaded (you're near the station); one that unloaded and came back
+                // without its people gets them back (and is left as scanned as it was).
                 int aboard = Aboard();
-                bool atStation = Live(station);
-                if (pod != null && Live(pod))
+                foreach (var p in pods.ToList())
                 {
-                    var body = pod.AHMPFHDGMKJ;
-                    if (lastLive != null && !ReferenceEquals(body, lastLive) && stationPeople > 0 && People(pod) == 0)
+                    if (!Live(p.Body)) continue;
+                    var body = p.Body.AHMPFHDGMKJ;
+                    if (p.LastLive != null && !ReferenceEquals(body, p.LastLive) && p.People > 0 && People(p.Body) == 0)
                     {
-                        PutPeople(pod, stationPeople);
-                        Beamable(pod);
-                        Plugin.Log.LogInfo($"Stellar evacuation: {stationPeople} people back in the reloaded escape pod");
+                        PutPeople(p.Body, p.People);
+                        if (p.Scanned) Beamable(p.Body); else Unscanned(p.Body);
+                        Plugin.Log.LogInfo($"Stellar evacuation: {p.People} people back in reloaded escape pod {p.Number}");
                     }
-                    else stationPeople = People(pod);
-                    lastLive = body;
+                    else p.People = People(p.Body);
+                    p.LastLive = body;
+                    if (!p.Scanned && p.People > 0 && Scanned(p.Body))
+                    {
+                        p.Scanned = true;
+                        Plugin.Log.LogInfo($"Stellar evacuation: escape pod {p.Number} scanned, {p.People} aboard");
+                        foreach (var step in Say($"Escape pod {p.Number} scanned: {p.People} life signs. Beam them aboard")) yield return step;
+                    }
+                    // Lost to an enemy: its people with it.
+                    if (p.People > 0 && PodDestroyed(p))
+                    {
+                        lostPeople += p.People;
+                        Plugin.Log.LogInfo($"Stellar evacuation: escape pod {p.Number} destroyed, {p.People} lost");
+                        foreach (var step in Say($"Escape pod {p.Number} was destroyed: {p.People} people lost")) yield return step;
+                        p.People = 0;
+                    }
+                    if (p.People == 0)
+                    {
+                        pods.Remove(p);
+                        yield return Mark();
+                    }
                 }
-                // A pod lost to raiders takes its people with it; the next group gets a new one.
-                if (pod != null && stationPeople > 0 && atStation && UnityEngine.Time.time - placedAt > 10f && PodDestroyed())
-                {
-                    lostPeople += stationPeople;
-                    Plugin.Log.LogInfo($"Stellar evacuation: escape pod destroyed, {stationPeople} lost");
-                    foreach (var step in Say($"The escape pod was destroyed: {stationPeople} people lost")) yield return step;
-                    stationPeople = 0;
-                    pod = null;
-                    ready = true;
-                }
-                int onStation = stationPeople;
 
-                // Now and then a raider: around the ship, after it or (sometimes) the pod or transport near it.
-                // One at a time, now and then two from the third raid on; never while the last raid's ships are
-                // still about, and a good while after they're gone. None once the star's going.
-                bool raidersAbout = raiding.Any(r => Live(r) && LastStandWaves.Alive(r, UnityEngine.Time.time - raidAt < 10f));
-                if (raidersAbout) nextRaid = Math.Max(nextRaid, UnityEngine.Time.time + 90f);
-                if (!erupting && !raidersAbout && UnityEngine.Time.time >= nextRaid)
+                // An enemy every so often (each gap random, from your arrival and then the last one): for the ship,
+                // or now and then a pod or the transport near it. None once the star's going.
+                if (!erupting && UnityEngine.Time.time >= nextEnemy)
                 {
-                    nextRaid = UnityEngine.Time.time + random.Next(150, 240);
-                    raids++;
-                    int count = raids >= 3 && random.Next(3) == 0 ? 2 : 1;
+                    nextEnemy = UnityEngine.Time.time + random.Next(EnemyEveryMin, EnemyEveryMax + 1);
+                    enemies++;
                     var prey = new List<BodyRef> { player };
-                    if (pod != null && Live(pod) && Distance(player, pod) < 30000) prey.Add(pod);
+                    prey.AddRange(pods.Where(p => Live(p.Body) && Distance(player, p.Body) < 30000).Select(p => p.Body));
                     if (transport.AHMPFHDGMKJ != null && Live(transport) && Distance(player, transport) < 30000) prey.Add(transport);
-                    Plugin.Log.LogInfo($"Stellar evacuation: raid {raids}, {count} ships");
+                    var ship = new BodyRef();
+                    yield return Task.BFMBGDIDKEI.UsingSpawner(MakeSpawner(Raiders[random.Next(Raiders.Length)], "Raider", Tag.Enemy))
+                        .AtAngleAndDistanceFromBody(player, random.Next(0, 360), 12000f + random.Next(0, 6000)).FaceOtherBody(player).OutputTo(ship);
+                    var target = random.Next(3) == 0 ? prey[random.Next(prey.Count)] : player;
+                    yield return Task.NDFEDBHFGFB.TellAI(ship).ToAddObjectives(target).OfObjectiveType(AIObjective.Attack);
+                    Plugin.Log.LogInfo($"Stellar evacuation: enemy {enemies} ({(ship.AHMPFHDGMKJ as UnityEngine.Object)?.name ?? "not spawned"}), next in {nextEnemy - UnityEngine.Time.time:0} s");
                     yield return Task.ABHANLLBILL.WithEventID("PLAY_NPC_SHIP_KLING_DECLOAK").ContinueImmediately();
-                    yield return Task.CAJKAPALCCO.SendViewScreenMessage(ViewScreen.GCIOEGLLOLP.Warning, 5f, "Raiders inbound");
                     yield return Task.OKLDNLKLLFJ.WithGroup("State_Group_Mus_Dyn").WithState("Tension");
-                    float angle = random.Next(0, 360);
-                    var spawned = new List<BodyRef>();
-                    for (int r = 0; r < count; r++)
-                    {
-                        var ship = new BodyRef();
-                        spawned.Add(ship);
-                        angle += 360f / count + random.Next(-20, 20);
-                        yield return Task.BFMBGDIDKEI.UsingSpawner(MakeSpawner(Raiders[random.Next(Raiders.Length)], "Raider", Tag.Enemy))
-                            .AtAngleAndDistanceFromBody(player, angle, 12000f + random.Next(0, 6000)).FaceOtherBody(player).OutputTo(ship);
-                    }
-                    raiding = spawned;
-                    raidAt = UnityEngine.Time.time;
-                    foreach (var ship in spawned)
-                        yield return Task.NDFEDBHFGFB.TellAI(ship).ToAddObjectives(random.Next(3) == 0 ? prey[random.Next(prey.Count)] : player)
-                            .OfObjectiveType(AIObjective.Attack);
-                    foreach (var step in Say(count == 1 ? "A raider is closing in!" : $"{count} raiders closing in!")) yield return step;
+                    foreach (var step in Say(target == player ? "An enemy ship is closing in!" : "An enemy ship is going for the evacuation!")) yield return step;
                 }
 
                 // The transport at the quarantine point, once you're there (its area is loaded then); a new one if
@@ -286,45 +307,22 @@ namespace StbcRevival.Missions
                     Plugin.Log.LogInfo($"Stellar evacuation: transport waiting at the quarantine point ({(transport.AHMPFHDGMKJ != null ? "spawned" : "not spawned")})");
                 }
 
-                // The next group, in an escape pod by the station, once the last one's been dropped off. (The
-                // station itself can't be the transporter's target: the captain's order checks need ship data
-                // a station hasn't got, and break every crew order. The E3 demo beamed people from pods too.)
-                if (ready && atStation && onStation == 0 && aboard == 0 && placed < total && !erupting)
-                {
-                    ready = false;
-                    placedAt = UnityEngine.Time.time;
-                    int group = Math.Min(total - placed, 10 + random.Next(0, 6));
-                    placed += group;
-                    pod = new BodyRef();
-                    podHullSeen = false;
-                    yield return Task.BFMBGDIDKEI.UsingSpawner(MakeSpawner(EscapePod, "Escape pod", Tag.Friendly))
-                        .AtAngleAndDistanceFromBody(station, random.Next(0, 360), 1500f).OutputTo(pod);
-                    PutPeople(pod, group);
-                    Beamable(pod);
-                    stationPeople = group;
-                    lastLive = pod.AHMPFHDGMKJ;
-                    yield return Mark();
-                    Plugin.Log.LogInfo($"Stellar evacuation: group of {group} in an escape pod ({placed}/{total} placed), {Distance(player, pod) / 1000:0} km away");
-                    foreach (var step in Say($"{group} people waiting in an escape pod at {stationName}: scan it and beam them aboard")) yield return step;
-                }
-
                 // Survivors aboard and the transport close: hand them over.
                 if (aboard > 0 && transport.AHMPFHDGMKJ != null && Distance(player, transport) <= DeliverRange)
                 {
                     saved += aboard;
-                    if (stationPeople == 0) ready = true;
                     yield return Task.CIAHOPCODGJ.WithTargets(player).SetCargo(Sector.CargoTypes.People, 0);
                     Plugin.Log.LogInfo($"Stellar evacuation: {aboard} delivered, {saved}/{total} saved");
-                    foreach (var step in Say(saved >= total ? "Everyone's off the station. Warp out!" : $"{aboard} people transferred to the USS Raleigh")) yield return step;
+                    foreach (var step in Say(pods.Count == 0 ? "Everyone's off the station. Warp out!" : $"{aboard} people transferred to the USS Raleigh")) yield return step;
+                }
+                if (!everyoneOff && pods.Count == 0 && Aboard() == 0)
+                {
+                    everyoneOff = true;
+                    Plugin.Log.LogInfo($"Stellar evacuation: the pods are empty; {saved} saved, {lostPeople} lost");
                 }
 
                 if (notice != null && UnityEngine.Time.time > noticeUntil)
                     foreach (var step in Say(null)) yield return step;
-                if (!ready && !warnedEmpty && atStation && onStation == 0 && aboard == 0 && UnityEngine.Time.time - placedAt > 10f)
-                {
-                    warnedEmpty = true; // the group never showed up on the station, or vanished without reaching us
-                    Plugin.Log.LogWarning($"Stellar evacuation: the escape pod shows no people ({placed} placed, {saved} saved)");
-                }
                 string now = Status(Aboard());
                 if (now != status)
                 {
@@ -481,12 +479,13 @@ namespace StbcRevival.Missions
 
         private int markings;
 
-        // The map markers: the station or the current pod, and the drop-off (the transport once it's there, the
+        // The map markers: the pods with people in them (or the station), and the drop-off (the transport once it's there, the
         // quarantine point before). Run as a step of its own: the quarantine point is an unloaded placeholder,
         // and should marking it wait on its area loading, the mission carries on regardless.
         private Step Mark()
         {
-            var bodies = new List<BodyRef> { pod != null ? pod : station };
+            var bodies = pods.Where(p => p.People > 0).Select(p => p.Body).ToList();
+            if (bodies.Count == 0) bodies.Add(station);
             if (transport.AHMPFHDGMKJ != null) bodies.Add(transport);
             else if (quarantine != null) bodies.Add(quarantine);
             string name = "markers " + (++markings);
@@ -548,8 +547,56 @@ namespace StbcRevival.Missions
             }
         }
 
+        // A body to be scanned before its people can be beamed: its life signs and cargo added as systems to find,
+        // and nothing about it known (the game's RPC, so on every player's game). The transporter then won't lock
+        // on until the crew has scanned it (the game's own check). Only for a body with ship data, as Beamable.
+        // (Patrol's rescue freighters have the same.)
+        internal static void Unscanned(BodyRef body, string label = "Stellar evacuation")
+        {
+            try
+            {
+                var sector = body?.AHMPFHDGMKJ as Sector.SectorBody;
+                if (!(sector?.GetDetectable() is Sector.TargetableComponent targetable) || sector.GetTargetInfo() == null)
+                {
+                    Plugin.Log.LogInfo($"{label}: {sector?.name ?? "the body"} has no ship data; made beamable without a scan");
+                    Beamable(body, label);
+                    return;
+                }
+                targetable.AddTargetableSubsystem(Sector.NHGGGDMADKM.Life);
+                targetable.AddTargetableSubsystem(Sector.NHGGGDMADKM.Cargo);
+                targetable.SetSubsystemKnown(Sector.NHGGGDMADKM.All, false);
+            }
+            catch (Exception e)
+            {
+                Plugin.Log.LogWarning($"{label}: leaving {(body?.AHMPFHDGMKJ as UnityEngine.Object)?.name} to be scanned: " + e.Message);
+                Beamable(body, label);
+            }
+        }
+
+        // Whether it's been scanned: its life signs and cargo found. A scan that's found everything else but not
+        // those two (added to the body after it was made) counts too, and makes them known: the transporter would
+        // otherwise never lock on.
+        internal static bool Scanned(BodyRef body, string label = "Stellar evacuation")
+        {
+            try
+            {
+                if (!((body?.AHMPFHDGMKJ as Sector.SectorBody)?.GetDetectable() is Sector.TargetableComponent targetable)) return true;
+                if (targetable.IsSubsystemKnown(Sector.NHGGGDMADKM.Life) && targetable.IsSubsystemKnown(Sector.NHGGGDMADKM.Cargo)) return true;
+                var others = targetable.GetAllSubsystems().Where(x => x != Sector.NHGGGDMADKM.Life && x != Sector.NHGGGDMADKM.Cargo).ToList();
+                if (others.Count == 0 || !others.All(targetable.IsSubsystemKnown)) return false;
+                Plugin.Log.LogInfo($"{label}: the scan didn't find the life signs; made known with the rest");
+                Beamable(body, label);
+                return true;
+            }
+            catch (Exception e)
+            {
+                Plugin.Log.LogWarning($"{label}: scan: " + e.Message);
+                return true;
+            }
+        }
+
         // People onto a body: straight into its cargo bay, adding one if it has none (the game's own cargo task
-        // does nothing without one), and shared with the crew's games (Update, "EVC").
+        // does nothing without one), and shared with the crew's games (Update, "EVC": every body's count).
         internal static void PutPeople(BodyRef body, int count, string label = "Stellar evacuation")
         {
             try
@@ -566,7 +613,12 @@ namespace StbcRevival.Missions
                 // Only for a body with an ID (GuidComponent): without one, the ID is blank and a client would put the
                 // people on whichever ID-less body it found first. Escape pods have their own cargo bay, which the
                 // game keeps in step anyway.
-                if (room != null && sector.FLOBHLBHLLJ != Guid.Empty) PhotonProps.Set(room, RoomKey, $"{sector.FLOBHLBHLLJ}:{count}");
+                if (room != null && sector.FLOBHLBHLLJ != Guid.Empty)
+                {
+                    shared[sector.FLOBHLBHLLJ.ToString()] = count;
+                    while (shared.Count > MaxShared) shared.Remove(shared.Keys.First());
+                    PhotonProps.Set(room, RoomKey, string.Join(";", shared.Select(kv => $"{kv.Key}:{kv.Value}").ToArray()));
+                }
             }
             catch (Exception e)
             {
@@ -582,10 +634,15 @@ namespace StbcRevival.Missions
         }
 
         internal const string RoomKey = "EVC";
-        private static string applied;
+        private const int MaxShared = 12;
+        private static readonly Dictionary<string, int> shared = new Dictionary<string, int>(); // the host's: body ID -> people put there
+        private static readonly HashSet<string> applied = new HashSet<string>();               // a crewmate's: "ID:count" entries done
         private static float nextCheck;
 
-        /// <summary>Every player: put the host's latest group on the station here too (its cargo bay may be ours alone).</summary>
+        /// <summary>A new mission's bodies: the last one's counts are no longer shared.</summary>
+        internal static void ClearPeople() => shared.Clear();
+
+        /// <summary>Every player: the host's people on their bodies here too (a cargo bay added by the host is its own alone).</summary>
         internal static void Update()
         {
             if (UnityEngine.Time.unscaledTime < nextCheck) return;
@@ -595,37 +652,41 @@ namespace StbcRevival.Missions
             if (room == null || photon.GetMethod("get_isMasterClient", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static)?.Invoke(null, null) is true) return;
             var props = room.GetType().GetMethod("get_customProperties")?.Invoke(room, null) as System.Collections.IDictionary;
             var value = props != null && props.Contains(RoomKey) ? props[RoomKey] as string : null;
-            if (string.IsNullOrEmpty(value) || value == applied) return;
-            var parts = value.Split(':');
-            if (parts.Length != 2 || !int.TryParse(parts[1], out var count) || parts[0] == Guid.Empty.ToString()) return;
-            var sector = UnityEngine.Object.FindObjectsOfType<Sector.SectorBody>().FirstOrDefault(b => b.FLOBHLBHLLJ.ToString() == parts[0]);
-            if (sector == null) return; // not loaded yet: try again in a second
-            SetPeople(sector, count);
-            // The life signs and cargo as targetable systems here too (the host's Beamable adds them only on its
-            // own copy; whether they're known is the game's RPC). Applied once per group: re-applying later would
-            // put back people a client engineer has already beamed off.
-            if (sector.GetDetectable() is Sector.TargetableComponent targetable)
-                foreach (var subsystem in new[] { Sector.NHGGGDMADKM.Life, Sector.NHGGGDMADKM.Cargo })
-                    targetable.AddTargetableSubsystem(subsystem);
-            applied = value;
-            Plugin.Log.LogInfo($"Stellar evacuation: {count} people on {sector.name} (from the host)");
+            if (string.IsNullOrEmpty(value)) return;
+            Sector.SectorBody[] bodies = null;
+            foreach (var entry in value.Split(';'))
+            {
+                if (applied.Contains(entry)) continue;
+                var parts = entry.Split(':');
+                if (parts.Length != 2 || !int.TryParse(parts[1], out var count) || parts[0] == Guid.Empty.ToString()) continue;
+                bodies = bodies ?? UnityEngine.Object.FindObjectsOfType<Sector.SectorBody>();
+                var sector = bodies.FirstOrDefault(b => b.FLOBHLBHLLJ.ToString() == parts[0]);
+                if (sector == null) continue; // not loaded yet: try again in a second
+                SetPeople(sector, count);
+                // The life signs and cargo as targetable systems here too (the host adds them only on its own
+                // copy; whether they're known is the game's RPC). Applied once per entry: re-applying later would
+                // put back people a crewmate has already beamed off.
+                if (sector.GetDetectable() is Sector.TargetableComponent targetable)
+                    foreach (var subsystem in new[] { Sector.NHGGGDMADKM.Life, Sector.NHGGGDMADKM.Cargo })
+                        targetable.AddTargetableSubsystem(subsystem);
+                applied.Add(entry);
+                Plugin.Log.LogInfo($"Stellar evacuation: {count} people on {sector.name} (from the host)");
+            }
         }
 
-        private bool podHullSeen; // the current pod has shown hull (so none left means destroyed)
-
-        // The escape pod gone: its body destroyed, or its hull down to nothing after having had some. (Not
+        // An escape pod gone: its body destroyed, or its hull down to nothing after having had some. (Not
         // LastStandWaves.Alive: a pod isn't a ship, and may report no hull from the start.)
-        private bool PodDestroyed()
+        private static bool PodDestroyed(Pod pod)
         {
             try
             {
-                var body = pod.AHMPFHDGMKJ;
+                var body = pod.Body.AHMPFHDGMKJ;
                 if (body == null || (body is UnityEngine.Object o && o == null)) return true;
                 var info = body.GetTargetInfo();
                 if (info == null) return false;
                 float hull = info.GBNCJMFFIDI;
-                if (hull > 0f) podHullSeen = true;
-                return podHullSeen && hull <= 0f;
+                if (hull > 0f) pod.HullSeen = true;
+                return pod.HullSeen && hull <= 0f;
             }
             catch (Exception)
             {
