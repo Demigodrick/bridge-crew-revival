@@ -23,6 +23,9 @@ namespace StbcRevival.Missions
     ///   - Rescue: a disabled freighter with survivors; scan it for life signs, beam them aboard.
     ///   - Ambush: offered as a rescue, but Klingons decloak around you as you close in; rescue the survivors
     ///     and beat off the ambush.
+    ///   - Escort: freighters waiting at the site for an escort fly a route to another body of the system, through
+    ///     a waypoint when one lies on the way; delivered when they get there, failed if they're all lost. One
+    ///     escort in two, raiders attack the convoy on the way (sometimes Klingons decloaking around it).
     /// One assignment in twenty, a Borg cube warps in partway through and attacks: destroy it, warp out, or
     /// hold out until it warps away.
     /// Warping out of the assignment's system abandons it (it counts as failed) and a new one is offered.
@@ -105,7 +108,7 @@ namespace StbcRevival.Missions
             {
                 // The offer: a job in another system, marked on the warp map. Never the same kind of job twice in a
                 // row, nor the system of the last one (where it'd send you straight back to what you just left).
-                int job = lastJob < 0 ? random.Next(4) : (lastJob + 1 + random.Next(3)) % 4;
+                int job = lastJob < 0 ? random.Next(Jobs) : (lastJob + 1 + random.Next(Jobs - 1)) % Jobs;
                 lastJob = job;
                 var here = Objective.KALBLMGFNIN;
                 var target = PickSystem(here, jobSystem);
@@ -148,7 +151,7 @@ namespace StbcRevival.Missions
                     Objective.AddStep(borg, Task.MFLJBKCDBMC.WithSubtaskCoroutine(() => Borg(system)));
                     yield return Task.KKALNAMJCNH.WithName(borg); // a step added while another runs waits to be started
                 }
-                IEnumerable<Step> run = job == 0 ? Hunt() : job == 1 ? Defend() : Rescue(job == 3);
+                IEnumerable<Step> run = job == 0 ? Hunt() : job == 1 ? Defend() : job == 4 ? Escort() : Rescue(job == 3);
                 foreach (var step in run) yield return step;
                 yield return Task.BCJDEKKIHDD.RemoveAllMarkers();
 
@@ -354,6 +357,209 @@ namespace StbcRevival.Missions
             // Raiders still about stay in the system: a parting gift.
         }
 
+        // Freighters waiting at the site for an escort, then flying a route (Route) to another body of the system,
+        // each ordered on leg by leg with the game's AI move-to task. A freighter that stops getting closer is
+        // ordered on again; should none get any closer for GiveUpTime, the run counts as made, so the job can't
+        // hang. One escort in EscortRaidChance, raiders go for the convoy on the way: after a while, at the
+        // waypoint, or as the first freighter arrives, whichever comes first. One raid in three is Klingons
+        // decloaking around it. Delivered if any freighter gets there; raiders still about stay in the system.
+        private const int EscortRaidChance = 2;   // one escort in this many is raided
+        private const double ArriveRange = 5000;  // metres from a route point's surface that counts as reaching it
+        private const double MinLeg = 15000;      // the destination at least this far from the site's surface
+        private const float StallTime = 60f;      // seconds a freighter gets no closer before it's ordered on again
+        private const float GiveUpTime = 300f;    // seconds no freighter gets any closer before the run counts as made
+
+        private sealed class Freighter
+        {
+            public BodyRef Ship;
+            public int Leg;                       // index into the route of where it's headed
+            public bool Arrived, Lost;
+            public double Best = double.MaxValue; // closest it's been to that point
+            public float Since;                   // when it last got closer
+        }
+
+        private IEnumerable<Step> Escort()
+        {
+            var route = Route();
+            if (route == null)
+            {
+                Plugin.Log.LogInfo("Patrol: nowhere in this system for a convoy to go; a freighter to defend instead");
+                foreach (var step in Defend()) yield return step;
+                yield break;
+            }
+            var end = route[route.Count - 1];
+            string to = BodyName(end) ?? "the marked destination";
+            string line = $"Escort the convoy to {to}; it's waiting{Near()}";
+            yield return Task.NECMCDDOFJB.AddSubDirectives(Directive, line);
+
+            int size = 2 + random.Next(2);
+            var convoy = new List<Freighter>();
+            for (int i = 0; i < size; i++)
+            {
+                var ship = new BodyRef();
+                var spawn = Task.BFMBGDIDKEI.UsingSpawner(MakeSpawner(Freighters[random.Next(Freighters.Length)], "Freighter", Tag.Friendly));
+                yield return (i == 0 ? spawn.AtAngleAndDistanceFromBody(site, random.Next(0, 360), OffSurface(site, 3000f))
+                    : spawn.AtAngleAndDistanceFromBody(convoy[0].Ship, random.Next(0, 360), 600f + random.Next(0, 400))).OutputTo(ship);
+                yield return Task.JPLFLPFBCDJ.TellAI(ship).ToSetTeam(Sector.DGGJOECIFAF.Federation); // the prefab's team shows as an enemy
+                convoy.Add(new Freighter { Ship = ship });
+            }
+            var ships = convoy.Select(c => c.Ship).ToList();
+            bool raid = random.Next(EscortRaidChance) == 0;
+            double length = Gap(site, route[0]) + Enumerable.Range(1, route.Count - 1).Sum(i => Gap(route[i - 1], route[i]));
+            Plugin.Log.LogInfo($"Patrol: escort of {size} freighters from {BodyName(site) ?? "the site"} to {to}"
+                               + (route.Count > 1 ? $" by way of {BodyName(route[0]) ?? "a waypoint"}" : "")
+                               + $", about {length / 1000:0} km; {(raid ? "raiders will attack" : "no raiders")}");
+            yield return Task.BCJDEKKIHDD.AddMarker(ships.Concat(new[] { end }).ToArray());
+
+            // The convoy sets off once its escort has come.
+            yield return Task.KNMMMJOOBHC.WithTime(5f);
+            foreach (var step in UntilClose(ships[0])) yield return step;
+            var raiders = new List<BodyRef>();
+            string fight = null;
+            if (!abandoned)
+            {
+                Plugin.Log.LogInfo("Patrol: the escort is here; the convoy sets off");
+                float departed = UnityEngine.Time.time, lastProgress = departed, nextLog = departed + StatusEvery, raidAt = 0;
+                float raidAfter = 45 + random.Next(0, 106);
+                bool sprung = false;
+                foreach (var c in convoy)
+                {
+                    c.Since = departed;
+                    yield return Task.LAADENAGNCO.TellAI(c.Ship).ToDestination(route[0]);
+                }
+                for (;;)
+                {
+                    yield return Task.KNMMMJOOBHC.WithTime(2f);
+                    if (Abandoned()) break; // first: out of its system the convoy is gone from view, not lost
+                    float now = UnityEngine.Time.time;
+                    var orders = new List<Freighter>();
+                    foreach (var c in convoy.Where(c => !c.Arrived && !c.Lost))
+                    {
+                        if (!LastStandWaves.Alive(c.Ship, false))
+                        {
+                            c.Lost = true;
+                            Plugin.Log.LogInfo($"Patrol: {ShipName(c.Ship)} lost on leg {c.Leg + 1} of {route.Count}");
+                            continue;
+                        }
+                        double d = Gap(c.Ship, route[c.Leg]);
+                        if (d <= ArriveRange)
+                        {
+                            lastProgress = now;
+                            if (++c.Leg == route.Count)
+                            {
+                                c.Arrived = true;
+                                Plugin.Log.LogInfo($"Patrol: {ShipName(c.Ship)} has arrived at {to} ({now - departed:0} s)");
+                                continue;
+                            }
+                            Plugin.Log.LogInfo($"Patrol: {ShipName(c.Ship)} at the waypoint; on to {to}");
+                            c.Best = double.MaxValue;
+                            c.Since = now;
+                            orders.Add(c);
+                        }
+                        else if (d < c.Best - 300)
+                        {
+                            c.Best = d;
+                            c.Since = lastProgress = now;
+                        }
+                        else if (now - c.Since >= StallTime)
+                        {
+                            Plugin.Log.LogInfo($"Patrol: {ShipName(c.Ship)} no closer in {StallTime:0} s ({Km(d)} km off); ordered on again");
+                            c.Since = now;
+                            orders.Add(c);
+                        }
+                    }
+                    foreach (var c in orders) yield return Task.LAADENAGNCO.TellAI(c.Ship).ToDestination(route[c.Leg]);
+
+                    // The raid.
+                    var going = convoy.Where(c => !c.Arrived && !c.Lost).ToList();
+                    if (raid && !sprung && going.Count > 0
+                        && (now - departed >= raidAfter || route.Count > 1 && going.Any(c => c.Leg > 0) || convoy.Any(c => c.Arrived)))
+                    {
+                        sprung = true;
+                        raidAt = now;
+                        var near = going[random.Next(going.Count)].Ship;
+                        bool klingons = random.Next(3) == 0;
+                        Plugin.Log.LogInfo($"Patrol: {(klingons ? "Klingons decloaking" : "raiders closing")} on the convoy at {ShipName(near)}, {now - departed:0} s out");
+                        if (klingons)
+                        {
+                            yield return Task.ABHANLLBILL.WithEventID("PLAY_SND_INCOMING_CLOAK_ALARM_LP").ContinueImmediately();
+                            yield return Task.ABHANLLBILL.WithEventID("STOP_SND_INCOMING_CLOAK_ALARM_LP").WithDelay(8f);
+                            yield return Task.ABHANLLBILL.WithEventID("PLAY_NPC_SHIP_KLING_DECLOAK").ContinueImmediately();
+                        }
+                        yield return Task.OKLDNLKLLFJ.WithGroup("State_Group_Mus_Dyn").WithState("Tension");
+                        fight = $"{(klingons ? "Klingons" : "Raiders")} are attacking the convoy! Protect the freighters";
+                        yield return Task.NECMCDDOFJB.AddSubDirectives(Directive, fight);
+                        var spawned = new List<BodyRef>();
+                        foreach (var step in klingons ? SpawnRaiders(RaiderCount(), spawned, near, Ambushers, 3000f, 3000, around: near, attack: false)
+                                     : SpawnRaiders(RaiderCount(), spawned, near, distance: 15000f, spread: 6000, around: near, attack: false))
+                            yield return step;
+                        foreach (var step in Attack(spawned, going.Select(c => c.Ship).ToList())) yield return step;
+                        raiders.AddRange(spawned);
+                    }
+                    else if (raid && !sprung && going.Count == 0)
+                    {
+                        raid = false;
+                        Plugin.Log.LogInfo("Patrol: the convoy got there before the raiders caught it");
+                    }
+                    if (fight != null && Remaining(raiders, now - raidAt < 10f) == 0)
+                    {
+                        Plugin.Log.LogInfo("Patrol: the raid on the convoy is over");
+                        yield return Task.NECMCDDOFJB.RemoveSubDirective(Directive, fight);
+                        yield return Task.OKLDNLKLLFJ.WithGroup("State_Group_Mus_Dyn").WithState("Explore");
+                        fight = null;
+                    }
+
+                    if (going.Count == 0) break;
+                    if (now - lastProgress >= GiveUpTime)
+                    {
+                        Plugin.Log.LogInfo($"Patrol: the convoy has got no closer in {GiveUpTime:0} s; its run counts as made");
+                        foreach (var c in going) c.Arrived = true;
+                        break;
+                    }
+                    if (now >= nextLog)
+                    {
+                        nextLog = now + StatusEvery;
+                        Plugin.Log.LogInfo("Patrol: convoy: " + string.Join(", ", going.Select(c =>
+                            $"{ShipName(c.Ship)} leg {c.Leg + 1} of {route.Count}, {Km(Gap(c.Ship, route[c.Leg]))} km to go, hull {Hull(c.Ship)}").ToArray()));
+                    }
+                }
+            }
+            int arrived = convoy.Count(c => c.Arrived), lost = convoy.Count(c => c.Lost);
+            succeeded = !abandoned && arrived > 0;
+            Plugin.Log.LogInfo($"Patrol: escort {(abandoned ? "abandoned" : arrived > 0 ? "delivered" : "failed, the convoy lost")}: "
+                               + $"{arrived} of {size} freighters arrived, {lost} lost");
+            if (fight != null) yield return Task.NECMCDDOFJB.RemoveSubDirective(Directive, fight);
+            yield return Task.NECMCDDOFJB.RemoveSubDirective(Directive, line);
+        }
+
+        // The convoy's route from the site: a destination among the nearest few bodies at least MinLeg off,
+        // through a waypoint when a body lies on the way (no more than 40% further than flying straight there).
+        // Null when there's nowhere to go.
+        private List<BodyRef> Route()
+        {
+            if (site == player) return null;
+            try
+            {
+                var others = SystemBodies().Where(b => b.AHMPFHDGMKJ != site.AHMPFHDGMKJ).ToList();
+                var far = others.Where(b => Gap(site, b) - Radius(site) >= MinLeg).OrderBy(b => Distance(site, b)).ToList();
+                if (far.Count == 0) return null;
+                var end = far[random.Next(Math.Min(3, far.Count))];
+                double straight = Distance(site, end);
+                var on = others.Where(b => b.AHMPFHDGMKJ != end.AHMPFHDGMKJ
+                                           && Gap(site, b) - Radius(site) > 2 * ArriveRange && Gap(b, end) - Radius(b) > 2 * ArriveRange
+                                           && Distance(site, b) + Distance(b, end) <= 1.4 * straight).ToList();
+                var route = new List<BodyRef>();
+                if (on.Count > 0) route.Add(on[random.Next(on.Count)]);
+                route.Add(end);
+                return route;
+            }
+            catch (Exception e)
+            {
+                Plugin.Log.LogWarning("Patrol: convoy route: " + e.Message);
+                return null;
+            }
+        }
+
         // ---- Helpers ----------------------------------------------------------------------------------
 
         // Another system of the sector, at random (the game's FindSystemDifferentThan always gives the same one).
@@ -400,6 +606,13 @@ namespace StbcRevival.Missions
                 yield return Task.NDFEDBHFGFB.TellAI(ship).ToAddObjectives(random.Next(3) == 0 ? player : target).OfObjectiveType(AIObjective.Attack);
         }
 
+        // Each raider after one of the targets (or, one in three, the player).
+        private IEnumerable<Step> Attack(List<BodyRef> ships, List<BodyRef> targets)
+        {
+            foreach (var ship in ships)
+                yield return Task.NDFEDBHFGFB.TellAI(ship).ToAddObjectives(random.Next(3) == 0 ? player : targets[random.Next(targets.Count)]).OfObjectiveType(AIObjective.Attack);
+        }
+
         // Waits until the player is within EngageRange of the body (or has left the system).
         private IEnumerable<Step> UntilClose(BodyRef body)
         {
@@ -438,14 +651,7 @@ namespace StbcRevival.Missions
             {
                 var here = Objective.KALBLMGFNIN;
                 var me = player.AHMPFHDGMKJ?.ALPAOOKFIEE;
-                var bodies = new List<BodyRef>();
-                foreach (var tag in SiteTags)
-                {
-                    var found = new List<BodyRef>();
-                    Objective.FindAllBodyWithTags(found, new[] { tag });
-                    bodies.AddRange(found.Where(b => b?.AHMPFHDGMKJ?.ALPAOOKFIEE is var t && t != null && t.System == here
-                                                     && !bodies.Any(o => o.AHMPFHDGMKJ == b.AHMPFHDGMKJ)));
-                }
+                var bodies = SystemBodies();
                 if (me == null || bodies.Count == 0)
                 {
                     Plugin.Log.LogInfo($"Patrol: no planets or stations found in {SystemName(here)}; the assignment is where you are");
@@ -462,6 +668,21 @@ namespace StbcRevival.Missions
                 site = player;
                 Plugin.Log.LogWarning("Patrol: site: " + e.Message);
             }
+        }
+
+        // The planets, moons, stations (...) of the system the ship is in.
+        private List<BodyRef> SystemBodies()
+        {
+            var here = Objective.KALBLMGFNIN;
+            var bodies = new List<BodyRef>();
+            foreach (var tag in SiteTags)
+            {
+                var found = new List<BodyRef>();
+                Objective.FindAllBodyWithTags(found, new[] { tag });
+                bodies.AddRange(found.Where(b => b?.AHMPFHDGMKJ?.ALPAOOKFIEE is var t && t != null && t.System == here
+                                                 && !bodies.Any(o => o.AHMPFHDGMKJ == b.AHMPFHDGMKJ)));
+            }
+            return bodies;
         }
 
         private string Near()
@@ -544,6 +765,24 @@ namespace StbcRevival.Missions
             return abandoned;
         }
 
+        // A body's radius, or 0 if it hasn't one that makes sense.
+        private static double Radius(BodyRef body)
+        {
+            try { double r = body?.AHMPFHDGMKJ?.ALPAOOKFIEE?.Radius ?? 0; return r > 0 && r < 1e7 ? r : 0; }
+            catch { return 0; }
+        }
+
+        // From a ship to a body's surface.
+        private static double Gap(BodyRef ship, BodyRef body) => Distance(ship, body) - Radius(body);
+
+        private static string Km(double metres) => metres >= double.MaxValue / 2 ? "?" : $"{metres / 1000:0.#}";
+
+        private static string BodyName(BodyRef body)
+        {
+            try { return DisplayName(body?.AHMPFHDGMKJ?.ALPAOOKFIEE?.BaseName); }
+            catch { return null; }
+        }
+
         private static double Distance(BodyRef a, BodyRef b)
         {
             try { return UnityEngine.Vector3d.Distance(a.AHMPFHDGMKJ.ALPAOOKFIEE.Position, b.AHMPFHDGMKJ.ALPAOOKFIEE.Position); }
@@ -622,11 +861,15 @@ namespace StbcRevival.Missions
 
         private string Status(BodyRef ship)
         {
-            string hull = "?";
-            try { if (ship.AHMPFHDGMKJ?.GetTargetInfo() is var info && info != null) hull = $"{info.GBNCJMFFIDI:0}"; }
-            catch { }
             double d = Distance(player, ship);
-            return $"{ShipName(ship)} ({(d == double.MaxValue ? "?" : $"{d / 1000:0.#}")} km, hull {hull}{(Cloaked(ship) ? ", cloaked" : "")})";
+            return $"{ShipName(ship)} ({(d == double.MaxValue ? "?" : $"{d / 1000:0.#}")} km, hull {Hull(ship)}{(Cloaked(ship) ? ", cloaked" : "")})";
+        }
+
+        private static string Hull(BodyRef ship)
+        {
+            try { if (ship.AHMPFHDGMKJ?.GetTargetInfo() is var info && info != null) return $"{info.GBNCJMFFIDI:0}"; }
+            catch { }
+            return "?";
         }
 
         // The name of a space station within repair range in this system, or null. A station is what the game tags
@@ -740,11 +983,14 @@ namespace StbcRevival.Missions
             catch { return system.SystemName; }
         }
 
-        private static string JobName(int job) => job == 0 ? "hunt" : job == 1 ? "defend" : job == 2 ? "rescue" : "ambush";
+        private const int Jobs = 5;
+
+        private static string JobName(int job) => job == 0 ? "hunt" : job == 1 ? "defend" : job == 2 ? "rescue" : job == 3 ? "ambush" : "escort";
 
         // An ambush is offered as a rescue: it's a trap.
         private static string Offer(int job) => job == 0 ? "raiders are attacking shipping"
             : job == 1 ? "a disabled freighter is under attack"
+            : job == 4 ? "a convoy of freighters needs an escort"
             : "a freighter is adrift with survivors aboard";
 
         private Spawner MakeSpawner(string prefab, string role, Tag allegiance) =>

@@ -199,6 +199,9 @@ Check("Mission.DebugExplorationMode.DebugExplorationModeSequence (Free Roam)", g
 var objectiveContext = game.GetType("Mission.Scripting.Framework.IHKAJDDPCIB");
 foreach (var m in new[] { "get_ActiveSystem", "FindSystemDifferentThan", "FindAllBodyWithTags", "AddStep" })
     Check($"  objective context {m} (Patrol)", objectiveContext?.GetMethods(Inst).FirstOrDefault(x => x.Name == m));
+var moveTo = game.GetType("Mission.Scripting.Framework.Tasks.FNICGFPIEOL")?.GetProperty("LAADENAGNCO", Inst)?.PropertyType;
+Check("  Task.LAADENAGNCO (AIMoveTo) TellAI / ToDestination (escort convoy)", moveTo?.GetMethods(Inst).FirstOrDefault(x => x.Name == "TellAI") is not null
+    && moveTo.GetMethods(Inst).FirstOrDefault(x => x.Name == "ToDestination") is not null ? moveTo : null);
 Check("  Sector.NHGGGDMADKM.Life (rescue life signs)", game.GetType("Sector.NHGGGDMADKM")?.GetField("Life"));
 Check("  Sector.CargoTypes.People (rescue survivors)", game.GetType("Sector.CargoTypes")?.GetField("People"));
 Check("  SystemTransform.Position / BaseName / System", game.GetType("SystemTransform") is { } st && st.GetProperty("Position") is not null
