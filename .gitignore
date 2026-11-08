@@ -5,3 +5,4 @@ decompiled/
 .idea/
 *.DotSettings.user
 server/.env
+.superpowers/
