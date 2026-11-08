@@ -229,7 +229,7 @@ namespace StbcRevival
                 "Experimental, doesn't work yet: fly the main-menu shuttle with the keyboard (W/S forward/back, A/D turn, Q/E down/up, Shift faster).");
             ShuttleSpeed = Config.Bind("Shuttle", "Speed", 20f, "Shuttle keyboard speed (scene units per second).");
             ShuttleTurnSpeed = Config.Bind("Shuttle", "TurnSpeed", 30f, "Shuttle keyboard turn speed (degrees per second).");
-            BridgeWalkEnabled = Config.Bind("Bridge Walk", "Enabled", false,
+            BridgeWalkEnabled = Config.Bind("Bridge Walk", "Enabled", true,
                 "Experimental, 2D (monitor) mode only: stand up from your seat with the key and walk around the bridge: WASD or arrow keys, "
                 + "mouse to look around, Shift to run, the key again or Escape to sit back down. Crewmates with the mod see you stand and walk. "
                 + "Takes effect after a restart.");
