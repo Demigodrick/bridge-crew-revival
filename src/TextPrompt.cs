@@ -16,6 +16,9 @@ namespace StbcRevival
         private static bool hidden = true;
         private static Rect window = new Rect(0, 0, 360, 110);
 
+        /// <summary>The desktop window is up and taking keys.</summary>
+        internal static bool IsOpen => done != null;
+
         internal static void Ask(string what, bool secret, Action<string> answer)
         {
             bool steamVr = UnityEngine.VR.VRSettings.enabled && UnityEngine.VR.VRSettings.loadedDeviceName == "OpenVR";

@@ -31,16 +31,36 @@ namespace StbcRevival.Walking
             Active = true;
         }
 
+        private static bool wasOnBridge;
+        private static float nextPrewarm;
+
         internal static void Update()
         {
             if (!Active) return;
-            if (Input.GetKeyDown(Plugin.BridgeWalkKey.Value))
+            bool onBridge = Bridge.OnBridge();
+            if (wasOnBridge && !onBridge)
+            {
+                // Left the bridge: what was kept for its characters and geometry goes.
+                BodyAnim.Clear();
+                Walker.ClearCaches();
+                WalkMesh.Clear();
+            }
+            wasOnBridge = onBridge;
+            if (Walker.SwallowEscape && !Input.GetKey(KeyCode.Escape)) Walker.SwallowEscape = false;
+            // Keys typed into the mod's text prompt aren't for walking.
+            bool typing = TextPrompt.IsOpen;
+            if (!typing && Input.GetKeyDown(Plugin.BridgeWalkKey.Value))
             {
                 if (Walker.Standing) Walker.SitDown("key");
                 else Walker.StandUp();
             }
-            if (Walker.Standing && Input.GetKeyDown(KeyCode.Escape)) Walker.SitDown("escape");
-            Walker.Tick();
+            if (!typing && Walker.Standing && Input.GetKeyDown(KeyCode.Escape)) Walker.SitDown("escape");
+            if (onBridge && !Walker.Standing && Time.unscaledTime >= nextPrewarm)
+            {
+                nextPrewarm = Time.unscaledTime + 2f;
+                Walker.Prewarm();
+            }
+            Walker.Tick(typing);
             Remotes.Tick();
         }
     }
@@ -131,11 +151,35 @@ namespace StbcRevival.Walking
         private static bool mouseAxisOk = true;
         private static float nextSend;
         private static readonly HashSet<Collider> own = new HashSet<Collider>();
+        private static CursorLockMode savedLockMode;
+        private static bool savedCursorVisible;
+        /// <summary>Sat down with Escape: the game's menu actions stay off until Escape is let go.</summary>
+        public static bool SwallowEscape;
 
         // The bridge moves with the ship: everything is worked out relative to the character's parent.
         private static Transform Basis => pawn != null ? pawn.parent : null;
         private static Vector3 Up => Basis != null ? Basis.up : Vector3.up;
         private static Quaternion BasisRot => Basis != null ? Basis.rotation : Quaternion.identity;
+        private static Vector3 ToLocal(Vector3 world) => Basis != null ? Basis.InverseTransformPoint(world) : world;
+        private static Vector3 ToWorld(Vector3 local) => Basis != null ? Basis.TransformPoint(local) : local;
+
+        /// <summary>On the bridge, seated in 2D mode: the bridge's meshes are read ahead, so they're there when you stand up.</summary>
+        public static void Prewarm()
+        {
+            if (!Plugin.BridgeWalkCollisions.Value) return;
+            try
+            {
+                var me = Bridge.Local();
+                if (me == null || me.PawnObject == null) return;
+                var fps = me.PawnObject.GetComponentInChildren<FPSCamera>(true);
+                if (fps == null || !fps.isActiveAndEnabled) return;
+                var t = me.PawnObject.transform;
+                WalkMesh.Ensure(t.position, t.parent);
+            }
+            catch (Exception e) { Plugin.Log.LogDebug("Bridge walk: reading the bridge ahead: " + e.Message); }
+        }
+
+        public static void ClearCaches() => ignoreCache.Clear();
 
         public static void StandUp()
         {
@@ -162,7 +206,7 @@ namespace StbcRevival.Walking
             Speed = 0f;
 
             Vector3 pos = pawn.position;
-            if (Plugin.BridgeWalkCollisions.Value) { try { WalkMesh.Ensure(pos); } catch (Exception e) { Plugin.Log.LogWarning("Bridge walk: bridge geometry: " + e.Message); } }
+            if (Plugin.BridgeWalkCollisions.Value) { try { WalkMesh.Ensure(pos, Basis); } catch (Exception e) { Plugin.Log.LogWarning("Bridge walk: bridge geometry: " + e.Message); } }
             floorFromGeometry = false;
             if (Plugin.BridgeWalkCollisions.Value && FindFloor(pos, out var floor, nearestTo: true)) { pos = floor; floorFromGeometry = true; }
             flatHeight = Vector3.Dot(pos, Up);
@@ -171,7 +215,10 @@ namespace StbcRevival.Walking
             TryMove(BasisRot * Quaternion.Euler(0, yaw, 0) * Vector3.forward * 0.45f);
 
             Standing = true;
+            SwallowEscape = false;
             Pose.Reset();
+            savedLockMode = Cursor.lockState;
+            savedCursorVisible = Cursor.visible;
             Cursor.lockState = CursorLockMode.Locked;
             Cursor.visible = false;
             Plugin.Log.LogInfo($"Bridge walk: stood up at {Bridge.Path(pawn)}; floor {(floorFromGeometry ? "from the bridge geometry" : "flat (no floor found)")}");
@@ -194,16 +241,26 @@ namespace StbcRevival.Walking
                 if (cam != null) { cam.localPosition = camLocalPos; cam.localRotation = camLocalRot; }
             }
             catch (Exception e) { Plugin.Log.LogWarning("Bridge walk: sitting down: " + e.Message); }
-            Cursor.lockState = CursorLockMode.None;
-            Cursor.visible = true;
+            if (why == "escape") SwallowEscape = true;
+            Cursor.lockState = savedLockMode;
+            Cursor.visible = savedCursorVisible;
             Plugin.Log.LogInfo("Bridge walk: sat down (" + why + ")");
             WalkNet.SendState(true);
         }
 
-        public static void Tick()
+        public static void Tick(bool typing)
         {
             if (!Standing) return;
             if (pawn == null || cam == null || Me == null || !Bridge.OnBridge()) { SitDown("left the bridge"); return; }
+            // The bridge's meshes finished reading after you stood up: from now on they carry you.
+            if (!floorFromGeometry && Plugin.BridgeWalkCollisions.Value && WalkMesh.ReadyFor(Basis)) floorFromGeometry = true;
+            if (typing)
+            {
+                Speed = Mathf.Lerp(Speed, 0f, 1f - Mathf.Exp(-10f * Time.deltaTime));
+                PlaceCamera();
+                if (Time.unscaledTime >= nextSend) { nextSend = Time.unscaledTime + 1f / 15f; WalkNet.SendState(false); }
+                return;
+            }
 
             // Looking around
             float mx = 0, my = 0;
@@ -298,14 +355,14 @@ namespace StbcRevival.Walking
             // Right at your own seat the mesh walls aren't checked, or you'd be stuck between the armrests.
             Vector3 seatW = Basis != null ? Basis.TransformPoint(seatLocalPos) : seatLocalPos;
             Vector3 fromSeat = pos - seatW; fromSeat -= up * Vector3.Dot(fromSeat, up);
-            if (WalkMesh.Ready && fromSeat.magnitude > 0.7f)
+            if (WalkMesh.ReadyFor(Basis) && fromSeat.magnitude > 0.7f)
             {
                 Vector3 dir = delta / dist, side = Vector3.Cross(up, dir).normalized * r;
                 foreach (float h in wallHeights)
                 {
                     Vector3 s = pos + up * h;
                     Vector3 e = s + dir * (dist + r);
-                    if (WalkMesh.Hits(s, e) || WalkMesh.Hits(s + side, e + side) || WalkMesh.Hits(s - side, e - side)) return true;
+                    if (WalkMesh.Hits(ToLocal(s), ToLocal(e)) || WalkMesh.Hits(ToLocal(s + side), ToLocal(e + side)) || WalkMesh.Hits(ToLocal(s - side), ToLocal(e - side))) return true;
                 }
             }
             return false;
@@ -330,16 +387,20 @@ namespace StbcRevival.Walking
                 float score = nearestTo ? -hit.distance : hit.distance;
                 if (score < best) { best = score; floor = hit.point; found = true; }
             }
-            if (WalkMesh.Ready)
+            if (WalkMesh.ReadyFor(Basis))
             {
+                // The mesh floors are in the bridge's space, where up is +y.
                 meshHeights.Clear();
-                float top = at.y + above;
-                WalkMesh.Floors(at, top, top - (nearestTo ? above + 1.0f : 2.4f), meshHeights);
+                Vector3 topW = at + up * above;
+                Vector3 lp = ToLocal(at);
+                float top = ToLocal(topW).y, bottom = ToLocal(topW - up * (nearestTo ? above + 1.0f : 2.4f)).y;
+                WalkMesh.Floors(lp, top, bottom, meshHeights);
                 foreach (float y in meshHeights)
                 {
-                    float dist = top - y;
+                    Vector3 fw = ToWorld(new Vector3(lp.x, y, lp.z));
+                    float dist = Vector3.Dot(topW - fw, up);
                     float score = nearestTo ? -dist : dist;
-                    if (score < best) { best = score; floor = new Vector3(at.x, y, at.z); found = true; }
+                    if (score < best) { best = score; floor = fw; found = true; }
                 }
             }
             return found;
@@ -454,6 +515,9 @@ namespace StbcRevival.Walking
         private static void Put(byte[] b, ref int o, float f) { Buffer.BlockCopy(BitConverter.GetBytes(f), 0, b, o, 4); o += 4; }
         private static float Get(byte[] b, ref int o) { float f = BitConverter.ToSingle(b, o); o += 4; return f; }
 
+        private const float MaxOffset = 500f;
+        private static bool Finite(float f) => !float.IsNaN(f) && !float.IsInfinity(f);
+
         private static void OnEvent(byte code, object content, int sender)
         {
             if (code != Code) return;
@@ -464,7 +528,9 @@ namespace StbcRevival.Walking
                 int o = 2;
                 var local = new Vector3(Get(b, ref o), Get(b, ref o), Get(b, ref o));
                 float yaw = Get(b, ref o), pitch = Get(b, ref o), speed = Get(b, ref o);
-                if (float.IsNaN(local.x + local.y + local.z + yaw + pitch + speed)) return;
+                // Finite, and within reach of a bridge (positions are relative to the character's parent).
+                if (!Finite(local.x) || !Finite(local.y) || !Finite(local.z) || !Finite(yaw) || !Finite(pitch) || !Finite(speed)) return;
+                if (local.sqrMagnitude > MaxOffset * MaxOffset) return;
                 Remotes.Receive(sender, b[1] == 1, local, yaw, pitch, Mathf.Clamp(speed, 0f, 10f));
             }
             catch (Exception e) { Plugin.Log.LogWarning("Bridge walk: receiving: " + e.Message); }
@@ -500,10 +566,23 @@ namespace StbcRevival.Walking
 
         private static bool SkipWhileStanding() => !Walker.Standing;
 
-        private static bool NoAction(ref bool __result)
+        private static bool NoAction(LONCAPHEAPA __0, ref bool __result)
         {
-            if (!Walker.Standing) return true;
+            if (!Blocks(__0)) return true;
             __result = false;
+            return false;
+        }
+
+        // Standing: the station and menu actions are off (Escape is for sitting down), but push-to-talk and the
+        // "which device is in use" checks still work. Just after sitting down with Escape, the menu actions stay
+        // off until Escape is let go, so the same press doesn't open the game's menu.
+        private static bool Blocks(LONCAPHEAPA a)
+        {
+            if (Walker.Standing)
+                return a != LONCAPHEAPA.VoiceCommand && a != LONCAPHEAPA.KeyboardAny && a != LONCAPHEAPA.MouseAny && a != LONCAPHEAPA.GamePadAny
+                    && a != LONCAPHEAPA.TouchControllersAny && a != LONCAPHEAPA.ViveControllersAny && a != LONCAPHEAPA.MoveControllersAny;
+            if (Walker.SwallowEscape)
+                return a == LONCAPHEAPA.PauseMenuMode || a == LONCAPHEAPA.BackOrCancel || a == LONCAPHEAPA.CloseAllMenus;
             return false;
         }
 

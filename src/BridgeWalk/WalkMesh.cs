@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Threading;
 using UnityEngine;
@@ -8,71 +9,136 @@ namespace StbcRevival.Walking
 {
     /// <summary>
     /// Floors and walls from the bridge's visible meshes. Some bridges (the Enterprise-D) have hardly any colliders,
-    /// so the meshes within 25 m of you are read once as you stand up, and their triangles sorted into floors and walls
-    /// on a 0.5 m grid. The game knows nothing of this.
+    /// so the meshes within 25 m of you are read once (on reaching the bridge, or as you stand up), and their
+    /// triangles sorted into floors and walls on a 0.5 m grid. Everything is kept in the space of the character's
+    /// parent (the bridge, which moves with the ship), so "up" is the bridge's up and the grid moves with it. The
+    /// meshes are listed on the main thread; reading them from the asset files and sorting the triangles happen on a
+    /// background thread. The game knows nothing of this.
     /// </summary>
     internal static class WalkMesh
     {
         private const float Cell = 0.5f;
         private const float Radius = 25f;
-        private static readonly Dictionary<long, List<int>> floorCells = new Dictionary<long, List<int>>();
-        private static readonly Dictionary<long, List<int>> wallCells = new Dictionary<long, List<int>>();
-        private static readonly List<Vector3> fv = new List<Vector3>();
-        private static readonly List<Vector3> wv = new List<Vector3>();
+
+        private sealed class Grid
+        {
+            public Transform Basis;
+            public readonly Dictionary<long, List<int>> FloorCells = new Dictionary<long, List<int>>();
+            public readonly Dictionary<long, List<int>> WallCells = new Dictionary<long, List<int>>();
+            public readonly List<Vector3> Fv = new List<Vector3>();
+            public readonly List<Vector3> Wv = new List<Vector3>();
+        }
+
+        private sealed class Job
+        {
+            public string Name;
+            public int VertexCount;
+            public Matrix4x4 M; // mesh space to bridge space
+            public Vector3[] Verts;
+            public int[] Tris;
+        }
+
+        private static volatile Grid grid;
+        private static Thread builder;
+        private static Transform builtBasis;
         private static Vector3 builtAt = new Vector3(1e9f, 0, 0);
         private static int builtScene = -1;
         private static bool builtWithIndex;
-        public static bool Ready => fv.Count > 0 || wv.Count > 0;
+
+        /// <summary>Whether mesh floors and walls are there for this bridge (the character's parent).</summary>
+        public static bool ReadyFor(Transform basis)
+        {
+            var g = grid;
+            return g != null && g.Basis == basis && (g.Fv.Count > 0 || g.Wv.Count > 0);
+        }
+
+        private static bool Building => builder != null && builder.IsAlive;
 
         private static long Key(int x, int z) => ((long)x << 32) ^ (uint)z;
         private static int C(float v) => Mathf.FloorToInt(v / Cell);
 
-        public static void Ensure(Vector3 center)
+        /// <summary>Starts reading the bridge's meshes around center (world space) unless that's done or under way.</summary>
+        public static void Ensure(Vector3 center, Transform basis)
         {
+            if (Building) return;
             int scene = UnityEngine.SceneManagement.SceneManager.GetActiveScene().buildIndex;
-            if (scene == builtScene && (center - builtAt).magnitude < 10f && (builtWithIndex || !BridgeMeshes.Indexed)) return;
-            Build(center);
+            Vector3 local = basis != null ? basis.InverseTransformPoint(center) : center;
+            bool same = scene == builtScene && basis == builtBasis;
+            if (same && (local - builtAt).magnitude < 10f && (builtWithIndex || !BridgeMeshes.Indexed)) return;
+            if (!same) grid = null;
+            Start(center, local, basis, fresh: !same);
             builtScene = scene;
+            builtBasis = basis;
+            builtAt = local;
+            builtWithIndex = BridgeMeshes.Indexed;
         }
 
-        private static void Build(Vector3 center)
+        /// <summary>Forgets the bridge's geometry (on leaving the bridge).</summary>
+        public static void Clear()
         {
-            float t0 = Time.realtimeSinceStartup;
-            floorCells.Clear(); wallCells.Clear(); fv.Clear(); wv.Clear();
-            builtAt = center;
-            int nearby = 0, unreadable = 0, used = 0, fromDisk = 0;
+            if (Building) return;
+            grid = null;
+            builtBasis = null;
+            builtScene = -1;
+        }
+
+        private static void Start(Vector3 center, Vector3 localCenter, Transform basis, bool fresh)
+        {
+            var jobs = new List<Job>();
+            int nearby = 0;
             var combinedDone = new HashSet<Mesh>();
-            builtWithIndex = BridgeMeshes.Indexed;
+            Matrix4x4 toLocal = basis != null ? basis.worldToLocalMatrix : Matrix4x4.identity;
+            foreach (var mf in UnityEngine.Object.FindObjectsOfType<MeshFilter>())
+            {
+                var mr = mf.GetComponent<MeshRenderer>();
+                if (mr == null || !mr.enabled || !mf.gameObject.activeInHierarchy) continue;
+                var mesh = mf.sharedMesh;
+                if (mesh == null) continue;
+                Bounds b = mr.bounds;
+                if ((b.ClosestPoint(center) - center).magnitude > Radius) continue;
+                if (b.size.magnitude > 400f) continue; // sky, stars, the view outside
+                string path = Bridge.Path(mf.transform);
+                if (path.StartsWith("/Players/") || path.IndexOf("/FX/", StringComparison.OrdinalIgnoreCase) >= 0 || path.IndexOf("Canvas", StringComparison.OrdinalIgnoreCase) >= 0
+                    || path.IndexOf("Hologram", StringComparison.OrdinalIgnoreCase) >= 0 || path.IndexOf("Particle", StringComparison.OrdinalIgnoreCase) >= 0) continue;
+                nearby++;
+                // Static batching merges meshes into world-space "Combined Mesh" objects shared by many filters.
+                bool combined = mesh.name.StartsWith("Combined Mesh");
+                if (combined && !combinedDone.Add(mesh)) continue;
+                var job = new Job
+                {
+                    Name = mesh.name,
+                    VertexCount = mesh.vertexCount,
+                    M = toLocal * (combined ? Matrix4x4.identity : mf.transform.localToWorldMatrix),
+                };
+                if (mesh.isReadable)
+                {
+                    try { job.Verts = mesh.vertices; job.Tris = mesh.triangles; } catch { job.Verts = null; job.Tris = null; }
+                }
+                jobs.Add(job);
+            }
+            builder = new Thread(() => Build(jobs, localCenter, basis, fresh, nearby)) { IsBackground = true };
+            builder.Start();
+        }
+
+        // On the background thread: no Unity objects are touched here, only the copied data.
+        private static void Build(List<Job> jobs, Vector3 center, Transform basis, bool fresh, int nearby)
+        {
+            var sw = Stopwatch.StartNew();
+            var g = new Grid { Basis = basis };
+            int unreadable = 0, used = 0, fromDisk = 0;
             try
             {
-                foreach (var mf in UnityEngine.Object.FindObjectsOfType<MeshFilter>())
+                if (fresh) BridgeMeshes.ClearLoaded();
+                foreach (var job in jobs)
                 {
-                    var mr = mf.GetComponent<MeshRenderer>();
-                    if (mr == null || !mr.enabled || !mf.gameObject.activeInHierarchy) continue;
-                    var mesh = mf.sharedMesh;
-                    if (mesh == null) continue;
-                    Bounds b = mr.bounds;
-                    if ((b.ClosestPoint(center) - center).magnitude > Radius) continue;
-                    if (b.size.magnitude > 400f) continue; // sky, stars, the view outside
-                    string path = Bridge.Path(mf.transform);
-                    if (path.StartsWith("/Players/") || path.IndexOf("/FX/", StringComparison.OrdinalIgnoreCase) >= 0 || path.IndexOf("Canvas", StringComparison.OrdinalIgnoreCase) >= 0
-                        || path.IndexOf("Hologram", StringComparison.OrdinalIgnoreCase) >= 0 || path.IndexOf("Particle", StringComparison.OrdinalIgnoreCase) >= 0) continue;
-                    nearby++;
-                    // Static batching merges meshes into world-space "Combined Mesh" objects shared by many filters.
-                    bool combined = mesh.name.StartsWith("Combined Mesh");
-                    if (combined && !combinedDone.Add(mesh)) continue;
-                    Matrix4x4 m = combined ? Matrix4x4.identity : mf.transform.localToWorldMatrix;
-                    Vector3[] verts = null; int[] tris = null;
-                    if (mesh.isReadable)
+                    var verts = job.Verts; var tris = job.Tris;
+                    if (verts == null || tris == null)
                     {
-                        try { verts = mesh.vertices; tris = mesh.triangles; } catch { verts = null; }
-                    }
-                    if (verts == null)
-                    {
-                        if (BridgeMeshes.TryLoad(mesh, out verts, out tris)) fromDisk++;
+                        if (BridgeMeshes.TryLoad(job.Name, job.VertexCount, out verts, out tris)) fromDisk++;
                         else { unreadable++; continue; }
                     }
                     used++;
+                    var m = job.M;
                     for (int i = 0; i + 2 < tris.Length; i += 3)
                     {
                         Vector3 a = m.MultiplyPoint3x4(verts[tris[i]]), bb = m.MultiplyPoint3x4(verts[tris[i + 1]]), c = m.MultiplyPoint3x4(verts[tris[i + 2]]);
@@ -80,15 +146,17 @@ namespace StbcRevival.Walking
                         Vector3 n = Vector3.Cross(bb - a, c - a);
                         float len = n.magnitude;
                         if (len < 1e-6f) continue;
-                        float ny = n.y / len;
-                        if (Mathf.Abs(ny) > 0.6f) Add(floorCells, fv, a, bb, c); // floor (either winding)
-                        else if (Mathf.Abs(ny) < 0.35f) Add(wallCells, wv, a, bb, c);
+                        float ny = n.y / len; // the bridge's up
+                        if (Mathf.Abs(ny) > 0.6f) Add(g.FloorCells, g.Fv, a, bb, c); // floor (either winding)
+                        else if (Mathf.Abs(ny) < 0.35f) Add(g.WallCells, g.Wv, a, bb, c);
                     }
                 }
             }
+            catch (Exception e) { Plugin.Log.LogWarning("Bridge walk: bridge geometry: " + e.Message); }
             finally { BridgeMeshes.CloseFiles(); }
+            grid = g;
             Plugin.Log.LogInfo($"Bridge walk: bridge geometry: {nearby} meshes nearby, {used} used ({fromDisk} from the asset files), {unreadable} unreadable, "
-                + $"{fv.Count / 3} floor and {wv.Count / 3} wall triangles, {(Time.realtimeSinceStartup - t0) * 1000f:0} ms; {BridgeMeshes.Status}");
+                + $"{g.Fv.Count / 3} floor and {g.Wv.Count / 3} wall triangles, {sw.ElapsedMilliseconds} ms (in the background); {BridgeMeshes.Status}");
         }
 
         private static void Add(Dictionary<long, List<int>> cells, List<Vector3> store, Vector3 a, Vector3 b, Vector3 c)
@@ -107,10 +175,12 @@ namespace StbcRevival.Walking
                 }
         }
 
-        /// <summary>The heights of all floor triangles at (x, z) between yBottom and yTop.</summary>
+        /// <summary>The heights of all floor triangles at (x, z) between yBottom and yTop, all in bridge space.</summary>
         public static void Floors(Vector3 p, float yTop, float yBottom, List<float> heights)
         {
-            if (!floorCells.TryGetValue(Key(C(p.x), C(p.z)), out var l)) return;
+            var g = grid;
+            if (g == null || !g.FloorCells.TryGetValue(Key(C(p.x), C(p.z)), out var l)) return;
+            var fv = g.Fv;
             foreach (int i in l)
             {
                 Vector3 a = fv[i * 3], b = fv[i * 3 + 1], c = fv[i * 3 + 2];
@@ -125,17 +195,19 @@ namespace StbcRevival.Walking
             }
         }
 
-        /// <summary>Does the segment from s to e cross a wall triangle?</summary>
+        /// <summary>Does the segment from s to e (bridge space) cross a wall triangle?</summary>
         public static bool Hits(Vector3 s, Vector3 e)
         {
+            var g = grid;
+            if (g == null) return false;
             int x0 = C(Mathf.Min(s.x, e.x)), x1 = C(Mathf.Max(s.x, e.x)), z0 = C(Mathf.Min(s.z, e.z)), z1 = C(Mathf.Max(s.z, e.z));
             Vector3 dir = e - s;
             for (int x = x0; x <= x1; x++)
                 for (int z = z0; z <= z1; z++)
                 {
-                    if (!wallCells.TryGetValue(Key(x, z), out var l)) continue;
+                    if (!g.WallCells.TryGetValue(Key(x, z), out var l)) continue;
                     foreach (int i in l)
-                        if (Segment(s, dir, wv[i * 3], wv[i * 3 + 1], wv[i * 3 + 2])) return true;
+                        if (Segment(s, dir, g.Wv[i * 3], g.Wv[i * 3 + 1], g.Wv[i * 3 + 2])) return true;
                 }
             return false;
         }
@@ -161,7 +233,8 @@ namespace StbcRevival.Walking
     /// <summary>
     /// Most bridge meshes aren't readable in memory (isReadable is off), so their triangles are read from the game's
     /// own asset files with AssetFile. A background thread lists every mesh in the level and shared asset files by
-    /// name at launch; a mesh is then found by its name and vertex count.
+    /// name at launch; a mesh is then found by its name and vertex count. TryLoad, ClearLoaded and CloseFiles run on
+    /// WalkMesh's builder thread only.
     /// </summary>
     internal static class BridgeMeshes
     {
@@ -218,24 +291,26 @@ namespace StbcRevival.Walking
         }
 
         /// <summary>A mesh's positions and triangle indices, from the asset files.</summary>
-        public static bool TryLoad(Mesh mesh, out Vector3[] verts, out int[] tris)
+        public static bool TryLoad(string meshName, int vertexCount, out Vector3[] verts, out int[] tris)
         {
             verts = null; tris = null;
             if (!indexed) return false;
-            int vc = mesh.vertexCount;
-            string key = mesh.name + "#" + vc;
+            string key = meshName + "#" + vertexCount;
             if (loaded.TryGetValue(key, out var hit)) { verts = hit.Key; tris = hit.Value; return verts != null; }
             List<Ref> refs;
-            lock (byName) byName.TryGetValue(mesh.name, out refs);
+            lock (byName) byName.TryGetValue(meshName, out refs);
             if (refs != null)
                 foreach (var rf in refs)
                 {
-                    try { if (Read(rf, vc, out verts, out tris)) break; }
+                    try { if (Read(rf, vertexCount, out verts, out tris)) break; }
                     catch { verts = null; tris = null; }
                 }
             loaded[key] = new KeyValuePair<Vector3[], int[]>(verts, tris);
             return verts != null;
         }
+
+        /// <summary>Forgets the meshes read for the last bridge.</summary>
+        public static void ClearLoaded() => loaded.Clear();
 
         private static bool Read(Ref rf, int vertexCount, out Vector3[] verts, out int[] tris)
         {

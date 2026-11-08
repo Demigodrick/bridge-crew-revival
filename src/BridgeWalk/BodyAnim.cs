@@ -71,7 +71,7 @@ namespace StbcRevival.Walking
             try
             {
                 Init();
-                if (Walker.Standing && Walker.Me != null && Walker.Me.VisualPawnObject != null)
+                if (Walker.Standing && Walker.Me != null && Walker.Me.VisualPawnObject != null && Walker.Me.PawnObject != null)
                     Apply(Walker.Me.VisualPawnObject, Walker.Me.PawnObject.transform, Walker.Pose, Walker.Speed, 0f);
                 foreach (var r in Remotes.All.Values)
                     if (r.Standing && r.Info != null && r.Info.VisualPawnObject != null && r.Info.PawnObject != null)
@@ -197,6 +197,16 @@ namespace StbcRevival.Walking
         }
 
         private static readonly Dictionary<Animator, Rest> rests = new Dictionary<Animator, Rest>();
+        private static Dictionary<string, GameObject> prefabs;
+
+        /// <summary>Forgets the characters seen on the last bridge (on leaving it).</summary>
+        public static void Clear()
+        {
+            handlers.Clear();
+            warned.Clear();
+            rests.Clear();
+            prefabs = null;
+        }
 
         private static void RestHelpers(Animator anim, GameObject visual)
         {
@@ -227,9 +237,14 @@ namespace StbcRevival.Walking
 
                 // First choice: the character's untouched prefab, where the helper bones are at rest.
                 string baseName = visual.name.Replace("(Clone)", "").Trim();
-                GameObject prefab = null;
-                foreach (var go in Resources.FindObjectsOfTypeAll<GameObject>())
-                    if (go != null && go.name == baseName && go.transform.parent == null && !go.scene.IsValid()) { prefab = go; break; }
+                if (prefabs == null)
+                {
+                    // One look through all loaded objects per bridge, not one per character.
+                    prefabs = new Dictionary<string, GameObject>();
+                    foreach (var go in Resources.FindObjectsOfTypeAll<GameObject>())
+                        if (go != null && go.transform.parent == null && !go.scene.IsValid() && !prefabs.ContainsKey(go.name)) prefabs[go.name] = go;
+                }
+                prefabs.TryGetValue(baseName, out var prefab);
                 var hips = anim.GetBoneTransform(HumanBodyBones.Hips);
                 if (prefab != null && hips != null)
                 {
