@@ -294,6 +294,7 @@ namespace StbcRevival
             Safely("creator species choices", SpeciesCreatorOptions.Update);
             Safely("revival settings", RevivalSettings.Update);
             Safely("briefing room decor", BriefingRoomDecor.Update);
+            Safely("loading screen label", LoadingScreenLabel.Update);
             Safely("stellar evacuation", StbcRevival.Missions.StellarEvacuationObjective.Update);
             Safely("mission maps", StbcRevival.Missions.MissionMaps.Update);
             Safely("restock sync", StbcRevival.Missions.RestockSync.Update);
