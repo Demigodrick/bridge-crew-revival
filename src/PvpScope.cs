@@ -93,6 +93,16 @@ namespace StbcRevival
             copiedOrders.Clear();
         }
 
+        /// <summary>Leaving the bridge: its handles dropped without writing them back (its consoles are gone with it).</summary>
+        internal static void Forget()
+        {
+            applied = null;
+            yours = null;
+            foreach (var orders in copiedOrders.Values)
+                if (orders != null) UnityEngine.Object.Destroy(orders.gameObject);
+            copiedOrders.Clear();
+        }
+
         private static View Read() => new View
         {
             Craft = CraftField.GetValue(Bridge.Instance) as CMFLDCJNMJJ,

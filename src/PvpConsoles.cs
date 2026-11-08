@@ -311,6 +311,13 @@ namespace StbcRevival
             if (station != null) sceneOf[station] = __instance.gameObject.scene;
         }
 
+        /// <summary>Leaving the bridge: its stations' entries, and the console sets' roots, gone.</summary>
+        internal static void Forget()
+        {
+            ForgetOldBridge();
+            setRoots.Clear();
+        }
+
         // A new bridge: the old one's stations are gone (destroyed with its scene).
         private static void ForgetOldBridge()
         {

@@ -227,6 +227,31 @@ namespace StbcRevival
             if (crew != null) crew.enabled = true;
         }
 
+        private static bool wasOnBridge;
+
+        // Leaving the bridge (for the briefing room, the main menu, anywhere): every reference to its ships, their
+        // parts, consoles and crews let go. A destroyed Unity object still referenced keeps everything its fields
+        // reach, so these would keep the last PvP mission's whole object graph alive (the PvP test stays on in a PvP
+        // room's briefing room, so the clean-up when it's off never ran).
+        private static void ForgetBridgeOnLeaving()
+        {
+            var manager = GamePhaseManager.IEFBKOMBFGO;
+            bool onBridge = manager != null && manager.GetCurrentGamePhase() == typeof(GamePhase_Bridge);
+            if (onBridge == wasOnBridge) return;
+            wasOnBridge = onBridge;
+            if (onBridge) return;
+            if (hiddenAvatars.Count > 0) ShowAllAvatars();
+            Bound = null;
+            boundInfo = null;
+            shipOf.Clear();
+            others.Clear();
+            exploded.Clear();
+            PvpScope.Forget();
+            PvpRouting.Forget();
+            PvpConsoles.Forget();
+            Plugin.Log.LogInfo("PvP: off the bridge; its ships, consoles and crews let go");
+        }
+
         // Its crew logic off (OnDisable drops its event listeners and its updates).
         private static void Detach(PlayerSpacecraft ship)
         {
@@ -243,6 +268,8 @@ namespace StbcRevival
             PvpLobby.Update();
             PvpShipChoice.Update();
             PvpLoadDiag.Update();
+            PvpSeatDiag.Update();
+            ForgetBridgeOnLeaving();
             if (!Active)
             {
                 if (others.Count > 0 || exploded.Count > 0)

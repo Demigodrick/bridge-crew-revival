@@ -237,6 +237,14 @@ namespace StbcRevival
             new[] { "GELDBDOEIBN", "IJFDAJGLKLF", "LMFOFJEALLE" }.Select(n => AccessTools.Field(typeof(AI.USSAegisCrew), n)).ToArray();
         private static readonly HashSet<AI.USSAegisCrew> checkedCrews = new HashSet<AI.USSAegisCrew>();
 
+        /// <summary>Leaving the bridge: nothing of its ships, consoles or crews kept (they'd keep the whole mission alive).</summary>
+        internal static void Forget()
+        {
+            ownerOf.Clear();
+            gridOf.Clear();
+            checkedCrews.Clear();
+        }
+
         private static void CrewCheck_Postfix(AI.USSAegisCrew __instance)
         {
             if (!Routing || __instance == null || checkedCrews.Contains(__instance)) return;
