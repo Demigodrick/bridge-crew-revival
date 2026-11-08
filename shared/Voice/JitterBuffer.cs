@@ -39,6 +39,7 @@ namespace StbcRevival.Voice
         readonly IFrameDecoder decoder;
         readonly Dictionary<uint, Frame> held = new Dictionary<uint, Frame>();
         readonly Stack<Frame> pool = new Stack<Frame>();
+        readonly List<uint> keys = new List<uint>();
 
         bool hasStream;
         uint stream;
@@ -179,8 +180,10 @@ namespace StbcRevival.Voice
             else if (held.Count > 0)
             {
                 // Seq counts mic time, so a new burst lands far ahead: the gap before it is silence, not loss.
-                // End this burst and start the new one by the usual rule instead of concealing across the gap.
-                if (Lowest().BurstStart)
+                // At a BurstStart, or a gap too wide to be a hole (the BurstStart packet may be lost), end this
+                // burst and start the new one by the usual rule instead of concealing across the gap.
+                Frame low = Lowest();
+                if (low.BurstStart || low.Seq - seq > BoundaryFrames(targetMs))
                 {
                     playing = false;
                     TryStart();
@@ -232,19 +235,50 @@ namespace StbcRevival.Voice
         void TryStart()
         {
             if (held.Count == 0) return;
-            Frame first = Lowest();
-            if ((int)(highest - first.Seq + 1) * VoiceFormat.FrameMs < targetMs) return;
 
             // Adapt at each start, where a depth change can't warp speech; shrink at most one step per start.
-            jitterMs = ComputeJitterMs();
-            int t = Math.Max(MinTargetMs, Math.Min(MaxTargetMs, jitterMs + VoiceFormat.FrameMs));
-            targetMs = Math.Max(t, targetMs - TargetStepMs);
+            // The candidate is tested against the span now, so a link that got jittery is covered at the very
+            // next burst; it is only committed when the start happens, so idle Pushes don't ratchet the shrink.
+            int j = ComputeJitterMs();
+            int t = Math.Max(MinTargetMs, Math.Min(MaxTargetMs, j + VoiceFormat.FrameMs));
+            int cand = Math.Max(t, targetMs - TargetStepMs);
 
+            DropBeforeBoundary(cand);
+            Frame first = Lowest();
+            if ((int)(highest - first.Seq + 1) * VoiceFormat.FrameMs < cand) return;
+
+            jitterMs = j;
+            targetMs = cand;
             nextSeq = first.Seq;
             hasPlayed = true;
             playing = true;
             concealRun = 0;
             starved = false;
+        }
+
+        // A seq gap wider than the cushion plus the concealment limit can't be a hole to conceal: seq counts mic
+        // time, so it is the silence before a new burst (whose BurstStart packet may have been lost).
+        static uint BoundaryFrames(int target)
+        {
+            return (uint)(target / VoiceFormat.FrameMs + MaxConcealed);
+        }
+
+        // Drops held stragglers that sit before a burst boundary, so the start begins at the newest burst.
+        void DropBeforeBoundary(int target)
+        {
+            if (held.Count < 2) return;
+            keys.Clear();
+            foreach (var kv in held) keys.Add(kv.Key);
+            keys.Sort();
+            uint limit = BoundaryFrames(target);
+            int cut = 0;
+            for (int i = 1; i < keys.Count; i++)
+                if (keys[i] - keys[i - 1] > limit) cut = i;
+            for (int i = 0; i < cut; i++)
+            {
+                pool.Push(held[keys[i]]);
+                held.Remove(keys[i]);
+            }
         }
 
         Frame Lowest()

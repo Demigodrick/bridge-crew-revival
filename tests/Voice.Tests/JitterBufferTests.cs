@@ -86,13 +86,14 @@ public class JitterBufferTests
     [Fact]
     public void WaitsForTargetBeforePlaying()
     {
+        // Steady arrivals: the start target adapts to max(clamp(0 + 20, 40, 300), 60 - 20) = 40 ms, two frames.
         var jb = new JitterBuffer(new FakeDecoder());
         Push(jb, 0, 0, burstStart: true);
-        Push(jb, 1, 20);
-        Assert.False(jb.Playing);              // 40 ms held, target 60
+        Assert.False(jb.Playing);
         Assert.False(jb.Pop(Pcm, out _));
-        Push(jb, 2, 40);
+        Push(jb, 1, 20);
         Assert.True(jb.Playing);
+        Assert.Equal(40, jb.TakeStats().TargetMs);
         Assert.True(Pop(jb, out var s, out var v));
         Assert.Equal(FrameSource.Normal, s);
         Assert.Equal(0f, v);
@@ -244,6 +245,42 @@ public class JitterBufferTests
         Assert.Equal(0, jb.TakeStats().Lost);
     }
 
+    [Fact]
+    public void StragglerBeforeLostBurstStartIsDropped()
+    {
+        // A burst ends by fade-out; a straggler of it stays held while idle; the next burst's BurstStart is lost.
+        var jb = new JitterBuffer(new FakeDecoder());
+        for (uint s = 0; s < 10; s++) Push(jb, s, s * 20.0, burstStart: s == 0);
+        Assert.Equal(15, PopUntilStop(jb).Count);   // 10 played + 5 concealed, next seq 15
+        Push(jb, 16, 16 * 20.0);                    // straggler, too short to start on its own
+        Assert.False(jb.Playing);
+        Assert.False(jb.Pop(Pcm, out _));
+        jb.TakeStats();
+        for (uint s = 117; s < 120; s++) Push(jb, s, s * 20.0);   // 116 (BurstStart) lost
+        Assert.True(Pop(jb, out var src, out var v));
+        Assert.Equal(FrameSource.Normal, src);
+        Assert.Equal(117f, v);
+        Assert.Equal(0, jb.TakeStats().Lost);
+    }
+
+    [Fact]
+    public void FarAheadPacketWithoutBurstStartEndsTheBurst()
+    {
+        // While the old burst is in its concealment tail, a new burst arrives with its BurstStart lost.
+        var jb = new JitterBuffer(new FakeDecoder());
+        for (uint s = 0; s < 10; s++) Push(jb, s, s * 20.0, burstStart: s == 0);
+        for (int i = 0; i < 10; i++) Assert.True(Pop(jb, out _, out _));
+        for (int i = 0; i < 2; i++) { Assert.True(Pop(jb, out var c, out _)); Assert.Equal(FrameSource.Concealed, c); }
+        jb.TakeStats();
+        for (uint s = 61; s < 66; s++) Push(jb, s, s * 20.0);    // 60 (BurstStart) lost
+        Assert.True(Pop(jb, out var src, out var v));
+        Assert.Equal(FrameSource.Normal, src);
+        Assert.Equal(61f, v);
+        var st = jb.TakeStats();
+        Assert.Equal(0, st.Lost);
+        Assert.Equal(0, st.Concealed);
+    }
+
     // Drives the buffer as the game would: packets at their arrival times, a Pop every 20 ms.
     static double Run(JitterBuffer jb, List<(uint seq, double at, bool start)> packets, double clock, double until)
     {
@@ -279,7 +316,18 @@ public class JitterBufferTests
         var rng = new Random(1234);
         double clock = Run(jb, Burst(0, 200, 60, rng, 60), 0, 4400);
         Assert.False(jb.Playing);
-        clock = Run(jb, Burst(300, 20, 6000, null, 0), clock, 6200);
+        // The very next burst already waits for the adapted cushion, not the one the jittery burst started with.
+        int frames = 0;
+        for (uint s = 300; !jb.Playing; s++)
+        {
+            Assert.True(s < 320);
+            Push(jb, s, s * 20.0 + 5, burstStart: s == 300);
+            frames++;
+        }
+        int target = jb.TakeStats().TargetMs;
+        Assert.InRange(target, 80, 160);
+        Assert.True(frames * 20 >= target && (frames - 1) * 20 < target, $"started at {frames} frames, target {target}");
+        clock = Run(jb, Burst(300 + (uint)frames, 20 - frames, 6000 + frames * 20, null, 0), clock, 6400);
         var st = jb.TakeStats();
         Assert.InRange(st.TargetMs, 80, 160);
         Assert.InRange(st.JitterMs, 90, 125);  // p95 of a 120 ms uniform spread
