@@ -274,6 +274,7 @@ namespace StbcRevival
                 Patches.ApplyDeferred(harmony);
             }
             // Each subsystem on its own: one failing must not stop the others (or spam every frame).
+            Safely("memory log", MemoryLog.Frame);
             if (Diagnostics.Value)
                 Safely("diagnostics", () => StbcRevival.Diagnostics.Heartbeat(Patches.PhotonNetworkType));
             Safely("steam mode", SteamMode.Update);
@@ -312,11 +313,13 @@ namespace StbcRevival
 
         private void Safely(string what, System.Action action)
         {
+            long before = MemoryLog.Before();
             try { action(); }
             catch (System.Exception e)
             {
                 if (failedOnce.Add(what)) Log.LogError($"{what} failed (logged once): {e}");
             }
+            MemoryLog.After(what, before);
         }
 
         private void OnApplicationQuit()
