@@ -6,3 +6,4 @@ decompiled/
 *.DotSettings.user
 server/.env
 .superpowers/
+tools/rnnoise/out/
