@@ -38,10 +38,23 @@ docker run --rm -e URL="$URL" -e SHA256="$SHA256" -v "$out:/out" "$IMAGE" bash -
   echo "--- DLL imports:"
   imports="$(x86_64-w64-mingw32-objdump -p /out/rnnoise.dll | sed -n "s/^\s*DLL Name: //p")"
   echo "$imports"
+  if [ -z "$imports" ]; then
+    echo "objdump listed no imports for rnnoise.dll (unexpected)" >&2
+    exit 1
+  fi
   if echo "$imports" | grep -qvi -E "^(KERNEL32|msvcrt)\.dll$"; then
     echo "rnnoise.dll imports something besides KERNEL32.dll and msvcrt.dll" >&2
     exit 1
   fi
+  echo "--- DLL exports:"
+  exports="$(x86_64-w64-mingw32-objdump -p /out/rnnoise.dll)"
+  for sym in rnnoise_create rnnoise_process_frame rnnoise_destroy; do
+    if ! echo "$exports" | grep -qE "(^|[[:space:]])$sym\$"; then
+      echo "rnnoise.dll does not export $sym" >&2
+      exit 1
+    fi
+    echo "$sym"
+  done
   chown "$(stat -c %u:%g /out)" /out/rnnoise.dll
 '
 echo "$out/rnnoise.dll"
