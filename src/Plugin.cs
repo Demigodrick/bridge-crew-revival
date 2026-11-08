@@ -79,6 +79,15 @@ namespace StbcRevival
         internal static ConfigEntry<bool> ExcelsiorTest;
         internal static ConfigEntry<float> ShuttleSpeed;
         internal static ConfigEntry<float> ShuttleTurnSpeed;
+        internal static ConfigEntry<bool> BridgeWalkEnabled;
+        internal static ConfigEntry<UnityEngine.KeyCode> BridgeWalkKey;
+        internal static ConfigEntry<float> BridgeWalkSpeed;
+        internal static ConfigEntry<float> BridgeWalkRunSpeed;
+        internal static ConfigEntry<float> BridgeWalkMouseSensitivity;
+        internal static ConfigEntry<float> BridgeWalkEyeHeight;
+        internal static ConfigEntry<float> BridgeWalkMaxDistance;
+        internal static ConfigEntry<bool> BridgeWalkCollisions;
+        internal static ConfigEntry<bool> BridgeWalkAnimate;
         internal static Plugin Instance { get; private set; }
         internal static ConfigEntry<string> PlayerName;
         internal static ConfigEntry<string> ExtraDevConfig;
@@ -219,6 +228,18 @@ namespace StbcRevival
                 "Experimental, doesn't work yet: fly the main-menu shuttle with the keyboard (W/S forward/back, A/D turn, Q/E down/up, Shift faster).");
             ShuttleSpeed = Config.Bind("Shuttle", "Speed", 20f, "Shuttle keyboard speed (scene units per second).");
             ShuttleTurnSpeed = Config.Bind("Shuttle", "TurnSpeed", 30f, "Shuttle keyboard turn speed (degrees per second).");
+            BridgeWalkEnabled = Config.Bind("Bridge Walk", "Enabled", true,
+                "Experimental, 2D (monitor) mode only: stand up from your seat with the key and walk around the bridge: WASD or arrow keys, "
+                + "mouse to look around, Shift to run, the key again or Escape to sit back down. Crewmates with the mod see you stand and walk. "
+                + "Takes effect after a restart.");
+            BridgeWalkKey = Config.Bind("Bridge Walk", "Key", UnityEngine.KeyCode.F6, "Stands you up and sits you back down (on the bridge, in 2D mode).");
+            BridgeWalkSpeed = Config.Bind("Bridge Walk", "WalkSpeed", 1.4f, "Walking speed, metres per second.");
+            BridgeWalkRunSpeed = Config.Bind("Bridge Walk", "RunSpeed", 2.6f, "Speed with Shift held, metres per second.");
+            BridgeWalkMouseSensitivity = Config.Bind("Bridge Walk", "MouseSensitivity", 2f, "How fast the mouse turns you while standing.");
+            BridgeWalkEyeHeight = Config.Bind("Bridge Walk", "EyeHeight", 1.62f, "Eye height standing, metres.");
+            BridgeWalkMaxDistance = Config.Bind("Bridge Walk", "MaxDistance", 15f, "How far from your seat you can walk, metres: keeps you from walking out of the bridge.");
+            BridgeWalkCollisions = Config.Bind("Bridge Walk", "Collisions", true, "Walls, floors, ramps and steps stop or carry you (from the bridge's colliders and meshes). Off: walk through everything at seat floor height.");
+            BridgeWalkAnimate = Config.Bind("Bridge Walk", "Animate", true, "Animate standing and walking characters (yours and crewmates').");
             PlayerName = Config.Bind("Login", "PlayerName", "",
                 "Name shown to other players. Empty = your Steam persona name (falls back to the OS user name).");
 
@@ -310,6 +331,7 @@ namespace StbcRevival
             Safely("voice commands", StbcRevival.VoiceCommands.Update);
             Safely("ubisoft save import", UbisoftSaveImport.Update);
             Safely("crash report", CrashReport.Update);
+            Safely("bridge walk", Walking.BridgeWalk.Update);
         }
 
         private readonly System.Collections.Generic.HashSet<string> failedOnce = new System.Collections.Generic.HashSet<string>();
