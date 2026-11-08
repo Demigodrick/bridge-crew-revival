@@ -107,6 +107,26 @@ public class ProcessingTests
     }
 
     [Fact]
+    public void AgcLimiterIsSmoothAcrossFrames()
+    {
+        var agc = new Agc();
+        var quiet = Tone(960, -40f);
+        for (int i = 0; i < 250; i++) agc.Process((float[])quiet.Clone(), 0, 960, true);
+        // A smooth 50 Hz tone whose level decays from 0.5 to about 0.03: the limiter has to let go.
+        var all = new float[960 * 12];
+        for (int i = 0; i < all.Length; i++)
+            all[i] = 0.5f * Math.Min(1f, i / 960f) * (float)Math.Exp(-i / 4000.0) * (float)Math.Sin(2 * Math.PI * 50 * i / 48000.0 + Math.PI / 2);
+        for (int f = 0; f < 12; f++) agc.Process(all, f * 960, 960, true);
+        float maxStep = 0;
+        for (int i = 1; i < all.Length; i++)
+        {
+            Assert.True(Math.Abs(all[i]) <= 0.98f + 1e-6f);
+            maxStep = Math.Max(maxStep, Math.Abs(all[i] - all[i - 1]));
+        }
+        Assert.True(maxStep < 0.05f, "step " + maxStep);
+    }
+
+    [Fact]
     public void GateOpensWithPreRoll()
     {
         var g = new SpeechGate();

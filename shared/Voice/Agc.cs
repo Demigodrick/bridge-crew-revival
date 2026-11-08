@@ -6,7 +6,9 @@ namespace StbcRevival.Voice
     {
         const float UpDbPerSecond = 6f, DownDbPerSecond = 30f, Ceiling = 0.98f;
         readonly float target, maxGain, minGain;
-        float gainDb;
+        const float AttackSlope = 0.002f, ReleaseSlope = 0.0001f;
+        float gainDb, limiter = 1f;
+        float[] envelope;
 
         public Agc(float targetDbfs = -20f, float maxGainDb = 18f, float minGainDb = -6f)
         {
@@ -45,20 +47,45 @@ namespace StbcRevival.Voice
             }
             float g0 = (float)System.Math.Pow(10.0, startDb / 20.0);
             float g1 = (float)System.Math.Pow(10.0, gainDb / 20.0);
-            float peak = 0f;
+            // Apply the interpolated gain, keeping the post-gain samples in the frame.
             for (int i = 0; i < count; i++)
             {
                 float g = g0 + (g1 - g0) * ((i + 1) / (float)count);
-                float y = frame[offset + i] * g;
-                frame[offset + i] = y;
-                float a = y < 0 ? -y : y;
-                if (a > peak) peak = a;
+                frame[offset + i] *= g;
             }
-            if (peak > Ceiling)
+            Limit(frame, offset, count);
+        }
+
+        // Smoothed peak limiter. The gain envelope e[i] never exceeds the per-sample need 0.98/|x|; it falls
+        // towards a peak along a slope (so the cut is ramped in ahead of it, not a step) and recovers slowly
+        // over the following frames.
+        void Limit(float[] frame, int offset, int count)
+        {
+            if (envelope == null || envelope.Length < count) envelope = new float[count];
+            float[] e = envelope;
+            bool any = false;
+            for (int i = 0; i < count; i++)
             {
-                float k = Ceiling / peak;
-                for (int i = 0; i < count; i++) frame[offset + i] *= k;
+                float a = frame[offset + i];
+                if (a < 0) a = -a;
+                e[i] = a > Ceiling ? Ceiling / a : 1f;
+                if (a > Ceiling) any = true;
             }
+            if (!any && limiter >= 1f) return;
+            for (int i = count - 2; i >= 0; i--)
+                if (e[i] > e[i + 1] + AttackSlope) e[i] = e[i + 1] + AttackSlope;
+            float prev = limiter;
+            for (int i = 0; i < count; i++)
+            {
+                if (e[i] > prev + ReleaseSlope) e[i] = prev + ReleaseSlope;
+                if (e[i] > 1f) e[i] = 1f;
+                prev = e[i];
+                float x = frame[offset + i] * prev;
+                if (x > Ceiling) x = Ceiling;
+                if (x < -Ceiling) x = -Ceiling;
+                frame[offset + i] = x;
+            }
+            limiter = prev;
         }
     }
 }
