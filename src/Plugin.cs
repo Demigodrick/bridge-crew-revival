@@ -61,7 +61,7 @@ namespace StbcRevival
         internal static ConfigEntry<int> KlingonHeadChoice;
         internal static ConfigEntry<string> MapOverride;
         internal static ConfigEntry<int> FleetBattleSize;
-        internal static ConfigEntry<bool> TestWarfareAnomaly;
+        internal static ConfigEntry<string> TestPatrolAssignment;
         internal static ConfigEntry<int> EvacuationMinutes;
         internal static ConfigEntry<bool> VoiceCommands;
         internal static ConfigEntry<UnityEngine.KeyCode> PushToTalkKey;
@@ -187,8 +187,11 @@ namespace StbcRevival
                 "Testing only: the sector map Free Roam and Ongoing Voyages load, as a path in the game's Resources, e.g. \"Mission Data/Maps/Sector - E3\" "
                 + "or \"Mission Data/Maps/Sector - SpaceStationRescue\". Applies to your whole crew when you host. Off the Trench there are no "
                 + "mission encounters: you start in one of the map's systems and can warp to its others. Empty: the game's own map.");
-            TestWarfareAnomaly = Config.Bind("Debug", "TestWarfareAnomaly", false,
-                "Testing only: every assignment Patrol offers is a Warfare Anomaly (normally about one in twenty).");
+            TestPatrolAssignment = Config.Bind("Debug", "TestPatrolAssignment", "",
+                new BepInEx.Configuration.ConfigDescription(
+                    "Testing only: every assignment Patrol offers is this one, when you host. Empty: Starfleet's usual mix "
+                    + "(a Warfare Anomaly about one time in twenty).",
+                    new BepInEx.Configuration.AcceptableValueList<string>("", "hunt", "defend", "rescue", "ambush", "escort", "research", "warfare")));
             TestLastStand = Config.Bind("Debug", "TestLastStand", false,
                 "Testing only: every Ongoing Voyage you host runs the Revival mission Last Stand instead.");
             PvpTest = Config.Bind("Debug", "PvpTest", false,

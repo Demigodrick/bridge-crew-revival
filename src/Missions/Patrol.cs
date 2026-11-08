@@ -121,7 +121,8 @@ namespace StbcRevival.Missions
                 // The offer: a job in another system, marked on the warp map. Never the same kind of job twice in a
                 // row, nor the system of the last one (where it'd send you straight back to what you just left).
                 int job = lastJob < 0 ? random.Next(Jobs) : (lastJob + 1 + random.Next(Jobs - 1)) % Jobs;
-                if (Plugin.TestWarfareAnomaly.Value || lastJob != Warfare && random.Next(WarfareChance) == 0) job = Warfare; // rare, outside the rotation
+                if (lastJob != Warfare && random.Next(WarfareChance) == 0) job = Warfare; // rare, outside the rotation
+                if (ForcedJob() is int forced && forced >= 0) job = forced;               // [Debug] TestPatrolAssignment
                 lastJob = job;
                 var here = Objective.KALBLMGFNIN;
                 var target = PickSystem(here, jobSystem);
@@ -625,7 +626,9 @@ namespace StbcRevival.Missions
         // decloaking around it. Delivered if any freighter gets there; raiders still about stay in the system.
         private const int EscortRaidChance = 2;   // one escort in this many is raided
         private const double ArriveRange = 5000;  // metres from a route point's surface that counts as reaching it
+        private const double NearEnough = 15000;  // ... or that does, once a freighter has stopped getting closer there
         private const double MinLeg = 15000;      // the destination at least this far from the site's surface
+        private const double ImpulseLeg = 200000; // a leg further than this, the convoy goes to impulse for it: out of sight
         private const float StallTime = 60f;      // seconds a freighter gets no closer before it's ordered on again
         private const float GiveUpTime = 300f;    // seconds no freighter gets any closer before the run counts as made
 
@@ -636,6 +639,30 @@ namespace StbcRevival.Missions
             public bool Arrived, Lost;
             public double Best = double.MaxValue; // closest it's been to that point
             public float Since;                   // when it last got closer
+            public UnityEngine.Vector3d? LastAt;  // where it was at the last status line
+            public float LastTime;
+        }
+
+        // "120 m/s" since the last status line, and "AI off" if the game has its AI disabled: for telling a stuck
+        // freighter from a slow one.
+        private static string Motion(Freighter c)
+        {
+            try
+            {
+                var body = c.Ship.AHMPFHDGMKJ;
+                var at = body.ALPAOOKFIEE.Position;
+                float now = UnityEngine.Time.time;
+                string speed = "speed ?";
+                if (c.LastAt is UnityEngine.Vector3d last && now > c.LastTime)
+                {
+                    double dx = at.x - last.x, dy = at.y - last.y, dz = at.z - last.z;
+                    speed = $"{Math.Sqrt(dx * dx + dy * dy + dz * dz) / (now - c.LastTime):0} m/s";
+                }
+                c.LastAt = at;
+                c.LastTime = now;
+                return body is AI.AgentShip agent && agent.BODPDHFAOGN ? speed + ", AI off" : speed;
+            }
+            catch { return "speed ?"; }
         }
 
         private IEnumerable<Step> Escort()
@@ -649,8 +676,10 @@ namespace StbcRevival.Missions
             }
             var end = route[route.Count - 1];
             string to = BodyName(end) ?? "the marked destination";
-            string line = $"Escort the convoy to {to}; it's waiting{Near()}";
+            bool longHaul = Enumerable.Range(0, route.Count).Any(i => Gap(i == 0 ? site : route[i - 1], route[i]) > ImpulseLeg);
+            string line = $"Escort the convoy to {to}{(longHaul ? " (it will go to impulse: follow it)" : "")}; it's waiting{Near()}";
             yield return Task.NECMCDDOFJB.AddSubDirectives(Directive, line);
+            string gone = null; // the directive while the convoy's off at impulse and the ship isn't with it
 
             int size = 2 + random.Next(2);
             var convoy = new List<Freighter>();
@@ -702,7 +731,9 @@ namespace StbcRevival.Missions
                             continue;
                         }
                         double d = Gap(c.Ship, route[c.Leg]);
-                        if (d <= ArriveRange)
+                        bool stoppedNear = d <= NearEnough && now - c.Since >= StallTime; // the AI's own idea of there
+                        if (stoppedNear) Plugin.Log.LogInfo($"Patrol: {ShipName(c.Ship)} stopped {Km(d)} km short of the leg's end; that'll do");
+                        if (d <= ArriveRange || stoppedNear)
                         {
                             lastProgress = now;
                             if (++c.Leg == route.Count)
@@ -729,6 +760,23 @@ namespace StbcRevival.Missions
                         }
                     }
                     foreach (var c in orders) yield return Task.LAADENAGNCO.TellAI(c.Ship).ToDestination(route[c.Leg]);
+
+                    // Gone to impulse: tell the crew where, until the ship has caught up with it.
+                    var away = convoy.Where(c => !c.Arrived && !c.Lost).ToList();
+                    bool withIt = away.Any(c => Distance(player, c.Ship) <= EngageRange);
+                    if (gone == null && !withIt && away.Any(c => Gap(c.Ship, route[c.Leg]) > ImpulseLeg || Distance(player, c.Ship) > ImpulseLeg))
+                    {
+                        string place = BodyName(route[away[0].Leg]) ?? "the marked destination";
+                        gone = $"The convoy has gone to impulse for {place}: set an impulse course to follow it";
+                        Plugin.Log.LogInfo($"Patrol: the convoy has gone to impulse for {place}; the crew told to follow");
+                        yield return Task.NECMCDDOFJB.AddSubDirectives(Directive, gone);
+                    }
+                    else if (gone != null && (withIt || away.Count == 0))
+                    {
+                        Plugin.Log.LogInfo("Patrol: the ship has caught up with the convoy");
+                        yield return Task.NECMCDDOFJB.RemoveSubDirective(Directive, gone);
+                        gone = null;
+                    }
 
                     // The raid.
                     var going = convoy.Where(c => !c.Arrived && !c.Lost).ToList();
@@ -780,7 +828,7 @@ namespace StbcRevival.Missions
                     {
                         nextLog = now + StatusEvery;
                         Plugin.Log.LogInfo("Patrol: convoy: " + string.Join(", ", going.Select(c =>
-                            $"{ShipName(c.Ship)} leg {c.Leg + 1} of {route.Count}, {Km(Gap(c.Ship, route[c.Leg]))} km to go, hull {Hull(c.Ship)}").ToArray()));
+                            $"{ShipName(c.Ship)} leg {c.Leg + 1} of {route.Count}, {Km(Gap(c.Ship, route[c.Leg]))} km to go, hull {Hull(c.Ship)}, {Motion(c)}").ToArray()));
                     }
                 }
             }
@@ -789,6 +837,7 @@ namespace StbcRevival.Missions
             Plugin.Log.LogInfo($"Patrol: escort {(abandoned ? "abandoned" : arrived > 0 ? "delivered" : "failed, the convoy lost")}: "
                                + $"{arrived} of {size} freighters arrived, {lost} lost");
             if (fight != null) yield return Task.NECMCDDOFJB.RemoveSubDirective(Directive, fight);
+            if (gone != null) yield return Task.NECMCDDOFJB.RemoveSubDirective(Directive, gone);
             yield return Task.NECMCDDOFJB.RemoveSubDirective(Directive, line);
         }
 
@@ -942,7 +991,16 @@ namespace StbcRevival.Missions
             if (site == player) return null;
             try
             {
-                var others = SystemBodies().Where(b => b.AHMPFHDGMKJ != site.AHMPFHDGMKJ).ToList();
+                // Not into an anomaly, nebula or asteroid field: the game's ships steer clear of those, so a convoy
+                // headed for one stopped short of it and never got there.
+                var hazards = new HashSet<object>();
+                foreach (var tag in new[] { Tag.Anomaly, Tag.Nebula, Tag.Asteroid })
+                {
+                    var found = new List<BodyRef>();
+                    Objective.FindAllBodyWithTags(found, new[] { tag });
+                    foreach (var b in found) if (b?.AHMPFHDGMKJ != null) hazards.Add(b.AHMPFHDGMKJ);
+                }
+                var others = SystemBodies().Where(b => b.AHMPFHDGMKJ != site.AHMPFHDGMKJ && !hazards.Contains(b.AHMPFHDGMKJ)).ToList();
                 var far = others.Where(b => Gap(site, b) - Radius(site) >= MinLeg).OrderBy(b => Distance(site, b)).ToList();
                 if (far.Count == 0) return null;
                 var end = far[random.Next(Math.Min(3, far.Count))];
@@ -1387,6 +1445,16 @@ namespace StbcRevival.Missions
 
         private const int Jobs = 6;      // the regular assignments, in rotation
         private const int Warfare = 6;   // the warfare anomaly, picked now and then instead (WarfareChance)
+
+        // The assignment [Debug] TestPatrolAssignment asks for (by JobName's first word), or -1.
+        private static int ForcedJob()
+        {
+            string wanted = (Plugin.TestPatrolAssignment?.Value ?? "").Trim();
+            if (wanted.Length == 0) return -1;
+            for (int job = 0; job <= Warfare; job++)
+                if (JobName(job).Split(' ')[0].Equals(wanted, StringComparison.OrdinalIgnoreCase)) return job;
+            return -1;
+        }
 
         private static string JobName(int job) => job == Warfare ? "warfare anomaly" : job == 0 ? "hunt" : job == 1 ? "defend" : job == 2 ? "rescue" : job == 3 ? "ambush" : job == 4 ? "escort" : "research";
 
