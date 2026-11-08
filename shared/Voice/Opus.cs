@@ -40,6 +40,7 @@ namespace StbcRevival.Voice
         public static extern int opus_decode_float(IntPtr st, IntPtr data, int len, float[] pcm, int frameSize, int decodeFec);
     }
 
+    // Single-thread ownership: use and Dispose from one thread only (no locking).
     public sealed class OpusEncoder : IDisposable
     {
         IntPtr st;
@@ -59,6 +60,7 @@ namespace StbcRevival.Voice
             OpusNative.opus_encoder_ctl(st, OpusNative.SetInbandFec, 1);
             OpusNative.opus_encoder_ctl(st, OpusNative.SetComplexity, 8);
             PacketLossPercent = 10;
+            GC.KeepAlive(this);
         }
 
         ~OpusEncoder() { Free(); }
@@ -77,6 +79,7 @@ namespace StbcRevival.Voice
                 if (st == IntPtr.Zero) throw new ObjectDisposedException("OpusEncoder");
                 int v = value < 5 ? 5 : value > 30 ? 30 : value;
                 OpusNative.opus_encoder_ctl(st, OpusNative.SetPacketLossPerc, v);
+                GC.KeepAlive(this);
             }
         }
 
@@ -88,6 +91,7 @@ namespace StbcRevival.Voice
                 if (st == IntPtr.Zero) throw new ObjectDisposedException("OpusEncoder");
                 int v;
                 OpusNative.opus_encoder_ctl(st, OpusNative.GetPacketLossPerc, out v);
+                GC.KeepAlive(this);
                 return v;
             }
         }
@@ -103,10 +107,13 @@ namespace StbcRevival.Voice
                 Array.Copy(pcm, offset, scratch, 0, frameSamples);
                 src = scratch;
             }
-            return OpusNative.opus_encode_float(st, src, frameSamples, output, output.Length);
+            int n = OpusNative.opus_encode_float(st, src, frameSamples, output, output.Length);
+            GC.KeepAlive(this); // the finalizer must not destroy the handle mid-call
+            return n;
         }
     }
 
+    // Single-thread ownership: use and Dispose from one thread only (no locking).
     public sealed class OpusDecoder : IFrameDecoder, IDisposable
     {
         IntPtr st;
@@ -132,13 +139,17 @@ namespace StbcRevival.Voice
         public int Decode(byte[] packet, int length, float[] pcm, bool fec)
         {
             if (st == IntPtr.Zero) throw new ObjectDisposedException("OpusDecoder");
-            return OpusNative.opus_decode_float(st, packet, length, pcm, frameSamples, fec ? 1 : 0);
+            int n = OpusNative.opus_decode_float(st, packet, length, pcm, frameSamples, fec ? 1 : 0);
+            GC.KeepAlive(this);
+            return n;
         }
 
         public int Conceal(float[] pcm)
         {
             if (st == IntPtr.Zero) throw new ObjectDisposedException("OpusDecoder");
-            return OpusNative.opus_decode_float(st, IntPtr.Zero, 0, pcm, frameSamples, 0);
+            int n = OpusNative.opus_decode_float(st, IntPtr.Zero, 0, pcm, frameSamples, 0);
+            GC.KeepAlive(this);
+            return n;
         }
     }
 }
