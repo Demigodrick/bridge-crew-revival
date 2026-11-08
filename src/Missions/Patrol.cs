@@ -172,7 +172,7 @@ namespace StbcRevival.Missions
                 if (succeeded) completed++; else failed++;
                 Completed = completed;
                 Plugin.Log.LogInfo($"Patrol: {JobName(job)} {(succeeded ? "complete" : abandoned ? "abandoned" : "failed")}; {completed} done, {failed} failed");
-                yield return Task.HHNFJKHGEPH.WithMissionResult($"Assignments completed: {completed}", false);
+                ResultRow(completed);
                 yield return Task.OKLDNLKLLFJ.WithGroup("State_Group_Mus_Dyn").WithState("Explore");
                 string result = succeeded ? $"Assignment complete. Well done. Assignments completed: {completed}"
                     : abandoned ? $"Assignment abandoned. Assignments completed: {completed}"
@@ -698,7 +698,8 @@ namespace StbcRevival.Missions
             Plugin.Log.LogInfo($"Patrol: escort of {size} freighters from {BodyName(site) ?? "the site"} to {to}"
                                + (route.Count > 1 ? $" by way of {BodyName(route[0]) ?? "a waypoint"}" : "")
                                + $", about {length / 1000:0} km; {(raid ? "raiders will attack" : "no raiders")}");
-            yield return Task.BCJDEKKIHDD.AddMarker(ships.Concat(new[] { end }).ToArray());
+            yield return Task.BCJDEKKIHDD.AddMarker(ships.ToArray()); // the destination too, once the convoy sets off: two
+                                                                       // markers on arrival left it unclear which to make for
 
             // The convoy sets off once its escort has come.
             yield return Task.KNMMMJOOBHC.WithTime(5f);
@@ -708,6 +709,7 @@ namespace StbcRevival.Missions
             if (!abandoned)
             {
                 Plugin.Log.LogInfo("Patrol: the escort is here; the convoy sets off");
+                yield return Task.BCJDEKKIHDD.AddMarker(new[] { end });
                 float departed = UnityEngine.Time.time, lastProgress = departed, nextLog = departed + StatusEvery, raidAt = 0;
                 float raidAfter = 45 + random.Next(0, 106);
                 bool sprung = false;
@@ -1445,6 +1447,35 @@ namespace StbcRevival.Missions
 
         private const int Jobs = 6;      // the regular assignments, in rotation
         private const int Warfare = 6;   // the warfare anomaly, picked now and then instead (WarfareChance)
+
+        // The results screen's line for the patrol: one "Assignments completed: N", a success once there's one done.
+        // (The game's WithMissionResult adds a line per distinct text, so a new count added a new line each time,
+        // and all of them showed Failure.) The results go to the crew with the rest of MissionResultManager.
+        private static readonly System.Reflection.FieldInfo ResultsField =
+            HarmonyLib.AccessTools.Field(typeof(MissionResultManager), "<GGLIAJPAMOC>k__BackingField"); // MissionResults
+
+        private static void ResultRow(int completed)
+        {
+            const string prefix = "Assignments completed: ";
+            try
+            {
+                var manager = MissionResultManager.Instance;
+                if (manager == null) return;
+                if (ResultsField?.GetValue(manager) is System.Collections.IList rows)
+                    for (int i = rows.Count - 1; i >= 0; i--)
+                    {
+                        var row = rows[i];
+                        var text = row?.GetType().GetFields(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic)
+                            .FirstOrDefault(f => f.FieldType == typeof(string))?.GetValue(row) as string;
+                        if (text != null && text.StartsWith(prefix)) rows.RemoveAt(i);
+                    }
+                manager.AddMissionResult(prefix + completed, completed > 0);
+            }
+            catch (Exception e)
+            {
+                Plugin.Log.LogWarning("Patrol: results line: " + e.Message);
+            }
+        }
 
         // The assignment [Debug] TestPatrolAssignment asks for (by JobName's first word), or -1.
         private static int ForcedJob()

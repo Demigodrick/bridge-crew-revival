@@ -71,7 +71,9 @@ namespace StbcRevival.Missions
         // shows as a failure. With an assignment completed, it's a success.
         private static void EndRequest_Prefix(Mission.BEEEGBFNGFJ __0)
         {
-            if (__0 == null || Selected != typeof(PatrolSequence) || PatrolObjective.Completed < 1) return;
+            if (__0 == null || Selected != typeof(PatrolSequence)) return;
+            Plugin.Log.LogInfo($"Patrol: mission ending ({__0.MissionStatus}), {PatrolObjective.Completed} assignment(s) completed");
+            if (PatrolObjective.Completed < 1) return;
             if (__0.MissionStatus != Mission.GPJGLFHMNJO.aborted && __0.MissionStatus != Mission.GPJGLFHMNJO.captainLeft) return;
             Plugin.Log.LogInfo($"Patrol: left after {PatrolObjective.Completed} assignment(s) completed: a success");
             __0.MissionStatus = Mission.GPJGLFHMNJO.success;
