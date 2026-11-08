@@ -67,13 +67,22 @@ namespace StbcRevival
             copy.transform.SetParent(original.parent, false);
             copy.transform.localRotation = original.localRotation;
             copy.transform.localScale = original.localScale;
-            float height = original is RectTransform r && r.rect.height > 0f ? r.rect.height : 40f;
-            copy.transform.localPosition = original.localPosition + original.localRotation * Vector3.down * height * 0.6f;
+            // How far down: by the size LOADING is drawn at, not its box, which can be smaller than the text (the TNG
+            // one's is 48 high with taller letters overflowing it). Auto-sized text is drawn up to fontSizeMax.
+            float size = 40f;
+            if (loading is TMPro.TMP_Text shown)
+                size = shown.BMAIEFHKPMA ? shown.LOBPGECEJCD : shown.ACEGMMMIHCN; // enableAutoSizing ? fontSizeMax : fontSize
+            else if (loading is UnityEngine.UI.Text legacy)
+                size = legacy.fontSize;
+            float rectDrop = original is RectTransform r && r.rect.height > 0f ? r.rect.height * 0.6f : 0f;
+            float drop = Mathf.Max(rectDrop, size * 0.9f);
+            copy.transform.localPosition = original.localPosition + original.localRotation * Vector3.down * drop;
             copy.transform.SetSiblingIndex(original.GetSiblingIndex() + 1);
             if (copy.GetComponent<TMPro.TextMeshProUGUI>() is TMPro.TextMeshProUGUI tmp)
             {
                 tmp.SetLocalizedText(Label);
                 tmp.ACEGMMMIHCN *= 0.55f; // fontSize
+                tmp.LOBPGECEJCD *= 0.55f; // fontSizeMax, for auto-sized text
             }
             else if (copy.GetComponent<UnityEngine.UI.Text>() is UnityEngine.UI.Text text)
             {
@@ -81,7 +90,7 @@ namespace StbcRevival
                 text.fontSize = Mathf.Max(8, (int)(text.fontSize * 0.55f));
             }
             Plugin.Log.LogInfo($"Loading screen label: added under '{original.name}' ({loading.GetType().Name}), "
-                               + $"at {copy.transform.localPosition} in {original.parent.name}");
+                               + $"at {copy.transform.localPosition} in {original.parent.name} (LOADING drawn at {size:0}, {drop:0} down)");
         }
 
         private static readonly System.Reflection.MethodInfo TmpText = AccessTools.Method(typeof(TMPro.TMP_Text), "get_text");
