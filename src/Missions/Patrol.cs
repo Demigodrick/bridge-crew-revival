@@ -28,6 +28,9 @@ namespace StbcRevival.Missions
     ///     escort in two, raiders attack the convoy on the way (sometimes Klingons decloaking around it).
     ///   - Research: unidentified objects scattered about the site; scan them all. Now and then raiders
     ///     turn up after the first scan.
+    ///   - Warfare Anomaly (rare, about one assignment in WarfareChance): offered as sensor anomalies to
+    ///     investigate, but five Borg cubes and forty Romulan ships are fighting there as you warp in. They fight
+    ///     each other and leave you alone (PatrolWarfareAggro). Over when one side is gone or after WarfareMax.
     /// One assignment in twenty, a Borg cube warps in partway through and attacks: destroy it, warp out, or
     /// hold out until it warps away.
     /// Warping out of the assignment's system abandons it (it counts as failed) and a new one is offered.
@@ -62,6 +65,7 @@ namespace StbcRevival.Missions
         private const double MinTravel = 30000;    // a site at least this far from the warp arrival, if there is one
         private const int BorgChance = 20;         // one assignment in this many has a Borg cube turn up
         private const float BorgStays = 240f;      // seconds the cube attacks before it warps away
+        private const int WarfareChance = 20;      // one offer in about this many is a warfare anomaly
         private static readonly Tag[] SiteTags =
         {
             Tag.ImpulseDestination, Tag.Planet, Tag.Moon, Tag.SpaceStation, Tag.Asteroid, Tag.Anomaly, Tag.Nebula,
@@ -96,6 +100,7 @@ namespace StbcRevival.Missions
         public override void StartScript()
         {
             Completed = 0;
+            PatrolWarfareAggro.Clear(); // from a patrol quit mid-battle
             player = Objective.FFKKADIEOGP;
             Objective.AddStep("patrol", Task.MFLJBKCDBMC.WithSubtaskCoroutine(Patrol));
         }
@@ -116,6 +121,7 @@ namespace StbcRevival.Missions
                 // The offer: a job in another system, marked on the warp map. Never the same kind of job twice in a
                 // row, nor the system of the last one (where it'd send you straight back to what you just left).
                 int job = lastJob < 0 ? random.Next(Jobs) : (lastJob + 1 + random.Next(Jobs - 1)) % Jobs;
+                if (Plugin.TestWarfareAnomaly.Value || lastJob != Warfare && random.Next(WarfareChance) == 0) job = Warfare; // rare, outside the rotation
                 lastJob = job;
                 var here = Objective.KALBLMGFNIN;
                 var target = PickSystem(here, jobSystem);
@@ -151,14 +157,14 @@ namespace StbcRevival.Missions
                 jobSystem = target;
                 yield return Task.KNMMMJOOBHC.WithTime(3f); // out of warp
                 PickSite();
-                if (random.Next(BorgChance) == 0)
+                if (job != Warfare && random.Next(BorgChance) == 0)
                 {
                     var system = target;
                     string borg = "borg " + (++spawnCount);
                     Objective.AddStep(borg, Task.MFLJBKCDBMC.WithSubtaskCoroutine(() => Borg(system)));
                     yield return Task.KKALNAMJCNH.WithName(borg); // a step added while another runs waits to be started
                 }
-                IEnumerable<Step> run = job == 0 ? Hunt() : job == 1 ? Defend() : job == 4 ? Escort() : job == 5 ? Research() : Rescue(job == 3);
+                IEnumerable<Step> run = job == Warfare ? WarfareAnomaly() : job == 0 ? Hunt() : job == 1 ? Defend() : job == 4 ? Escort() : job == 5 ? Research() : Rescue(job == 3);
                 foreach (var step in run) yield return step;
                 yield return Task.BCJDEKKIHDD.RemoveAllMarkers();
 
@@ -239,6 +245,252 @@ namespace StbcRevival.Missions
             yield return Task.NECMCDDOFJB.AddSubDirectives(Directive, after);
             yield return Task.KNMMMJOOBHC.WithTime(10f);
             yield return Task.NECMCDDOFJB.RemoveSubDirective(Directive, after);
+        }
+
+        // Warfare Anomaly: sent to investigate anomalies, the ship warps into a battle already under way: five Borg
+        // cubes against forty Romulan ships, on either side of a point ahead of the arrival, closing on each other.
+        // The cubes are our own variant, BorgWarfareVariant (6000 hull, always regenerating 2 a second, hitting PatrolWarfareAggro.CubeDamage times as hard: as they
+        // come, without shields, they were destroyed in under two minutes having destroyed nothing); the Romulans Fleet Battle's mix, a
+        // D'deridex in every six. The Borg come for the ship as well as the Romulans (as cubes do); the Romulans leave
+        // it alone while there are cubes left (PatrolWarfareAggro), then turn on it. Each ship is ordered at one of
+        // the other side, and ordered again when its target is destroyed. The side's numbers and condition are
+        // logged as it goes.
+        //   - The Borg destroyed: the Romulans turn on the ship. Complete when they're gone, or the ship warps out.
+        //   - The Romulans destroyed: complete; the Borg are still after the ship (warp out).
+        //   - Leaving while both are there abandons it, as any assignment; after WarfareMax it's complete regardless.
+        // Auto-balanced: each side's damage is steered so both wear down together, to nothing in about WarfarePace,
+        // for a close finish (Steer). The Romulans don't cloak meanwhile (FleetBattleNoCloak), and every 20 s each
+        // cube is ordered at its nearest Romulan.
+        private const int WarfareCubes = 5, WarfareRomulans = 40;
+        private const float WarfareMax = 900f; // seconds before the battle is left to itself
+        private const float WarfareCubeGap = 20f; // degrees between the cubes, seen from the ship
+        private static readonly string[] Romulans =
+        {
+            "Sector/Ships/Ship - Romulan Scout", "Sector/Ships/Ship - Romulan Medium", "Sector/Ships/Ship - Romulan Medium",
+        };
+
+        private IEnumerable<Step> WarfareAnomaly()
+        {
+            string line = "Warfare anomaly: Borg and Romulan fleets are at war here, and the Borg have seen you. Survive";
+            yield return Task.NECMCDDOFJB.AddSubDirectives(Directive, line);
+            var cubes = new List<BodyRef>();
+            var romulans = new List<BodyRef>();
+            PatrolWarfareAggro.Clear();
+            float facing = random.Next(0, 360);
+            // The cubes spread out in a line to one side (WarfareCubeGap degrees apart, about 7 km at 20 km out: bunched
+            // up, they were swarmed together), the Romulans in a pack to the other side, the two sides 15+ km apart.
+            for (int i = 0; i < WarfareCubes; i++)
+            {
+                var cube = new BodyRef();
+                cubes.Add(cube);
+                yield return Task.BFMBGDIDKEI.UsingSpawner(MakeSpawner("Sector/Ships/Ship - Borg Cube", "Borg cube", Tag.Enemy))
+                    .UsingSpawnMode(AI.POGGHNHDBAL.Warp).ApplyingConfigurators(typeof(BorgWarfareVariant))
+                    .AtAngleAndDistanceFromBody(player, facing - 50 + (i - (WarfareCubes - 1) / 2f) * WarfareCubeGap + random.Next(-3, 4), 18000 + random.Next(0, 5000))
+                    .FaceOtherBody(player).OutputTo(cube);
+            }
+            for (int i = 0; i < WarfareRomulans; i++)
+            {
+                var ship = new BodyRef();
+                romulans.Add(ship);
+                string prefab = i % 6 == 5 ? "Sector/Ships/Ship - Romulan DDeridex" : Romulans[random.Next(Romulans.Length)];
+                yield return Task.BFMBGDIDKEI.UsingSpawner(MakeSpawner(prefab, "Romulan", Tag.Enemy))
+                    .AtAngleAndDistanceFromBody(player, facing + 50 + random.Next(-15, 15), 15000 + random.Next(0, 10000)).FaceOtherBody(player).OutputTo(ship);
+            }
+            yield return Task.KNMMMJOOBHC.WithTime(1f); // the ships in, their bodies set
+            yield return Task.CIAHOPCODGJ.WithTargets(cubes.ToArray()).SetHullHealthPercent(100f); // full, at the raised hull
+            foreach (var cube in cubes)
+                Plugin.Log.LogInfo($"Patrol: warfare, {ShipName(cube)} hull {Hull(cube)} of {BorgWarfareVariant.Hull:0}");
+            foreach (var ship in romulans) // the Romulans ignore the ship while the Borg are about
+                if (ship.AHMPFHDGMKJ != null) PatrolWarfareAggro.Ships.Add(ship.AHMPFHDGMKJ);
+            foreach (var cube in cubes)
+                if (cube.AHMPFHDGMKJ != null) PatrolWarfareAggro.Cubes.Add(cube.AHMPFHDGMKJ);
+            Plugin.Log.LogInfo($"Patrol: warfare anomaly, {cubes.Count} Borg cubes against {romulans.Count} Romulan ships "
+                               + $"({PatrolWarfareAggro.Ships.Count} Romulans leaving the player alone while there are cubes)");
+            yield return Task.GLACCPHKCDO.TellAI(romulans.ToArray()); // no disengaging: a Romulan's is to cloak and slip away
+            yield return Task.ABHANLLBILL.WithEventID("PLAY_NPC_WARP_IN").ContinueImmediately();
+            yield return Task.OKLDNLKLLFJ.WithGroup("State_Group_Mus_Dyn").WithState("Tension");
+            // Each cube on its share of the Romulans, the Romulans spread over the cubes.
+            for (int i = 0; i < romulans.Count; i++)
+                yield return Task.NDFEDBHFGFB.TellAI(romulans[i]).ToAddObjectives(cubes[i % cubes.Count]).OfObjectiveType(AIObjective.Attack);
+            foreach (var cube in cubes)
+                foreach (var target in romulans.OrderBy(_ => random.Next()).Take(5))
+                    yield return Task.NDFEDBHFGFB.TellAI(cube).ToAddObjectives(target).OfObjectiveType(AIObjective.Attack);
+
+            float started = UnityEngine.Time.time, paceFrom = -1f;
+            int cubesLeft = cubes.Count, romulansLeft = romulans.Count, ticks = 0;
+            PatrolWarfareAggro.BorgDamage = PatrolWarfareAggro.RomulanDamage = WarfareStartDamage;
+            string status = WarfareStatus(cubesLeft, romulansLeft);
+            yield return Task.NECMCDDOFJB.AddSubDirectives(Directive, status);
+            string outcome;
+            for (;;)
+            {
+                yield return Task.KNMMMJOOBHC.WithTime(2f);
+                if (Abandoned()) { outcome = "left"; break; }
+                float now = UnityEngine.Time.time;
+                bool justSpawned = now - started < 10f;
+                var liveCubes = cubes.Where(x => LastStandWaves.Alive(x, justSpawned)).ToList();
+                var liveRomulans = romulans.Where(x => LastStandWaves.Alive(x, justSpawned)).ToList();
+
+                // Auto-balance: each side's strength (its share of what it started with) kept on one schedule, falling
+                // from 1 to 0 over WarfarePace from when the fighting starts, by each side's damage multiplier.
+                double borg = BorgStrength(liveCubes, cubes.Count), rom = RomulanStrength(liveRomulans, romulans.Count);
+                if (paceFrom < 0 && (borg < 0.98 || rom < 0.98 || now - started > 60f)) paceFrom = now;
+                double pace = paceFrom < 0 ? 1 : Math.Max(0, 1 - (now - paceFrom) / WarfarePace);
+                if (paceFrom >= 0)
+                {
+                    PatrolWarfareAggro.BorgDamage = Steer(PatrolWarfareAggro.BorgDamage, rom - pace);    // Romulans ahead: the Borg hit harder
+                    PatrolWarfareAggro.RomulanDamage = Steer(PatrolWarfareAggro.RomulanDamage, borg - pace); // and the other way round
+                }
+
+                if (++ticks % 15 == 0) // every 30 seconds, for seeing how it goes
+                {
+                    int cloaked = liveRomulans.Count(Cloaked);
+                    Plugin.Log.LogInfo($"Patrol: warfare, {liveCubes.Count} cubes ({WarfareCondition(liveCubes)}), {liveRomulans.Count} Romulans ({WarfareCondition(liveRomulans)}, {cloaked} cloaked)");
+                    Plugin.Log.LogInfo($"Patrol: warfare balance, strength Borg {borg:P0}, Romulans {rom:P0}, schedule {pace:P0}; "
+                                       + $"damage x{PatrolWarfareAggro.BorgDamage:0.00} Borg, x{PatrolWarfareAggro.RomulanDamage:0.00} Romulan; "
+                                       + "cube targets: " + string.Join(", ", liveCubes.Select(CubeTarget).ToArray()));
+                }
+
+                // Every 20 s, each cube on the Romulan nearest it, so they keep at the fleet (the player's ship draws
+                // them otherwise: the game rates it above other targets).
+                if (ticks % 10 == 0 && liveRomulans.Count > 0)
+                    foreach (var cube in liveCubes)
+                        yield return Task.NDFEDBHFGFB.TellAI(cube).ToAddObjectives(liveRomulans.OrderBy(r => Distance(cube, r)).First()).OfObjectiveType(AIObjective.Attack);
+                if (liveCubes.Count == 0 || liveRomulans.Count == 0)
+                {
+                    cubesLeft = liveCubes.Count;
+                    romulansLeft = liveRomulans.Count;
+                    outcome = romulansLeft == 0 ? "the Borg won" : "the Romulans won";
+                    break;
+                }
+                if (UnityEngine.Time.time - started >= WarfareMax) { outcome = "still going"; break; }
+                if (liveCubes.Count == cubesLeft && liveRomulans.Count == romulansLeft) continue;
+
+                // Ships whose target died go after a survivor.
+                if (liveCubes.Count < cubesLeft)
+                    for (int i = 0; i < liveRomulans.Count; i++)
+                        yield return Task.NDFEDBHFGFB.TellAI(liveRomulans[i]).ToAddObjectives(liveCubes[i % liveCubes.Count]).OfObjectiveType(AIObjective.Attack);
+                if (liveRomulans.Count < romulansLeft)
+                    foreach (var cube in liveCubes)
+                        yield return Task.NDFEDBHFGFB.TellAI(cube).ToAddObjectives(liveRomulans[random.Next(liveRomulans.Count)]).OfObjectiveType(AIObjective.Attack);
+                if (liveCubes.Count < cubesLeft) Plugin.Log.LogInfo($"Patrol: warfare, a Borg cube destroyed; {liveCubes.Count} left");
+                cubesLeft = liveCubes.Count;
+                romulansLeft = liveRomulans.Count;
+                yield return Task.NECMCDDOFJB.RemoveSubDirective(Directive, status);
+                status = WarfareStatus(cubesLeft, romulansLeft);
+                yield return Task.NECMCDDOFJB.AddSubDirectives(Directive, status);
+            }
+            float minutes = (UnityEngine.Time.time - started) / 60f;
+            Plugin.Log.LogInfo($"Patrol: warfare anomaly battle over after {minutes:0.0} min: {outcome}; {cubesLeft} cubes, {romulansLeft} Romulans left");
+            PatrolWarfareAggro.Clear(); // the Romulans now see the ship like any other
+            succeeded = !abandoned;
+            yield return Task.NECMCDDOFJB.RemoveSubDirective(Directive, status);
+            yield return Task.NECMCDDOFJB.RemoveSubDirective(Directive, line);
+            if (abandoned) yield break;
+
+            if (outcome == "the Romulans won")
+            {
+                // The Romulans turn on the ship. Done when they're gone (destroyed, or cloaked long enough to have
+                // slipped away), or the ship has warped out: either way the Borg are beaten, so it counts.
+                var turned = romulans.Where(x => LastStandWaves.Alive(x, false)).ToList();
+                Plugin.Log.LogInfo($"Patrol: warfare, the {turned.Count} Romulans left turn on the ship");
+                string fight = "The Borg are destroyed. The Romulans have turned on you! Destroy them or warp out";
+                yield return Task.ABHANLLBILL.WithEventID("PLAY_SND_INCOMING_CLOAK_ALARM_LP").ContinueImmediately();
+                yield return Task.ABHANLLBILL.WithEventID("STOP_SND_INCOMING_CLOAK_ALARM_LP").WithDelay(6f);
+                yield return Task.NECMCDDOFJB.AddSubDirectives(Directive, fight);
+                yield return Task.BCJDEKKIHDD.AddMarker(turned.ToArray());
+                foreach (var ship in turned)
+                    yield return Task.NDFEDBHFGFB.TellAI(ship).ToAddObjectives(player).OfObjectiveType(AIObjective.Attack);
+                foreach (var step in UntilGone(turned, () => false)) yield return step;
+                Plugin.Log.LogInfo($"Patrol: warfare, Romulans {(abandoned ? "left behind" : "beaten off")}");
+                succeeded = true;
+                yield return Task.NECMCDDOFJB.RemoveSubDirective(Directive, fight);
+                yield break;
+            }
+
+            string after = outcome == "the Borg won" ? "The Romulan fleet is destroyed. The Borg remain: warp out"
+                : "Sensor readings complete. The battle goes on: warp out";
+            yield return Task.NECMCDDOFJB.AddSubDirectives(Directive, after);
+            yield return Task.KNMMMJOOBHC.WithTime(10f);
+            yield return Task.NECMCDDOFJB.RemoveSubDirective(Directive, after);
+            // Survivors stay in the system, still fighting (and the Borg still after the ship).
+        }
+
+        private static string WarfareStatus(int cubes, int romulans) => $"Borg cubes: {cubes}. Romulan ships: {romulans}";
+
+        // Auto-balance (see WarfareAnomaly): the schedule's length, the multipliers' start (from test runs: 2x left
+        // the Borg short, 5x had them win by a mile) and range, and how hard a multiplier is steered: by e^(gain x
+        // how far its side's enemy is off the schedule) each 2 s, by at most 15% a step.
+        private const float WarfarePace = 300f, WarfareStartDamage = 3f, WarfareMinDamage = 0.2f, WarfareMaxDamage = 25f;
+        private const double WarfareGain = 1.0;
+
+        private static float Steer(float damage, double ahead)
+        {
+            double factor = Math.Max(0.85, Math.Min(1.15, Math.Exp(WarfareGain * ahead)));
+            return (float)Math.Max(WarfareMinDamage, Math.Min(WarfareMaxDamage, damage * factor));
+        }
+
+        // The cubes' hull left, as a share of what they started with (a destroyed cube counts 0).
+        private static double BorgStrength(List<BodyRef> live, int count)
+        {
+            double sum = 0;
+            foreach (var cube in live)
+            {
+                try { if (cube.AHMPFHDGMKJ?.GetTargetInfo() is var info && info != null) sum += Math.Min(1, info.GBNCJMFFIDI / BorgWarfareVariant.Hull); }
+                catch { /* gone */ }
+            }
+            return count > 0 ? sum / count : 0;
+        }
+
+        // The Romulans' hull and shields left, as a share of what they started with (each ship its own share: a
+        // destroyed ship counts 0).
+        private static double RomulanStrength(List<BodyRef> live, int count)
+        {
+            double sum = 0;
+            foreach (var ship in live)
+            {
+                try
+                {
+                    var info = ship.AHMPFHDGMKJ?.GetTargetInfo();
+                    if (info == null) continue;
+                    double max = info.EHMGJDHIMCJ + info.ENKDCAEBMIH;
+                    if (max > 0) sum += Math.Min(1, (info.GBNCJMFFIDI + info.ICOKADECALG) / max);
+                }
+                catch { /* gone */ }
+            }
+            return count > 0 ? sum / count : 0;
+        }
+
+        // What a cube is shooting at: "you", a ship's name, or "-".
+        private static string CubeTarget(BodyRef cube)
+        {
+            try
+            {
+                var target = (cube.AHMPFHDGMKJ as AI.AgentShip)?.NMJIEDJOOCJ?.CurrentAttackTarget;
+                if (target == null) return "-";
+                return target is Sector.Spacecraft.PlayerSpacecraft ? "you" : (target as UnityEngine.Object)?.name ?? "?";
+            }
+            catch { return "?"; }
+        }
+
+        // "hull 87%, shields 40%": a side's average.
+        private static string WarfareCondition(List<BodyRef> ships)
+        {
+            double hull = 0, hullMax = 0, shield = 0, shieldMax = 0;
+            foreach (var ship in ships)
+            {
+                try
+                {
+                    var info = ship.AHMPFHDGMKJ?.GetTargetInfo();
+                    if (info == null) continue;
+                    hull += info.GBNCJMFFIDI;
+                    hullMax += info.EHMGJDHIMCJ;
+                    shield += info.ICOKADECALG;
+                    shieldMax += info.ENKDCAEBMIH;
+                }
+                catch { /* gone */ }
+            }
+            return $"hull {(hullMax > 0 ? 100 * hull / hullMax : 0):F0}%, shields {(shieldMax > 0 ? 100 * shield / shieldMax : 0):F0}%";
         }
 
         // A disabled freighter; two waves of raiders after it. Lost if it's destroyed.
@@ -1133,12 +1385,14 @@ namespace StbcRevival.Missions
             catch { return system.SystemName; }
         }
 
-        private const int Jobs = 6;
+        private const int Jobs = 6;      // the regular assignments, in rotation
+        private const int Warfare = 6;   // the warfare anomaly, picked now and then instead (WarfareChance)
 
-        private static string JobName(int job) => job == 0 ? "hunt" : job == 1 ? "defend" : job == 2 ? "rescue" : job == 3 ? "ambush" : job == 4 ? "escort" : "research";
+        private static string JobName(int job) => job == Warfare ? "warfare anomaly" : job == 0 ? "hunt" : job == 1 ? "defend" : job == 2 ? "rescue" : job == 3 ? "ambush" : job == 4 ? "escort" : "research";
 
         // An ambush is offered as a rescue: it's a trap.
-        private static string Offer(int job) => job == 0 ? "raiders are attacking shipping"
+        private static string Offer(int job) => job == Warfare ? "sensors have detected anomalies to investigate (Warfare Anomaly)"
+            : job == 0 ? "raiders are attacking shipping"
             : job == 1 ? "a disabled freighter is under attack"
             : job == 4 ? "a convoy of freighters needs an escort"
             : job == 5 ? "sensors have picked up unidentified objects to survey"
