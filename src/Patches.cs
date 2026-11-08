@@ -246,6 +246,7 @@ namespace StbcRevival
             LoadingScreenLabel.Patch(harmony);
             Excelsior.Patch(harmony);
             VoiceJitter.Patch(harmony);
+            Walking.BridgeWalk.Patch(harmony);
             PerfLog.Patch(harmony);
             DirectVoice.Patch(harmony);
             CrewLogs.Patch();
