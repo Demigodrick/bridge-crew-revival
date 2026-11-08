@@ -16,7 +16,7 @@ namespace StbcRevival.Walking
     /// bridge's colliders and, since some bridges (the Enterprise-D) have hardly any, from the bridge's visible
     /// meshes as well (read from the game's asset files when they aren't readable in memory, see BridgeMeshes).
     /// Position, yaw, pitch and speed go out 15 times a second as event 168.
-    /// Known limitation: the viewscreen still shows the picture for the seated view while you walk around.
+    /// The viewscreen's outside view follows your eyes while you walk (ViewscreenRig).
     /// </summary>
     internal static class BridgeWalk
     {
@@ -196,6 +196,7 @@ namespace StbcRevival.Walking
             seatLocalRot = pawn.localRotation;
             camLocalPos = cam.localPosition;
             camLocalRot = cam.localRotation;
+            try { ViewscreenRig.Capture(cam, Basis); } catch (Exception e) { Plugin.Log.LogWarning("Bridge walk: viewscreen: " + e.Message); }
             own.Clear();
             foreach (var c in me.PawnObject.GetComponentsInChildren<Collider>(true)) own.Add(c);
 
@@ -239,6 +240,7 @@ namespace StbcRevival.Walking
                     try { Bridge.Reseat(Me); } catch (Exception e) { Plugin.Log.LogWarning("Bridge walk: reseating: " + e.Message); }
                 }
                 if (cam != null) { cam.localPosition = camLocalPos; cam.localRotation = camLocalRot; }
+                ViewscreenRig.Restore();
             }
             catch (Exception e) { Plugin.Log.LogWarning("Bridge walk: sitting down: " + e.Message); }
             if (why == "escape") SwallowEscape = true;
@@ -302,6 +304,7 @@ namespace StbcRevival.Walking
             Quaternion yawRot = BasisRot * Quaternion.Euler(0, yaw, 0);
             cam.position = pawn.position + Up * Plugin.BridgeWalkEyeHeight.Value + yawRot * Vector3.forward * 0.12f;
             cam.rotation = yawRot * Quaternion.Euler(pitch, 0, 0);
+            ViewscreenRig.Follow(cam, Basis);
         }
 
         private static void TryMove(Vector3 delta)
@@ -311,7 +314,8 @@ namespace StbcRevival.Walking
             if (delta.sqrMagnitude < 1e-8f) return;
             Vector3 pos = pawn.position;
             Vector3 next = pos + delta;
-            if (Plugin.BridgeWalkCollisions.Value && Blocked(pos, delta))
+            bool walls = Plugin.BridgeWalkCollisions.Value && Plugin.BridgeWalkWalls.Value;
+            if (walls && Blocked(pos, delta))
             {
                 // Slide along the wall: try each axis on its own.
                 Vector3 right = BasisRot * Vector3.right, fwd = BasisRot * Vector3.forward;
@@ -325,8 +329,12 @@ namespace StbcRevival.Walking
                 // Where the bridge has no floor, keep walking at the same height (MaxDistance keeps you on the bridge).
                 if (!FindFloor(next, out var floor)) floor = next;
                 float step = Vector3.Dot(floor - pos, up);
-                if (step > 0.45f || step < -0.8f) return; // too high a step
-                next = floor;
+                if (step > 0.45f || step < -0.8f)
+                {
+                    if (walls) return; // too high a step
+                    // Walls off: through the desk or wall at the same height.
+                }
+                else next = floor;
             }
             else next += up * (flatHeight - Vector3.Dot(next, up));
             Vector3 seatWorld = Basis != null ? Basis.TransformPoint(seatLocalPos) : seatLocalPos;
@@ -427,6 +435,81 @@ namespace StbcRevival.Walking
         {
             local = Basis != null ? Basis.InverseTransformPoint(pawn.position) : pawn.position;
             y = yaw; p = pitch;
+        }
+    }
+
+    // ---------------------------------------------------------------- the viewscreen
+    /// <summary>
+    /// In its normal mode the viewscreen is a window: the game's external camera rigs (OrientExternalCamera, the
+    /// space view and its 3D-skybox copy) are placed for your seat (the pivot at (viewscreen - station) / 10, turned
+    /// to the station's facing), and their camera copies the seated camera's local rotation each frame; a
+    /// bridge-shaped proxy masks all but the glass. Standing, they'd stay at the seat, so the picture outside
+    /// slid around as you walked. Here the pivot moves with your eyes by the same rule, and the camera takes your
+    /// view relative to how the seat faced; sitting down puts the pivot back.
+    /// </summary>
+    internal static class ViewscreenRig
+    {
+        private sealed class Saved { public OrientExternalCamera Rig; public Transform Pivot; public Vector3 Pos; public Quaternion Rot; }
+
+        private static readonly System.Reflection.FieldInfo pivotField = AccessTools.Field(typeof(OrientExternalCamera), "_pivot");
+        private static readonly System.Reflection.FieldInfo cameraField = AccessTools.Field(typeof(OrientExternalCamera), "BJGOCLMLBLD");     // _camera
+        private static readonly System.Reflection.FieldInfo spaceViewField = AccessTools.Field(typeof(OrientExternalCamera), "CLJLBPKOEFE");  // _spaceViewOn
+        private static readonly System.Reflection.FieldInfo spectatorField = AccessTools.Field(typeof(OrientExternalCamera), "DJPHKDPIDKJ");  // _spectatorExternalTarget
+        private static readonly List<Saved> saved = new List<Saved>();
+        private static Quaternion seatParentLocal = Quaternion.identity; // the seated camera's parent, in bridge space
+        private static Vector3 seatEyeLocal;                               // the seated camera, in bridge space
+        private static bool warned;
+
+        public static void Capture(Transform cam, Transform basis)
+        {
+            saved.Clear();
+            if (pivotField == null || cameraField == null)
+            {
+                if (!warned) { warned = true; Plugin.Log.LogWarning("Bridge walk: the viewscreen camera's fields weren't found; it stays set for your seat"); }
+                return;
+            }
+            Quaternion basisRot = basis != null ? basis.rotation : Quaternion.identity;
+            seatParentLocal = Quaternion.Inverse(basisRot) * (cam.parent != null ? cam.parent.rotation : Quaternion.identity);
+            seatEyeLocal = basis != null ? basis.InverseTransformPoint(cam.position) : cam.position;
+            foreach (var rig in UnityEngine.Object.FindObjectsOfType<OrientExternalCamera>())
+            {
+                var pivot = pivotField.GetValue(rig) as Transform;
+                if (pivot != null) saved.Add(new Saved { Rig = rig, Pivot = pivot, Pos = pivot.localPosition, Rot = pivot.localRotation });
+            }
+        }
+
+        // After the game's own BatchLateUpdate (which sets the camera from the seated camera) and in Update.
+        public static void Follow(Transform cam, Transform basis)
+        {
+            if (saved.Count == 0) return;
+            Quaternion basisRot = basis != null ? basis.rotation : Quaternion.identity;
+            Quaternion seatParent = basisRot * seatParentLocal;
+            Vector3 seatEye = basis != null ? basis.TransformPoint(seatEyeLocal) : seatEyeLocal;
+            Vector3 moved = cam.position - seatEye;
+            Quaternion look = Quaternion.Inverse(seatParent) * cam.rotation;
+            foreach (var s in saved)
+            {
+                if (s.Rig == null || s.Pivot == null) continue;
+                // The space view (pivot elsewhere) and spectator views aren't the seat's window: left alone.
+                if (spaceViewField != null && spaceViewField.GetValue(s.Rig) is bool on && on) continue;
+                if (spectatorField != null && spectatorField.GetValue(s.Rig) as Transform != null) continue;
+                s.Pivot.localPosition = s.Pos - moved / 10f;
+                s.Pivot.localRotation = s.Rot;
+                var c = cameraField.GetValue(s.Rig) as Camera;
+                if (c != null) c.transform.localRotation = look;
+            }
+        }
+
+        public static void Restore()
+        {
+            foreach (var s in saved)
+            {
+                if (s.Rig == null || s.Pivot == null) continue;
+                if (spaceViewField != null && spaceViewField.GetValue(s.Rig) is bool on && on) continue;
+                s.Pivot.localPosition = s.Pos;
+                s.Pivot.localRotation = s.Rot;
+            }
+            saved.Clear();
         }
     }
 
