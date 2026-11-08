@@ -34,7 +34,7 @@ namespace StbcRevival
         private static readonly string[] DeWarp = G("warp");
         private static readonly string[] DeCore = G("kern", "gondeln");
         private static readonly string[] DeImpulse = G("impuls", "impulse");
-        private static readonly string[] DeNumbers = G("eins", "ein", "zwei", "zwo", "drei", "vier", "fünf", "sechs", "sieben", "acht", "neun", "zehn");
+        private static readonly string[] DeNumbers = G("eins", "zwei", "zwo", "drei", "vier", "fünf", "sechs", "sieben", "acht", "neun", "zehn");
         private static readonly HashSet<string> DeNumberSet = new HashSet<string>(DeNumbers);
         private static readonly string[] DeNumberNames = { "eins", "zwei", "drei", "vier", "fünf", "sechs", "sieben", "acht", "neun" };
         private static readonly string[] DePrepare = G("vorbereiten", "vorbereitung", "bereit", "klarmachen", "klar", "plotten", "kurs", "setzen", "setze", "legen",
