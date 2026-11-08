@@ -45,6 +45,7 @@ namespace StbcRevival
             lastHeap = heap;
 
             float now = Time.realtimeSinceStartup;
+            SettleCheck(now);
             if (nextReport == 0f) { nextReport = now + ReportSeconds; nextCensus = now + CensusSeconds; }
             if (now >= nextReport)
             {
@@ -56,6 +57,32 @@ namespace StbcRevival
                 nextCensus = now + CensusSeconds;
                 Census();
             }
+        }
+
+        // Ten seconds into the briefing room or the main menu (where a short hitch doesn't matter), a full
+        // collection: the true floor there, logged, so visits can be compared (a floor that's higher after every
+        // mission is memory the last one kept). It also stops the heap growing between collections there: the
+        // game's garbage collector lets it grow rather than collect, and the game crashed in Mono at the main menu
+        // with the heap past 500 MB and climbing (most likely the collector running out of heap sections).
+        private static Type lastPhase;
+        private static float settleAt = -1f;
+
+        private static void SettleCheck(float now)
+        {
+            var manager = GamePhaseManager.IEFBKOMBFGO;
+            var phase = manager == null ? null : manager.GetCurrentGamePhase();
+            if (phase != lastPhase)
+            {
+                lastPhase = phase;
+                settleAt = phase == typeof(GamePhase_BriefingRoom) || phase == typeof(GamePhase_MainMenu) ? now + 10f : -1f;
+            }
+            if (settleAt < 0f || now < settleAt) return;
+            settleAt = -1f;
+            long before = GC.GetTotalMemory(false);
+            float started = Time.realtimeSinceStartup;
+            long after = GC.GetTotalMemory(true);
+            lastHeap = after;
+            Plugin.Log.LogInfo($"Memory: settled in {phase.Name}: full collection, heap {Mb(before)} to {Mb(after)} (the floor here) in {(Time.realtimeSinceStartup - started) * 1000f:0} ms");
         }
 
         /// <summary>Around one of the mod's per-frame updates: the heap before it.</summary>
