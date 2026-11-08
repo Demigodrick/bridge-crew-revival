@@ -9,7 +9,7 @@ using UnityEngine;
 namespace StbcRevival
 {
     /// <summary>
-    /// [Updates] CheckForUpdates: once per launch, after reaching the shuttle, read the latest version number
+    /// [Updates] CheckForUpdates: as the game starts (and again on returning to the shuttle after 15 minutes or more), read the latest version number
     /// from the website (version.txt, a single line written by tools/release.sh). If it's newer than this
     /// mod:
     ///   - [Updates] AutoUpdate: that release's StbcRevival.dll and StbcCore.dll are downloaded from GitHub and
@@ -32,13 +32,24 @@ namespace StbcRevival
         private static readonly string[] Files = { "StbcRevival.dll", "StbcCore.dll" };
         private const float DownloadSeconds = 120f;
 
-        private static bool started, offered, downloading;
+        private const float RecheckSeconds = 15 * 60f; // a session this long asks again on the shuttle
+
+        private static bool started, offered, downloading, fetching;
+        private static float lastFetch;
         private static string newer, installed;
         private static float onShuttleSince = -1f;
 
         internal static void Update()
         {
             if (!Plugin.CheckForUpdates.Value || UbisoftSaveImport.Active) return;
+            // Asked as soon as the game starts, so the answer (and with AutoUpdate the download) is in by the time
+            // the shuttle is reached, rather than starting there.
+            if (!started)
+            {
+                started = true;
+                lastFetch = Time.realtimeSinceStartup;
+                Plugin.Instance.StartCoroutine(Fetch());
+            }
             bool onShuttle = GameState.Phase() == "GamePhase_MainMenu" && !GameState.Loading()
                              && GameState.ConnectedAndReady() && GameState.RoomName() == null;
             if (!onShuttle)
@@ -46,11 +57,15 @@ namespace StbcRevival
                 onShuttleSince = -1f;
                 return;
             }
-            if (onShuttleSince < 0f) onShuttleSince = Time.realtimeSinceStartup;
-            if (!started)
+            if (onShuttleSince < 0f)
             {
-                started = true;
-                Plugin.Instance.StartCoroutine(Fetch());
+                onShuttleSince = Time.realtimeSinceStartup;
+                // Back on the shuttle in a long session: ask again, so a release made while playing is offered too.
+                if (newer == null && !fetching && Time.realtimeSinceStartup - lastFetch >= RecheckSeconds)
+                {
+                    lastFetch = Time.realtimeSinceStartup;
+                    Plugin.Instance.StartCoroutine(Fetch());
+                }
             }
             // Only on the shuttle (never in a briefing room or mission), and only once it has settled: a popup
             // shown while the shuttle console is still loading goes nowhere.
@@ -74,11 +89,13 @@ namespace StbcRevival
         {
             var url = string.IsNullOrEmpty(Plugin.UpdateUrl.Value) ? DefaultUrl : Plugin.UpdateUrl.Value.Trim();
             // A query string keeps caches from serving an old file.
+            fetching = true;
             var www = new WWW(url + (url.Contains("?") ? "&" : "?") + "t=" + DateTime.UtcNow.Ticks);
             float until = Time.realtimeSinceStartup + TimeoutSeconds;
             while (!www.isDone && Time.realtimeSinceStartup < until) yield return null;
             try
             {
+                fetching = false;
                 if (!www.isDone) { Plugin.Log.LogInfo($"Update check: no answer from {url}; skipped"); yield break; }
                 if (!string.IsNullOrEmpty(www.error)) { Plugin.Log.LogInfo($"Update check: {url}: {www.error}; skipped"); yield break; }
                 var latest = (www.text ?? "").Trim();
