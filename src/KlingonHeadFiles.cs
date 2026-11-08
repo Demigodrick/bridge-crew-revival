@@ -301,9 +301,22 @@ namespace StbcRevival
             return material;
         }
 
+        // Once a texture is on the graphics card its pixels are let go, in this plan and in every other plan of the
+        // same texture as it's asked for (each material read its own copy). They were kept for the whole session
+        // (the holodeck room's and the Klingon heads' plans are kept to build them again), many times over for
+        // textures several materials share: the memory floor rose by about 170 MB on entering a PvP room.
         private static Texture2D MakeTexture(TexturePlan plan)
         {
-            if (textures.TryGetValue(plan.Key, out var made) && made != null) return made;
+            if (textures.TryGetValue(plan.Key, out var made) && made != null)
+            {
+                LetGo(plan);
+                return made;
+            }
+            if (plan.Pixels == null)
+            {
+                Plugin.Log.LogWarning($"Texture {plan.Key} ({plan.Texture?.Name}) is gone and its pixels were let go: drawn without it");
+                return null;
+            }
             var t = plan.Texture;
             var format = t.Format == 10 ? TextureFormat.DXT1 : t.Format == 12 ? TextureFormat.DXT5 : (TextureFormat)t.Format;
             // Colour space 0 is linear data (normal maps): no sRGB conversion.
@@ -319,7 +332,18 @@ namespace StbcRevival
             texture.Apply(false, true); // no longer readable: the pixels live on the graphics card only
             texture.hideFlags |= HideFlags.DontUnloadUnusedAsset;
             textures[plan.Key] = texture;
+            LetGo(plan);
             return texture;
         }
+
+        private static void LetGo(TexturePlan plan)
+        {
+            plan.Pixels = null;
+            if (plan.Texture != null) plan.Texture.Data = new byte[0];
+        }
+
+        /// <summary>The pixels these plans still hold (each plan's own copy counted), in bytes.</summary>
+        internal static long PixelBytes(IEnumerable<MaterialPlan> plans) =>
+            plans.SelectMany(p => p.Textures).Sum(t => (long)(t.Value.Pixels?.Length ?? 0));
     }
 }

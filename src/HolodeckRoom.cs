@@ -77,7 +77,10 @@ namespace StbcRevival
                 yield break;
             }
             room = read;
-            Plugin.Log.LogInfo($"PvP: holodeck room read ({room.Pieces.Count} pieces, {room.Combined.VertexCount} vertices in its scene, floor middle {room.FloorMiddle})");
+            var plans = room.Pieces.SelectMany(p => p.Materials).ToList();
+            Plugin.Log.LogInfo($"PvP: holodeck room read ({room.Pieces.Count} pieces, {room.Combined.VertexCount} vertices in its scene, floor middle {room.FloorMiddle}; "
+                               + $"{plans.SelectMany(p => p.Textures).Select(t => t.Value.Key).Distinct().Count()} textures, "
+                               + $"{KlingonHeadFiles.PixelBytes(plans) / (1024 * 1024)} MB of pixels read, let go once they're made)");
         }
 
         // ---- Reading (background thread) ----------------------------------------------------------------
