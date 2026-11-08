@@ -148,7 +148,13 @@ namespace StbcRevival
         // players on it, and for everyone else is announced as an ordinary ship (next frame's end, as the game's).
         private static bool Announce_Prefix(SectorSpawnManager __instance, SectorBody __0)
         {
-            if (!(__0 is PlayerSpacecraft ship) || !Active) return true;
+            if (!(__0 is PlayerSpacecraft ship)) return true;
+            if (!Active)
+            {
+                if (PvpLobby.InPvpRoom)
+                    Plugin.Log.LogInfo($"PvP: [load] player ship '{ship.ALPAOOKFIEE?.BaseName ?? ship.name}' arrived, but the PvP test is off here (room mission '{RevivalBriefing.RoomSelection() ?? "none"}'): the game's own handling");
+                return true;
+            }
             string name = ship.ALPAOOKFIEE?.BaseName ?? "";
             bool shipB = name.StartsWith(ShipBName, StringComparison.Ordinal);
             if (!shipB || OnShipB)
@@ -236,6 +242,7 @@ namespace StbcRevival
             PvpRelay.Update();
             PvpLobby.Update();
             PvpShipChoice.Update();
+            PvpLoadDiag.Update();
             if (!Active)
             {
                 if (others.Count > 0 || exploded.Count > 0)
