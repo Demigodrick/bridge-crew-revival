@@ -218,6 +218,7 @@ namespace StbcRevival.Walking
             Standing = true;
             SwallowEscape = false;
             Pose.Reset();
+            OtherConsoles.Show();
             savedLockMode = Cursor.lockState;
             savedCursorVisible = Cursor.visible;
             Cursor.lockState = CursorLockMode.Locked;
@@ -243,6 +244,7 @@ namespace StbcRevival.Walking
                 ViewscreenRig.Restore();
             }
             catch (Exception e) { Plugin.Log.LogWarning("Bridge walk: sitting down: " + e.Message); }
+            OtherConsoles.Restore();
             if (why == "escape") SwallowEscape = true;
             Cursor.lockState = savedLockMode;
             Cursor.visible = savedCursorVisible;
