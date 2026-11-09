@@ -327,11 +327,30 @@ namespace StbcRevival
             if (s.RateWas > 0) SetRate(player, s.RateWas);
         }
 
-        // WwiseAudioPlayer.SetSampleRate's work, but keeping the tracking AudioSource: the game's version destroys it
-        // along with the old clip (decompiled/_/WwiseAudioPlayer.cs, SetSampleRate), after which the player plays
-        // nothing; game voice never changes rate, but switching to and from Revival voice does.
+        /// <summary>While Revival voice is on, WwiseAudioPlayer.SetSampleRate is <see cref="SetRate"/>: the game's
+        /// version destroys the tracking AudioSource along with the old clip (decompiled/_/WwiseAudioPlayer.cs,
+        /// SetSampleRate), after which the player plays nothing. Game voice alone never changes the rate, but switching
+        /// a crewmate between game voice and Revival voice does, in either direction and in any order with the game's
+        /// own receive path. With Revival voice off the game's method runs untouched.</summary>
+        internal static void Patch(Harmony harmony)
+        {
+            var setRate = AccessTools.Method(typeof(WwiseAudioPlayer), "SetSampleRate", new[] { typeof(int) });
+            if (setRate == null) Plugin.Log.LogWarning("Revival voice: WwiseAudioPlayer.SetSampleRate wasn't found; switching a crewmate back to game voice may silence them");
+            else harmony.Patch(setRate, prefix: new HarmonyMethod(typeof(RevivalPlayback), nameof(SetSampleRate_Prefix)));
+        }
+
+        private static bool SetSampleRate_Prefix(WwiseAudioPlayer __instance, int __0)
+        {
+            if (!Plugin.RevivalVoiceActive) return true;
+            try { SetRate(__instance, __0); }
+            catch (Exception e) { Plugin.Log.LogWarning("Revival voice: changing a voice player's rate: " + e.Message); }
+            return false;
+        }
+
+        // SetSampleRate's work, keeping the tracking AudioSource (and doing nothing without one, as the game's does).
         private static void SetRate(WwiseAudioPlayer player, int rate)
         {
+            if (player == null || rate <= 0) return;
             var source = Source(player);
             if (source == null) return;
             var old = source.clip;

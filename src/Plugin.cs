@@ -313,6 +313,7 @@ namespace StbcRevival
             Patches.Apply(harmony);
             Safely("revival voice capture patches", () => VoiceCapture.Patch(harmony));
             Safely("revival voice patches", () => RevivalVoice.Patch(harmony));
+            Safely("revival voice playback patches", () => RevivalPlayback.Patch(harmony));
             SteamMode.Install(harmony);
             ShuttleControls.Install();
 
