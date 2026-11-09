@@ -73,6 +73,27 @@ namespace StbcRevival
         }
         private static volatile string threadError;
         private static bool decoderFailureLogged;
+        private static int canDecode;               // 0 not known yet, 1 an Opus decoder can be made, -1 it can't
+
+        /// <summary>Main thread: whether this game can play Revival voice (an Opus decoder can be made). Probed once,
+        /// or settled by the first speaker's decoder; the hello only offers Revival voice when it can.</summary>
+        internal static bool CanDecode
+        {
+            get
+            {
+                if (canDecode == 0)
+                {
+                    try { new OpusDecoder(VoiceFormat.PlaybackRate).Dispose(); canDecode = 1; }
+                    catch (Exception e)
+                    {
+                        canDecode = -1;
+                        if (!decoderFailureLogged) Plugin.Log.LogError("Revival voice: no Opus decoder, crewmates' Revival voice isn't played: " + e.Message);
+                        decoderFailureLogged = true;
+                    }
+                }
+                return canDecode > 0;
+            }
+        }
 
         // VoIpManager's players by actor number (PFKNMPPKOFP); a voice controller's output device (PHGNCBOCLEH,
         // _audioOutputDevice); a player's tracking AudioSource, rate, clip and playback position fields.
@@ -120,9 +141,10 @@ namespace StbcRevival
         private static Speaker Create(int actor)
         {
             OpusDecoder decoder;
-            try { decoder = new OpusDecoder(VoiceFormat.PlaybackRate); }
+            try { decoder = new OpusDecoder(VoiceFormat.PlaybackRate); canDecode = 1; }
             catch (Exception e)
             {
+                canDecode = -1;
                 if (!decoderFailureLogged) Plugin.Log.LogError("Revival voice: no Opus decoder, crewmates' Revival voice isn't played: " + e.Message);
                 decoderFailureLogged = true;
                 return null;

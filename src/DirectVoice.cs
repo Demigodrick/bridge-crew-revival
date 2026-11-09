@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using HarmonyLib;
+using StbcRevival.Voice;
 using UnityEngine;
 using CSteamID = Steamworks.IMHJDCPKKHM;
 using EP2PSend = Steamworks.KKHEAIABKGB;
@@ -30,8 +31,10 @@ namespace StbcRevival
     /// player's, through VoIpManager's own handler (so mutes, volumes and who-can-hear-whom still apply).
     /// Steam is only called on the main thread; the send hook (possibly on the voice encoder's thread) queues.
     ///
-    /// Revival voice: the hello's third byte says Revival voice is on and capturing here (older mods send two bytes,
-    /// read as off). Crewmates both sides of a confirmed link with it on get Revival voice instead (RevivalVoice), so
+    /// Revival voice: the hello's third byte is the Revival voice wire version (VoiceWire.Version) when Revival voice is
+    /// on, capturing and playable here, else 0 (older mods send two bytes, read as off). A crewmate counts as on
+    /// Revival voice only when that byte equals our own VoiceWire.Version, so mismatched versions fall back to game
+    /// voice instead of dropping each other's packets. Crewmates both sides of a confirmed link with it on get Revival voice instead (RevivalVoice), so
     /// the game's frames to them are left out here, and theirs aren't played while their Revival voice is live. The
     /// hellos run whenever Revival voice is on, even with DirectVoice off (then game voice still goes through the host).
     /// </summary>
@@ -109,8 +112,8 @@ namespace StbcRevival
         private static bool Linked => (Plugin.DirectVoice.Value || Plugin.RevivalVoiceActive) && SteamMode.Enabled && SteamMode.MySteamId != 0;
         private static bool Active => Plugin.DirectVoice.Value && Linked;
 
-        // The hello's third byte: Revival voice is on here and capturing, so crewmates may send it to us.
-        private static bool RevivalHere => Plugin.RevivalVoiceActive && VoiceCapture.Capturing;
+        // The hello's third byte: Revival voice is on here, capturing, and we can decode it, so crewmates may send it to us.
+        private static bool RevivalHere => Plugin.RevivalVoiceActive && VoiceCapture.Capturing && RevivalPlayback.CanDecode;
 
         // NetworkCore.SendEvent(code, content, receivers, protocol, channel): a voice frame goes directly to those
         // with a direct link; the rest (if any) are sent it through the host, addressed to them alone.
@@ -176,7 +179,7 @@ namespace StbcRevival
             if (time >= nextHello)
             {
                 nextHello = time + HelloEvery;
-                byte revival = (byte)(RevivalHere ? 1 : 0);
+                byte revival = RevivalHere ? VoiceWire.Version : (byte)0;
                 foreach (var peer in peers.Values) Send(peer.SteamId, new[] { Hello, (byte)(time - peer.LastHeard < DirectFor ? 1 : 0), revival });
             }
             if (time >= nextReport)
@@ -241,7 +244,7 @@ namespace StbcRevival
                 if (receiveBuffer[0] == Hello && read >= 2)
                 {
                     if (receiveBuffer[1] == 1) peer.LastConfirmed = time;
-                    peer.Revival = read >= 3 && receiveBuffer[2] == 1;
+                    peer.Revival = read >= 3 && receiveBuffer[2] == VoiceWire.Version;
                 }
                 if (receiveBuffer[0] != Voice || read < 2) continue;
                 Deliver(peer, (int)read - 1);
