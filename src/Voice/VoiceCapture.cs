@@ -73,9 +73,36 @@ namespace StbcRevival
 
         // The rate voice chat starts its microphone recording at (UnityMicrophoneInputDevice and
         // WwiseMicrophoneInputDevice clamp it to what the device supports, and resample to their codec's rate).
+        // Only for a microphone that can record at 48 kHz: the devices keep the rate they asked for and hand it to
+        // their codec's resampler, while Microphone.Start clamps the clip to the device's range, so asking a 44.1 kHz
+        // or 16 kHz mic for 48 kHz would pitch-shift game voice (still what players without the mod hear).
         private static void InputSampleRate_Postfix(ref int __result)
         {
-            if (Plugin.RevivalVoiceActive) __result = VoiceFormat.SampleRate;
+            if (Plugin.RevivalVoiceActive && Supports48k()) __result = VoiceFormat.SampleRate;
+        }
+
+        private static readonly Dictionary<string, bool> supports48k = new Dictionary<string, bool>(); // by device name
+
+        private static bool Supports48k()
+        {
+            try
+            {
+                var input = MicTap.ChatInput();
+                if (input == null || !MicTap.ChatDevice(input, out var device)) return false;
+                var key = device ?? "";
+                if (supports48k.TryGetValue(key, out bool ok)) return ok;
+                Microphone.GetDeviceCaps(device, out int min, out int max);
+                ok = max == 0 || (min <= VoiceFormat.SampleRate && VoiceFormat.SampleRate <= max);
+                supports48k[key] = ok;
+                Plugin.Log.LogInfo($"Revival voice: microphone '{(key.Length == 0 ? "default" : key)}' records at {min}-{max} Hz; "
+                                   + (ok ? "voice chat records it at 48 kHz" : "voice chat keeps its rate (resampled to 48 kHz)"));
+                return ok;
+            }
+            catch (Exception e)
+            {
+                Plugin.Log.LogWarning("Revival voice: microphone rates unknown, voice chat keeps its rate: " + e.Message);
+                return false;
+            }
         }
 
         /// <summary>Main thread, every frame.</summary>
