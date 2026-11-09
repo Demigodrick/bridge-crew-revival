@@ -57,6 +57,7 @@ namespace StbcRevival
             public Samples Samples;
             public JitterStats Window = new JitterStats();               // counters since the last Describe
             public int Played, Dropped, NotPlayed;
+            public long DelaySumMs; public int DelaySamples;              // actual delay: buffer depth + player backlog
         }
 
         private static readonly object sync = new object();
@@ -164,6 +165,7 @@ namespace StbcRevival
             w.Redundant += now.Redundant;
             w.Fec += now.Fec;
             w.Concealed += now.Concealed;
+            w.TailConcealed += now.TailConcealed;
             w.Underruns += now.Underruns;
             w.TargetMs = now.TargetMs;
             w.DepthMs = now.DepthMs;
@@ -183,12 +185,16 @@ namespace StbcRevival
             int overflow;
             lock (s.Output) { overflow = s.Overflow; s.Overflow = 0; }
             if (w.Received == 0 && w.Late == 0 && w.Lost == 0 && s.Played == 0) return null;
-            string line = $"last 30 s, received {w.Received}, lost {w.Lost} (redundancy {w.Redundant}, FEC {w.Fec}, concealed {w.Concealed}), "
+            string line = $"last 30 s, received {w.Received}, lost {w.Lost} (redundancy {w.Redundant}, FEC {w.Fec}), concealed {w.Concealed}, "
                           + $"late {w.Late}, duplicates {w.Duplicates}, underruns {w.Underruns}, jitter {w.JitterMs} ms, buffer {w.TargetMs} ms"
+                          + (s.DelaySamples > 0 ? $", actual delay {s.DelaySumMs / s.DelaySamples} ms" : "")
+                          + $", {w.TailConcealed} frames faded out at speech ends"
                           + (s.Dropped + overflow > 0 ? $", {s.Dropped + overflow} frames dropped after a hold-up" : "")
                           + (s.NotPlayed > 0 ? $", {s.NotPlayed} frames not played (no voice player, muted or out of earshot)" : "");
             s.Window = new JitterStats();
             s.Played = s.Dropped = s.NotPlayed = 0;
+            s.DelaySumMs = 0;
+            s.DelaySamples = 0;
             return line;
         }
 
@@ -265,6 +271,14 @@ namespace StbcRevival
                 VoiceJitter.Bypass(player, s.Samples);
                 s.Played++;
                 lock (s.Output) s.Spare.Push(frame.Pcm);
+            }
+            if (s.Buffer.Playing)
+            {
+                // What a word heard now waits: the jitter buffer's depth, plus decoded audio not yet played.
+                int output;
+                lock (s.Output) output = s.Output.Count;
+                s.DelaySumMs += s.Buffer.DepthMs + output * VoiceFormat.FrameMs + QueuedMs(player);
+                s.DelaySamples++;
             }
         }
 

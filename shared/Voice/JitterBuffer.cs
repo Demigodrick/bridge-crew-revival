@@ -1,6 +1,7 @@
 #nullable disable
 // Revival voice receive buffer, one per speaker: reorders by seq, adapts its delay to measured arrival jitter, and
 // fills holes from the redundant copy, then Opus FEC, then Opus PLC (fading out after 100 ms with nothing coming).
+// Seqs below a held BurstStart were never sent (the speaker's gate was closed): silence, not loss.
 // Push runs on the main thread, Pop on the playout thread; one lock guards everything, decoder calls included.
 // Compiled by the mod (net35) and the voice tests (net8): plain arrays and collections only.
 using System;
@@ -13,7 +14,9 @@ namespace StbcRevival.Voice
     public sealed class JitterStats
     {
         // Counters, reset by TakeStats.
-        public int Received, Late, Duplicates, Lost, Redundant, Fec, Concealed, Underruns;
+        // Concealed: frames concealed because a later packet proved them missing (a hole, or a mid-burst underrun).
+        // TailConcealed: the fade-out frames after the speaker stopped (or ahead of a new burst): not a fault.
+        public int Received, Late, Duplicates, Lost, Redundant, Fec, Concealed, TailConcealed, Underruns;
         // Gauges.
         public int TargetMs, DepthMs, JitterMs, LossPercent;
     }
@@ -48,14 +51,16 @@ namespace StbcRevival.Voice
         uint nextSeq;
         uint highest;          // highest held seq, valid while held is non-empty
         int concealRun;        // Conceal calls in a row
-        bool starved;          // this conceal run hit a tick with nothing later held
+        int tailPending;       // frames concealed in a row with nothing later held, not yet known as underrun or silence
 
         readonly double[] transits = new double[TransitWindow];
         readonly double[] sortScratch = new double[TransitWindow];
         int transitCount, transitNext;
+        bool hasBatch;         // the newest transit came from a Push at batchMs
+        double batchMs;
 
         int targetMs = InitialTargetMs, depthMs, jitterMs;
-        int received, late, duplicates, lost, redundant, fec, concealed, underruns;
+        int received, late, duplicates, lost, redundant, fec, concealed, tailConcealed, underruns;
 
         public JitterBuffer(IFrameDecoder decoder)
         {
@@ -64,6 +69,9 @@ namespace StbcRevival.Voice
         }
 
         public bool Playing { get { lock (sync) return playing; } }
+
+        // Gauge: held audio ahead of the play position after the last Pop.
+        public int DepthMs { get { lock (sync) return depthMs; } }
 
         // Thread-safe. The packet's buffers are copied: the caller reuses them.
         public void Push(VoicePacketIn packet, double arrivalMs)
@@ -136,11 +144,11 @@ namespace StbcRevival.Voice
                 var s = new JitterStats
                 {
                     Received = received, Late = late, Duplicates = duplicates, Lost = lost,
-                    Redundant = redundant, Fec = fec, Concealed = concealed, Underruns = underruns,
+                    Redundant = redundant, Fec = fec, Concealed = concealed, TailConcealed = tailConcealed, Underruns = underruns,
                     TargetMs = targetMs, DepthMs = depthMs, JitterMs = jitterMs,
                     LossPercent = seen == 0 ? 0 : (lost * 100 + seen / 2) / seen,
                 };
-                received = late = duplicates = lost = redundant = fec = concealed = underruns = 0;
+                received = late = duplicates = lost = redundant = fec = concealed = tailConcealed = underruns = 0;
                 return s;
             }
         }
@@ -153,6 +161,14 @@ namespace StbcRevival.Voice
             Frame f, after;
             int n;
 
+            // Something arrived after running dry: it says whether the dry run was an underrun or silence.
+            // (Held seqs are never below seq.) The dry frames sit below the lowest held one.
+            if (tailPending > 0 && held.Count > 0)
+            {
+                Frame next = Lowest();
+                ResolveTail(!next.BurstStart && next.Seq - seq <= BoundaryFrames(targetMs));
+            }
+
             if (held.TryGetValue(seq, out f))
             {
                 // 1. The frame itself.
@@ -161,49 +177,51 @@ namespace StbcRevival.Voice
                 pool.Push(f);
                 if (n > 0) return Played(FrameSource.Normal, out source);
             }
-            else if (held.TryGetValue(seq + 1, out after))
-            {
-                lost++;   // the next packet proves this one was sent
-                if (after.PrevLength > 0)
-                {
-                    // 2. Its redundant copy, carried by the next packet.
-                    n = decoder.Decode(after.Prev, after.PrevLength, pcm, false);
-                    if (n > 0) { redundant++; return Played(FrameSource.Redundant, out source); }
-                }
-                else
-                {
-                    // 3. Opus FEC from the next packet.
-                    n = decoder.Decode(after.Opus, after.OpusLength, pcm, true);
-                    if (n > 0) { fec++; return Played(FrameSource.Fec, out source); }
-                }
-            }
             else if (held.Count > 0)
             {
                 // Seq counts mic time, so a new burst lands far ahead: the gap before it is silence, not loss.
-                // At a BurstStart, or a gap too wide to be a hole (the BurstStart packet may be lost), end this
-                // burst and start the new one by the usual rule instead of concealing across the gap.
+                // Every seq below a held BurstStart was never sent; so is a gap too wide to be a hole (the
+                // BurstStart packet may be lost). End this burst and start the new one by the usual rule
+                // instead of concealing across the gap or counting it lost.
                 Frame low = Lowest();
-                if (low.BurstStart || low.Seq - seq > BoundaryFrames(targetMs))
+                if (IsSilenceBefore(low, seq))
                 {
                     playing = false;
                     TryStart();
                     if (!playing) { source = FrameSource.Concealed; return false; }
                     return PlayNext(pcm, out source);
                 }
-                lost++;
+
+                lost++;   // a later packet of this burst proves this one was sent
+                if (held.TryGetValue(seq + 1, out after))
+                {
+                    if (after.PrevLength > 0)
+                    {
+                        // 2. Its redundant copy, carried by the next packet.
+                        n = decoder.Decode(after.Prev, after.PrevLength, pcm, false);
+                        if (n > 0) { redundant++; return Played(FrameSource.Redundant, out source); }
+                    }
+                    // 3. Opus FEC from the next packet (no redundant copy, or it didn't decode).
+                    n = decoder.Decode(after.Opus, after.OpusLength, pcm, true);
+                    if (n > 0) { fec++; return Played(FrameSource.Fec, out source); }
+                }
+                else if (held.TryGetValue(seq + 2, out after) && after.PrevLength > 0)
+                {
+                    // 3. This one and the next both missing: the packet after carries the next one whole, and
+                    // that frame's Opus FEC is this one.
+                    n = decoder.Decode(after.Prev, after.PrevLength, pcm, true);
+                    if (n > 0) { fec++; return Played(FrameSource.Fec, out source); }
+                }
             }
 
             // 4/5. Conceal. Nothing later held means we ran dry: the speaker stopped, or the network stalled.
+            // Which one is only known when something arrives (ResolveTail); until then it is a tail.
             source = FrameSource.Concealed;
             bool anyLater = held.Count > 0;
-            if (!anyLater && !starved)
-            {
-                starved = true;
-                underruns++;
-            }
             n = decoder.Conceal(pcm);
             if (n < 0) n = 0;
-            concealed++;
+            if (anyLater) concealed++;
+            else tailPending++;
             concealRun++;
             nextSeq = seq + 1;
 
@@ -213,7 +231,7 @@ namespace StbcRevival.Voice
                 for (int i = 0; i < n; i++) pcm[i] *= 1f - (float)(i + 1) / n;
                 playing = false;
                 concealRun = 0;
-                starved = false;   // the burst ended; not a mid-burst underrun, so the target doesn't grow
+                ResolveTail(false);   // the burst ended; not a mid-burst underrun, so the target doesn't grow
             }
             return true;
         }
@@ -223,13 +241,29 @@ namespace StbcRevival.Voice
             source = src;
             nextSeq++;
             concealRun = 0;
-            if (starved)
+            return true;
+        }
+
+        // The frames below this held one, from seq up, were never sent: it starts a new burst, or is too far
+        // ahead to be the same one.
+        bool IsSilenceBefore(Frame low, uint seq)
+        {
+            return low.Seq > seq && (low.BurstStart || low.Seq - seq > BoundaryFrames(targetMs));
+        }
+
+        // The frames concealed while dry were missing from a burst still going (an underrun: the cushion was too
+        // thin, so the target grows), or the speaker's silence (a tail: nothing wrong).
+        void ResolveTail(bool underrun)
+        {
+            if (tailPending == 0) return;
+            if (underrun)
             {
-                // Audio resumed after running dry mid-burst: the cushion was too thin.
-                starved = false;
+                underruns++;
+                concealed += tailPending;
                 targetMs = Math.Min(MaxTargetMs, targetMs + TargetStepMs);
             }
-            return true;
+            else tailConcealed += tailPending;
+            tailPending = 0;
         }
 
         void TryStart()
@@ -253,7 +287,6 @@ namespace StbcRevival.Voice
             hasPlayed = true;
             playing = true;
             concealRun = 0;
-            starved = false;
         }
 
         // A seq gap wider than the cushion plus the concealment limit can't be a hole to conceal: seq counts mic
@@ -312,19 +345,31 @@ namespace StbcRevival.Voice
             hasPlayed = false;
             nextSeq = 0;
             concealRun = 0;
-            starved = false;
+            ResolveTail(false);
             transitCount = transitNext = 0;
+            hasBatch = false;
             depthMs = 0;
         }
 
+        // One transit per arrival batch: packets pushed with the same arrival time came together (a hitch on either
+        // side, or the speaker's pre-roll), and only the newest, least delayed of them says how late the network is.
         void AddTransit(double arrivalMs, uint seq)
         {
-            transits[transitNext] = arrivalMs - (double)seq * VoiceFormat.FrameMs;
+            double transit = arrivalMs - (double)seq * VoiceFormat.FrameMs;
+            if (hasBatch && arrivalMs == batchMs && transitCount > 0)
+            {
+                int last = (transitNext + TransitWindow - 1) % TransitWindow;
+                if (transit < transits[last]) transits[last] = transit;
+                return;
+            }
+            hasBatch = true;
+            batchMs = arrivalMs;
+            transits[transitNext] = transit;
             transitNext = (transitNext + 1) % TransitWindow;
             if (transitCount < TransitWindow) transitCount++;
         }
 
-        // p95 of (transit - min transit) over the last 100 packets.
+        // p95 of (transit - min transit) over the last 100 arrival batches.
         int ComputeJitterMs()
         {
             int c = transitCount;

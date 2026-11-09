@@ -6,9 +6,12 @@ public class JitterBufferTests
     // The packet bytes carry their seq so the fake can tell which frame it is decoding.
     sealed class FakeDecoder : IFrameDecoder
     {
+        public readonly HashSet<int> FailNormal = new HashSet<int>();   // these seqs don't decode (fec=false)
+
         public int Decode(byte[] packet, int length, float[] pcm, bool fec)
         {
             int seq = BitConverter.ToInt32(packet, 0);
+            if (!fec && FailNormal.Contains(seq)) return -4;   // OPUS_INVALID_PACKET
             float v = fec ? -(seq - 1) : seq;
             for (int i = 0; i < VoiceFormat.FrameSamples; i++) pcm[i] = v;
             return VoiceFormat.FrameSamples;
@@ -149,16 +152,20 @@ public class JitterBufferTests
     public void ConcealsAcrossLongerLossWhenLaterPacketHeld()
     {
         var jb = new JitterBuffer(new FakeDecoder());
-        // 4..8 lost (5 frames, 9 has prev of 8 only): 4..7 concealed, 8 redundant, then 9 onward.
+        // 4..8 lost (5 frames; 9 carries 8 whole, and 8's FEC is 7): 4..6 concealed, 7 FEC, 8 redundant, then 9 on.
         for (uint s = 0; s < 14; s++) if (s < 4 || s > 8) Push(jb, s, s * 20.0, burstStart: s == 0);
         var frames = PopUntilStop(jb);
-        for (int i = 4; i < 8; i++) Assert.Equal(FrameSource.Concealed, frames[i].src);
+        for (int i = 4; i < 7; i++) Assert.Equal(FrameSource.Concealed, frames[i].src);
+        Assert.Equal(FrameSource.Fec, frames[7].src);
+        Assert.Equal(-7f, frames[7].value);
         Assert.Equal(FrameSource.Redundant, frames[8].src);
         Assert.Equal(9f, frames[9].value);
         Assert.Equal(13f, frames[13].value);
         var st = jb.TakeStats();
         Assert.Equal(5, st.Lost);
-        Assert.Equal(1, st.Underruns);         // only the end of the burst: the hole had later packets held
+        Assert.Equal(3, st.Concealed);
+        Assert.Equal(5, st.TailConcealed);     // the fade-out after 13
+        Assert.Equal(0, st.Underruns);         // the hole had later packets held, and the end of the burst isn't one
     }
 
     [Fact]
@@ -184,9 +191,11 @@ public class JitterBufferTests
         Assert.Equal(0f, pcm[VoiceFormat.FrameSamples - 1]);
         Assert.False(jb.Playing);
         Assert.False(jb.Pop(pcm, out _));
+        // The speaker stopped: a tail, not a fault.
         var st = jb.TakeStats();
-        Assert.True(st.Underruns >= 1);
-        Assert.Equal(5, st.Concealed);
+        Assert.Equal(0, st.Underruns);
+        Assert.Equal(0, st.Concealed);
+        Assert.Equal(5, st.TailConcealed);
         Assert.Equal(0, st.Lost);
     }
 
@@ -374,7 +383,137 @@ public class JitterBufferTests
         var st = jb.TakeStats();
         Assert.Equal(start + 20, st.TargetMs);
         Assert.Equal(1, st.Underruns);
+        Assert.Equal(2, st.Concealed);         // proven missing by 8
+        Assert.Equal(0, st.TailConcealed);
         Assert.Equal(2, st.Late);
+    }
+
+    [Fact]
+    public void TwoLostRecoverFecFromPrevThenRedundant()
+    {
+        var jb = new JitterBuffer(new FakeDecoder());
+        for (uint s = 0; s < 10; s++) if (s != 4 && s != 5) Push(jb, s, s * 20.0, burstStart: s == 0);
+        var frames = PopUntilStop(jb);
+        Assert.Equal(FrameSource.Fec, frames[4].src);
+        Assert.Equal(-4f, frames[4].value);        // FEC of frame 5, carried whole by packet 6
+        Assert.Equal(FrameSource.Redundant, frames[5].src);
+        Assert.Equal(5f, frames[5].value);
+        Assert.Equal(6f, frames[6].value);
+        var st = jb.TakeStats();
+        Assert.Equal(2, st.Lost);
+        Assert.Equal(1, st.Fec);
+        Assert.Equal(1, st.Redundant);
+        Assert.Equal(0, st.Concealed);
+    }
+
+    [Fact]
+    public void FailedRedundantFallsBackToFec()
+    {
+        var dec = new FakeDecoder();
+        dec.FailNormal.Add(5);                     // packet 6's copy of frame 5 doesn't decode
+        var jb = new JitterBuffer(dec);
+        for (uint s = 0; s < 10; s++) if (s != 5) Push(jb, s, s * 20.0, burstStart: s == 0);
+        var frames = PopUntilStop(jb);
+        Assert.Equal(FrameSource.Fec, frames[5].src);
+        Assert.Equal(-5f, frames[5].value);        // FEC from packet 6
+        Assert.Equal(6f, frames[6].value);
+        var st = jb.TakeStats();
+        Assert.Equal(1, st.Lost);
+        Assert.Equal(1, st.Fec);
+        Assert.Equal(0, st.Redundant);
+        Assert.Equal(0, st.Concealed);
+    }
+
+    // The speaker's gate closes after its hang and reopens a frame later: frame 20 was never sent, and the next
+    // burst (pre-roll 21..23 with BurstStart 21, plus 24) leaves at 24 * 20 ms. Perfect network.
+    [Fact]
+    public void ShortPauseIsSilenceNotUnderrun()
+    {
+        var jb = new JitterBuffer(new FakeDecoder());
+        var packets = new List<(uint seq, double at, bool start)>();
+        for (uint s = 0; s <= 3; s++) packets.Add((s, 60, s == 0));            // the first burst's pre-roll
+        for (uint s = 4; s <= 19; s++) packets.Add((s, s * 20.0, false));
+        for (uint s = 21; s <= 24; s++) packets.Add((s, 24 * 20.0, s == 21));
+        for (uint s = 25; s <= 60; s++) packets.Add((s, s * 20.0, false));
+        Run(jb, packets.GetRange(0, 4), 0, 80);
+        int before = jb.TakeStats().TargetMs;
+        Run(jb, packets.GetRange(4, packets.Count - 4), 80, 1400);
+        var st = jb.TakeStats();
+        Assert.Equal(before, st.TargetMs);
+        Assert.Equal(0, st.Underruns);
+        Assert.Equal(0, st.Concealed);
+        Assert.Equal(0, st.Lost);
+        Assert.Equal(0, st.Fec);
+    }
+
+    [Fact]
+    public void SilenceBeforeHeldBurstStartIsNotLoss()
+    {
+        // Frame 10 was never sent; the next burst's BurstStart (11) is already held when 10's tick comes.
+        var jb = new JitterBuffer(new FakeDecoder());
+        for (uint s = 0; s < 10; s++) Push(jb, s, s * 20.0, burstStart: s == 0);
+        for (int i = 0; i < 6; i++) Assert.True(Pop(jb, out _, out _));
+        int before = jb.TakeStats().TargetMs;
+        for (uint s = 11; s < 15; s++) Push(jb, s, 14 * 20.0, burstStart: s == 11);   // pre-roll, sent together
+        var played = new List<float>();
+        for (int i = 0; i < 8; i++)
+        {
+            Assert.True(Pop(jb, out var src, out var v));
+            Assert.Equal(FrameSource.Normal, src);
+            played.Add(v);
+        }
+        Assert.Equal(new float[] { 6, 7, 8, 9, 11, 12, 13, 14 }, played);
+        var st = jb.TakeStats();
+        Assert.Equal(0, st.Lost);
+        Assert.Equal(0, st.Fec);
+        Assert.Equal(0, st.Concealed);
+        Assert.Equal(0, st.Underruns);
+        Assert.Equal(before, st.TargetMs);
+    }
+
+    [Fact]
+    public void HitchDoesNotInflateTarget()
+    {
+        // A steady link, then a 300 ms hold-up delivers 15 packets at once, then steady again.
+        var jb = new JitterBuffer(new FakeDecoder());
+        double clock = Run(jb, Burst(0, 100, 0, null, 0), 0, 2200);
+        clock = Run(jb, Burst(200, 20, 4000, null, 0), Math.Max(clock, 3900), 4600);
+        int before = jb.TakeStats().TargetMs;
+        var hitch = Burst(300, 60, 6000, null, 0);
+        for (int i = 10; i < 25; i++) hitch[i] = (hitch[i].Item1, 6000 + 25 * 20 + 5, false);
+        clock = Run(jb, hitch, Math.Max(clock, 5900), 7400);
+        // The next burst starts with the cushion it had before the hold-up.
+        for (uint s = 400; !jb.Playing; s++)
+        {
+            Assert.True(s < 420);
+            Push(jb, s, s * 20.0 + 5, burstStart: s == 400);
+        }
+        var st = jb.TakeStats();
+        Assert.InRange(st.TargetMs, before - 20, before + 20);
+        Assert.InRange(st.JitterMs, 0, 20);
+    }
+
+    [Fact]
+    public void PreRollBatchIsNotJitter()
+    {
+        // Perfect link; every burst opens with its 4-frame pre-roll sent together.
+        var jb = new JitterBuffer(new FakeDecoder());
+        double clock = 0;
+        for (uint b = 0; b < 10; b++)
+        {
+            uint first = b * 100;
+            var list = new List<(uint, double, bool)>();
+            for (uint i = 0; i < 10; i++)
+            {
+                uint s = first + i;
+                double at = i < 4 ? (first + 3) * 20.0 + 5 : s * 20.0 + 5;
+                list.Add((s, at, i == 0));
+            }
+            clock = Run(jb, list, Math.Max(clock, first * 20.0), first * 20.0 + 600);
+        }
+        var st = jb.TakeStats();
+        Assert.Equal(0, st.JitterMs);
+        Assert.Equal(JitterBuffer.MinTargetMs, st.TargetMs);
     }
 
     [Fact]
