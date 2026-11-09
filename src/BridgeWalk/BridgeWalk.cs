@@ -196,8 +196,7 @@ namespace StbcRevival.Walking
             seatLocalRot = pawn.localRotation;
             camLocalPos = cam.localPosition;
             camLocalRot = cam.localRotation;
-            try { ViewscreenRig.Capture(cam, Basis); } catch (Exception e) { Plugin.Log.LogWarning("Bridge walk: viewscreen: " + e.Message); }
-            own.Clear();
+            try { ViewscreenRig.Capture(cam, Basis); } catch (Exception e) { Plugin.Log.LogWarning("Bridge walk: viewscreen: " + e.Message); }            own.Clear();
             foreach (var c in me.PawnObject.GetComponentsInChildren<Collider>(true)) own.Add(c);
 
             // Walk off in the direction the camera looks.
@@ -451,7 +450,22 @@ namespace StbcRevival.Walking
     /// </summary>
     internal static class ViewscreenRig
     {
-        private sealed class Saved { public OrientExternalCamera Rig; public Transform Pivot; public Vector3 Pos; public Quaternion Rot; }
+        private sealed class Saved
+        {
+            public OrientExternalCamera Rig; public Transform Pivot; public Vector3 Pos; public Quaternion Rot; public MeshRenderer Proxy; public bool ProxyOn;
+            public Camera[] Cameras; public float[] Near;
+        }
+
+        // Seated, nothing of your own ship is ever close to the outside view's camera, so its near plane sits far out
+        // (1 in space units, 10 m on the bridge's scale). Walking up to the Aegis's window, the hull below is nearer
+        // than that and gets cut off: standing, the near plane comes in close.
+        private const float StandingNear = 0.05f;
+        private static float nextHullCheck;
+
+        // The rig draws a bridge-shaped mask first, depth only, with a hole cut where the viewscreen is as seen from
+        // your seat: space shows only through that hole. Close up it's too small (a cropped rectangle inside the
+        // viewscreen's frame), so standing it's switched off; the bridge itself covers everything but the viewscreen.
+        private static readonly System.Reflection.FieldInfo proxyField = AccessTools.Field(typeof(OrientExternalCamera), "_bridgeViewOcclusionProxy");
 
         private static readonly System.Reflection.FieldInfo pivotField = AccessTools.Field(typeof(OrientExternalCamera), "_pivot");
         private static readonly System.Reflection.FieldInfo cameraField = AccessTools.Field(typeof(OrientExternalCamera), "BJGOCLMLBLD");     // _camera
@@ -476,7 +490,12 @@ namespace StbcRevival.Walking
             foreach (var rig in UnityEngine.Object.FindObjectsOfType<OrientExternalCamera>())
             {
                 var pivot = pivotField.GetValue(rig) as Transform;
-                if (pivot != null) saved.Add(new Saved { Rig = rig, Pivot = pivot, Pos = pivot.localPosition, Rot = pivot.localRotation });
+                if (pivot == null) continue;
+                var proxy = proxyField != null ? proxyField.GetValue(rig) as MeshRenderer : null;
+                var cams = rig.GetComponentsInChildren<Camera>(true);
+                var near = new float[cams.Length];
+                for (int i = 0; i < cams.Length; i++) near[i] = cams[i].nearClipPlane;
+                saved.Add(new Saved { Rig = rig, Pivot = pivot, Pos = pivot.localPosition, Rot = pivot.localRotation, Proxy = proxy, ProxyOn = proxy != null && proxy.enabled, Cameras = cams, Near = near });
             }
         }
 
@@ -489,6 +508,19 @@ namespace StbcRevival.Walking
             Vector3 seatEye = basis != null ? basis.TransformPoint(seatEyeLocal) : seatEyeLocal;
             Vector3 moved = cam.position - seatEye;
             Quaternion look = Quaternion.Inverse(seatParent) * cam.rotation;
+            // Only the normal window view hides the own hull; the viewscreen's outside camera and other views show it.
+            // The game itself switches the bridge mask on only for the normal view (OrientExternalCamera.DKONHDLFEBM:
+            // view mode Normal, no space view, ...), so a rig whose mask is switched off isn't looking out the window.
+            bool outside = false;
+            foreach (var s in saved)
+            {
+                if (s.Rig == null) continue;
+                if (s.Proxy != null) { if (!s.Proxy.gameObject.activeSelf) outside = true; }
+                else if ((spaceViewField != null && spaceViewField.GetValue(s.Rig) is bool sv && sv)
+                    || (spectatorField != null && spectatorField.GetValue(s.Rig) as Transform != null)) outside = true;
+            }
+            if (outside) { if (OwnHull.Hidden) OwnHull.Restore(); nextHullCheck = 0f; } // back to the window: hide again at once
+            else if (!outside && !OwnHull.Hidden && Time.unscaledTime >= nextHullCheck) { nextHullCheck = Time.unscaledTime + 2f; OwnHull.Hide(); }
             foreach (var s in saved)
             {
                 if (s.Rig == null || s.Pivot == null) continue;
@@ -497,6 +529,9 @@ namespace StbcRevival.Walking
                 if (spectatorField != null && spectatorField.GetValue(s.Rig) as Transform != null) continue;
                 s.Pivot.localPosition = s.Pos - moved / 10f;
                 s.Pivot.localRotation = s.Rot;
+                if (s.Proxy != null && s.Proxy.enabled) s.Proxy.enabled = false;
+                for (int i = 0; i < s.Cameras.Length; i++)
+                    if (s.Cameras[i] != null && s.Cameras[i].nearClipPlane > StandingNear) s.Cameras[i].nearClipPlane = StandingNear;
                 var c = cameraField.GetValue(s.Rig) as Camera;
                 if (c != null) c.transform.localRotation = look;
             }
@@ -506,12 +541,57 @@ namespace StbcRevival.Walking
         {
             foreach (var s in saved)
             {
+                if (s.Proxy != null && s.ProxyOn) s.Proxy.enabled = true;
+                if (s.Cameras != null)
+                    for (int i = 0; i < s.Cameras.Length; i++) if (s.Cameras[i] != null) s.Cameras[i].nearClipPlane = s.Near[i];
                 if (s.Rig == null || s.Pivot == null) continue;
                 if (spaceViewField != null && spaceViewField.GetValue(s.Rig) is bool on && on) continue;
                 s.Pivot.localPosition = s.Pos;
                 s.Pivot.localRotation = s.Rot;
             }
             saved.Clear();
+            OwnHull.Restore();
+        }
+    }
+
+    /// <summary>
+    /// The Enterprise-D's viewscreen looks out from inside the saucer: seated, the rig's bridge-shaped mask hides the
+    /// ship's own hull, but with the mask off for walking (ViewscreenRig) the saucer's top fills the view. On that
+    /// bridge your own ship's model is hidden from your view while you stand. The Aegis looks out over its own hull
+    /// through its window on purpose, so its hull stays.
+    /// </summary>
+    internal static class OwnHull
+    {
+        private static readonly List<Renderer> hidden = new List<Renderer>();
+        internal static bool Hidden => hidden.Count > 0;
+
+        internal static void Hide()
+        {
+            Restore();
+            var ship = UnityEngine.Object.FindObjectOfType<Sector.Spacecraft.PlayerSpacecraft>();
+            if (ship == null) return;
+            // The ship object is "Enterprise D_", its model "Body - 1701D(Clone)".
+            bool enterpriseD = ship.name.IndexOf("Enterprise D", StringComparison.OrdinalIgnoreCase) >= 0 || ship.name.IndexOf("1701D", StringComparison.OrdinalIgnoreCase) >= 0;
+            if (!enterpriseD)
+                foreach (Transform child in ship.transform)
+                    if (child.name.IndexOf("1701D", StringComparison.OrdinalIgnoreCase) >= 0) { enterpriseD = true; break; }
+            if (!enterpriseD) return;
+            foreach (var r in ship.GetComponentsInChildren<Renderer>(false))
+            {
+                if (r == null || !r.enabled || r is ParticleSystemRenderer) continue;
+                string path = Bridge.Path(r.transform);
+                if (path.IndexOf("CameraRig", StringComparison.OrdinalIgnoreCase) >= 0 || path.IndexOf("Effect", StringComparison.OrdinalIgnoreCase) >= 0
+                    || path.IndexOf("FX", StringComparison.Ordinal) >= 0 || path.IndexOf("Shield", StringComparison.OrdinalIgnoreCase) >= 0) continue;
+                r.enabled = false;
+                hidden.Add(r);
+            }
+            if (hidden.Count > 0) Plugin.Log.LogInfo($"Bridge walk: your ship's hull hidden from the viewscreen while standing ({hidden.Count} parts of {ship.name})");
+        }
+
+        internal static void Restore()
+        {
+            foreach (var r in hidden) if (r != null) r.enabled = true;
+            hidden.Clear();
         }
     }
 
