@@ -85,8 +85,10 @@ namespace StbcRevival
                 var face = avatars[i].GetComponentInChildren<FaceCustomization>(true);
                 if (face == null || !(LookIndex.GetValue(face) is int look)) continue;
                 int want = 1 + Mathf.Abs(look) % 2;
-                if (want != Plugin.KlingonHead.Value)
+                if (want != Plugin.KlingonHead.Value || want != Plugin.KlingonHeadChoice.Value)
                 {
+                    // Both: the one worn, and the one KLINGON (and the Revival settings) pick.
+                    Plugin.KlingonHeadChoice.Value = want;
                     Plugin.KlingonHead.Value = want;
                     Plugin.Log.LogInfo($"Klingon head: look {look} in the creator, so the {Names[want]}'s head");
                 }
