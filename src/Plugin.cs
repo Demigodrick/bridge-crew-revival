@@ -312,6 +312,7 @@ namespace StbcRevival
             harmony = new Harmony(Guid);
             Patches.Apply(harmony);
             Safely("revival voice capture patches", () => VoiceCapture.Patch(harmony));
+            Safely("revival voice patches", () => RevivalVoice.Patch(harmony));
             SteamMode.Install(harmony);
             ShuttleControls.Install();
 

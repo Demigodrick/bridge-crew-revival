@@ -47,6 +47,9 @@ namespace StbcRevival
         internal static bool Talking => talking;
         internal static uint Stream => stream;
 
+        /// <summary>Main thread: the capture pipeline is running (DirectVoice's hello tells crewmates so).</summary>
+        internal static bool Capturing => worker != null;
+
         internal static int PacketLossPercent { set { lossPercent = value; } }
 
         internal static void Patch(Harmony harmony)

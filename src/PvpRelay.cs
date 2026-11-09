@@ -76,8 +76,9 @@ namespace StbcRevival
 
         private static readonly HashSet<int> toldOtherShip = new HashSet<int>();
 
-        private static bool VoiceChat_Prefix(byte __0, object __1, int __2)
+        private static bool VoiceChat_Prefix(byte __0, object __1, int __2, bool __runOriginal)
         {
+            if (!__runOriginal) return false; // another prefix (Revival voice's handover) already let it go
             if (__0 != 125 || Hears(__2)) return true;
             if (__1 is SVR.Network.PLPKPDFOLDL packet) SVR.Network.PLPKPDFOLDL.Release(packet); // back to its pool, as the game does
             var phase = GamePhaseManager.IEFBKOMBFGO?.GetCurrentGamePhase();
