@@ -218,7 +218,8 @@ namespace StbcRevival.Walking
             seatLocalRot = pawn.localRotation;
             camLocalPos = cam.localPosition;
             camLocalRot = cam.localRotation;
-            if (onBridge) try { ViewscreenRig.Capture(cam, Basis); } catch (Exception e) { Plugin.Log.LogWarning("Bridge walk: viewscreen: " + e.Message); }            own.Clear();
+            if (onBridge) try { ViewscreenRig.Capture(cam, Basis); } catch (Exception e) { Plugin.Log.LogWarning("Bridge walk: viewscreen: " + e.Message); }
+            own.Clear();
             foreach (var c in me.PawnObject.GetComponentsInChildren<Collider>(true)) own.Add(c);
 
             // Walk off in the direction the camera looks.
@@ -692,6 +693,7 @@ namespace StbcRevival.Walking
         public static void Capture(Transform cam, Transform basis)
         {
             saved.Clear();
+            OwnHull.Forget();
             if (pivotField == null || cameraField == null)
             {
                 if (!warned) { warned = true; Plugin.Log.LogWarning("Bridge walk: the viewscreen camera's fields weren't found; it stays set for your seat"); }
@@ -778,9 +780,16 @@ namespace StbcRevival.Walking
         private static readonly List<Renderer> hidden = new List<Renderer>();
         internal static bool Hidden => hidden.Count > 0;
 
+        // Not the Enterprise-D: settled for this stand, so the scene isn't searched again every 2 s (ViewscreenRig.Follow).
+        private static bool notThisShip;
+
+        /// <summary>Standing up: whether this ship's hull needs hiding is worked out again.</summary>
+        internal static void Forget() => notThisShip = false;
+
         internal static void Hide()
         {
             Restore();
+            if (notThisShip) return;
             var ship = UnityEngine.Object.FindObjectOfType<Sector.Spacecraft.PlayerSpacecraft>();
             if (ship == null) return;
             // The ship object is "Enterprise D_", its model "Body - 1701D(Clone)".
@@ -788,7 +797,7 @@ namespace StbcRevival.Walking
             if (!enterpriseD)
                 foreach (Transform child in ship.transform)
                     if (child.name.IndexOf("1701D", StringComparison.OrdinalIgnoreCase) >= 0) { enterpriseD = true; break; }
-            if (!enterpriseD) return;
+            if (!enterpriseD) { notThisShip = true; return; }
             foreach (var r in ship.GetComponentsInChildren<Renderer>(false))
             {
                 if (r == null || !r.enabled || r is ParticleSystemRenderer) continue;
@@ -860,6 +869,13 @@ namespace StbcRevival.Walking
                 pawn.localRotation = Quaternion.Euler(0, r.CurrentYaw, 0);
             }
             if (gone != null) foreach (var id in gone) All.Remove(id);
+        }
+
+        /// <summary>Is any crewmate standing? (A handful at most: cheap enough for the per-character animation hooks.)</summary>
+        public static bool AnyStanding()
+        {
+            foreach (var r in All.Values) if (r.Standing) return true;
+            return false;
         }
 
         /// <summary>Crewmates' characters are turned to their heading again after the game's animation (see Walker.HoldFacing).</summary>
@@ -957,14 +973,23 @@ namespace StbcRevival.Walking
 
         private static bool SkipWhileStanding() => !Walker.Standing;
 
-        private static readonly System.Reflection.FieldInfo animPlayer = AccessTools.Field(typeof(NovaAnimationController), "HAMOMEFCFNB");
+        // PawnComponent._playerInfo (NovaAnimationController's base class).
+        private static readonly AccessTools.FieldRef<PawnComponent, NovaPlayerInfo> animPlayer = TryFieldRef();
         private static bool seatTurnLogged;
 
+        private static AccessTools.FieldRef<PawnComponent, NovaPlayerInfo> TryFieldRef()
+        {
+            try { return AccessTools.FieldRefAccess<PawnComponent, NovaPlayerInfo>("HAMOMEFCFNB"); }
+            catch (Exception e) { Plugin.Log.LogWarning("Bridge walk: a character's player wasn't found (" + e.Message + "); standing characters are found by place instead"); return null; }
+        }
+
         // The controller's player (its own object isn't under the player's character), else its place in the scene.
+        // Runs for every character every frame: with nobody standing (nearly always) it does nothing more.
         private static bool NoSeatTurn(Component __instance)
         {
+            if (!Walker.Standing && !Remotes.AnyStanding()) return true;
             if (__instance == null) return true;
-            var player = animPlayer?.GetValue(__instance) as NovaPlayerInfo;
+            var player = animPlayer != null && __instance is PawnComponent pc ? animPlayer(pc) : null;
             bool standing = player != null
                 ? (Walker.Standing && player == Walker.Me) || IsStandingRemote(player)
                 : IsStanding(__instance.transform);

@@ -621,6 +621,14 @@ Check("AI.AgentShip.CPMKGMJPINE (cloak, fleet battle)", game.GetType("AI.AgentSh
 foreach (var m in new[] { "get_CurrentBridgeScene", "get_HolodeckBridgeScene" })
     Check($"Loader.{m} (excelsior)", game.GetType("Loader")?.GetMethod(m, BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic));
 
+// Bridge Walk (reflected names)
+var nac = game.GetType("SVR.NovaAnimationController");
+foreach (var m in new[] { "EEEKOHNIDBH", "FIFMENKIJFI" }) Check($"SVR.NovaAnimationController.{m} (seat turn, backrest lean)", nac?.GetMethod(m, Inst));
+Check("  PawnComponent.HAMOMEFCFNB (_playerInfo)", game.GetType("PawnComponent")?.GetField("HAMOMEFCFNB", Inst));
+var oec = game.GetType("OrientExternalCamera");
+foreach (var f in new[] { "_pivot", "BJGOCLMLBLD", "_bridgeViewOcclusionProxy" }) Check($"  OrientExternalCamera.{f}", oec?.GetField(f, Inst));
+Check("  ShuttleCameraMover.BatchLateUpdate", game.GetType("ShuttleCameraMover")?.GetMethod("BatchLateUpdate", Inst));
+
 // VR controller grace
 var inputManager = game.GetType("SVR.InputManager");
 Check("SVR.InputManager.AADJJIOIJJA(bool) (controller check)", inputManager?.GetMethods(Inst).FirstOrDefault(m => m.Name == "AADJJIOIJJA" && m.GetParameters().Length == 1));
