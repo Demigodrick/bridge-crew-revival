@@ -66,7 +66,8 @@ namespace StbcRevival.Walking
         /// <summary>Runs after all the game's animation (the end of its batched LateUpdate).</summary>
         public static void ApplyAll()
         {
-            if (Walker.Standing) Walker.PlaceCamera();
+            if (Walker.Standing) { Walker.HoldFacing(); Walker.PlaceCamera(); }
+            Remotes.HoldFacing();
             if (!Plugin.BridgeWalkAnimate.Value) return;
             try
             {
@@ -80,15 +81,68 @@ namespace StbcRevival.Walking
             catch (Exception e) { Plugin.Log.LogWarning("Bridge walk: animation: " + e.Message); }
         }
 
+        private sealed class Facing { public Quaternion Seated; public float Last; }
+        private static readonly Dictionary<GameObject, Facing> facings = new Dictionary<GameObject, Facing>();
+
+        // Seated, the game turns the character toward where you look (its idles lean left and right, turning the
+        // model under the player). Standing, the body faces the way you walk: the model keeps the turn it had under
+        // the player when you stood up, whatever the seated animation does to it.
+        private static void KeepFacing(GameObject visual)
+        {
+            var t = visual.transform;
+            if (!facings.TryGetValue(visual, out var f) || Time.unscaledTime - f.Last > 0.5f)
+            {
+                f = new Facing { Seated = t.localRotation };
+                facings[visual] = f;
+                float turned = Quaternion.Angle(Quaternion.identity, f.Seated);
+                if (turned > 2f) Plugin.Log.LogInfo($"Bridge walk: {visual.name} was turned {turned:F0}° under the player as you stood up; facing straight ahead");
+                f.Seated = Quaternion.identity;
+            }
+            f.Last = Time.unscaledTime;
+            t.localRotation = f.Seated;
+        }
+
+        /// <summary>
+        /// The body faces the way you look. The pose's body rotation alone doesn't do it: the seated character's
+        /// turn (only as far as you can turn in the chair) stayed in it. So the hips' facing is measured (across from
+        /// hip joint to hip joint) and the hips turned about the up axis until it's the player's.
+        /// </summary>
+        private static float lastTurnLog = -10f;
+
+        private static void FaceForward(Animator anim, Transform root)
+        {
+            var hips = anim.GetBoneTransform(HumanBodyBones.Hips);
+            var l = anim.GetBoneTransform(HumanBodyBones.LeftUpperLeg);
+            var r = anim.GetBoneTransform(HumanBodyBones.RightUpperLeg);
+            if (hips == null || l == null || r == null) return;
+            Vector3 up = root.up;
+            Vector3 across = r.position - l.position; across -= up * Vector3.Dot(across, up);
+            if (across.sqrMagnitude < 1e-6f) return;
+            Vector3 facing = Vector3.Cross(across, up).normalized;
+            Vector3 want = root.forward; want -= up * Vector3.Dot(want, up);
+            if (want.sqrMagnitude < 1e-6f) return;
+            want.Normalize();
+            float turn = Mathf.Atan2(Vector3.Dot(Vector3.Cross(facing, want), up), Vector3.Dot(facing, want)) * Mathf.Rad2Deg;
+            if (Time.unscaledTime - lastTurnLog > 3f && Mathf.Abs(turn) > 5f) { lastTurnLog = Time.unscaledTime; Plugin.Log.LogInfo($"Bridge walk: {anim.name}'s hips faced {turn:F0}° off your heading; turned to it"); }
+            if (Mathf.Abs(turn) < 0.5f) return;
+            Vector3 pivot = root.position + up * Vector3.Dot(hips.position - root.position, up);
+            Quaternion q = Quaternion.AngleAxis(turn, up);
+            hips.position = pivot + q * (hips.position - pivot);
+            hips.rotation = q * hips.rotation;
+        }
+
         private static void Apply(GameObject visual, Transform root, Pose st, float speed, float pitch)
         {
+            KeepFacing(visual);
             float dt = Time.deltaTime;
             float walk = Mathf.Max(0.1f, Plugin.BridgeWalkSpeed.Value);
             float targetAmp = Mathf.Clamp(speed / walk, 0f, 1.35f);
             st.Amp = Mathf.Lerp(st.Amp, targetAmp, 1f - Mathf.Exp(-6f * dt));
-            // Stride grows with speed; one cycle is two steps.
-            float stepLen = 0.55f + 0.18f * speed;
-            st.Phase += 2f * Mathf.PI * (speed / (2f * stepLen)) * dt;
+            // One cycle is two steps. Faster walkers take longer strides and quicker steps: the captured stride,
+            // scaled with the square root of the speed against the captured speed.
+            float capturedSpeed = WalkCycleData.Stride / WalkCycleData.Duration;
+            float stride = WalkCycleData.Stride * Mathf.Sqrt(Mathf.Max(0.2f, speed) / capturedSpeed);
+            st.Phase += 2f * Mathf.PI * (speed / stride) * dt;
             // Coming to a stop, the legs ease back to standing.
             if (targetAmp < 0.05f) st.Phase = Mathf.Lerp(st.Phase, Mathf.Round(st.Phase / Mathf.PI) * Mathf.PI, 1f - Mathf.Exp(-4f * dt));
             if (st.Phase > 1000f) st.Phase -= 2f * Mathf.PI * 100f;
@@ -107,6 +161,7 @@ namespace StbcRevival.Walking
                     hph = new HumanPoseHandler(anim.avatar, anim.transform);
                     handlers[anim] = hph;
                 }
+                StraightenChain(anim, visual);
                 hph.GetHumanPose(ref pose);
                 if (pose.muscles == null) continue;
 
@@ -114,8 +169,7 @@ namespace StbcRevival.Walking
 
                 float a = st.Amp;
                 float run = Mathf.Clamp01((a - 1f) / 0.35f);
-                Leg("Left", st.Phase, a, run);
-                Leg("Right", st.Phase + Mathf.PI, a, run);
+                // Legs: the captured walk cycle, aimed onto the leg bones after the pose is set (see Legs).
                 // Arms swing opposite to the leg on their side; the elbow bends on the forward swing.
                 Arm("Left", st.Phase, a, run);
                 Arm("Right", st.Phase + Mathf.PI, a, run);
@@ -133,29 +187,63 @@ namespace StbcRevival.Walking
                 pose.bodyPosition = new Vector3(0f, pose.bodyPosition.y, 0f);
                 hph.SetHumanPose(ref pose);
                 RestHelpers(anim, visual);
+                FaceForward(anim, root);
+                Legs(anim, root, st.Phase, Mathf.Clamp01(a));
                 Ground(anim, root, st);
             }
         }
 
-        // A bell curve on the gait cycle (x and c in cycles, 0..1).
-        private static float Bump(float x, float c, float w)
+        private static readonly HumanBodyBones[][] legChains =
         {
-            float d = x - c;
-            d -= Mathf.Round(d);
-            return Mathf.Exp(-(d * d) / (2f * w * w));
-        }
+            new[] { HumanBodyBones.LeftUpperLeg, HumanBodyBones.LeftLowerLeg, HumanBodyBones.LeftFoot, HumanBodyBones.LeftToes },
+            new[] { HumanBodyBones.RightUpperLeg, HumanBodyBones.RightLowerLeg, HumanBodyBones.RightFoot, HumanBodyBones.RightToes },
+        };
 
-        // Phase 0 = heel strike; stance until ~0.6, then swing.
-        private static void Leg(string side, float phase, float a, float run)
+        /// <summary>
+        /// The legs walk the captured cycle (WalkCycleData): each thigh, shin and foot is turned to point the way the
+        /// captured one points at this moment of the cycle, so the motion carries over whatever the rig's rest pose.
+        /// The hips sway as captured, and the spine takes back most of it so the upper body stays steady.
+        /// weight 0 = the standing pose, 1 = the full walk.
+        /// </summary>
+        private static void Legs(Animator anim, Transform root, float phase, float weight)
         {
+            if (weight < 0.001f) return;
             float x = phase / (2f * Mathf.PI); x -= Mathf.Floor(x);
-            float hip = 0.30f * Mathf.Cos(phase) + 0.04f + 0.08f * run * Mathf.Cos(phase);
-            float knee = 0.12f * Bump(x, 0.12f, 0.07f) + (0.62f + 0.25f * run) * Bump(x, 0.72f, 0.09f);
-            float foot = 0.12f * Bump(x, 0.0f, 0.06f) - 0.30f * Bump(x, 0.58f, 0.07f) + 0.10f * Bump(x, 0.82f, 0.1f);
-            M(side + " Upper Leg Front-Back", B(side + " Upper Leg Front-Back") + a * hip);
-            M(side + " Lower Leg Stretch", B(side + " Lower Leg Stretch") - a * knee * 1.5f);
-            M(side + " Foot Up-Down", B(side + " Foot Up-Down") + a * foot);
-            M(side + " Toes Up-Down", B(side + " Toes Up-Down") + a * 0.25f * Bump(x, 0.55f, 0.06f));
+            float f = x * WalkCycleData.Samples;
+            int s0 = (int)f % WalkCycleData.Samples, s1 = (s0 + 1) % WalkCycleData.Samples;
+            float w = f - Mathf.Floor(f);
+            const int stride = 23;
+            var d = WalkCycleData.Data;
+            int o0 = s0 * stride, o1 = s1 * stride;
+
+            var hips = anim.GetBoneTransform(HumanBodyBones.Hips);
+            var spine = anim.GetBoneTransform(HumanBodyBones.Spine);
+            if (hips != null)
+            {
+                var q0 = new Quaternion(d[o0 + 18], d[o0 + 19], d[o0 + 20], d[o0 + 21]);
+                var q1 = new Quaternion(d[o1 + 18], d[o1 + 19], d[o1 + 20], d[o1 + 21]);
+                var sway = Quaternion.Slerp(Quaternion.identity, Quaternion.Slerp(q0, q1, w), weight * 0.8f);
+                Quaternion spineBefore = spine != null ? spine.rotation : Quaternion.identity;
+                hips.rotation = root.rotation * sway * Quaternion.Inverse(root.rotation) * hips.rotation;
+                if (spine != null) spine.rotation = Quaternion.Slerp(spineBefore, spine.rotation, 0.35f);
+            }
+
+            for (int side = 0; side < 2; side++)
+            {
+                var chain = legChains[side];
+                for (int seg = 0; seg < 3; seg++)
+                {
+                    var bone = anim.GetBoneTransform(chain[seg]);
+                    var child = anim.GetBoneTransform(chain[seg + 1]);
+                    if (bone == null || child == null) continue;
+                    int k = (side * 3 + seg) * 3;
+                    var dir = Vector3.Lerp(new Vector3(d[o0 + k], d[o0 + k + 1], d[o0 + k + 2]), new Vector3(d[o1 + k], d[o1 + k + 1], d[o1 + k + 2]), w);
+                    Vector3 current = child.position - bone.position;
+                    if (current.sqrMagnitude < 1e-8f || dir.sqrMagnitude < 1e-8f) continue;
+                    Vector3 target = Vector3.Slerp(current.normalized, (root.rotation * dir).normalized, weight);
+                    bone.rotation = Quaternion.FromToRotation(current, target) * bone.rotation;
+                }
+            }
         }
 
         private static void Arm(string side, float phase, float a, float run)
@@ -181,8 +269,10 @@ namespace StbcRevival.Walking
             st.Lift = st.HasLift ? Mathf.Lerp(st.Lift, want, 1f - Mathf.Exp(-25f * Time.deltaTime)) : want;
             st.HasLift = true;
             hips.position += up * st.Lift;
+            // Standing, the feet are centred under the character; walking, the captured steps place them, so the hips
+            // aren't pushed back and forth with every step.
             Vector3 feetMid = (lf.position + rf.position) * 0.5f - root.position; feetMid -= up * Vector3.Dot(feetMid, up);
-            hips.position -= feetMid;
+            hips.position -= feetMid * (1f - Mathf.Clamp01(st.Amp));
         }
 
         // The rig's helper bones (Sleeve_*, Stretchy_*, New*, *_Roll) are posed by the game for sitting and reaching
@@ -194,6 +284,11 @@ namespace StbcRevival.Walking
             public Vector3[] Pos;
             public Quaternion[] Rot;
             public Vector3[] Scale;
+            // The bones between the character and its hips (its Root): the game turns them toward the console at
+            // some stations. Standing, they're put back before the pose is set.
+            public Transform[] Chain = new Transform[0];
+            public Vector3[] ChainPos;
+            public Quaternion[] ChainRot;
         }
 
         private static readonly Dictionary<Animator, Rest> rests = new Dictionary<Animator, Rest>();
@@ -206,6 +301,14 @@ namespace StbcRevival.Walking
             warned.Clear();
             rests.Clear();
             prefabs = null;
+            facings.Clear();
+        }
+
+        private static void StraightenChain(Animator anim, GameObject visual)
+        {
+            if (!rests.TryGetValue(anim, out var r)) { r = BuildRest(anim, visual); rests[anim] = r; }
+            for (int i = 0; i < r.Chain.Length; i++)
+                if (r.Chain[i] != null) { r.Chain[i].localPosition = r.ChainPos[i]; r.Chain[i].localRotation = r.ChainRot[i]; }
         }
 
         private static void RestHelpers(Animator anim, GameObject visual)
@@ -284,6 +387,14 @@ namespace StbcRevival.Walking
                     }
                 }
                 rest.Bones = list.ToArray(); rest.Pos = pos.ToArray(); rest.Rot = rot.ToArray(); rest.Scale = scl.ToArray();
+                var chain = new List<Transform>(); var cpos = new List<Vector3>(); var crot = new List<Quaternion>();
+                for (var t = hips != null ? hips.parent : null; t != null && t != visual.transform; t = t.parent)
+                {
+                    var pt = prefab != null ? prefab.transform.Find(RelPath(t, visual.transform)) : null;
+                    chain.Add(t); cpos.Add(pt != null ? pt.localPosition : t.localPosition); crot.Add(pt != null ? pt.localRotation : Quaternion.identity);
+                }
+                rest.Chain = chain.ToArray(); rest.ChainPos = cpos.ToArray(); rest.ChainRot = crot.ToArray();
+                if (chain.Count > 0) Plugin.Log.LogInfo($"Bridge walk: {chain.Count} bone(s) above the hips kept straight ({chain[0].name}{(prefab != null ? ", from the prefab" : "")})");
                 Plugin.Log.LogInfo($"Bridge walk: {list.Count} helper bones at rest (from {(prefab != null && hips != null && list.Count > 0 ? "prefab " + baseName : "bind poses")})");
             }
             catch (Exception e) { Plugin.Log.LogWarning("Bridge walk: helper bones: " + e.Message); }

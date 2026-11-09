@@ -101,6 +101,7 @@ namespace StbcRevival
 
         private void Update()
         {
+            if (Walking.Walker.Standing) return; // walking about in the shuttle: WASD is for your feet
             if (!reportedOverride && (transform.position - position).sqrMagnitude > 0.01f)
             {
                 reportedOverride = true;

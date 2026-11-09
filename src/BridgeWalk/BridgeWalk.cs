@@ -9,7 +9,8 @@ namespace StbcRevival.Walking
 {
     /// <summary>
     /// [Bridge Walk] Experimental, 2D (monitor) mode only: stand up from your seat with ToggleKey (F6) and walk
-    /// around the bridge (WASD/arrow keys, mouse to look, Shift to run, ToggleKey or Escape to sit down again).
+    /// around the bridge, the shuttle or the briefing room (WASD/arrow keys, mouse to look, Shift to run, ToggleKey or
+    /// Escape to sit down again).
     /// Crewmates with the mod see you stand and walk, with a procedural walk cycle on the character's humanoid rig.
     ///
     /// The game's own 2D camera and console input are paused while standing. Floors and walls come from the
@@ -27,25 +28,27 @@ namespace StbcRevival.Walking
             if (!Plugin.BridgeWalkEnabled.Value) return;
             WalkPatches.Apply(harmony);
             WalkNet.Hook();
+            ShuttleView.Patch(harmony);
             BridgeMeshes.StartIndex(Application.dataPath);
             Active = true;
         }
 
-        private static bool wasOnBridge;
+        private static Type lastPhase;
         private static float nextPrewarm;
 
         internal static void Update()
         {
             if (!Active) return;
-            bool onBridge = Bridge.OnBridge();
-            if (wasOnBridge && !onBridge)
+            var phase = Bridge.Phase();
+            bool walkable = Bridge.Walkable(phase);
+            if (phase != lastPhase)
             {
-                // Left the bridge: what was kept for its characters and geometry goes.
+                // Left the bridge, shuttle or briefing room: what was kept for its characters and geometry goes.
                 BodyAnim.Clear();
                 Walker.ClearCaches();
                 WalkMesh.Clear();
             }
-            wasOnBridge = onBridge;
+            lastPhase = phase;
             if (Walker.SwallowEscape && !Input.GetKey(KeyCode.Escape)) Walker.SwallowEscape = false;
             // Keys typed into the mod's text prompt aren't for walking.
             bool typing = TextPrompt.IsOpen;
@@ -55,7 +58,7 @@ namespace StbcRevival.Walking
                 else Walker.StandUp();
             }
             if (!typing && Walker.Standing && Input.GetKeyDown(KeyCode.Escape)) Walker.SitDown("escape");
-            if (onBridge && !Walker.Standing && Time.unscaledTime >= nextPrewarm)
+            if (walkable && !Walker.Standing && Time.unscaledTime >= nextPrewarm)
             {
                 nextPrewarm = Time.unscaledTime + 2f;
                 Walker.Prewarm();
@@ -68,6 +71,18 @@ namespace StbcRevival.Walking
     // ---------------------------------------------------------------- game access
     internal static class Bridge
     {
+        /// <summary>The game phase now (GamePhase_Bridge, GamePhase_MainMenu: the shuttle, GamePhase_BriefingRoom...), or null.</summary>
+        public static Type Phase()
+        {
+            try { var gpm = GamePhaseManager.IEFBKOMBFGO; return gpm == null ? null : gpm.GetCurrentGamePhase(); }
+            catch { return null; }
+        }
+
+        /// <summary>Where you can stand up and walk: the bridge, the shuttle (main menu) and the briefing room.</summary>
+        public static bool Walkable(Type phase) => phase == typeof(GamePhase_Bridge) || phase == typeof(GamePhase_MainMenu) || phase == typeof(GamePhase_BriefingRoom);
+
+        public static string PlaceName(Type phase) => phase == typeof(GamePhase_Bridge) ? "the bridge" : phase == typeof(GamePhase_MainMenu) ? "the shuttle" : phase == typeof(GamePhase_BriefingRoom) ? "the briefing room" : (phase?.Name ?? "nowhere");
+
         public static bool OnBridge()
         {
             try
@@ -104,8 +119,9 @@ namespace StbcRevival.Walking
         public static NovaPlayerInfo Local()
         {
             int id = LocalActor();
-            if (id < 0) return null;
-            foreach (var p in Players()) if (p != null && ActorOf(p) == id && p.PawnObject != null) return p;
+            if (id >= 0) foreach (var p in Players()) if (p != null && ActorOf(p) == id && p.PawnObject != null) return p;
+            // Not matched by network ID (in the shuttle before a room is joined, say): the game's own local player.
+            try { var local = NovaPlayerManager.IEFBKOMBFGO?.AJPNCBOKCLC; if (local != null && local.PawnObject != null) return local; } catch { }
             return null;
         }
 
@@ -135,6 +151,9 @@ namespace StbcRevival.Walking
     internal static class Walker
     {
         public static bool Standing;
+        /// <summary>Standing on the bridge (not the shuttle or briefing room): the viewscreen and the other consoles join in.</summary>
+        private static bool onBridge;
+        private static Type standPhase;
         public static NovaPlayerInfo Me;
         public static float Speed;
         public static readonly Pose Pose = new Pose();
@@ -183,11 +202,14 @@ namespace StbcRevival.Walking
 
         public static void StandUp()
         {
-            if (!Bridge.OnBridge()) return;
+            var phase = Bridge.Phase();
+            if (!Bridge.Walkable(phase)) { Plugin.Log.LogInfo($"Bridge walk: not here ({Bridge.PlaceName(phase)})"); return; }
             var me = Bridge.Local();
-            if (me == null || me.PawnObject == null) { Plugin.Log.LogWarning("Bridge walk: your character wasn't found"); return; }
+            if (me == null || me.PawnObject == null) { Plugin.Log.LogWarning($"Bridge walk: your character wasn't found in {Bridge.PlaceName(phase)} (actor {Bridge.LocalActor()}, {Bridge.Players().Length} players)"); return; }
             var fps = me.PawnObject.GetComponentInChildren<FPSCamera>(true);
-            if (fps == null || !fps.isActiveAndEnabled) { Plugin.Log.LogInfo("Bridge walk: only in 2D mode (no 2D camera active)"); return; }
+            if (fps == null || !fps.isActiveAndEnabled) { Plugin.Log.LogInfo($"Bridge walk: only in 2D mode (no 2D camera active on {Bridge.Path(me.PawnObject.transform)}{(fps == null ? "" : ", it's at " + Bridge.Path(fps.transform))})"); return; }
+            onBridge = phase == typeof(GamePhase_Bridge);
+            standPhase = phase;
 
             Me = me;
             pawn = me.PawnObject.transform;
@@ -196,8 +218,7 @@ namespace StbcRevival.Walking
             seatLocalRot = pawn.localRotation;
             camLocalPos = cam.localPosition;
             camLocalRot = cam.localRotation;
-            try { ViewscreenRig.Capture(cam, Basis); } catch (Exception e) { Plugin.Log.LogWarning("Bridge walk: viewscreen: " + e.Message); }
-            own.Clear();
+            if (onBridge) try { ViewscreenRig.Capture(cam, Basis); } catch (Exception e) { Plugin.Log.LogWarning("Bridge walk: viewscreen: " + e.Message); }            own.Clear();
             foreach (var c in me.PawnObject.GetComponentsInChildren<Collider>(true)) own.Add(c);
 
             // Walk off in the direction the camera looks.
@@ -207,22 +228,27 @@ namespace StbcRevival.Walking
             Speed = 0f;
 
             Vector3 pos = pawn.position;
+            Vector3 seated = pos;
             if (Plugin.BridgeWalkCollisions.Value) { try { WalkMesh.Ensure(pos, Basis); } catch (Exception e) { Plugin.Log.LogWarning("Bridge walk: bridge geometry: " + e.Message); } }
             floorFromGeometry = false;
             if (Plugin.BridgeWalkCollisions.Value && FindFloor(pos, out var floor, nearestTo: true)) { pos = floor; floorFromGeometry = true; }
             flatHeight = Vector3.Dot(pos, Up);
             pawn.position = pos;
-            // A step away from the chair, if there's room.
-            TryMove(BasisRot * Quaternion.Euler(0, yaw, 0) * Vector3.forward * 0.45f);
+            // Out of the chair, onto free floor beside it.
+            StepOut(seated);
+            if (phase == typeof(GamePhase_MainMenu)) ShuttleView.Capture();
+            ResetGameFreeLook();
+            HookCamera();
 
             Standing = true;
             SwallowEscape = false;
             Pose.Reset();
+            if (onBridge) OtherConsoles.Show();
             savedLockMode = Cursor.lockState;
             savedCursorVisible = Cursor.visible;
             Cursor.lockState = CursorLockMode.Locked;
             Cursor.visible = false;
-            Plugin.Log.LogInfo($"Bridge walk: stood up at {Bridge.Path(pawn)}; floor {(floorFromGeometry ? "from the bridge geometry" : "flat (no floor found)")}");
+            Plugin.Log.LogInfo($"Bridge walk: stood up in {Bridge.PlaceName(phase)} at {Bridge.Path(pawn)}; floor {(floorFromGeometry ? "from the bridge geometry" : "flat (no floor found)")}");
             WalkNet.SendState(true);
         }
 
@@ -240,9 +266,11 @@ namespace StbcRevival.Walking
                     try { Bridge.Reseat(Me); } catch (Exception e) { Plugin.Log.LogWarning("Bridge walk: reseating: " + e.Message); }
                 }
                 if (cam != null) { cam.localPosition = camLocalPos; cam.localRotation = camLocalRot; }
-                ViewscreenRig.Restore();
+                if (onBridge) ViewscreenRig.Restore();
+                ShuttleView.Restore();
             }
             catch (Exception e) { Plugin.Log.LogWarning("Bridge walk: sitting down: " + e.Message); }
+            if (onBridge) OtherConsoles.Restore();
             if (why == "escape") SwallowEscape = true;
             Cursor.lockState = savedLockMode;
             Cursor.visible = savedCursorVisible;
@@ -253,7 +281,7 @@ namespace StbcRevival.Walking
         public static void Tick(bool typing)
         {
             if (!Standing) return;
-            if (pawn == null || cam == null || Me == null || !Bridge.OnBridge()) { SitDown("left the bridge"); return; }
+            if (pawn == null || cam == null || Me == null || Bridge.Phase() != standPhase) { SitDown("left " + Bridge.PlaceName(standPhase)); return; }
             // The bridge's meshes finished reading after you stood up: from now on they carry you.
             if (!floorFromGeometry && Plugin.BridgeWalkCollisions.Value && WalkMesh.ReadyFor(Basis)) floorFromGeometry = true;
             if (typing)
@@ -298,13 +326,192 @@ namespace StbcRevival.Walking
             if (Time.unscaledTime >= nextSend) { nextSend = Time.unscaledTime + 1f / 15f; WalkNet.SendState(false); }
         }
 
+        private static float lastHoldLog = -10f;
+
+        /// <summary>
+        /// Something of the game's turns the character back toward its seat between the walk's update and the
+        /// end of the frame (only as far as the chair swivels), so the body didn't follow your heading: it's turned
+        /// to your heading again after all the game's animation, right before the walk pose goes on.
+        /// </summary>
+        public static void HoldFacing()
+        {
+            if (!Standing || pawn == null) return;
+            Quaternion want = BasisRot * Quaternion.Euler(0, yaw, 0);
+            float off = Quaternion.Angle(pawn.rotation, want);
+            if (off > 5f && Time.unscaledTime - lastHoldLog > 5f) { lastHoldLog = Time.unscaledTime; Plugin.Log.LogInfo($"Bridge walk: your character had been turned {off:F0}° back toward the seat; turned to your heading again"); }
+            pawn.rotation = want;
+        }
+
         public static void PlaceCamera()
         {
             if (!Standing || pawn == null || cam == null) return;
             Quaternion yawRot = BasisRot * Quaternion.Euler(0, yaw, 0);
             cam.position = pawn.position + Up * Plugin.BridgeWalkEyeHeight.Value + yawRot * Vector3.forward * 0.12f;
             cam.rotation = yawRot * Quaternion.Euler(pitch, 0, 0);
-            ViewscreenRig.Follow(cam, Basis);
+            if (onBridge) ViewscreenRig.Follow(cam, Basis);
+            ShuttleView.Follow(cam);
+        }
+
+        /// <summary>
+        /// Standing up puts you on free floor beside the seat. Every spot around it (out to 1.5 m) with floor at about
+        /// the seat's height, nothing in the way and not boxed in is scored by how open it is (how many of eight
+        /// directions are clear for 0.8 m), then by how near it is and how close to the way you look; the best wins.
+        /// Taking the first free spot the way you looked could leave you in a pocket in front of a console (the
+        /// Aegis's engineering station) where every way out was walled.
+        /// </summary>
+        private static void StepOut(Vector3 seated)
+        {
+            Vector3 up = Up, seat = pawn.position;
+            bool collisions = Plugin.BridgeWalkCollisions.Value;
+            float bestScore = float.MinValue, bestR = 0f, bestTurn = 0f;
+            int bestOpen = 0, noFloor = 0, badHeight = 0, blocked = 0, boxed = 0, inFront = 0, covered = 0;
+            var blockers = new List<string>();
+            Vector3 best = seat;
+            // Around the character and around its station: looking at the briefing room's table, the game draws the
+            // seated character in toward it, so around the character alone everything was table.
+            var centers = new List<Vector3> { seat };
+            Transform station = null;
+            var heights = new List<Vector3> { seat, seated };
+            try
+            {
+                var st = Me != null ? Me.Station as NovaStation : null;
+                station = st != null ? st.transform : null;
+                if (st != null && (st.transform.position - seat).sqrMagnitude > 0.01f) { centers.Add(st.transform.position); heights.Add(st.transform.position); }
+            }
+            catch { }
+            foreach (var center in centers)
+                foreach (float r in new[] { 0.55f, 0.75f, 0.95f, 1.2f, 1.5f, 1.9f })
+                    for (int k = 0; k < 18; k++)
+                    {
+                        float turn = (k % 2 == 0 ? 1 : -1) * ((k + 1) / 2) * 20f;
+                        Vector3 p = center + BasisRot * Quaternion.Euler(0, yaw + turn, 0) * Vector3.forward * r;
+                        // Not in front of the station: that's where its console or the briefing room's table is.
+                        if (station != null)
+                        {
+                            Vector3 away = p - station.position; away -= up * Vector3.Dot(away, up);
+                            Vector3 ahead = station.forward; ahead -= up * Vector3.Dot(ahead, up);
+                            if (away.sqrMagnitude > 1e-4f && ahead.sqrMagnitude > 1e-4f && Vector3.Dot(away.normalized, ahead.normalized) > 0.64f) { inFront++; continue; }
+                        }
+                        int open = 8;
+                        if (collisions)
+                        {
+                            if (FindFloor(p, out var f)) p = f;
+                            else if (floorFromGeometry) { noFloor++; continue; }
+                            // About the height of the floor found under the seat, of where the seated character was, or
+                            // of the station (the briefing room's floor under the seat is a lower one).
+                            bool level = false;
+                            foreach (var h in heights) { float step = Vector3.Dot(p - h, up); if (step <= 0.45f && step >= -0.6f) { level = true; break; } }
+                            if (!level) { badHeight++; continue; }
+                            if (Covered(p)) { covered++; continue; }
+                            var hit = OverlapOf(p);
+                            if (hit != null) { blocked++; if (blockers.Count < 3 && !blockers.Contains(hit)) blockers.Add(hit); continue; }
+                            if (Cramped(p)) { boxed++; continue; }
+                            open = 8 - WalledDirections(p, 0.8f);
+                        }
+                        else p += up * (flatHeight - Vector3.Dot(p, up));
+                        float score = open * 10f - r * 4f - Mathf.Abs(turn) / 45f;
+                        if (score > bestScore) { bestScore = score; best = p; bestR = r; bestTurn = turn; bestOpen = open; }
+                    }
+            if (bestScore > float.MinValue)
+            {
+                pawn.position = best;
+                Plugin.Log.LogInfo($"Bridge walk: stepped out of the seat, {bestR:F2} m at {bestTurn:F0}° from where you looked ({bestOpen} of 8 directions open)");
+                return;
+            }
+            Plugin.Log.LogInfo($"Bridge walk: no free floor beside the seat (around {centers.Count} point(s): {inFront} in front of the station, {noFloor} without floor, {badHeight} too high or low, {covered} under something, {blocked} in something{(blockers.Count > 0 ? " (" + string.Join(", ", blockers.ToArray()) + ")" : "")}, {boxed} boxed in); stepping ahead");
+            TryMove(BasisRot * Quaternion.Euler(0, yaw, 0) * Vector3.forward * 0.45f);
+        }
+
+        /// <summary>Would a standing character here overlap a solid collider?</summary>
+        private static readonly List<float> overhead = new List<float>();
+
+        /// <summary>Something over this spot between 0.3 m and 1.3 m up (a table top): nowhere to stand. (Not higher: the shuttle's ceiling is low.)</summary>
+        private static bool Covered(Vector3 pos)
+        {
+            Vector3 up = Up;
+            foreach (var hit in Physics.RaycastAll(pos + up * 0.3f, up, 1.0f)) if (!Ignore(hit.collider)) return true;
+            if (!WalkMesh.ReadyFor(Basis)) return false;
+            overhead.Clear();
+            Vector3 lp = ToLocal(pos);
+            WalkMesh.Floors(lp, ToLocal(pos + up * 1.3f).y, ToLocal(pos + up * 0.3f).y, overhead);
+            return overhead.Count > 0;
+        }
+
+        private static bool Overlaps(Vector3 pos) => OverlapOf(pos) != null;
+
+        /// <summary>The first solid collider a standing character here would overlap (its path), or null.</summary>
+        private static string OverlapOf(Vector3 pos)
+        {
+            const float r = 0.22f;
+            Vector3 up = Up;
+            foreach (var c in Physics.OverlapCapsule(pos + up * (0.45f + r), pos + up * (1.75f - r), r))
+                if (!Ignore(c)) return Bridge.Path(c.transform);
+            return null;
+        }
+
+        /// <summary>
+        /// Boxed in: walls within 0.3 m in half or more of eight directions around you (inside a chair or a console,
+        /// say). Walking, the walls don't stop you there, so you can always get out; out in the open they do.
+        /// </summary>
+        private static bool Cramped(Vector3 pos) => WalledDirections(pos, 0.3f) >= 4;
+
+        /// <summary>Of eight directions around you, how many have a wall (mesh or collider) within this distance,
+        /// at knee or hip height.</summary>
+        private static int WalledDirections(Vector3 pos, float distance)
+        {
+            Vector3 up = Up;
+            int blocked = 0;
+            for (int i = 0; i < 8; i++)
+            {
+                Vector3 dir = BasisRot * Quaternion.Euler(0, i * 45f, 0) * Vector3.forward;
+                bool hit = false;
+                foreach (float h in new[] { 0.5f, 1.0f })
+                {
+                    Vector3 s = pos + up * h, e = s + dir * distance;
+                    if (WalkMesh.ReadyFor(Basis) && WalkMesh.Hits(ToLocal(s), ToLocal(e))) { hit = true; break; }
+                    foreach (var rh in Physics.RaycastAll(s, dir, distance)) if (!Ignore(rh.collider)) { hit = true; break; }
+                    if (hit) break;
+                }
+                if (hit) blocked++;
+            }
+            return blocked;
+        }
+
+        // The game's right-click free look keeps its own state while you stand (its camera code is paused): cleared
+        // on standing up, so its cursor and crew-menu handling don't act as if you were still looking around.
+        private static void ResetGameFreeLook()
+        {
+            try { InputManager.IEFBKOMBFGO?.SetIsFreelook(false); } catch (Exception e) { Plugin.Log.LogDebug("Bridge walk: free look: " + e.Message); }
+        }
+
+        private static Camera.CameraCallback beforeRender;
+
+        // Anything of the game's that still turns the 2D camera while you stand (its free look's events reset the
+        // camera's rotation) would show for a frame as a snap or stutter: right before the camera draws, it's put
+        // back where your eyes are.
+        private static void HookCamera()
+        {
+            if (beforeRender != null) return;
+            beforeRender = c =>
+            {
+                if (!Standing || c == null || cam == null || pawn == null) return;
+                if (c.transform != cam && !c.transform.IsChildOf(cam)) return;
+                Quaternion yawRot = BasisRot * Quaternion.Euler(0, yaw, 0);
+                cam.position = pawn.position + Up * Plugin.BridgeWalkEyeHeight.Value + yawRot * Vector3.forward * 0.12f;
+                cam.rotation = yawRot * Quaternion.Euler(pitch, 0, 0);
+            };
+            Camera.onPreCull += beforeRender;
+        }
+
+        private static string blockReason;
+        private static float lastWhy = -10f;
+
+        // What stopped a step, in the log (every 2 s at most), so a place where you get stuck can be found.
+        private static void Why()
+        {
+            if (Time.unscaledTime - lastWhy < 2f) return;
+            lastWhy = Time.unscaledTime;
+            Plugin.Log.LogInfo($"Bridge walk: blocked at {ToLocal(pawn.position)}: {blockReason ?? "?"}{(Cramped(pawn.position) ? " (boxed in)" : "")}");
         }
 
         private static void TryMove(Vector3 delta)
@@ -317,12 +524,16 @@ namespace StbcRevival.Walking
             bool walls = Plugin.BridgeWalkCollisions.Value && Plugin.BridgeWalkWalls.Value;
             if (walls && Blocked(pos, delta))
             {
-                // Slide along the wall: try each axis on its own.
-                Vector3 right = BasisRot * Vector3.right, fwd = BasisRot * Vector3.forward;
-                Vector3 a = right * Vector3.Dot(delta, right), b = fwd * Vector3.Dot(delta, fwd);
-                if (!Blocked(pos, a)) next = pos + a;
-                else if (!Blocked(pos, b)) next = pos + b;
-                else return;
+                if (Cramped(pos)) walls = false; // boxed in: walk out
+                else
+                {
+                    // Slide along the wall: try each axis on its own.
+                    Vector3 right = BasisRot * Vector3.right, fwd = BasisRot * Vector3.forward;
+                    Vector3 a = right * Vector3.Dot(delta, right), b = fwd * Vector3.Dot(delta, fwd);
+                    if (!Blocked(pos, a)) next = pos + a;
+                    else if (!Blocked(pos, b)) next = pos + b;
+                    else { Why(); return; }
+                }
             }
             if (floorFromGeometry)
             {
@@ -331,7 +542,7 @@ namespace StbcRevival.Walking
                 float step = Vector3.Dot(floor - pos, up);
                 if (step > 0.45f || step < -0.8f)
                 {
-                    if (walls) return; // too high a step
+                    if (walls) { blockReason = $"step of {step:F2} m"; Why(); return; } // too high a step
                     // Walls off: through the desk or wall at the same height.
                 }
                 else next = floor;
@@ -339,7 +550,7 @@ namespace StbcRevival.Walking
             else next += up * (flatHeight - Vector3.Dot(next, up));
             Vector3 seatWorld = Basis != null ? Basis.TransformPoint(seatLocalPos) : seatLocalPos;
             Vector3 off = next - seatWorld; off -= up * Vector3.Dot(off, up);
-            if (off.magnitude > Plugin.BridgeWalkMaxDistance.Value) return;
+            if (off.magnitude > Plugin.BridgeWalkMaxDistance.Value) { blockReason = $"{off.magnitude:F1} m from the seat (max {Plugin.BridgeWalkMaxDistance.Value})"; Why(); return; }
             pawn.position = next;
         }
 
@@ -358,6 +569,7 @@ namespace StbcRevival.Walking
             {
                 if (Ignore(hit.collider)) continue;
                 if (hit.distance <= 0f && hit.point == Vector3.zero) continue; // already overlapping: don't get stuck
+                blockReason = "collider " + Bridge.Path(hit.collider.transform);
                 return true;
             }
             // Right at your own seat the mesh walls aren't checked, or you'd be stuck between the armrests.
@@ -370,7 +582,7 @@ namespace StbcRevival.Walking
                 {
                     Vector3 s = pos + up * h;
                     Vector3 e = s + dir * (dist + r);
-                    if (WalkMesh.Hits(ToLocal(s), ToLocal(e)) || WalkMesh.Hits(ToLocal(s + side), ToLocal(e + side)) || WalkMesh.Hits(ToLocal(s - side), ToLocal(e - side))) return true;
+                    if (WalkMesh.Hits(ToLocal(s), ToLocal(e)) || WalkMesh.Hits(ToLocal(s + side), ToLocal(e + side)) || WalkMesh.Hits(ToLocal(s - side), ToLocal(e - side))) { blockReason = $"bridge mesh wall at {h:F2} m height"; return true; }
                 }
             }
             return false;
@@ -427,6 +639,8 @@ namespace StbcRevival.Walking
             v = false;
             foreach (var p in ignoreParts) if (path.IndexOf(p, StringComparison.OrdinalIgnoreCase) >= 0) { v = true; break; }
             if (!v && c.attachedRigidbody != null && !c.attachedRigidbody.isKinematic) v = true; // moving parts
+            // Backdrops around the whole room (the briefing room's StarsCollider): everything is inside them, they're no wall.
+            if (!v && c.bounds.size.magnitude > 60f) v = true;
             ignoreCache[id] = v;
             return v;
         }
@@ -449,7 +663,22 @@ namespace StbcRevival.Walking
     /// </summary>
     internal static class ViewscreenRig
     {
-        private sealed class Saved { public OrientExternalCamera Rig; public Transform Pivot; public Vector3 Pos; public Quaternion Rot; }
+        private sealed class Saved
+        {
+            public OrientExternalCamera Rig; public Transform Pivot; public Vector3 Pos; public Quaternion Rot; public MeshRenderer Proxy; public bool ProxyOn;
+            public Camera[] Cameras; public float[] Near;
+        }
+
+        // Seated, nothing of your own ship is ever close to the outside view's camera, so its near plane sits far out
+        // (1 in space units, 10 m on the bridge's scale). Walking up to the Aegis's window, the hull below is nearer
+        // than that and gets cut off: standing, the near plane comes in close.
+        private const float StandingNear = 0.05f;
+        private static float nextHullCheck;
+
+        // The rig draws a bridge-shaped mask first, depth only, with a hole cut where the viewscreen is as seen from
+        // your seat: space shows only through that hole. Close up it's too small (a cropped rectangle inside the
+        // viewscreen's frame), so standing it's switched off; the bridge itself covers everything but the viewscreen.
+        private static readonly System.Reflection.FieldInfo proxyField = AccessTools.Field(typeof(OrientExternalCamera), "_bridgeViewOcclusionProxy");
 
         private static readonly System.Reflection.FieldInfo pivotField = AccessTools.Field(typeof(OrientExternalCamera), "_pivot");
         private static readonly System.Reflection.FieldInfo cameraField = AccessTools.Field(typeof(OrientExternalCamera), "BJGOCLMLBLD");     // _camera
@@ -474,7 +703,12 @@ namespace StbcRevival.Walking
             foreach (var rig in UnityEngine.Object.FindObjectsOfType<OrientExternalCamera>())
             {
                 var pivot = pivotField.GetValue(rig) as Transform;
-                if (pivot != null) saved.Add(new Saved { Rig = rig, Pivot = pivot, Pos = pivot.localPosition, Rot = pivot.localRotation });
+                if (pivot == null) continue;
+                var proxy = proxyField != null ? proxyField.GetValue(rig) as MeshRenderer : null;
+                var cams = rig.GetComponentsInChildren<Camera>(true);
+                var near = new float[cams.Length];
+                for (int i = 0; i < cams.Length; i++) near[i] = cams[i].nearClipPlane;
+                saved.Add(new Saved { Rig = rig, Pivot = pivot, Pos = pivot.localPosition, Rot = pivot.localRotation, Proxy = proxy, ProxyOn = proxy != null && proxy.enabled, Cameras = cams, Near = near });
             }
         }
 
@@ -487,6 +721,19 @@ namespace StbcRevival.Walking
             Vector3 seatEye = basis != null ? basis.TransformPoint(seatEyeLocal) : seatEyeLocal;
             Vector3 moved = cam.position - seatEye;
             Quaternion look = Quaternion.Inverse(seatParent) * cam.rotation;
+            // Only the normal window view hides the own hull; the viewscreen's outside camera and other views show it.
+            // The game itself switches the bridge mask on only for the normal view (OrientExternalCamera.DKONHDLFEBM:
+            // view mode Normal, no space view, ...), so a rig whose mask is switched off isn't looking out the window.
+            bool outside = false;
+            foreach (var s in saved)
+            {
+                if (s.Rig == null) continue;
+                if (s.Proxy != null) { if (!s.Proxy.gameObject.activeSelf) outside = true; }
+                else if ((spaceViewField != null && spaceViewField.GetValue(s.Rig) is bool sv && sv)
+                    || (spectatorField != null && spectatorField.GetValue(s.Rig) as Transform != null)) outside = true;
+            }
+            if (outside) { if (OwnHull.Hidden) OwnHull.Restore(); nextHullCheck = 0f; } // back to the window: hide again at once
+            else if (!outside && !OwnHull.Hidden && Time.unscaledTime >= nextHullCheck) { nextHullCheck = Time.unscaledTime + 2f; OwnHull.Hide(); }
             foreach (var s in saved)
             {
                 if (s.Rig == null || s.Pivot == null) continue;
@@ -495,6 +742,9 @@ namespace StbcRevival.Walking
                 if (spectatorField != null && spectatorField.GetValue(s.Rig) as Transform != null) continue;
                 s.Pivot.localPosition = s.Pos - moved / 10f;
                 s.Pivot.localRotation = s.Rot;
+                if (s.Proxy != null && s.Proxy.enabled) s.Proxy.enabled = false;
+                for (int i = 0; i < s.Cameras.Length; i++)
+                    if (s.Cameras[i] != null && s.Cameras[i].nearClipPlane > StandingNear) s.Cameras[i].nearClipPlane = StandingNear;
                 var c = cameraField.GetValue(s.Rig) as Camera;
                 if (c != null) c.transform.localRotation = look;
             }
@@ -504,12 +754,57 @@ namespace StbcRevival.Walking
         {
             foreach (var s in saved)
             {
+                if (s.Proxy != null && s.ProxyOn) s.Proxy.enabled = true;
+                if (s.Cameras != null)
+                    for (int i = 0; i < s.Cameras.Length; i++) if (s.Cameras[i] != null) s.Cameras[i].nearClipPlane = s.Near[i];
                 if (s.Rig == null || s.Pivot == null) continue;
                 if (spaceViewField != null && spaceViewField.GetValue(s.Rig) is bool on && on) continue;
                 s.Pivot.localPosition = s.Pos;
                 s.Pivot.localRotation = s.Rot;
             }
             saved.Clear();
+            OwnHull.Restore();
+        }
+    }
+
+    /// <summary>
+    /// The Enterprise-D's viewscreen looks out from inside the saucer: seated, the rig's bridge-shaped mask hides the
+    /// ship's own hull, but with the mask off for walking (ViewscreenRig) the saucer's top fills the view. On that
+    /// bridge your own ship's model is hidden from your view while you stand. The Aegis looks out over its own hull
+    /// through its window on purpose, so its hull stays.
+    /// </summary>
+    internal static class OwnHull
+    {
+        private static readonly List<Renderer> hidden = new List<Renderer>();
+        internal static bool Hidden => hidden.Count > 0;
+
+        internal static void Hide()
+        {
+            Restore();
+            var ship = UnityEngine.Object.FindObjectOfType<Sector.Spacecraft.PlayerSpacecraft>();
+            if (ship == null) return;
+            // The ship object is "Enterprise D_", its model "Body - 1701D(Clone)".
+            bool enterpriseD = ship.name.IndexOf("Enterprise D", StringComparison.OrdinalIgnoreCase) >= 0 || ship.name.IndexOf("1701D", StringComparison.OrdinalIgnoreCase) >= 0;
+            if (!enterpriseD)
+                foreach (Transform child in ship.transform)
+                    if (child.name.IndexOf("1701D", StringComparison.OrdinalIgnoreCase) >= 0) { enterpriseD = true; break; }
+            if (!enterpriseD) return;
+            foreach (var r in ship.GetComponentsInChildren<Renderer>(false))
+            {
+                if (r == null || !r.enabled || r is ParticleSystemRenderer) continue;
+                string path = Bridge.Path(r.transform);
+                if (path.IndexOf("CameraRig", StringComparison.OrdinalIgnoreCase) >= 0 || path.IndexOf("Effect", StringComparison.OrdinalIgnoreCase) >= 0
+                    || path.IndexOf("FX", StringComparison.Ordinal) >= 0 || path.IndexOf("Shield", StringComparison.OrdinalIgnoreCase) >= 0) continue;
+                r.enabled = false;
+                hidden.Add(r);
+            }
+            if (hidden.Count > 0) Plugin.Log.LogInfo($"Bridge walk: your ship's hull hidden from the viewscreen while standing ({hidden.Count} parts of {ship.name})");
+        }
+
+        internal static void Restore()
+        {
+            foreach (var r in hidden) if (r != null) r.enabled = true;
+            hidden.Clear();
         }
     }
 
@@ -565,6 +860,14 @@ namespace StbcRevival.Walking
                 pawn.localRotation = Quaternion.Euler(0, r.CurrentYaw, 0);
             }
             if (gone != null) foreach (var id in gone) All.Remove(id);
+        }
+
+        /// <summary>Crewmates' characters are turned to their heading again after the game's animation (see Walker.HoldFacing).</summary>
+        public static void HoldFacing()
+        {
+            foreach (var r in All.Values)
+                if (r.Standing && r.HasCurrent && r.Info != null && r.Info.PawnObject != null)
+                    r.Info.PawnObject.transform.localRotation = Quaternion.Euler(0, r.CurrentYaw, 0);
         }
     }
 
@@ -631,6 +934,11 @@ namespace StbcRevival.Walking
             Try(h, AccessTools.Method(typeof(InputManager), "PCADJIICOJC", new[] { typeof(LONCAPHEAPA) }), prefix: nameof(NoAction));
             Try(h, AccessTools.Method(typeof(InputManager), "GetAxis", new[] { typeof(FEKBGPPHGEP) }), prefix: nameof(NoAxis));
             Try(h, AccessTools.Method(typeof(InputManager), "FPHOJIKAACG", new[] { typeof(FEKBGPPHGEP) }), prefix: nameof(NoAxis));
+            // Seated, the game turns the character to the station's facing plus at most 45° toward where you look,
+            // every frame: standing, that's skipped for the standing character, so it faces your heading.
+            Try(h, AccessTools.Method(typeof(NovaAnimationController), "EEEKOHNIDBH"), prefix: nameof(NoSeatTurn));
+            // The chair's backrest leans toward the seated character's shoulders: standing, it stays as it was.
+            Try(h, AccessTools.Method(typeof(NovaAnimationController), "FIFMENKIJFI"), prefix: nameof(NoBackrestLean));
             // The batched LateUpdate that runs the game's animation: the walk pose goes on after it.
             Try(h, AccessTools.Method(typeof(FOMLMDGCIAF), "LateUpdate"), postfix: nameof(AfterLateUpdate));
         }
@@ -648,6 +956,42 @@ namespace StbcRevival.Walking
         }
 
         private static bool SkipWhileStanding() => !Walker.Standing;
+
+        private static readonly System.Reflection.FieldInfo animPlayer = AccessTools.Field(typeof(NovaAnimationController), "HAMOMEFCFNB");
+        private static bool seatTurnLogged;
+
+        // The controller's player (its own object isn't under the player's character), else its place in the scene.
+        private static bool NoSeatTurn(Component __instance)
+        {
+            if (__instance == null) return true;
+            var player = animPlayer?.GetValue(__instance) as NovaPlayerInfo;
+            bool standing = player != null
+                ? (Walker.Standing && player == Walker.Me) || IsStandingRemote(player)
+                : IsStanding(__instance.transform);
+            if (standing && !seatTurnLogged) { seatTurnLogged = true; Plugin.Log.LogInfo($"Bridge walk: the seat turn is off for standing characters (at {Bridge.Path(__instance.transform)})"); }
+            return !standing;
+        }
+
+
+        // Standing, the backrest stays as it was when you got up (its rest angle isn't the same on every chair: forcing
+        // 0° broke the shuttle's).
+        private static bool NoBackrestLean(Component __instance) => NoSeatTurn(__instance);
+
+        private static bool IsStandingRemote(NovaPlayerInfo p)
+        {
+            foreach (var r in Remotes.All.Values) if (r.Standing && r.Info == p) return true;
+            return false;
+        }
+
+        private static bool IsStanding(Transform t)
+        {
+            if (Walker.Standing && Walker.Me != null && Walker.Me.PawnObject != null && Under(t, Walker.Me.PawnObject.transform)) return true;
+            foreach (var r in Remotes.All.Values)
+                if (r.Standing && r.Info != null && r.Info.PawnObject != null && Under(t, r.Info.PawnObject.transform)) return true;
+            return false;
+        }
+
+        private static bool Under(Transform t, Transform pawn) => t == pawn || t.IsChildOf(pawn);
 
         private static bool NoAction(LONCAPHEAPA __0, ref bool __result)
         {
