@@ -99,7 +99,7 @@ namespace StbcRevival.Walking
                 if (b.size.magnitude > 400f) continue; // sky, stars, the view outside
                 string path = Bridge.Path(mf.transform);
                 if (path.StartsWith("/Players/") || path.IndexOf("/FX/", StringComparison.OrdinalIgnoreCase) >= 0 || path.IndexOf("Canvas", StringComparison.OrdinalIgnoreCase) >= 0
-                    || path.IndexOf("Hologram", StringComparison.OrdinalIgnoreCase) >= 0 || path.IndexOf("Particle", StringComparison.OrdinalIgnoreCase) >= 0) continue;
+                    || path.IndexOf("Hologram", StringComparison.OrdinalIgnoreCase) >= 0 || path.IndexOf(TestCorridor.RootName, StringComparison.Ordinal) >= 0 || path.IndexOf("Particle", StringComparison.OrdinalIgnoreCase) >= 0) continue;
                 nearby++;
                 // Static batching merges meshes into world-space "Combined Mesh" objects shared by many filters.
                 bool combined = mesh.name.StartsWith("Combined Mesh");

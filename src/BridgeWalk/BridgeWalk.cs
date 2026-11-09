@@ -65,6 +65,7 @@ namespace StbcRevival.Walking
             }
             Walker.Tick(typing);
             Remotes.Tick();
+            TestCorridor.Tick(phase == typeof(GamePhase_Bridge));
         }
     }
 
@@ -551,7 +552,8 @@ namespace StbcRevival.Walking
             else next += up * (flatHeight - Vector3.Dot(next, up));
             Vector3 seatWorld = Basis != null ? Basis.TransformPoint(seatLocalPos) : seatLocalPos;
             Vector3 off = next - seatWorld; off -= up * Vector3.Dot(off, up);
-            if (off.magnitude > Plugin.BridgeWalkMaxDistance.Value) { blockReason = $"{off.magnitude:F1} m from the seat (max {Plugin.BridgeWalkMaxDistance.Value})"; Why(); return; }
+            float maxDistance = TestCorridor.MaxDistance(Plugin.BridgeWalkMaxDistance.Value);
+            if (off.magnitude > maxDistance) { blockReason = $"{off.magnitude:F1} m from the seat (max {maxDistance})"; Why(); return; }
             pawn.position = next;
         }
 
@@ -566,9 +568,12 @@ namespace StbcRevival.Walking
             // check in TryMove lifts the character onto them.
             const float r = 0.22f;
             Vector3 p1 = pos + up * (0.45f + r), p2 = pos + up * (1.75f - r);
+            // In the test corridor's doorway or the corridor: only its own walls (the bridge's have the door baked in).
+            bool corridor = TestCorridor.InZone(pos) && TestCorridor.InZone(pos + delta);
             foreach (var hit in Physics.CapsuleCastAll(p1, p2, r, delta / dist, dist + 0.05f))
             {
                 if (Ignore(hit.collider)) continue;
+                if (corridor && !TestCorridor.IsMine(hit.collider)) continue;
                 if (hit.distance <= 0f && hit.point == Vector3.zero) continue; // already overlapping: don't get stuck
                 blockReason = "collider " + Bridge.Path(hit.collider.transform);
                 return true;
@@ -576,7 +581,7 @@ namespace StbcRevival.Walking
             // Right at your own seat the mesh walls aren't checked, or you'd be stuck between the armrests.
             Vector3 seatW = Basis != null ? Basis.TransformPoint(seatLocalPos) : seatLocalPos;
             Vector3 fromSeat = pos - seatW; fromSeat -= up * Vector3.Dot(fromSeat, up);
-            if (WalkMesh.ReadyFor(Basis) && fromSeat.magnitude > 0.7f)
+            if (!corridor && WalkMesh.ReadyFor(Basis) && fromSeat.magnitude > 0.7f)
             {
                 Vector3 dir = delta / dist, side = Vector3.Cross(up, dir).normalized * r;
                 foreach (float h in wallHeights)
@@ -600,15 +605,17 @@ namespace StbcRevival.Walking
             float best = float.MaxValue;
             bool found = false;
             const float above = 0.9f;
+            bool corridor = TestCorridor.InZone(at); // the test corridor's doorway or corridor: its own floor only
             foreach (var hit in Physics.RaycastAll(at + up * above, -up, 2.4f))
             {
                 if (Ignore(hit.collider)) continue;
+                if (corridor && !TestCorridor.IsMine(hit.collider)) continue;
                 if (Vector3.Dot(hit.normal, up) < 0.5f) continue; // walls and steep faces aren't floor
                 if (nearestTo && hit.distance > above + 1.0f) continue;
                 float score = nearestTo ? -hit.distance : hit.distance;
                 if (score < best) { best = score; floor = hit.point; found = true; }
             }
-            if (WalkMesh.ReadyFor(Basis))
+            if (!corridor && WalkMesh.ReadyFor(Basis))
             {
                 // The mesh floors are in the bridge's space, where up is +y.
                 meshHeights.Clear();

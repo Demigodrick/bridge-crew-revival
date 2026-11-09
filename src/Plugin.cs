@@ -89,6 +89,7 @@ namespace StbcRevival
         internal static ConfigEntry<bool> BridgeWalkCollisions;
         internal static ConfigEntry<bool> BridgeWalkWalls;
         internal static ConfigEntry<bool> BridgeWalkAnimate;
+        internal static ConfigEntry<bool> BridgeWalkTestCorridor;
         internal static Plugin Instance { get; private set; }
         internal static ConfigEntry<string> PlayerName;
         internal static ConfigEntry<string> ExtraDevConfig;
@@ -242,6 +243,9 @@ namespace StbcRevival
             BridgeWalkCollisions = Config.Bind("Bridge Walk", "Collisions", true, "Walls, floors, ramps and steps stop or carry you (from the bridge's colliders and meshes). Off: walk through everything at seat floor height.");
             BridgeWalkWalls = Config.Bind("Bridge Walk", "Walls", true, "Walls and furniture stop you. Off: walk through them; floors, ramps and steps still carry you (with Collisions on).");
             BridgeWalkAnimate = Config.Bind("Bridge Walk", "Animate", true, "Animate standing and walking characters (yours and crewmates').");
+            BridgeWalkTestCorridor = Config.Bind("Bridge Walk", "TestCorridor", false,
+                "Test: on the Aegis bridge, one of the doors opens onto a corridor to walk down (its side doors are scenery). "
+                + "While on, you can walk up to 40 m from your seat. Takes effect on reaching the bridge.");
             PlayerName = Config.Bind("Login", "PlayerName", "",
                 "Name shown to other players. Empty = your Steam persona name (falls back to the OS user name).");
 
