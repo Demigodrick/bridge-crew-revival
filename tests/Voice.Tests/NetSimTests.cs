@@ -73,8 +73,8 @@ public class NetSimTests
     {
         var sim = NetSim.Parse("reorder=50", 5);
         var got = new List<int>();
-        // Packets 10 ms apart, so one held back a 20 ms slot lands behind the next one.
-        for (int i = 0; i < 200; i++) { Offer(sim, i, i * 10.0); Drain(sim, i * 10.0, got); }
+        // Packets at the real 20 ms spacing: one held back a slot plus 1 ms lands behind the next one.
+        for (int i = 0; i < 200; i++) { Offer(sim, i, i * 20.0); Drain(sim, i * 20.0, got); }
         Drain(sim, 1e9, got);
         Assert.Equal(200, got.Count);
         Assert.Equal(200, new HashSet<int>(got).Count);

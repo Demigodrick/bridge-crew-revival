@@ -57,7 +57,8 @@ namespace StbcRevival.Voice
             if (lossPercent > 0 && rng.Next(100) < lossPercent) { burstLeft = burst; return; }
 
             double release = nowMs;
-            if (reorderPercent > 0 && rng.Next(100) < reorderPercent) release += SlotMs;
+            // A reordered packet is held one slot plus 1 ms, so it lands behind the next one at the real 20 ms spacing.
+            if (reorderPercent > 0 && rng.Next(100) < reorderPercent) release += SlotMs + 1;
             if (jitterMs > 0) release += rng.NextDouble() * jitterMs;
 
             var h = new Held { Data = new byte[length], Length = length, ReleaseMs = release };
