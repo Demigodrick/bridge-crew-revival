@@ -368,6 +368,7 @@ namespace StbcRevival
             Safely("host hand-off", HostHandoff.Update);
             Safely("voice commands", StbcRevival.VoiceCommands.Update);
             Safely("revival voice capture", VoiceCapture.Update);
+            Safely("revival voice playback", RevivalPlayback.Update);
             Safely("ubisoft save import", UbisoftSaveImport.Update);
             Safely("crash report", CrashReport.Update);
             Safely("bridge walk", Walking.BridgeWalk.Update);

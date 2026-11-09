@@ -1455,6 +1455,13 @@ DaikonForge.VoIP.NOEPDDNKGOM = SpeakerMode                      # Local, Remote
 VoIpManager::GMFCCIFGKDN = OnPhotonEvent                        # event 125 only: to the sender's UDPNetworkVoiceController
 VoIpManager::PFKNMPPKOFP = _voipPlayers                         # actor number -> VoipPlayer
 VoIpManager/PIHAFAACGLJ = VoipPlayer                            # View, Player, VoiceController
+DaikonForge.VoIP.VoiceControllerBase::PHGNCBOCLEH = _audioOutputDevice # the speaker's WwiseAudioPlayer (Revival voice plays through it)
+DaikonForge.VoIP.AudioPlayerBase::KGHBBCEOLGA = _audioClip         # the 4096-sample tracking clip on _trackingSource
+DaikonForge.VoIP.AudioPlayerBase::MPEKIJHNFKP = _writePosition     # where BufferAudio puts the next samples in the clip
+DaikonForge.VoIP.AudioPlayerBase::LECNEIIHLJM = _pushed            # samples BufferAudio has been handed since the rate was set
+DaikonForge.VoIP.AudioPlayerBase::OFGIMEGMJPL = _lastTimeSamples   # the clip position at the last BatchUpdate (wrap detection)
+DaikonForge.VoIP.AudioPlayerBase::OKBOHDOHKOI = _played            # whole clip loops played: _played + timeSamples is the play position
+WwiseAudioPlayer::FMIJNNOLMAP = _sinceStart                         # samples pushed since the clip stopped; it plays from 2048
 SVR.Network.PLPKPDFOLDL = PooledReader                          # Read, Release, Length, Pos
 
 # ---- Network: messaging, RPCs and ownership (Photon PUN 1.71 under scrambled names, plus the game's own object sync) ---
