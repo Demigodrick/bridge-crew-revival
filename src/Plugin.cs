@@ -322,6 +322,7 @@ namespace StbcRevival
             Safely("player joined alert", StbcRevival.PlayerJoinedAlert.Update);
             Safely("ship name", StbcRevival.ShipName.Update);
             Safely("hull name", StbcRevival.HullName.Update);
+            Safely("ship name box", StbcRevival.ShipNameBox.Update);
             Safely("bug report", BugReport.Update);
             Safely("crew logs", CrewLogs.Update);
             Safely("performance log", PerfLog.Update);

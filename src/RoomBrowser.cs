@@ -187,6 +187,7 @@ namespace StbcRevival
             if (current != null)
             {
                 if (SteamMode.Enabled) GUILayout.Label(SteamMode.RoomStatus(current, CurrentRoomVisible()));
+                if (ShipName.Display.Length > 0) GUILayout.Label(Translation.T("Ship") + ": " + ShipName.Display);
                 GUILayout.BeginHorizontal();
                 if (GUILayout.Button(Translation.T(SteamMode.Enabled ? "Copy share code" : "Copy my room code"), GUILayout.Width(180)))
                 {

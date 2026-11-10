@@ -23,6 +23,29 @@ namespace StbcRevival
         /// <summary>The ship name in use (the room's, or your own out of a room) and its registry; "" for the game's.</summary>
         internal static string Name => name;
         internal static string Registry => registry;
+        /// <summary>"Name, REGISTRY" as in use, or "".</summary>
+        internal static string Current => current;
+
+        private static object Room() => Patches.PhotonNetworkType?.GetMethod("get_room", BindingFlags.Public | BindingFlags.Static)?.Invoke(null, null);
+
+        private static bool IsHost() => Patches.PhotonNetworkType?.GetMethod("get_isMasterClient", BindingFlags.Public | BindingFlags.Static)?.Invoke(null, null) is bool m && m;
+
+        /// <summary>
+        /// Names the ship: for the room when in one (the briefing room's box, or the host's settings), and as your own
+        /// default when hosting or alone. From the settings in someone else's room only your own default changes.
+        /// </summary>
+        internal static void Set(string value, bool forRoom)
+        {
+            value = (value ?? "").Trim();
+            var room = Room();
+            if (room == null || IsHost()) Plugin.ShipName.Value = value;
+            if (room != null && forRoom | IsHost()) PhotonProps.Set(room, Key, value);
+            if (room == null || forRoom | IsHost()) Use(value);
+            nextCheck = Time.unscaledTime + 1f;
+        }
+
+        /// <summary>"NCC-91234 · USS Cosmo", or "" for the game's.</summary>
+        internal static string Display => name.Length == 0 ? "" : registry.Length > 0 ? registry + " · " + name : name;
 
         internal static void Patch(Harmony harmony)
         {
@@ -49,8 +72,9 @@ namespace StbcRevival
                     var props = room.GetType().GetMethod("get_customProperties")?.Invoke(room, null) as IDictionary;
                     string onRoom = props != null && props.Contains(Key) ? props[Key] as string ?? "" : "";
                     bool host = photon.GetMethod("get_isMasterClient", BindingFlags.Public | BindingFlags.Static)?.Invoke(null, null) is bool m && m;
-                    // The host names the ship for the room; everyone else takes the room's name.
-                    if (host && onRoom != Own && PhotonProps.Set(room, Key, Own)) onRoom = Own;
+                    // The room's name is the one in use. A new room gets the host's; after that the briefing room's
+                    // SHIP NAME box changes it (host or captain), for everyone.
+                    if (host && (props == null || !props.Contains(Key)) && Own.Length > 0 && PhotonProps.Set(room, Key, Own)) onRoom = Own;
                     use = onRoom;
                 }
                 if (use != current) Use(use);
@@ -92,8 +116,7 @@ namespace StbcRevival
             const string what = "Ship name, registry (e.g. USS Cosmo, NCC-91234); empty for the game's";
             Action<string> done = text =>
             {
-                Plugin.ShipName.Value = (text ?? "").Trim();
-                nextCheck = 0f;
+                Set(text, false);
                 Plugin.Log.LogInfo($"Revival settings: ship name \"{Plugin.ShipName.Value}\"");
             };
             if (UnityEngine.VR.VRSettings.enabled && UnityEngine.VR.VRSettings.loadedDeviceName == "OpenVR") VrKeyboard.Open(Translation.T("Ship name"), 40, done);
