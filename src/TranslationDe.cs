@@ -178,6 +178,7 @@ namespace StbcRevival
                 new[] { "Voice commands", "Sprachbefehle", "restart" },
                 new[] { "Voice orders from any station", "Sprachbefehle von jeder Station", "" },
                 new[] { "Sound when someone joins", "Signalton, wenn jemand beitritt", "" },
+                new[] { "Name plates", "Namensschilder", "" },
                 new[] { "Public crews in VR", "Öffentliche Crews in VR", "" },
                 new[] { "Hide full crews", "Volle Crews ausblenden", "" },
                 new[] { "Hide crews on a mission", "Crews in einer Mission ausblenden", "" },
@@ -195,6 +196,13 @@ namespace StbcRevival
             Add("KLINGON", "KLINGONE");
             Add("Romulan", "Romulaner");
             Add("Klingon", "Klingone");
+            Add("Rank: EARNED", "Rang: ERSPIELT");
+            Add("Rank: ENSIGN", "Rang: FÄHNRICH");
+            Add("Rank: LIEUTENANT JUNIOR GRADE", "Rang: LIEUTENANT JUNIOR GRADE");
+            Add("Rank: LIEUTENANT", "Rang: LIEUTENANT");
+            Add("Rank: LIEUTENANT COMMANDER", "Rang: LIEUTENANT COMMANDER");
+            Add("Rank: COMMANDER", "Rang: COMMANDER");
+            Add("Rank: CAPTAIN", "Rang: CAPTAIN");
             Add("Klingon head: CAPTAIN", "Klingonenkopf: KAPITÄN");
             Add("Klingon head: FLAGSHIP CAPTAIN", "Klingonenkopf: FLAGGSCHIFF-KAPITÄN");
             Add("Crews listed: TNG only", "Angezeigte Crews: nur TNG");

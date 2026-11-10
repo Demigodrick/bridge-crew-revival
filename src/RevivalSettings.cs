@@ -70,6 +70,17 @@ namespace StbcRevival
             },
             Switch("All hairstyles (experimental)", () => Plugin.AllHairStyles),
             Switch("Sound when someone joins", () => Plugin.PlayerJoinedAlert),
+            // The rank you wear: the earned one, or one of the six (crewmates see it too).
+            new Entry
+            {
+                Text = () => "Rank: " + (Ranks.Chosen < 0 ? "EARNED" : Ranks.Names[Ranks.Chosen].ToUpperInvariant()),
+                Press = () =>
+                {
+                    Plugin.Rank.Value = Ranks.Chosen >= Ranks.Names.Length - 1 ? -1 : Ranks.Chosen + 1;
+                    Plugin.Log.LogInfo($"Revival settings: rank {(Ranks.Chosen < 0 ? "earned" : Ranks.Names[Ranks.Chosen])}");
+                },
+            },
+            Switch("Name plates", () => Plugin.NamePlates),
             Switch("Public crews in VR", () => Plugin.VrRoomPanels),
             new Entry
             {
