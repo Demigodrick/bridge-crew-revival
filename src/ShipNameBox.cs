@@ -137,12 +137,46 @@ namespace StbcRevival
                 var plain = (GameObject)UnityEngine.Object.Instantiate(copyOfEnterprise.gameObject, holder.transform, false);
                 plain.name = "Ship Name Toggle 3";
                 plain.transform.localPosition = copyOfTng.localPosition; plain.transform.localScale = copyOfTng.localScale;
-                UnityEngine.Object.Destroy(copyOfTng.gameObject);
+                UnityEngine.Object.DestroyImmediate(copyOfTng.gameObject);
+
+                // A frame like GAME TYPE's around the rows (the SHIP box's own is part of the panel's backdrop).
+                var rowsRect = new[] { copyOfAegis, copyOfEnterprise, plain.transform }.Select(Extent)
+                    .Aggregate((a, b) => Rect.MinMaxRect(Mathf.Min(a.xMin, b.xMin), Mathf.Min(a.yMin, b.yMin), Mathf.Max(a.xMax, b.xMax), Mathf.Max(a.yMax, b.yMax)));
+                var frameSource = typeBox.GetComponentsInChildren<Image>(true).Where(i => i.GetComponentInParent<Toggle>() == null)
+                    .OrderByDescending(i => i.rectTransform.rect.width * i.rectTransform.rect.height).FirstOrDefault();
+                if (frameSource != null)
+                {
+                    var frame = (GameObject)UnityEngine.Object.Instantiate(frameSource.gameObject, holder.transform, false);
+                    frame.name = "Ship Name Frame";
+                    foreach (var c in frame.transform.Cast<Transform>().ToList()) UnityEngine.Object.DestroyImmediate(c.gameObject);
+                    foreach (var extra in frame.GetComponents<Component>().Where(c => !(c is Transform) && !(c is Graphic) && !(c is CanvasRenderer)).ToList()) UnityEngine.Object.DestroyImmediate(extra);
+                    var rt = (RectTransform)frame.transform;
+                    rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0.5f, 0.5f);
+                    rt.localRotation = Quaternion.identity; rt.localScale = Vector3.one;
+                    const float pad = 4f;
+                    rt.sizeDelta = new Vector2(rowsRect.width + 2f * pad, rowsRect.height + 2f * pad);
+                    rt.localPosition = new Vector3(rowsRect.center.x, rowsRect.center.y, 0f);
+                    frame.transform.SetAsFirstSibling();
+                    Plugin.Log.LogInfo($"Ship name box: frame from {frameSource.name}");
+                }
+                var full = Extent(holder.transform);
+
+                // Above GAME TYPE and whatever control sits on top of it (the crew password button).
+                float baseY = type.yMax;
+                foreach (Transform sibling in parent)
+                {
+                    if (sibling == holder.transform || shipParts.Contains(sibling) || typeParts.Contains(sibling)) continue;
+                    if (sibling.GetComponentsInChildren<Selectable>(true).Length == 0) continue;
+                    var r = Extent(sibling);
+                    if (r.width <= 0f || r.xMax < type.xMin || r.xMin > type.xMax || r.yMin < type.yMax - 2f || r.yMin > type.yMax + 40f) continue;
+                    Plugin.Log.LogInfo($"Ship name box: above {sibling.name} {r}");
+                    baseY = Mathf.Max(baseY, r.yMax);
+                }
 
                 // Bottom just above GAME TYPE (with its heading), left edges lined up, as large as fits up to the
                 // panel's top row of decorations.
                 holder.transform.localScale = Vector3.one * Scale;
-                Vector2 at = new Vector2(type.xMin - ship.xMin * Scale, type.yMax + 0.04f * ship.height - ship.yMin * Scale);
+                Vector2 at = new Vector2(type.xMin - full.xMin * Scale, baseY + 3f - full.yMin * Scale);
                 holder.transform.localPosition = new Vector3(at.x, at.y, 0f);
 
                 var box = new Box { Console = console, Root = holder, Prefix = copyOfAegis.GetComponent<Toggle>(), Number = copyOfEnterprise.GetComponent<Toggle>(), Name = plain.GetComponent<Toggle>() };
@@ -166,9 +200,10 @@ namespace StbcRevival
                 var mine = Extent(holder.transform);
                 foreach (Transform sibling in parent)
                 {
-                    if (sibling == holder.transform || shipParts.Contains(sibling) || typeParts.Contains(sibling) || sibling.GetComponentsInChildren<Selectable>(true).Length > 0 || sibling.GetComponentsInChildren<TMP_Text>(true).Length > 0) continue;
+                    if (sibling == holder.transform || shipParts.Contains(sibling) || typeParts.Contains(sibling) || sibling.GetComponentsInChildren<Selectable>(true).Length > 0) continue;
                     var r = Extent(sibling);
-                    if (r.width > 0f && mine.Overlaps(r) && mine.Contains(r.center) && r.width < mine.width * 1.5f && r.height < mine.height * 1.5f)
+                    float overlap = Mathf.Max(0f, Mathf.Min(r.xMax, mine.xMax) - Mathf.Max(r.xMin, mine.xMin)) * Mathf.Max(0f, Mathf.Min(r.yMax, mine.yMax) - Mathf.Max(r.yMin, mine.yMin));
+                    if (r.width > 0f && overlap >= 0.4f * r.width * r.height && r.width < mine.width * 1.6f && r.height < mine.height * 1.6f)
                     {
                         Plugin.Log.LogInfo($"Ship name box: hiding the decoration {sibling.name} {r} under it");
                         sibling.gameObject.SetActive(false);
