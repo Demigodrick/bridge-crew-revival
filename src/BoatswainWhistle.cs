@@ -7,7 +7,7 @@ namespace StbcRevival
     /// [Rooms] BoatswainWhistle: when someone joins your crew (PlayerJoinedAlert notices), the boatswain's whistle
     /// pipes them aboard. The sound is made here, not taken from anywhere: a whistle gliding up an octave, held with
     /// a vibrato and a short warble, and gliding back down, with a little breath in it. Made once, played as 2D sound.
-    /// Your own sound goes first: a 16-bit .wav at BepInEx/sounds/bootsmannspfeife.wav (not part of the mod).
+    /// Your own sound goes first: a 16-bit .wav at BepInEx/sounds/player-joined.wav (not part of the mod).
     /// </summary>
     internal static class BoatswainWhistle
     {
@@ -16,7 +16,7 @@ namespace StbcRevival
 
         // Your own whistle, if you've put one here (a .wav, 16-bit PCM): it's played instead of the made one. It stays
         // on your PC; the mod brings none.
-        internal const string OwnFile = "BepInEx/sounds/bootsmannspfeife.wav";
+        internal const string OwnFile = "BepInEx/sounds/player-joined.wav";
 
         internal static void Play()
         {
