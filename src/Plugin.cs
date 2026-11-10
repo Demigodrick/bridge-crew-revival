@@ -58,6 +58,7 @@ namespace StbcRevival
         internal static ConfigEntry<UnityEngine.KeyCode> GameDumpKey;
         internal static ConfigEntry<bool> RomulanFace;
         internal static ConfigEntry<int> KlingonHead;
+        internal static ConfigEntry<bool> AllHairStyles;
         internal static ConfigEntry<int> KlingonHeadChoice;
         internal static ConfigEntry<string> MapOverride;
         internal static ConfigEntry<int> FleetBattleSize;
@@ -171,6 +172,8 @@ namespace StbcRevival
             KlingonHead = Config.Bind("Avatar", "KlingonHead", 0,
                 new ConfigDescription("Wear a Klingon captain's head: 0 off, 1 the captain, 2 the flagship's captain. Male Human character presets only; crewmates with the mod see it too. "
                                       + "The heads are loaded from the bridge's assets as the game starts.", new AcceptableValueRange<int>(0, 2)));
+            AllHairStyles = Config.Bind("Avatar", "AllHairStyles", false,
+                "[Experimental, work in progress] Every hairstyle on any head in the character creator: the HAIR choice runs through all the game's hairstyles of the same sex (the other presets' looks, put together with this head's face) and the counters show the real numbers. Each hairstyle is made when first shown, so the creator takes noticeably longer to show them. Crewmates with the mod see them too (without it they see the head's fourth look).");
             KlingonHeadChoice = Config.Bind("Avatar", "KlingonHeadChoice", Math.Max(1, KlingonHead.Value),
                 new ConfigDescription("Which Klingon captain's head the character creator's KLINGON wears: 1 the captain, 2 the flagship's captain "
                                       + "(Revival settings changes it).", new AcceptableValueRange<int>(1, 2)));
@@ -321,6 +324,7 @@ namespace StbcRevival
             Safely("game dump", GameDump.Update);
             Safely("romulan face", StbcRevival.RomulanFace.Update);
             Safely("klingon head", StbcRevival.KlingonHead.Update);
+            Safely("hairstyles", StbcRevival.HairStyles.Tick);
             Safely("player volumes", PlayerVolumes.Update);
             Safely("creator species choices", SpeciesCreatorOptions.Update);
             Safely("revival settings", RevivalSettings.Update);
