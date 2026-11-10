@@ -140,7 +140,7 @@ namespace StbcRevival
             originals.Clear();
             foreach (var d in Decals) d.DrawnFor = null;
             foreach (var p in Paints) p.DrawnFor = null;
-            plaqueFor = null;
+            foreach (var p in Plaques) p.DrawnFor = null;
         }
 
         /// <summary>The Enterprise-D decal's gold plate (beside the lettering, kept as it is): red-brown frame, gold inside.</summary>
@@ -212,12 +212,12 @@ namespace StbcRevival
             return TmpFace();
         }
 
-        private static Face OsFace(string fontName, string text)
+        private static Face OsFace(string fontName, string text, FontStyle style = FontStyle.Normal)
         {
             const int px = 128;
             var font = Font.CreateDynamicFontFromOSFont(fontName, px);
             string chars = new string((text + "H").Distinct().ToArray());
-            font.RequestCharactersInTexture(chars, px, FontStyle.Normal);
+            font.RequestCharactersInTexture(chars, px, style);
             var tex = font.material != null ? font.material.mainTexture : null;
             if (tex == null) return null;
             var read = ReadBack(tex, out int w, out int h);
@@ -226,7 +226,7 @@ namespace StbcRevival
             var glyphs = new Dictionary<char, Glyph>();
             foreach (char c in chars)
             {
-                if (!font.GetCharacterInfo(c, out CharacterInfo ci, px, FontStyle.Normal)) continue;
+                if (!font.GetCharacterInfo(c, out CharacterInfo ci, px, style)) continue;
                 glyphs[c] = new Glyph { MinX = ci.minX, MaxX = ci.maxX, MinY = ci.minY, MaxY = ci.maxY, Advance = ci.advance, BL = ci.uvBottomLeft, BR = ci.uvBottomRight, TL = ci.uvTopLeft, Found = true };
             }
             face.Get = c => glyphs.TryGetValue(c, out var g) ? g : default(Glyph);
