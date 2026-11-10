@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Threading;
 using UnityEngine;
 
 namespace StbcRevival.Walking
@@ -45,6 +47,8 @@ namespace StbcRevival.Walking
         private static Transform panelLeft, panelRight;
         private static GameObject blocker;
         private static readonly HashSet<Collider> mine = new HashSet<Collider>();
+        // Meshes and materials made here: not freed with the objects that use them, so freed on Clear.
+        private static readonly List<UnityEngine.Object> owned = new List<UnityEngine.Object>();
 
         internal static bool On => Plugin.BridgeWalkTestCorridor != null && Plugin.BridgeWalkTestCorridor.Value;
         internal static float MaxDistance(float setting) => On ? Mathf.Max(setting, TestDistance) : setting;
@@ -85,6 +89,8 @@ namespace StbcRevival.Walking
             return Mathf.Abs(p.x) < Width / 2f + 0.3f && p.z > z0 - 0.05f && p.z < z0 + Length + 0.3f;
         }
 
+        internal static void Own(UnityEngine.Object o) => owned.Add(o);
+
         internal static bool IsMine(Collider c) => c != null && mine.Contains(c);
 
         // ------------------------------------------------------------------------------------------- building
@@ -102,6 +108,8 @@ namespace StbcRevival.Walking
                 }
             }
             if (found == null) return; // not the Aegis bridge (or not loaded yet): tried again in 2 s
+            // The door's own shape, read from the bridge's file (in the background) so a copy of it can slide.
+            if (!DoorShape.Ready(found.gameObject.scene.buildIndex)) return;
             // Out of the bridge is worked out from where you sit: wait for your character (the first run built it
             // before you were in your seat, measuring from the bridge's origin instead).
             var me = Bridge.Local();
@@ -155,7 +163,7 @@ namespace StbcRevival.Walking
                                + $"materials: wall {Name(mats.Wall)}, floor {Name(mats.Floor)}, ceiling {Name(mats.Ceiling)}, strip {Name(mats.Strip)}, door {Name(mats.Door)}, frame {Name(mats.Frame)}");
         }
 
-        private sealed class Mats { public Material Wall, Floor, Ceiling, Strip, Door, Frame; }
+        private sealed class Mats { public Material Wall, Floor, Ceiling, Strip, Door, Frame, Glow, Panel; }
 
         // The bridge's own materials, by the objects that wear them (or failing that by name).
         private static Mats Materials(Renderer[] doorRenderers)
@@ -187,7 +195,23 @@ namespace StbcRevival.Walking
             if (mats.Ceiling == null) mats.Ceiling = fallback;
             if (mats.Frame == null) mats.Frame = mats.Wall;
             if (mats.Door == null) mats.Door = mats.Wall;
+            // Made here: a soft white light panel for the ceiling (the bridge's glowing strip read as a band of blue
+            // sky), and a door panel without the bridge door's AIR LOCK lettering for the scenery doors.
+            mats.Glow = Lit(new Color(0.75f, 0.78f, 0.8f), new Color(0.9f, 0.93f, 1f) * 0.9f);
+            mats.Panel = new Material(mats.Wall) { name = RootName + " door panel" };
+            owned.Add(mats.Glow); owned.Add(mats.Panel);
+            if (mats.Panel.HasProperty("_Color")) mats.Panel.color = new Color(0.55f, 0.57f, 0.6f);
             return mats;
+        }
+
+        private static Material Lit(Color color, Color glow)
+        {
+            var m = new Material(Shader.Find("Standard")) { name = RootName + " light" };
+            m.color = color;
+            m.SetColor("_EmissionColor", glow);
+            m.EnableKeyword("_EMISSION");
+            m.globalIlluminationFlags = MaterialGlobalIlluminationFlags.None;
+            return m;
         }
 
         // A material for a wall or floor: not a particle or additive effect (the first run's ceiling got 'EmissiveSparks').
@@ -219,7 +243,7 @@ namespace StbcRevival.Walking
             {
                 Quad(look, "Strip left", new Vector3(-w + 0.12f, 0.004f, zm), Vector3.up, Vector3.forward, 0.08f, Length, m.Strip);
                 Quad(look, "Strip right", new Vector3(w - 0.12f, 0.004f, zm), Vector3.up, Vector3.forward, 0.08f, Length, m.Strip);
-                Quad(look, "Strip ceiling", new Vector3(0, height - 0.004f, zm), Vector3.down, Vector3.forward, 0.3f, Length, m.Strip);
+                Quad(look, "Light ceiling", new Vector3(0, height - 0.004f, zm), Vector3.down, Vector3.forward, 0.5f, Length - 1f, m.Glow);
             }
             // Doors down each side and one at the end: scenery.
             for (int i = 1; i <= 3; i++)
@@ -256,8 +280,10 @@ namespace StbcRevival.Walking
         // A door and its frame on a wall, standing on the floor, facing into the corridor.
         private static void SideDoor(Transform parent, string name, Vector3 at, Vector3 facing, Mats m)
         {
+            // A frame, a plain panel (no AIR LOCK lettering: that's the bridge door's texture) and a light down its middle.
             Quad(parent, name + " frame", at + facing * 0.006f + Vector3.up * (doorH / 2f + 0.05f), facing, Vector3.up, doorW + 0.3f, doorH + 0.15f, m.Frame, cutout: true);
-            Quad(parent, name, at + facing * 0.012f + Vector3.up * (doorH / 2f), facing, Vector3.up, doorW, doorH, m.Door, cutout: true);
+            Quad(parent, name, at + facing * 0.012f + Vector3.up * (doorH / 2f), facing, Vector3.up, doorW, doorH, m.Panel);
+            Quad(parent, name + " light", at + facing * 0.016f + Vector3.up * (doorH / 2f), facing, Vector3.up, 0.06f, doorH * 0.6f, m.Glow);
         }
 
         private static void BuildDoor(Renderer[] renderers, Mats m)
@@ -290,8 +316,18 @@ namespace StbcRevival.Walking
                 return;
             }
 
-            // Statically batched: it can't move. Hidden, and two panels in its material stand in for it.
+            // Statically batched: it can't move. Hidden, and a copy of it slides instead: its own shape from the
+            // bridge's file (exactly where it was, so no gap), or failing that two panels in its material.
             foreach (var r in renderers) if (r.enabled) { r.enabled = false; hiddenRenderers.Add(r); }
+            var copy = DoorShape.Copy(door, renderers);
+            if (copy != null)
+            {
+                copy.name = RootName + " door";
+                copy.transform.SetParent(root.transform, true);
+                moved.Add(new Moved { T = copy.transform, Pos = copy.transform.position, Away = root.transform.TransformDirection(Vector3.right * (doorW + 0.05f)) });
+                Plugin.Log.LogInfo("Test corridor: the door is part of the bridge's batched model: hidden, and a copy of it from the bridge's file slides aside");
+                return;
+            }
             var look = root.transform.Find("Look");
             panelLeft = Panel(look, "Door half left", -1, m.Door);
             panelRight = Panel(look, "Door half right", 1, m.Door);
@@ -358,6 +394,8 @@ namespace StbcRevival.Walking
             foreach (var c in offColliders) if (c != null) c.enabled = true;
             moved.Clear(); hiddenRenderers.Clear(); offColliders.Clear(); mine.Clear();
             if (root != null) UnityEngine.Object.Destroy(root);
+            foreach (var o in owned) if (o != null) UnityEngine.Object.Destroy(o);
+            owned.Clear();
             root = null; door = null; panelLeft = panelRight = null; blocker = null;
             open = 0f; opening = false;
             Plugin.Log.LogInfo("Test corridor: removed (" + why + ")");
@@ -406,6 +444,7 @@ namespace StbcRevival.Walking
             Vector3 hr = right * (w / 2f), hu = up * (h / 2f);
             Rect r = uv ?? (cutout ? new Rect(0, 0, 1, 1) : new Rect(0, 0, w / 1.5f, h / 1.5f));
             var mesh = new Mesh { name = RootName + " " + name };
+            owned.Add(mesh);
             mesh.vertices = new[] { -hr - hu, hr - hu, -hr + hu, hr + hu };
             mesh.uv = new[] { new Vector2(r.xMin, r.yMin), new Vector2(r.xMax, r.yMin), new Vector2(r.xMin, r.yMax), new Vector2(r.xMax, r.yMax) };
             mesh.normals = new[] { normal, normal, normal, normal };
@@ -417,6 +456,186 @@ namespace StbcRevival.Walking
             var mr = t.gameObject.AddComponent<MeshRenderer>();
             mr.sharedMaterial = mat;
             mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        }
+    }
+}
+
+namespace StbcRevival.Walking
+{
+    /// <summary>
+    /// The Aegis bridge's door as the bridge's file has it. The door is statically batched: drawn as part of one big
+    /// combined mesh, so it can't be moved. Its pieces' sub-meshes of that mesh are read from the scene's file (as
+    /// HolodeckRoom does) on a background thread, and copied out into a mesh of its own in the same place, which can.
+    /// </summary>
+    internal static class DoorShape
+    {
+        private const string DoorName = "BridgeDoor_A";
+
+        private sealed class Piece
+        {
+            public string Name;
+            public long Combined;
+            public bool HasRoot;
+            public readonly List<int> SubMeshes = new List<int>();
+        }
+
+        private static readonly List<Piece> pieces = new List<Piece>();
+        private static readonly Dictionary<long, MeshAsset> combined = new Dictionary<long, MeshAsset>();
+        private static int readScene = -1;
+        private static volatile bool reading, done;
+        private static string error;
+
+        /// <summary>Starts reading (once per scene); true once there's an answer (the shape, or why not).</summary>
+        internal static bool Ready(int buildIndex)
+        {
+            if (buildIndex < 0) return true;
+            if (readScene == buildIndex) return done;
+            if (reading) return false;
+            readScene = buildIndex;
+            reading = true;
+            done = false;
+            error = null;
+            pieces.Clear();
+            combined.Clear();
+            string path = Path.Combine(Application.dataPath, "level" + buildIndex);
+            new Thread(() =>
+            {
+                try { Read(path); }
+                catch (Exception e) { error = e.Message; }
+                reading = false;
+                done = true;
+            }) { IsBackground = true, Name = "Test corridor door" }.Start();
+            return false;
+        }
+
+        private static void Read(string path)
+        {
+            using (var scene = new AssetFile(path))
+            {
+                GameObjectAsset Go(PPtr p) => GameObjectAsset.Read(scene.At(scene.Find(p.PathId)));
+                TransformAsset Tr(PPtr p) => TransformAsset.Read(scene.At(scene.Find(p.PathId)));
+                void Collect(TransformAsset t)
+                {
+                    var go = Go(t.GameObject);
+                    var rendererRef = go.Component(23);
+                    var filterRef = go.Component(33);
+                    if (!rendererRef.IsNull && !filterRef.IsNull)
+                    {
+                        var renderer = MeshRendererAsset.Read(scene.At(scene.Find(rendererRef.PathId)));
+                        var filter = MeshFilterAsset.Read(scene.At(scene.Find(filterRef.PathId)));
+                        if (filter.Mesh.FileId == 0 && renderer.SubsetIndices.Count > 0)
+                        {
+                            var piece = new Piece { Name = go.Name, Combined = filter.Mesh.PathId, HasRoot = !renderer.StaticBatchRoot.IsNull };
+                            foreach (var i in renderer.SubsetIndices) piece.SubMeshes.Add((int)i);
+                            pieces.Add(piece);
+                        }
+                    }
+                    foreach (var child in t.Children) Collect(Tr(child));
+                }
+                foreach (var entry in scene.Objects)
+                {
+                    if (entry.ClassId != 4) continue;
+                    var t = TransformAsset.Read(scene.At(entry));
+                    if (Go(t.GameObject).Name != DoorName) continue;
+                    Collect(t);
+                    if (pieces.Count > 0) break;
+                }
+                if (pieces.Count == 0) throw new InvalidDataException($"{DoorName} isn't batched in {Path.GetFileName(path)}");
+                foreach (var p in pieces)
+                    if (!combined.ContainsKey(p.Combined)) combined[p.Combined] = MeshAsset.Read(scene.At(scene.Find(p.Combined)));
+            }
+        }
+
+        /// <summary>Main thread: the door's copy, drawn where it is, in the live door's materials; null if not read.</summary>
+        internal static GameObject Copy(Transform door, Renderer[] live)
+        {
+            if (!done || error != null || pieces.Count == 0)
+            {
+                Plugin.Log.LogInfo("Test corridor: the door's shape wasn't read from the bridge's file" + (error != null ? ": " + error : ""));
+                return null;
+            }
+            if (pieces.Exists(p => p.HasRoot))
+            {
+                Plugin.Log.LogInfo("Test corridor: the door is batched under a root of its own; not copied");
+                return null;
+            }
+            try
+            {
+                var root = new GameObject("door copy");
+                UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(root, door.gameObject.scene);
+                int made = 0;
+                foreach (var piece in pieces)
+                {
+                    Renderer match = null;
+                    foreach (var r in live) if (r.name == piece.Name) { match = r; break; }
+                    if (match == null) continue;
+                    var go = new GameObject(piece.Name);
+                    go.transform.SetParent(root.transform, false);
+                    var sliced = Slice(combined[piece.Combined], piece);
+                    TestCorridor.Own(sliced);
+                    go.AddComponent<MeshFilter>().sharedMesh = sliced;
+                    var mr = go.AddComponent<MeshRenderer>();
+                    mr.sharedMaterials = match.sharedMaterials;
+                    mr.shadowCastingMode = match.shadowCastingMode;
+                    mr.receiveShadows = match.receiveShadows;
+                    // The bridge's baked light on it, as on the door it copies (the combined mesh's second UVs already
+                    // point into the lightmap).
+                    mr.lightmapIndex = match.lightmapIndex;
+                    mr.lightmapScaleOffset = match.lightmapScaleOffset;
+                    made++;
+                }
+                if (made == 0) { UnityEngine.Object.Destroy(root); return null; }
+                return root;
+            }
+            catch (Exception e)
+            {
+                Plugin.Log.LogWarning("Test corridor: copying the door: " + e.Message);
+                return null;
+            }
+        }
+
+        // The piece's sub-meshes of the combined mesh (in the scene's space), with only the vertices they use.
+        private static Mesh Slice(MeshAsset m, Piece piece)
+        {
+            var map = new Dictionary<int, int>();
+            var vertices = new List<Vector3>();
+            var normals = m.Has(1) ? new List<Vector3>() : null;
+            var uvs = m.Has(3) ? new List<Vector2>() : null;
+            var uv2s = m.Has(4) ? new List<Vector2>() : null;
+            var tangents = m.Has(7) ? new List<Vector4>() : null;
+            var triangles = new List<int[]>();
+            foreach (var s in piece.SubMeshes)
+            {
+                if (s < 0 || s >= m.SubMeshes.Count) continue;
+                var sub = m.SubMeshes[s];
+                var tri = new int[sub.IndexCount];
+                for (int i = 0; i < tri.Length; i++)
+                {
+                    int v = BitConverter.ToUInt16(m.IndexBuffer, (int)sub.FirstByte + i * 2);
+                    if (!map.TryGetValue(v, out var at))
+                    {
+                        at = map[v] = vertices.Count;
+                        var p = m.Get(0, v);
+                        vertices.Add(new Vector3(p[0], p[1], p[2]));
+                        if (normals != null) { var n = m.Get(1, v); normals.Add(new Vector3(n[0], n[1], n[2])); }
+                        if (uvs != null) { var u = m.Get(3, v); uvs.Add(new Vector2(u[0], u[1])); }
+                        if (uv2s != null) { var u = m.Get(4, v); uv2s.Add(new Vector2(u[0], u[1])); }
+                        if (tangents != null) { var t = m.Get(7, v); tangents.Add(new Vector4(t[0], t[1], t[2], t[3])); }
+                    }
+                    tri[i] = at;
+                }
+                triangles.Add(tri);
+            }
+            var mesh = new Mesh { name = TestCorridor.RootName + " " + piece.Name };
+            mesh.vertices = vertices.ToArray();
+            if (normals != null) mesh.normals = normals.ToArray();
+            if (uvs != null) mesh.uv = uvs.ToArray();
+            if (uv2s != null) mesh.uv2 = uv2s.ToArray();
+            if (tangents != null) mesh.tangents = tangents.ToArray();
+            mesh.subMeshCount = triangles.Count;
+            for (int i = 0; i < triangles.Count; i++) mesh.SetTriangles(triangles[i], i);
+            mesh.RecalculateBounds();
+            return mesh;
         }
     }
 }
