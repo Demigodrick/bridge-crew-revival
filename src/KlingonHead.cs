@@ -13,9 +13,11 @@ namespace StbcRevival
     /// Human avatar. Unlike the Romulan captain, who has the player's female head with her own face material,
     /// the Klingons have their own head mesh (Klingon_Head: ridges, hair, 18 face shapes), so it's grafted on:
     /// a copy of their head rides on the avatar's Head bone, placed so its eyes are where the avatar's eyes
-    /// are (scaled to the same eye width), and the avatar's own head is drawn invisible. The avatar's face
-    /// animation (speech, blinks, expressions) is copied onto it by shape name each frame, and its lighting,
-    /// layer, shadows and visibility follow the avatar's head.
+    /// are (scaled to the same eye width), and the avatar's own head is left out while cameras draw (it keeps its
+    /// materials, so the creator still works on it). The avatar's face animation (speech, blinks, expressions) and
+    /// the creator's face sliders (KlingonFace) are copied onto it by shape name each frame, its skin and hair
+    /// colours too, and its lighting, layer, shadows and visibility follow the avatar's head. In the creator the
+    /// look choice picks between the two Klingon heads.
     /// The heads are the hail views' character prefabs in the Aegis bridge's assets. They're read from the game's
     /// files as it starts (KlingonHeadFiles), and made once their shaders are loaded; if that fails, the bridge is
     /// loaded alongside at launch for them (PreloadBridge), and any bridge that loads later provides them too.
@@ -46,6 +48,7 @@ namespace StbcRevival
 
         internal static void Update()
         {
+            KlingonFace.Tick();
             if (Time.unscaledTime < nextCheck) return;
             nextCheck = Time.unscaledTime + 1f;
             FindSources();
@@ -56,14 +59,41 @@ namespace StbcRevival
             // The character creator's own copies of the presets (as RomulanFace).
             var creator = UnityEngine.Object.FindObjectOfType<CustomizationManager>();
             if (creator != null && RomulanFace.CreatorAvatars?.GetValue(creator) is GameObject[] avatars && RomulanFace.Profiles() is IList profiles)
+            {
+                FollowLook(avatars, profiles);
                 for (int i = 0; i < avatars.Length && i < profiles.Count; i++)
                     if (avatars[i] != null && avatars[i].activeInHierarchy)
                         Apply(avatars[i], MaleHuman(profiles[i] as CharacterProfile) ? Chosen() : 0);
+            }
 
             var gone = new List<SkinnedMeshRenderer>();
             foreach (var pair in grafts) if (pair.Key == null || pair.Value == null) gone.Add(pair.Key);
             foreach (var head in gone) grafts.Remove(head);
             unfit.RemoveWhere(h => h == null);
+        }
+
+        private static readonly FieldInfo LookIndex = AccessTools.Field(typeof(FaceCustomization), "_currentLookIdx");
+
+        // In the creator, a Klingon picks his head with the head/look choice: the captain's on even looks, the
+        // flagship captain's on odd ones (the game has these two Klingon heads).
+        private static void FollowLook(GameObject[] avatars, IList profiles)
+        {
+            if (Chosen() <= 0 || LookIndex == null) return;
+            for (int i = 0; i < avatars.Length && i < profiles.Count; i++)
+            {
+                if (avatars[i] == null || !avatars[i].activeInHierarchy || !MaleHuman(profiles[i] as CharacterProfile)) continue;
+                var face = avatars[i].GetComponentInChildren<FaceCustomization>(true);
+                if (face == null || !(LookIndex.GetValue(face) is int look)) continue;
+                int want = 1 + Mathf.Abs(look) % 2;
+                if (want != Plugin.KlingonHead.Value || want != Plugin.KlingonHeadChoice.Value)
+                {
+                    // Both: the one worn, and the one KLINGON (and the Revival settings) pick.
+                    Plugin.KlingonHeadChoice.Value = want;
+                    Plugin.KlingonHead.Value = want;
+                    Plugin.Log.LogInfo($"Klingon head: look {look} in the creator, so the {Names[want]}'s head");
+                }
+                return;
+            }
         }
 
         private static int Chosen() => Mathf.Clamp(Plugin.KlingonHead.Value, 0, Characters.Length - 1);
@@ -170,6 +200,7 @@ namespace StbcRevival
                 worn.updateWhenOffscreen = true;
                 var graft = go.AddComponent<KlingonHeadGraft>();
                 graft.Set(head, worn, variant, Hidden(avatar));
+                KlingonFace.Request(graft, head, index, source.Mesh, local, spacing);
                 ForgetRenderers(bone);
                 Plugin.Log.LogInfo($"Klingon head: {Names[variant]} on {avatar.name} ({how}; at {F(go.transform.localPosition)} turned {F(go.transform.localEulerAngles)} x{go.transform.localScale.x:F3} on {bone.name}; drawn at {F(worn.bounds.center)} size {F(worn.bounds.size)}, avatar eyes at {F(left.position)})");
                 return graft;
@@ -480,50 +511,100 @@ namespace StbcRevival
         }
     }
 
-    /// <summary>A grafted Klingon head: follows the avatar's own (hidden) head each frame.</summary>
+    /// <summary>
+    /// A grafted Klingon head: follows the avatar's own head each frame. That head keeps its materials (the
+    /// character creator changes them: look, skin, hair colour) and is only left out while cameras draw; its skin
+    /// and hair settings are copied onto the Klingon head's skin, and its face shapes (speech, blinks, and the
+    /// creator's sliders once KlingonFace has made them) by name.
+    /// </summary>
     internal sealed class KlingonHeadGraft : MonoBehaviour
     {
         internal int Variant;
         private SkinnedMeshRenderer original, worn;
-        private Material[] originalMaterials;
-        private Material hidden;
         private int[] shapes; // the worn head's face shape for each of the original's, or -1
         private MaterialPropertyBlock block;
+        private Material skin;  // the worn head's own copy of its skin material
+        private Mesh madeMesh;  // its mesh with the face sliders (KlingonFace), destroyed with it
+        private bool wasEnabled;
+
+        private static readonly HashSet<KlingonHeadGraft> live = new HashSet<KlingonHeadGraft>();
+        private static bool hooked;
+
+        // The skin shader's settings the creator changes (FaceCustomization: SetSkinParams, SetSkinTexColor,
+        // ChangeHairColor, SetHairColorMultiplier); the Klingon head has the same shader.
+        private static readonly string[] skinColors = { "_MainTexColor", "_SkinColor1", "_SkinColor2", "_TransmissionColor", "_HairColor" };
+        private static readonly string[] skinFloats = { "_HairIntensity", "_ScatteringSpread", "_NormalSoftening", "_SpecularIntensity", "_SmoothnessModifier" };
 
         internal void Set(SkinnedMeshRenderer head, SkinnedMeshRenderer klingon, int variant, Material hide)
         {
             original = head;
             worn = klingon;
             Variant = variant;
-            hidden = hide;
             block = new MaterialPropertyBlock();
-            var names = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-            for (int i = 0; i < klingon.sharedMesh.blendShapeCount; i++) names[klingon.sharedMesh.GetBlendShapeName(i)] = i;
-            int count = head.sharedMesh != null ? head.sharedMesh.blendShapeCount : 0;
-            shapes = new int[count];
-            for (int i = 0; i < count; i++) shapes[i] = names.TryGetValue(head.sharedMesh.GetBlendShapeName(i), out var j) ? j : -1;
-            originalMaterials = head.sharedMaterials;
-            Rehide();
+            var materials = worn.sharedMaterials;
+            if (materials.Length > 0 && materials[0] != null)
+            {
+                skin = new Material(materials[0]) { name = materials[0].name + " (worn)" };
+                materials[0] = skin;
+                worn.sharedMaterials = materials;
+            }
+            MapShapes();
+            live.Add(this);
+            Hook();
             LateUpdate();
         }
 
-        // Hide the avatar's head again; a material the game put on since is kept for taking the graft off.
-        internal void Rehide()
+        /// <summary>The Klingon head's mesh with the creator's face sliders on it (from KlingonFace).</summary>
+        internal void UseMesh(Mesh mesh)
         {
-            if (original == null) return;
-            var current = original.sharedMaterials;
-            if (originalMaterials == null || originalMaterials.Length != current.Length) originalMaterials = (Material[])current.Clone();
-            for (int i = 0; i < current.Length; i++)
+            if (worn == null) { Destroy(mesh); return; }
+            worn.sharedMesh = mesh;
+            if (madeMesh != null) Destroy(madeMesh);
+            madeMesh = mesh;
+            MapShapes();
+        }
+
+        private void MapShapes()
+        {
+            var names = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            for (int i = 0; i < worn.sharedMesh.blendShapeCount; i++) names[worn.sharedMesh.GetBlendShapeName(i)] = i;
+            int count = original.sharedMesh != null ? original.sharedMesh.blendShapeCount : 0;
+            shapes = new int[count];
+            for (int i = 0; i < count; i++) shapes[i] = names.TryGetValue(original.sharedMesh.GetBlendShapeName(i), out var j) ? j : -1;
+        }
+
+        // The avatar's own head is left out of every camera's picture (and its shadows) while the Klingon head is on.
+        private static void Hook()
+        {
+            if (hooked) return;
+            hooked = true;
+            // Whether it's shown is taken once a frame, before any camera (LateUpdate): a camera drawn in the middle
+            // of another's picture would otherwise take "off" as the state to put back, and the head stayed off.
+            Camera.onPreCull += c =>
             {
-                if (current[i] != hidden) originalMaterials[i] = current[i];
-                current[i] = hidden;
-            }
-            original.sharedMaterials = current;
+                foreach (var g in live)
+                    if (g != null && g.original != null) g.original.enabled = false;
+            };
+            Camera.onPostRender += c =>
+            {
+                foreach (var g in live)
+                    if (g != null && g.original != null) g.original.enabled = g.wasEnabled;
+            };
+        }
+
+        // The creator used to hide the avatar's head by its materials; they're left alone now.
+        internal void Rehide() { }
+
+        private void OnDestroy()
+        {
+            live.Remove(this);
+            if (skin != null) Destroy(skin);
+            if (madeMesh != null) Destroy(madeMesh);
         }
 
         internal void Remove()
         {
-            if (original != null && originalMaterials != null) original.sharedMaterials = originalMaterials;
+            live.Remove(this);
             original = null;
             // Out of the avatar first (it's destroyed at the end of the frame), so its lighting lists it no more.
             var avatar = transform.parent;
@@ -540,7 +621,8 @@ namespace StbcRevival
                 Destroy(gameObject);
                 return;
             }
-            worn.enabled = original.enabled;
+            wasEnabled = original.enabled;
+            worn.enabled = wasEnabled;
             if (gameObject.layer != original.gameObject.layer) gameObject.layer = original.gameObject.layer;
             worn.shadowCastingMode = original.shadowCastingMode;
             worn.receiveShadows = original.receiveShadows;
@@ -548,6 +630,12 @@ namespace StbcRevival
                 if (shapes[i] >= 0) worn.SetBlendShapeWeight(shapes[i], original.GetBlendShapeWeight(i));
             original.GetPropertyBlock(block);
             worn.SetPropertyBlock(block);
+            var face = original.sharedMaterial;
+            if (skin != null && face != null)
+            {
+                foreach (var p in skinColors) if (face.HasProperty(p) && skin.HasProperty(p)) skin.SetColor(p, face.GetColor(p));
+                foreach (var p in skinFloats) if (face.HasProperty(p) && skin.HasProperty(p)) skin.SetFloat(p, face.GetFloat(p));
+            }
         }
     }
 }
