@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Linq;
 using System.Reflection;
 using HarmonyLib;
 using UnityEngine;
@@ -44,6 +45,38 @@ namespace StbcRevival
             nextCheck = Time.unscaledTime + 1f;
         }
 
+        /// <summary>"USS Cosmo, NCC-91234" (a room's SHN) → "USS Cosmo (NCC-91234)"; "" for none.</summary>
+        internal static string Format(string value)
+        {
+            value = (value ?? "").Trim();
+            int comma = value.LastIndexOf(',');
+            if (comma < 0) return value;
+            string n = value.Substring(0, comma).Trim(), r = value.Substring(comma + 1).Trim();
+            return r.Length > 0 ? $"{n} ({r})" : n;
+        }
+
+        // The room lists show the ship name: listed in the lobby with the game's own properties (Photon's list; Steam's
+        // lobbies carry every short room property already).
+        private static object listedFor;
+        private static void ListInLobby(object room)
+        {
+            if (ReferenceEquals(listedFor, room)) return;
+            try
+            {
+                var field = AccessTools.Field(room.GetType(), "KJNGOJCPCDJ");
+                var listed = field?.GetValue(room) as string[] ?? new string[0];
+                if (!listed.Contains(Key))
+                {
+                    var set = room.GetType().GetMethod("SetPropertiesListedInLobby", new[] { typeof(string[]) });
+                    if (set == null) { listedFor = room; return; }
+                    set.Invoke(room, new object[] { listed.Concat(new[] { Key }).ToArray() });
+                    Plugin.Log.LogInfo("Ship name: listed in the lobby");
+                }
+                listedFor = room;
+            }
+            catch (Exception e) { listedFor = room; Plugin.Log.LogDebug("Ship name: listing in the lobby: " + e.Message); }
+        }
+
         /// <summary>"NCC-91234 · USS Cosmo", or "" for the game's.</summary>
         internal static string Display => name.Length == 0 ? "" : registry.Length > 0 ? registry + " · " + name : name;
 
@@ -75,6 +108,7 @@ namespace StbcRevival
                     // The room's name is the one in use. A new room gets the host's; after that the briefing room's
                     // SHIP NAME box changes it (host or captain), for everyone.
                     if (host && (props == null || !props.Contains(Key)) && Own.Length > 0 && PhotonProps.Set(room, Key, Own)) onRoom = Own;
+                    if (host) ListInLobby(room);
                     use = onRoom;
                 }
                 if (use != current) Use(use);

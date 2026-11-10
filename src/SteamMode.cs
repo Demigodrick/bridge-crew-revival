@@ -861,7 +861,7 @@ namespace StbcRevival
                         for (int k = 0; k < count; k++)
                         {
                             if (!SteamMatchmaking.GetLobbyDataByIndex(lobby, k, out string key, 256, out string value, 8192)) continue;
-                            if (key.StartsWith("C") || key == "NPID")
+                            if (key.StartsWith("C") || key == "NPID" || key == "SHN") // SHN: the crew's ship name
                             {
                                 var decoded = Decode(value);
                                 if (decoded != null) props[key] = decoded;

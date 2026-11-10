@@ -228,7 +228,7 @@ namespace StbcRevival
             {
                 GUILayout.BeginHorizontal("box");
                 GUILayout.Label(r.Mine ? Translation.T(r.Code + " (you)") : r.Code, GUILayout.Width(90));
-                GUILayout.Label($"{r.Mode} · {r.Phase}", GUILayout.Width(220));
+                GUILayout.Label($"{r.Mode} · {r.Phase}" + (r.Ship.Length > 0 ? "\n" + r.Ship : ""), GUILayout.Width(220));
                 GUILayout.Label($"{r.Players}/{(r.MaxPlayers > 0 ? r.MaxPlayers.ToString() : "any")}", GUILayout.Width(50));
                 GUI.enabled = r.Joinable && r.Name != current && !r.Mine;
                 if (GUILayout.Button(Translation.T(r.Joinable ? "Join" : "Full"), GUILayout.Width(70))) Join(r.Name);
@@ -247,6 +247,7 @@ namespace StbcRevival
         internal sealed class Entry
         {
             public string Name, Code, Mode, Phase;
+            public string Ship = ""; // the crew's ship ("USS Cosmo (NCC-91234)"), or ""
             public int Players, MaxPlayers;
             public bool Joinable, Mine, InMission, NextGeneration;
         }
@@ -264,6 +265,7 @@ namespace StbcRevival
             // C6 game phase: 1 shuttle, 2 briefing room, 4 intro; anything else is a mission.
             InMission = Int(props, "C6") is int phase && phase != 1 && phase != 2 && phase != 4,
             NextGeneration = Int(props, "C9") == 1,
+            Ship = ShipName.Format(props != null && props.Contains("SHN") ? props["SHN"] as string : null),
         };
 
         // [Rooms] HideFullCrews / HideCrewsInMission / Content. Your own room is always listed.

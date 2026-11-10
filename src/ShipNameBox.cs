@@ -47,9 +47,11 @@ namespace StbcRevival
         }
 
         /// <summary>The rectangle a box's graphics cover, in its parent's space.</summary>
-        private static Rect Extent(Transform box)
+        private static Rect Extent(Transform box) => ExtentIn(box, box.parent);
+
+        /// <summary>The rectangle a box's graphics cover, in another transform's space.</summary>
+        private static Rect ExtentIn(Transform box, Transform parent)
         {
-            var parent = box.parent;
             float xMin = float.MaxValue, yMin = float.MaxValue, xMax = float.MinValue, yMax = float.MinValue;
             var corners = new Vector3[4];
             foreach (var g in box.GetComponentsInChildren<Graphic>(true))
@@ -163,23 +165,26 @@ namespace StbcRevival
 
                 // Above GAME TYPE and whatever control sits on top of it (the crew password button).
                 float baseY = type.yMax;
-                foreach (Transform sibling in parent)
+                bool found = false;
+                foreach (var control in console.GetComponentsInChildren<Selectable>(true))
                 {
-                    if (sibling == holder.transform || shipParts.Contains(sibling) || typeParts.Contains(sibling)) continue;
-                    if (sibling.GetComponentsInChildren<Selectable>(true).Length == 0) continue;
-                    var r = Extent(sibling);
+                    var t = control.transform;
+                    if (t.IsChildOf(holder.transform) || shipParts.Any(p => t.IsChildOf(p)) || typeParts.Any(p => t.IsChildOf(p))) continue;
+                    var r = ExtentIn(t, parent);
                     if (r.width <= 0f || r.xMax < type.xMin || r.xMin > type.xMax || r.yMin < type.yMax - 2f || r.yMin > type.yMax + 40f) continue;
-                    Plugin.Log.LogInfo($"Ship name box: above {sibling.name} {r}");
+                    Plugin.Log.LogInfo($"Ship name box: above {t.name} {r}");
                     baseY = Mathf.Max(baseY, r.yMax);
+                    found = true;
                 }
 
                 // Bottom just above GAME TYPE (with its heading), left edges lined up, as large as fits up to the
                 // panel's top row of decorations.
                 holder.transform.localScale = Vector3.one * Scale;
+                if (!found) baseY += 20f; // the crew password button's height, wherever it is
                 Vector2 at = new Vector2(type.xMin - full.xMin * Scale, baseY + 3f - full.yMin * Scale);
                 holder.transform.localPosition = new Vector3(at.x, at.y, 0f);
 
-                var box = new Box { Console = console, Root = holder, Prefix = copyOfAegis.GetComponent<Toggle>(), Number = copyOfEnterprise.GetComponent<Toggle>(), Name = plain.GetComponent<Toggle>() };
+                var box = new Box { Console = console, Root = holder, Name = copyOfAegis.GetComponent<Toggle>(), Prefix = copyOfEnterprise.GetComponent<Toggle>(), Number = plain.GetComponent<Toggle>() }; // the name on top
                 var rows = new[] { box.Prefix, box.Number, box.Name };
                 var actions = new Action[] { SwitchPrefix, AskNumber, AskName };
                 for (int i = 0; i < rows.Length; i++)
