@@ -177,7 +177,7 @@ namespace StbcRevival
                 new[] { "Skip mic check", "Mikrofon-Check überspringen", "restart" },
                 new[] { "Voice commands", "Sprachbefehle", "restart" },
                 new[] { "Voice orders from any station", "Sprachbefehle von jeder Station", "" },
-                new[] { "Chime when someone joins", "Signalton, wenn jemand beitritt", "" },
+                new[] { "Sound when someone joins", "Signalton, wenn jemand beitritt", "" },
                 new[] { "Public crews in VR", "Öffentliche Crews in VR", "" },
                 new[] { "Hide full crews", "Volle Crews ausblenden", "" },
                 new[] { "Hide crews on a mission", "Crews in einer Mission ausblenden", "" },
