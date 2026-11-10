@@ -30,6 +30,16 @@ namespace StbcRevival
         {
             new Paint
             {
+                Ship = "Aegis", Texture = "Nacelles_D", AreaX = 0, AreaY = 1152, AreaW = 640, AreaH = 256,
+                EraseX0 = 4, EraseX1 = 505, EraseY0 = 1256, EraseY1 = 1316,
+                Line = new Line
+                {
+                    Shape = Shape.Straight, Cx = 254f, Cy = 1286f, Cap = 53f, Says = Says.Registry, Reference = "NX-1787", ReferenceLength = 488f, MaxLength = 495f, Tracking = 0.12f,
+                    Style = new Style { Fill = new Color32(2, 2, 2, 255) },
+                },
+            },
+            new Paint
+            {
                 Ship = "Enterprise-D", Texture = "EnterpriseD_01_D", AreaX = 768, AreaY = 0, AreaW = 512, AreaH = 256,
                 EraseX0 = 905, EraseX1 = 1132, EraseY0 = 117, EraseY1 = 153,
                 Line = new Line
@@ -70,14 +80,16 @@ namespace StbcRevival
             var started = Time.realtimeSinceStartup;
             try
             {
-                string text = NumberOf(registry.Length > 0 ? registry : "1701-D").ToUpperInvariant();
+                string text = paint.Line.Says == Says.Registry ? (registry.Length > 0 ? registry : paint.Line.Reference).ToUpperInvariant()
+                    : NumberOf(registry.Length > 0 ? registry : paint.Line.Reference).ToUpperInvariant();
                 var face = LoadFace(text);
                 if (face == null) return false;
                 if (!ReadTexture(paint.Texture, out var t, out var data)) return false;
-                if (t.Format != 10) { Plugin.Log.LogWarning($"Hull name: {paint.Texture} is format {t.Format}, not DXT1"); return false; }
+                if (t.Format != 10 && t.Format != 12) { Plugin.Log.LogWarning($"Hull name: {paint.Texture} is format {t.Format}, not DXT1 or DXT5"); return false; }
+                int block = t.Format == 12 ? 16 : 8; // DXT5: its alpha half stays as it is, only the colours are painted
 
                 int w = t.Width, h = t.Height;
-                var px = DecodeDxt1(data, 0, w, paint.AreaX, paint.AreaY, paint.AreaW, paint.AreaH);
+                var px = DecodeDxt1(data, 0, w, paint.AreaX, paint.AreaY, paint.AreaW, paint.AreaH, block);
                 int aw = paint.AreaW;
                 Color32 At(int x, int y) => px[(y - paint.AreaY) * aw + (x - paint.AreaX)];
                 // The old number: each column carried across from just above it to just below it.
@@ -113,14 +125,14 @@ namespace StbcRevival
                     if (m < PaintMips)
                     {
                         var level = Downsample(px, aw, paint.AreaH, m);
-                        EncodeDxt1(level, paint.AreaW >> m, paint.AreaH >> m, patched, offset, mw, paint.AreaX >> m, paint.AreaY >> m);
+                        EncodeDxt1(level, paint.AreaW >> m, paint.AreaH >> m, patched, offset, mw, paint.AreaX >> m, paint.AreaY >> m, block);
                     }
-                    offset += Math.Max(1, (mw + 3) / 4) * Math.Max(1, (mh + 3) / 4) * 8;
+                    offset += Math.Max(1, (mw + 3) / 4) * Math.Max(1, (mh + 3) / 4) * block;
                 }
 
                 if (paint.Done == null)
                 {
-                    paint.Done = new Texture2D(w, h, TextureFormat.DXT1, t.MipCount > 1, t.ColorSpace == 0) { name = paint.Texture + " (crew's number)" };
+                    paint.Done = new Texture2D(w, h, block == 16 ? TextureFormat.DXT5 : TextureFormat.DXT1, t.MipCount > 1, t.ColorSpace == 0) { name = paint.Texture + " (crew's number)" };
                     UnityEngine.Object.DontDestroyOnLoad(paint.Done);
                 }
                 if (original != null) { paint.Done.wrapMode = original.wrapMode; paint.Done.filterMode = original.filterMode; paint.Done.anisoLevel = original.anisoLevel; paint.Done.mipMapBias = original.mipMapBias; }
@@ -130,7 +142,7 @@ namespace StbcRevival
                 {
                     var preview = new Texture2D(aw, paint.AreaH, TextureFormat.RGBA32, false);
                     preview.SetPixels32(px); preview.Apply();
-                    try { File.WriteAllBytes(Path.Combine(BepInEx.Paths.BepInExRootPath, "hull-name-" + paint.Ship + "-hull.png"), preview.EncodeToPNG()); } catch { }
+                    try { File.WriteAllBytes(Path.Combine(BepInEx.Paths.BepInExRootPath, "hull-name-" + paint.Ship + "-" + paint.Texture + ".png"), preview.EncodeToPNG()); } catch { }
                     UnityEngine.Object.Destroy(preview);
                 }
                 Plugin.Log.LogInfo($"Hull name: {paint.Ship}'s hull: \"{text}\" painted in {(Time.realtimeSinceStartup - started) * 1000f:0} ms");
@@ -175,7 +187,7 @@ namespace StbcRevival
         private static Color32 C565(int c) => new Color32((byte)(((c >> 11) & 31) * 255 / 31), (byte)(((c >> 5) & 63) * 255 / 63), (byte)((c & 31) * 255 / 31), 255);
 
         /// <summary>A rectangle of a DXT1 level (whole blocks), as pixels in Unity's row order.</summary>
-        private static Color32[] DecodeDxt1(byte[] d, int offset, int levelW, int x0, int y0, int w, int h)
+        private static Color32[] DecodeDxt1(byte[] d, int offset, int levelW, int x0, int y0, int w, int h, int blockBytes)
         {
             var px = new Color32[w * h];
             var c = new Color32[4];
@@ -183,11 +195,11 @@ namespace StbcRevival
             for (int by = 0; by < h / 4; by++)
                 for (int bx = 0; bx < w / 4; bx++)
                 {
-                    int o = offset + (((y0 / 4) + by) * blocksW + (x0 / 4) + bx) * 8;
+                    int o = offset + (((y0 / 4) + by) * blocksW + (x0 / 4) + bx) * blockBytes + blockBytes - 8;
                     int c0 = d[o] | d[o + 1] << 8, c1 = d[o + 2] | d[o + 3] << 8;
                     uint bits = (uint)(d[o + 4] | d[o + 5] << 8 | d[o + 6] << 16 | d[o + 7] << 24);
                     c[0] = C565(c0); c[1] = C565(c1);
-                    if (c0 > c1) { c[2] = Color32.Lerp(c[0], c[1], 1f / 3f); c[3] = Color32.Lerp(c[0], c[1], 2f / 3f); }
+                    if (c0 > c1 || blockBytes == 16) { c[2] = Color32.Lerp(c[0], c[1], 1f / 3f); c[3] = Color32.Lerp(c[0], c[1], 2f / 3f); }
                     else { c[2] = Color32.Lerp(c[0], c[1], 0.5f); c[3] = new Color32(0, 0, 0, 255); }
                     for (int i = 0; i < 16; i++)
                         px[(by * 4 + i / 4) * w + bx * 4 + i % 4] = c[(bits >> (2 * i)) & 3];
@@ -215,7 +227,7 @@ namespace StbcRevival
         private static int To565(Color32 c) => (c.r * 31 + 127) / 255 << 11 | (c.g * 63 + 127) / 255 << 5 | (c.b * 31 + 127) / 255;
 
         /// <summary>Pixels into a DXT1 level's blocks at (x0, y0): the ends of each block's colour spread, four colours between.</summary>
-        private static void EncodeDxt1(Color32[] px, int w, int h, byte[] d, int offset, int levelW, int x0, int y0)
+        private static void EncodeDxt1(Color32[] px, int w, int h, byte[] d, int offset, int levelW, int x0, int y0, int blockBytes)
         {
             int blocksW = Math.Max(1, (levelW + 3) / 4);
             var block = new Color32[16];
@@ -250,7 +262,7 @@ namespace StbcRevival
                             bits |= (uint)best << (2 * i);
                         }
                     }
-                    int o = offset + ((y0 / 4 + by) * blocksW + x0 / 4 + bx) * 8;
+                    int o = offset + ((y0 / 4 + by) * blocksW + x0 / 4 + bx) * blockBytes + blockBytes - 8;
                     d[o] = (byte)e0; d[o + 1] = (byte)(e0 >> 8); d[o + 2] = (byte)e1; d[o + 3] = (byte)(e1 >> 8);
                     d[o + 4] = (byte)bits; d[o + 5] = (byte)(bits >> 8); d[o + 6] = (byte)(bits >> 16); d[o + 7] = (byte)(bits >> 24);
                 }

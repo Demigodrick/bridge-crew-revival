@@ -54,7 +54,7 @@ namespace StbcRevival
             public string DrawnFor;
         }
 
-        private static readonly Style AegisStyle = new Style { Fill = new Color32(0x22, 0x11, 0x22, 255), Rim = new Color32(0x77, 0x11, 0x11, 255), RimWidth = 0.022f, Outer = new Color32(0xCC, 0xCC, 0xCC, 255), OuterWidth = 0.03f };
+        private static readonly Style AegisStyle = new Style { Fill = new Color32(0x22, 0x11, 0x22, 255), Rim = new Color32(0x77, 0x11, 0x11, 255), RimWidth = 0.014f, Outer = new Color32(0xB0, 0xB0, 0xB0, 255), OuterWidth = 0.01f };
         private static readonly Style EnterpriseRimmed = new Style { Fill = new Color32(0, 0, 0, 255), Gap = 0.02f, Rim = new Color32(0xB5, 0x39, 0x3A, 255), RimWidth = 0.033f };
         private static readonly Style EnterpriseSmallRimmed = new Style { Fill = new Color32(0, 0, 0, 255), Gap = 0.025f, Rim = new Color32(0xB5, 0x51, 0x52, 255), RimWidth = 0.034f };
         private static readonly Style EnterprisePlain = new Style { Fill = new Color32(0, 0, 0, 255) };
@@ -565,7 +565,7 @@ namespace StbcRevival
                         if (a >= px[i].a) px[i] = new Color32(col.r, col.g, col.b, a);
                         if (glow != null)
                         {
-                            byte e = (byte)Mathf.RoundToInt((1f - c) * 255f);
+                            byte e = (byte)Mathf.RoundToInt((1f - Mathf.Max(c, bandA)) * 255f); // the letters and their rims don't glow
                             if (e < glow[i].r) glow[i] = new Color32(e, e, e, 255);
                         }
                     }
