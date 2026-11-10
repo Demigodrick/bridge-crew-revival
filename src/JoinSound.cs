@@ -1,25 +1,53 @@
 using System;
+using System.IO;
+using System.Text;
 using UnityEngine;
 
 namespace StbcRevival
 {
     /// <summary>
-    /// [Rooms] JoinSound: when someone joins your crew (PlayerJoinedAlert notices), an LCARS-style notification sound.
-    /// The mod brings no recording: its own sound is made here, a short computer chirp of two rising tones. Your own
-    /// sound goes first: a 16-bit .wav at BepInEx/sounds/player-joined.wav (not part of the mod). Played as 2D sound.
+    /// The sound PlayerJoinedAlert plays when someone joins your crew: an LCARS-style notification. The mod brings no
+    /// recording: its own sound is made here, a short computer chirp of two rising tones. Your own sound goes first: a
+    /// 16-bit PCM .wav at BepInEx/sounds/player-joined.wav (not part of the mod). Load() runs on entering a room, so
+    /// the file is read then rather than when someone joins, and a file added or changed since is picked up. 2D sound.
     /// </summary>
     internal static class JoinSound
     {
-        private static AudioClip clip;
+        internal const string OwnFile = "BepInEx/sounds/player-joined.wav";
+        private const int MaxBytes = 16 * 1024 * 1024; // about 90 s of 16-bit stereo at 48 kHz: plenty for a chirp
+
+        private static AudioClip made, own;
+        private static DateTime ownStamp;              // the loaded file's write time (MinValue: none loaded)
         private static AudioSource source;
 
-        internal const string OwnFile = "BepInEx/sounds/player-joined.wav";
+        private static string OwnPath => Path.Combine(Path.GetDirectoryName(Application.dataPath), OwnFile);
+
+        // Your own .wav, (re)read if it's new or changed since the last load; dropped if it's gone.
+        internal static void Load()
+        {
+            try
+            {
+                var path = OwnPath;
+                if (!File.Exists(path))
+                {
+                    Drop();
+                    return;
+                }
+                var stamp = File.GetLastWriteTimeUtc(path);
+                if (stamp == ownStamp) return;
+                Drop();
+                ownStamp = stamp; // a file that won't read is only tried (and warned about) once per change
+                own = Read(path);
+            }
+            catch (Exception e) { Plugin.Log.LogWarning($"Join sound: {OwnFile}: {e.Message}; playing the mod's own"); }
+        }
 
         internal static void Play()
         {
             try
             {
-                if (clip == null) clip = Own() ?? Make(44100);
+                if (own == null && ownStamp == DateTime.MinValue) Load(); // joined before a room was seen
+                var clip = own ?? (made != null ? made : made = Make(44100));
                 if (source == null)
                 {
                     var go = new GameObject("Revival join sound");
@@ -34,44 +62,53 @@ namespace StbcRevival
             catch (Exception e) { Plugin.Log.LogInfo("Join sound: " + e.Message); }
         }
 
-        private static AudioClip Own()
+        private static void Drop()
         {
-            try
+            if (own != null) UnityEngine.Object.Destroy(own);
+            own = null;
+            ownStamp = DateTime.MinValue;
+        }
+
+        private static AudioClip Read(string path)
+        {
+            if (new FileInfo(path).Length > MaxBytes) throw new Exception($"over {MaxBytes / (1024 * 1024)} MB");
+            var bytes = File.ReadAllBytes(path);
+            if (bytes.Length < 12 || Encoding.ASCII.GetString(bytes, 0, 4) != "RIFF" || Encoding.ASCII.GetString(bytes, 8, 4) != "WAVE")
+                throw new Exception("not a .wav file");
+            int format = 0, channels = 0, rate = 0, bits = 0, dataAt = -1, dataSize = 0;
+            for (int o = 12; o + 8 <= bytes.Length;)
             {
-                string path = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(Application.dataPath), OwnFile);
-                if (!System.IO.File.Exists(path)) return null;
-                var bytes = System.IO.File.ReadAllBytes(path);
-                if (bytes.Length < 44 || System.Text.Encoding.ASCII.GetString(bytes, 0, 4) != "RIFF" || System.Text.Encoding.ASCII.GetString(bytes, 8, 4) != "WAVE")
-                    throw new Exception("not a .wav file");
-                int channels = 0, rate = 0, bits = 0, dataAt = -1, dataSize = 0;
-                for (int o = 12; o + 8 <= bytes.Length;)
+                string id = Encoding.ASCII.GetString(bytes, o, 4);
+                long size = BitConverter.ToUInt32(bytes, o + 4); // unsigned: a bad size can't step backwards
+                if (id == "fmt ")
                 {
-                    string id = System.Text.Encoding.ASCII.GetString(bytes, o, 4);
-                    int size = BitConverter.ToInt32(bytes, o + 4);
-                    if (id == "fmt ")
-                    {
-                        if (BitConverter.ToInt16(bytes, o + 8) != 1) throw new Exception("not PCM");
-                        channels = BitConverter.ToInt16(bytes, o + 10);
-                        rate = BitConverter.ToInt32(bytes, o + 12);
-                        bits = BitConverter.ToInt16(bytes, o + 22);
-                    }
-                    else if (id == "data") { dataAt = o + 8; dataSize = Math.Min(size, bytes.Length - dataAt); break; }
-                    o += 8 + size + (size & 1);
+                    if (size < 16 || o + 8 + 16 > bytes.Length) throw new Exception("bad format chunk");
+                    format = BitConverter.ToUInt16(bytes, o + 8);
+                    channels = BitConverter.ToUInt16(bytes, o + 10);
+                    rate = BitConverter.ToInt32(bytes, o + 12);
+                    bits = BitConverter.ToUInt16(bytes, o + 22);
                 }
-                if (bits != 16 || channels < 1 || rate <= 0 || dataAt < 0) throw new Exception($"{bits}-bit, {channels} channel(s): only 16-bit PCM is read");
-                int frames = dataSize / 2 / channels;
-                var samples = new float[frames * channels];
-                for (int i = 0; i < samples.Length; i++) samples[i] = BitConverter.ToInt16(bytes, dataAt + i * 2) / 32768f;
-                var own = AudioClip.Create("Join sound (yours)", frames, channels, rate, false);
-                own.SetData(samples, 0);
-                Plugin.Log.LogInfo($"Join sound: yours, {OwnFile} ({frames / (float)rate:F2} s)");
-                return own;
+                else if (id == "data")
+                {
+                    dataAt = o + 8;
+                    dataSize = (int)Math.Min(size, bytes.Length - dataAt);
+                    break;
+                }
+                long next = o + 8 + size + (size & 1);
+                if (next > bytes.Length) break;
+                o = (int)next;
             }
-            catch (Exception e)
-            {
-                Plugin.Log.LogWarning($"Join sound: {OwnFile}: {e.Message}; playing the mod's own");
-                return null;
-            }
+            if (format != 1) throw new Exception("not PCM");
+            if (bits != 16 || channels < 1 || channels > 8 || rate < 8000 || rate > 192000 || dataAt < 0)
+                throw new Exception($"{bits}-bit, {channels} channel(s), {rate} Hz: only 16-bit PCM is read");
+            int frames = dataSize / 2 / channels;
+            if (frames < 1) throw new Exception("no sound in it");
+            var samples = new float[frames * channels];
+            for (int i = 0; i < samples.Length; i++) samples[i] = BitConverter.ToInt16(bytes, dataAt + i * 2) / 32768f;
+            var clip = AudioClip.Create("Join sound (yours)", frames, channels, rate, false);
+            clip.SetData(samples, 0);
+            Plugin.Log.LogInfo($"Join sound: yours, {OwnFile} ({frames / (float)rate:F2} s)");
+            return clip;
         }
 
         // Two short tones, the second higher, each with a quick attack and a soft tail: a computer chirp.
@@ -92,9 +129,9 @@ namespace StbcRevival
                     s[from + i] += env * wave * 0.4f;
                 }
             }
-            var made = AudioClip.Create("Join sound", n, 1, rate, false);
-            made.SetData(s, 0);
-            return made;
+            var clip = AudioClip.Create("Join sound", n, 1, rate, false);
+            clip.SetData(s, 0);
+            return clip;
         }
     }
 }
