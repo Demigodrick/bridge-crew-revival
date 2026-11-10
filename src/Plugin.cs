@@ -58,6 +58,8 @@ namespace StbcRevival
         internal static ConfigEntry<UnityEngine.KeyCode> GameDumpKey;
         internal static ConfigEntry<bool> RomulanFace;
         internal static ConfigEntry<int> KlingonHead;
+        internal static ConfigEntry<int> Rank;
+        internal static ConfigEntry<bool> NamePlates;
         internal static ConfigEntry<int> KlingonHeadChoice;
         internal static ConfigEntry<string> MapOverride;
         internal static ConfigEntry<int> FleetBattleSize;
@@ -170,6 +172,10 @@ namespace StbcRevival
             KlingonHead = Config.Bind("Avatar", "KlingonHead", 0,
                 new ConfigDescription("Wear a Klingon captain's head: 0 off, 1 the captain, 2 the flagship's captain. Male Human character presets only; crewmates with the mod see it too. "
                                       + "The heads are loaded from the bridge's assets as the game starts.", new AcceptableValueRange<int>(0, 2)));
+            Rank = Config.Bind("Avatar", "Rank", -1,
+                new ConfigDescription("The rank you wear (on your uniform, in the briefing room, on your name plate), seen by your whole crew: -1 the one you've earned, "
+                                      + "0 Ensign, 1 Lieutenant Junior Grade, 2 Lieutenant, 3 Lieutenant Commander, 4 Commander, 5 Captain.", new AcceptableValueRange<int>(-1, 5)));
+            NamePlates = Config.Bind("Avatar", "NamePlates", true, "Rank and name over each crewmate's head.");
             KlingonHeadChoice = Config.Bind("Avatar", "KlingonHeadChoice", Math.Max(1, KlingonHead.Value),
                 new ConfigDescription("Which Klingon captain's head the character creator's KLINGON wears: 1 the captain, 2 the flagship's captain "
                                       + "(Revival settings changes it).", new AcceptableValueRange<int>(1, 2)));
@@ -317,6 +323,7 @@ namespace StbcRevival
             Safely("game dump", GameDump.Update);
             Safely("romulan face", StbcRevival.RomulanFace.Update);
             Safely("klingon head", StbcRevival.KlingonHead.Update);
+            Safely("ranks", StbcRevival.Ranks.Update);
             Safely("player volumes", PlayerVolumes.Update);
             Safely("creator species choices", SpeciesCreatorOptions.Update);
             Safely("revival settings", RevivalSettings.Update);
