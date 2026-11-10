@@ -7,38 +7,86 @@ using UnityEngine;
 namespace StbcRevival
 {
     /// <summary>
-    /// The ship's name on the hull: the Aegis wears its name and registry as a decal (material Aegis_Name_Decal,
-    /// textures Ship_Decals_D and the emission map Ship_Decals_E). One straight "U.S.S. AEGIS" line and "NX-1787" bent
-    /// twice along the saucer's rim, upper and lower side. With a ship name set (<see cref="ShipName"/>), both
-    /// textures are drawn again at the same places, in the decal's own colours: dark fill, red then light grey rim.
+    /// The ship's name on the hull. The Aegis wears its name and registry as a decal (material Aegis_Name_Decal,
+    /// textures Ship_Decals_D and the emission map Ship_Decals_E): one straight "U.S.S. AEGIS" line and "NX-1787" bent
+    /// twice along the saucer's rim. The Enterprise-D's decal (Enterprise_D_Decals, EnterpriseD_Decal_D) has five lines
+    /// running down the texture, two of them bent, and a gold plate. With a ship name set (<see cref="ShipName"/>), a
+    /// loaded ship's decal is drawn again with the same lines at the same places, in the decal's own colours.
     /// The letters come from [Rooms] HullFont if that font is installed in Windows (e.g. Starfleet Bold Extended,
     /// which isn't shipped with the mod), else from the game's own United Sans.
     /// </summary>
     internal static class HullName
     {
-        private const int Size = 1024;
-        private static readonly Color32 Fill = new Color32(0x22, 0x11, 0x22, 255), Red = new Color32(0x77, 0x11, 0x11, 255), Grey = new Color32(0xCC, 0xCC, 0xCC, 255);
+        private enum Shape { Straight, Smile, Frown } // a smile reads with the angle rising, letters' tops to the centre; a frown the other way
+        private enum Says { Name, BareName, Registry } // "U.S.S. COSMO", "COSMO", "NCC-91234"
 
-        private enum Shape { Straight, Smile, Frown }
+        /// <summary>How a line's letters are coloured: the fill, then a gap and up to two rims outside it (widths in capital heights).</summary>
+        private sealed class Style
+        {
+            public Color32 Fill, Rim, Outer;
+            public float Gap, RimWidth, OuterWidth;
+        }
 
-        /// <summary>Where a line of the decal is, in the texture's pixels (y up), and the original text it replaces.</summary>
+        /// <summary>Where a line of a decal is, in the texture's pixels (y up), and the original text it replaces.</summary>
         private sealed class Line
         {
             public Shape Shape;
-            public float Cx, Cy, Radius, Mid; // the straight line's centre, or the arc's circle and middle angle (radians)
+            public float Cx, Cy, Radius, Mid; // the straight line's centre, or the arc's circle and middle angle (degrees)
+            public float Angle;               // a straight line's reading direction (degrees; 0 = left to right)
             public float Cap;                 // capital height in pixels
+            public Says Says;
             public string Reference;          // the game's text: our letters are stretched to fill its length...
             public float ReferenceLength, MaxLength; // ...and squeezed when longer than MaxLength
             public float Tracking;            // extra space between letters, in capital heights
+            public Style Style;
         }
 
-        // Measured on the game's Ship_Decals_D: letter blobs, circles fitted through their centres.
-        private static readonly Line NameLine = new Line { Shape = Shape.Straight, Cx = 507f, Cy = 897f, Cap = 50f, Reference = "U.S.S. AEGIS", ReferenceLength = 487f, MaxLength = 960f, Tracking = 0.06f };
-        private static readonly Line UpperArc = new Line { Shape = Shape.Smile, Cx = 495f, Cy = 1303f, Radius = 651f, Mid = -88.4f * Mathf.Deg2Rad, Cap = 132f, Reference = "NX-1787", ReferenceLength = 1000f, MaxLength = 1010f, Tracking = 0.12f };
-        private static readonly Line LowerArc = new Line { Shape = Shape.Frown, Cx = 524f, Cy = -511f, Radius = 819f, Mid = 89.85f * Mathf.Deg2Rad, Cap = 124f, Reference = "NX-1787", ReferenceLength = 968f, MaxLength = 975f, Tracking = 0.12f };
+        /// <summary>A ship's name decal: which material and texture, its lines, and what else is on it.</summary>
+        private sealed class Decal
+        {
+            public string Ship, Material, Texture, DefaultRegistry;
+            public int Size;
+            public bool Emission;             // also an emission map: the fill dark, everything else lit
+            public Color32 Clear;             // the colour of the transparent background (for the mipmaps' edges)
+            public Line[] Lines;
+            public Action<Color32[], int> Extra;
+            public Texture2D Diffuse, Glow;
+            public string DrawnFor;
+        }
 
-        private static string drawnFor;          // the "name|registry|font" the textures show, or null
-        private static Texture2D diffuse, emission;
+        private static readonly Style AegisStyle = new Style { Fill = new Color32(0x22, 0x11, 0x22, 255), Rim = new Color32(0x77, 0x11, 0x11, 255), RimWidth = 0.022f, Outer = new Color32(0xCC, 0xCC, 0xCC, 255), OuterWidth = 0.03f };
+        private static readonly Style EnterpriseRimmed = new Style { Fill = new Color32(0, 0, 0, 255), Gap = 0.02f, Rim = new Color32(0xB5, 0x39, 0x3A, 255), RimWidth = 0.033f };
+        private static readonly Style EnterpriseSmallRimmed = new Style { Fill = new Color32(0, 0, 0, 255), Gap = 0.025f, Rim = new Color32(0xB5, 0x51, 0x52, 255), RimWidth = 0.034f };
+        private static readonly Style EnterprisePlain = new Style { Fill = new Color32(0, 0, 0, 255) };
+
+        // Measured on the game's textures: letter blobs, circles fitted through their centres.
+        private static readonly Decal[] Decals =
+        {
+            new Decal
+            {
+                Ship = "Aegis", Material = "Aegis_Name_Decal", Texture = "Ship_Decals_D", DefaultRegistry = "NX-1787", Size = 1024, Emission = true, Clear = new Color32(0, 0, 0, 0),
+                Lines = new[]
+                {
+                    new Line { Shape = Shape.Straight, Cx = 507f, Cy = 897f, Cap = 50f, Says = Says.Name, Reference = "U.S.S. AEGIS", ReferenceLength = 487f, MaxLength = 960f, Tracking = 0.06f, Style = AegisStyle },
+                    new Line { Shape = Shape.Smile, Cx = 495f, Cy = 1303f, Radius = 651f, Mid = -88.4f, Cap = 132f, Says = Says.Registry, Reference = "NX-1787", ReferenceLength = 1000f, MaxLength = 1010f, Tracking = 0.12f, Style = AegisStyle },
+                    new Line { Shape = Shape.Frown, Cx = 524f, Cy = -511f, Radius = 819f, Mid = 89.85f, Cap = 124f, Says = Says.Registry, Reference = "NX-1787", ReferenceLength = 968f, MaxLength = 975f, Tracking = 0.12f, Style = AegisStyle },
+                },
+            },
+            new Decal
+            {
+                Ship = "Enterprise-D", Material = "Enterprise_D_Decals", Texture = "EnterpriseD_Decal_D", DefaultRegistry = "NCC 1701-D", Size = 2048, Clear = new Color32(0xBD, 0xBD, 0xBD, 0),
+                Lines = new[]
+                {
+                    new Line { Shape = Shape.Smile, Cx = 3917f, Cy = 1016f, Radius = 3618f, Mid = 179.9f, Cap = 150f, Says = Says.Registry, Reference = "NCC 1701-D", ReferenceLength = 1950f, MaxLength = 1950f, Tracking = 0.2f, Style = EnterpriseRimmed },
+                    new Line { Shape = Shape.Straight, Cx = 538f, Cy = 1025f, Angle = -90f, Cap = 59f, Says = Says.Name, Reference = "U.S.S. ENTERPRISE", ReferenceLength = 1411f, MaxLength = 1411f, Tracking = 0.3f, Style = EnterpriseSmallRimmed },
+                    new Line { Shape = Shape.Frown, Cx = -131f, Cy = 473f, Radius = 1484f, Mid = 0.3f, Cap = 66f, Says = Says.Registry, Reference = "NCC 1701-D", ReferenceLength = 850f, MaxLength = 850f, Tracking = 0.2f, Style = EnterprisePlain },
+                    new Line { Shape = Shape.Straight, Cx = 1677f, Cy = 1035f, Angle = -90f, Cap = 123f, Says = Says.Registry, Reference = "NCC 1701-D", ReferenceLength = 1687f, MaxLength = 1687f, Tracking = 0.3f, Style = EnterprisePlain },
+                    new Line { Shape = Shape.Straight, Cx = 1949f, Cy = 1025f, Angle = -90f, Cap = 123f, Says = Says.BareName, Reference = "ENTERPRISE", ReferenceLength = 1931f, MaxLength = 1931f, Tracking = 0.3f, Style = EnterprisePlain },
+                },
+                Extra = GoldPlate,
+            },
+        };
+
         private static readonly Dictionary<Material, Texture[]> originals = new Dictionary<Material, Texture[]>();
         private static float nextScan;
 
@@ -50,34 +98,66 @@ namespace StbcRevival
             {
                 string name = ShipName.Name, registry = ShipName.Registry;
                 if (name.Length == 0) { Restore(); return; }
-                string want = name + "|" + registry + "|" + Plugin.HullFont.Value;
-                if (drawnFor != want) { if (!Draw(name, registry)) { nextScan = Time.unscaledTime + 30f; return; } drawnFor = want; }
-                var mats = Resources.FindObjectsOfTypeAll<Material>().Where(IsDecal).ToList(); // none: no Aegis loaded yet
-                foreach (var m in mats)
+                var mats = Resources.FindObjectsOfTypeAll<Material>();
+                foreach (var decal in Decals)
                 {
-                    if (m.GetTexture("_MainTex") == diffuse) continue;
-                    if (!originals.ContainsKey(m)) originals[m] = new[] { m.GetTexture("_MainTex"), m.GetTexture("_EmissionMap") };
-                    m.SetTexture("_MainTex", diffuse);
-                    m.SetTexture("_EmissionMap", emission);
+                    var mine = mats.Where(m => IsDecal(decal, m)).ToList();
+                    if (mine.Count == 0 && !Plugin.HullPreview.Value) continue; // that ship isn't loaded (the preview draws them all)
+                    string want = name + "|" + registry + "|" + Plugin.HullFont.Value;
+                    if (decal.DrawnFor != want) { if (!Draw(decal, name, registry)) { nextScan = Time.unscaledTime + 30f; return; } decal.DrawnFor = want; }
+                    foreach (var m in mine)
+                    {
+                        if (m.GetTexture("_MainTex") == decal.Diffuse) continue;
+                        if (!originals.ContainsKey(m)) originals[m] = new[] { m.GetTexture("_MainTex"), decal.Emission ? m.GetTexture("_EmissionMap") : null };
+                        m.SetTexture("_MainTex", decal.Diffuse);
+                        if (decal.Emission) m.SetTexture("_EmissionMap", decal.Glow);
+                    }
                 }
             }
             catch (Exception e) { Plugin.Log.LogWarning("Hull name: " + e); nextScan = Time.unscaledTime + 30f; }
         }
 
-        private static bool IsDecal(Material m)
+        private static bool IsDecal(Decal decal, Material m)
         {
             if (m == null || !m.HasProperty("_MainTex")) return false;
-            if (m.name.StartsWith("Aegis_Name_Decal", StringComparison.Ordinal)) return true;
+            if (m.name.StartsWith(decal.Material, StringComparison.Ordinal)) return true;
             var t = m.GetTexture("_MainTex");
-            return t != null && (t.name == "Ship_Decals_D" || (diffuse != null && t == diffuse));
+            return t != null && (t.name == decal.Texture || (decal.Diffuse != null && t == decal.Diffuse));
         }
 
         private static void Restore()
         {
             foreach (var kv in originals)
-                if (kv.Key != null) { kv.Key.SetTexture("_MainTex", kv.Value[0]); kv.Key.SetTexture("_EmissionMap", kv.Value[1]); }
+                if (kv.Key != null)
+                {
+                    kv.Key.SetTexture("_MainTex", kv.Value[0]);
+                    if (kv.Value[1] != null) kv.Key.SetTexture("_EmissionMap", kv.Value[1]);
+                }
             originals.Clear();
-            drawnFor = null;
+            foreach (var d in Decals) d.DrawnFor = null;
+        }
+
+        /// <summary>The Enterprise-D decal's gold plate (beside the lettering, kept as it is): red-brown frame, gold inside.</summary>
+        private static void GoldPlate(Color32[] px, int size)
+        {
+            var frame = new Color32(0xB2, 0x3C, 0x1C, 255); var gold = new Color32(0xF2, 0xC3, 0x10, 255);
+            const float cx = 1279.5f, cy = 1927f, hx = 141.5f, hy = 97f;
+            for (int y = 1820; y < 2036; y++)
+                for (int x = 1128; x < 1432; x++)
+                {
+                    float outer = RoundBox(x + 0.5f - cx, y + 0.5f - cy, hx, hy, 16f), inner = RoundBox(x + 0.5f - cx, y + 0.5f - cy, hx - 30f, hy - 30f, 8f);
+                    float ring = Mathf.Clamp01(0.5f - outer) * Mathf.Clamp01(outer + 14.5f), fill = Mathf.Clamp01(0.5f - inner);
+                    float a = Mathf.Max(ring, fill);
+                    if (a <= 0f) continue;
+                    var c = fill >= ring ? gold : frame;
+                    px[y * size + x] = new Color32(c.r, c.g, c.b, (byte)Mathf.RoundToInt(a * 255f));
+                }
+        }
+
+        private static float RoundBox(float x, float y, float hx, float hy, float r)
+        {
+            float qx = Mathf.Abs(x) - hx + r, qy = Mathf.Abs(y) - hy + r;
+            return new Vector2(Mathf.Max(qx, 0f), Mathf.Max(qy, 0f)).magnitude + Mathf.Min(Mathf.Max(qx, qy), 0f) - r;
         }
 
         /// <summary>"USS Cosmo" → "U.S.S. COSMO", as the hull writes it.</summary>
@@ -301,15 +381,29 @@ namespace StbcRevival
             return new Laid { Line = line, Glyphs = glyphs, Pen = pen, Width = width, CapUnits = cap, Scale = s, Stretch = stretch };
         }
 
+        private static float Wrap(float radians)
+        {
+            while (radians > Mathf.PI) radians -= 2f * Mathf.PI;
+            while (radians <= -Mathf.PI) radians += 2f * Mathf.PI;
+            return radians;
+        }
+
         /// <summary>Texture pixel → the line's own coordinates (font units: along from the start, up from the baseline).</summary>
         private static Vector2 ToLine(Laid l, float x, float y)
         {
             var line = l.Line;
+            float along, up, dx = x - line.Cx, dy = y - line.Cy;
             if (line.Shape == Shape.Straight)
-                return new Vector2((x - line.Cx) / (l.Scale * l.Stretch) + l.Width / 2f, (y - line.Cy) / l.Scale + l.CapUnits / 2f);
-            float dx = x - line.Cx, dy = y - line.Cy, r = Mathf.Sqrt(dx * dx + dy * dy), a = Mathf.Atan2(dy, dx);
-            float along = (line.Shape == Shape.Smile ? a - line.Mid : line.Mid - a) * line.Radius;
-            float up = line.Shape == Shape.Smile ? line.Radius - r : r - line.Radius;
+            {
+                float c = Mathf.Cos(line.Angle * Mathf.Deg2Rad), s = Mathf.Sin(line.Angle * Mathf.Deg2Rad);
+                along = dx * c + dy * s; up = -dx * s + dy * c;
+            }
+            else
+            {
+                float r = Mathf.Sqrt(dx * dx + dy * dy), turn = Wrap(Mathf.Atan2(dy, dx) - line.Mid * Mathf.Deg2Rad);
+                along = (line.Shape == Shape.Smile ? turn : -turn) * line.Radius;
+                up = line.Shape == Shape.Smile ? line.Radius - r : r - line.Radius;
+            }
             return new Vector2(along / (l.Scale * l.Stretch) + l.Width / 2f, up / l.Scale + l.CapUnits / 2f);
         }
 
@@ -318,30 +412,57 @@ namespace StbcRevival
         {
             var line = l.Line;
             float along = (u - l.Width / 2f) * l.Scale * l.Stretch, up = (w - l.CapUnits / 2f) * l.Scale;
-            if (line.Shape == Shape.Straight) return new Vector2(line.Cx + along, line.Cy + up);
-            float a = line.Shape == Shape.Smile ? line.Mid + along / line.Radius : line.Mid - along / line.Radius;
+            if (line.Shape == Shape.Straight)
+            {
+                float c = Mathf.Cos(line.Angle * Mathf.Deg2Rad), s = Mathf.Sin(line.Angle * Mathf.Deg2Rad);
+                return new Vector2(line.Cx + along * c - up * s, line.Cy + along * s + up * c);
+            }
+            float a = line.Mid * Mathf.Deg2Rad + (line.Shape == Shape.Smile ? along : -along) / line.Radius;
             float r = line.Shape == Shape.Smile ? line.Radius - up : line.Radius + up;
             return new Vector2(line.Cx + r * Mathf.Cos(a), line.Cy + r * Mathf.Sin(a));
         }
 
-        private static void Raster(Face f, Laid l, float[] cover)
+        /// <summary>The rectangle of the texture a line is drawn in, with its own coverage and distance buffers.</summary>
+        private sealed class Area { public int X, Y, W, H; }
+
+        private static void GlyphBox(Laid l, int i, out float xMin, out float xMax, out float yMin, out float yMax)
         {
+            var g = l.Glyphs[i];
+            xMin = yMin = float.MaxValue; xMax = yMax = float.MinValue;
+            for (int a = 0; a <= 4; a++)
+                for (int b = 0; b <= 4; b++)
+                {
+                    var p = FromLine(l, l.Pen[i] + Mathf.Lerp(g.MinX, g.MaxX, a / 4f), Mathf.Lerp(g.MinY, g.MaxY, b / 4f));
+                    xMin = Mathf.Min(xMin, p.x); xMax = Mathf.Max(xMax, p.x); yMin = Mathf.Min(yMin, p.y); yMax = Mathf.Max(yMax, p.y);
+                }
+        }
+
+        private static Area Bounds(Laid l, float margin, int size)
+        {
+            float xMin = float.MaxValue, xMax = float.MinValue, yMin = float.MaxValue, yMax = float.MinValue;
+            for (int i = 0; i < l.Glyphs.Length; i++)
+            {
+                if (!l.Glyphs[i].Found) continue;
+                GlyphBox(l, i, out var a, out var b, out var c, out var d);
+                xMin = Mathf.Min(xMin, a); xMax = Mathf.Max(xMax, b); yMin = Mathf.Min(yMin, c); yMax = Mathf.Max(yMax, d);
+            }
+            if (xMin > xMax) return null;
+            int x0 = Mathf.Clamp(Mathf.FloorToInt(xMin - margin), 0, size - 1), x1 = Mathf.Clamp(Mathf.CeilToInt(xMax + margin), 0, size - 1);
+            int y0 = Mathf.Clamp(Mathf.FloorToInt(yMin - margin), 0, size - 1), y1 = Mathf.Clamp(Mathf.CeilToInt(yMax + margin), 0, size - 1);
+            return new Area { X = x0, Y = y0, W = x1 - x0 + 1, H = y1 - y0 + 1 };
+        }
+
+        private static void Raster(Face f, Laid l, Area area, float[] cover)
+        {
+            float pixelsPerTexel = l.Scale * Mathf.Sqrt(l.Stretch) / f.TexelsPerUnit;
             for (int i = 0; i < l.Glyphs.Length; i++)
             {
                 var g = l.Glyphs[i];
                 if (!g.Found || g.MaxX <= g.MinX || g.MaxY <= g.MinY) continue;
                 float px0 = l.Pen[i];
-                // The letter's box on the texture, from a grid of its points (arcs bend the edges).
-                float xMin = float.MaxValue, xMax = float.MinValue, yMin = float.MaxValue, yMax = float.MinValue;
-                for (int a = 0; a <= 4; a++)
-                    for (int b = 0; b <= 4; b++)
-                    {
-                        var p = FromLine(l, px0 + Mathf.Lerp(g.MinX, g.MaxX, a / 4f), Mathf.Lerp(g.MinY, g.MaxY, b / 4f));
-                        xMin = Mathf.Min(xMin, p.x); xMax = Mathf.Max(xMax, p.x); yMin = Mathf.Min(yMin, p.y); yMax = Mathf.Max(yMax, p.y);
-                    }
-                int x0 = Mathf.Max(0, Mathf.FloorToInt(xMin) - 2), x1 = Mathf.Min(Size - 1, Mathf.CeilToInt(xMax) + 2);
-                int y0 = Mathf.Max(0, Mathf.FloorToInt(yMin) - 2), y1 = Mathf.Min(Size - 1, Mathf.CeilToInt(yMax) + 2);
-                float pixelsPerTexel = l.Scale * Mathf.Sqrt(l.Stretch) / f.TexelsPerUnit;
+                GlyphBox(l, i, out var xMin, out var xMax, out var yMin, out var yMax); // arcs bend the box's edges
+                int x0 = Mathf.Max(area.X, Mathf.FloorToInt(xMin) - 2), x1 = Mathf.Min(area.X + area.W - 1, Mathf.CeilToInt(xMax) + 2);
+                int y0 = Mathf.Max(area.Y, Mathf.FloorToInt(yMin) - 2), y1 = Mathf.Min(area.Y + area.H - 1, Mathf.CeilToInt(yMax) + 2);
                 for (int y = y0; y <= y1; y++)
                     for (int x = x0; x <= x1; x++)
                     {
@@ -352,81 +473,118 @@ namespace StbcRevival
                         var uv = g.BL + (g.BR - g.BL) * fx + (g.TL - g.BL) * fy;
                         float v = Sample(f, uv, g);
                         float c = f.Sdf ? Mathf.Clamp01((v - 0.5f) * f.Spread * pixelsPerTexel + 0.5f) : v;
-                        int k = y * Size + x;
+                        int k = (y - area.Y) * area.W + (x - area.X);
                         if (c > cover[k]) cover[k] = c;
                     }
             }
         }
 
         /// <summary>Distance from each pixel to the nearest filled one (cover ≥ 0.5), by two passes over offset vectors.</summary>
-        private static float[] Distance(float[] cover)
+        private static float[] Distance(float[] cover, int w, int h)
         {
-            const int Far = 9999;
-            var ox = new int[Size * Size]; var oy = new int[Size * Size];
+            const int Far = 99999;
+            var ox = new int[w * h]; var oy = new int[w * h];
             for (int i = 0; i < cover.Length; i++) { bool inside = cover[i] >= 0.5f; ox[i] = inside ? 0 : Far; oy[i] = inside ? 0 : Far; }
             void Try(int i, int x, int y, int dx, int dy)
             {
                 int nx = x + dx, ny = y + dy;
-                if (nx < 0 || ny < 0 || nx >= Size || ny >= Size) return;
-                int j = ny * Size + nx; if (ox[j] == Far) return;
+                if (nx < 0 || ny < 0 || nx >= w || ny >= h) return;
+                int j = ny * w + nx; if (ox[j] == Far) return;
                 int cx = ox[j] + dx, cy = oy[j] + dy;
                 if (ox[i] == Far || cx * cx + cy * cy < ox[i] * ox[i] + oy[i] * oy[i]) { ox[i] = cx; oy[i] = cy; }
             }
-            for (int y = 0; y < Size; y++)
+            for (int y = 0; y < h; y++)
             {
-                for (int x = 0; x < Size; x++) { int i = y * Size + x; Try(i, x, y, -1, 0); Try(i, x, y, 0, -1); Try(i, x, y, -1, -1); Try(i, x, y, 1, -1); }
-                for (int x = Size - 1; x >= 0; x--) Try(y * Size + x, x, y, 1, 0);
+                for (int x = 0; x < w; x++) { int i = y * w + x; Try(i, x, y, -1, 0); Try(i, x, y, 0, -1); Try(i, x, y, -1, -1); Try(i, x, y, 1, -1); }
+                for (int x = w - 1; x >= 0; x--) Try(y * w + x, x, y, 1, 0);
             }
-            for (int y = Size - 1; y >= 0; y--)
+            for (int y = h - 1; y >= 0; y--)
             {
-                for (int x = Size - 1; x >= 0; x--) { int i = y * Size + x; Try(i, x, y, 1, 0); Try(i, x, y, 0, 1); Try(i, x, y, 1, 1); Try(i, x, y, -1, 1); }
-                for (int x = 0; x < Size; x++) Try(y * Size + x, x, y, -1, 0);
+                for (int x = w - 1; x >= 0; x--) { int i = y * w + x; Try(i, x, y, 1, 0); Try(i, x, y, 0, 1); Try(i, x, y, 1, 1); Try(i, x, y, -1, 1); }
+                for (int x = 0; x < w; x++) Try(y * w + x, x, y, -1, 0);
             }
-            var d = new float[Size * Size];
+            var d = new float[w * h];
             for (int i = 0; i < d.Length; i++) d[i] = ox[i] == Far ? Far : Mathf.Sqrt(ox[i] * ox[i] + oy[i] * oy[i]);
             return d;
         }
 
-        private static bool Draw(string name, string registry)
+        /// <summary>How much of a rim from start to end (pixels out from the letter) a pixel at distance d is in.</summary>
+        private static float Band(float d, float start, float end) =>
+            end <= start ? 0f : (start <= 0f ? 1f : Mathf.Clamp01(d - start + 0.5f)) * Mathf.Clamp01(end + 0.5f - d);
+
+        private static string TextFor(Line line, string name, string registry, Decal decal)
         {
-            string hull = HullText(name), reg = (registry.Length > 0 ? registry : "NX-1787").ToUpperInvariant();
-            var face = LoadFace(hull + reg);
+            if (line.Says == Says.Registry) return (registry.Length > 0 ? registry : decal.DefaultRegistry).ToUpperInvariant();
+            string hull = HullText(name);
+            return line.Says == Says.BareName && hull.StartsWith("U.S.S. ", StringComparison.Ordinal) ? hull.Substring(7) : hull;
+        }
+
+        private static bool Draw(Decal decal, string name, string registry)
+        {
+            var texts = decal.Lines.Select(line => TextFor(line, name, registry, decal)).ToArray();
+            var face = LoadFace(string.Concat(texts));
             if (face == null) { Plugin.Log.LogInfo("Hull name: no font loaded yet"); return false; }
             var started = Time.realtimeSinceStartup;
+            int size = decal.Size;
 
-            var lines = new[] { Lay(face, NameLine, hull), Lay(face, UpperArc, reg), Lay(face, LowerArc, reg) };
-            var px = new Color32[Size * Size];
-            var glow = new Color32[Size * Size];
-            for (int i = 0; i < glow.Length; i++) glow[i] = new Color32(255, 255, 255, 255);
-            // Each line on its own layer: the rim widths follow the letters' size.
-            foreach (var l in lines)
+            var px = new Color32[size * size];
+            for (int i = 0; i < px.Length; i++) px[i] = decal.Clear;
+            var glow = decal.Emission ? new Color32[size * size] : null;
+            if (glow != null) for (int i = 0; i < glow.Length; i++) glow[i] = new Color32(255, 255, 255, 255);
+            decal.Extra?.Invoke(px, size);
+
+            // Each line on its own: the rims' widths follow its letters' size.
+            for (int n = 0; n < decal.Lines.Length; n++)
             {
-                var cover = new float[Size * Size];
-                Raster(face, l, cover);
-                var dist = Distance(cover);
+                var line = decal.Lines[n];
+                var l = Lay(face, line, texts[n]);
                 float capPx = l.CapUnits * l.Scale;
-                float red = Mathf.Max(1.2f, capPx * 0.022f);
-                float grey = Mathf.Max(1.4f, capPx * 0.03f);
-                for (int i = 0; i < px.Length; i++)
-                {
-                    float c = cover[i], d = dist[i];
-                    float rim = Mathf.Clamp01(red + grey + 0.5f - d);
-                    float alpha = Mathf.Max(c, rim);
-                    if (alpha <= 0f) continue;
-                    var edge = Color32.Lerp(Red, Grey, Mathf.Clamp01(d - red + 0.5f));
-                    var col = Color32.Lerp(edge, Fill, c);
-                    byte a = (byte)Mathf.RoundToInt(alpha * 255f);
-                    if (a > px[i].a) px[i] = new Color32(col.r, col.g, col.b, a);
-                    byte e = (byte)Mathf.RoundToInt((1f - c) * 255f);
-                    if (e < glow[i].r) glow[i] = new Color32(e, e, e, 255);
-                }
+                var st = line.Style;
+                float gap = st.Gap * capPx;
+                float rim = st.RimWidth > 0f ? Mathf.Max(1.2f, st.RimWidth * capPx) : 0f, outer = st.OuterWidth > 0f ? Mathf.Max(1.4f, st.OuterWidth * capPx) : 0f;
+                var area = Bounds(l, gap + rim + outer + 4f, size);
+                if (area == null) continue;
+                var cover = new float[area.W * area.H];
+                Raster(face, l, area, cover);
+                var dist = Distance(cover, area.W, area.H);
+                for (int ly = 0; ly < area.H; ly++)
+                    for (int lx = 0; lx < area.W; lx++)
+                    {
+                        int li = ly * area.W + lx, i = (area.Y + ly) * size + area.X + lx;
+                        float c = cover[li], d = dist[li];
+                        float rimA = Band(d, gap, gap + rim), outA = Band(d, gap + rim, gap + rim + outer);
+                        float bandA = Mathf.Min(1f, rimA + outA);
+                        float alpha = Mathf.Max(c, bandA);
+                        if (alpha <= 0f) continue;
+                        Color32 col = st.Fill;
+                        if (bandA > 0f) col = Color32.Lerp(Color32.Lerp(st.Rim, st.Outer, outA / (rimA + outA)), st.Fill, c);
+                        byte a = (byte)Mathf.RoundToInt(alpha * 255f);
+                        if (a >= px[i].a) px[i] = new Color32(col.r, col.g, col.b, a);
+                        if (glow != null)
+                        {
+                            byte e = (byte)Mathf.RoundToInt((1f - c) * 255f);
+                            if (e < glow[i].r) glow[i] = new Color32(e, e, e, 255);
+                        }
+                    }
             }
-            if (diffuse == null) { diffuse = new Texture2D(Size, Size, TextureFormat.RGBA32, true) { name = "Ship_Decals_D (crew's name)", wrapMode = TextureWrapMode.Clamp, anisoLevel = 4 }; UnityEngine.Object.DontDestroyOnLoad(diffuse); }
-            if (emission == null) { emission = new Texture2D(Size, Size, TextureFormat.RGB24, true) { name = "Ship_Decals_E (crew's name)", wrapMode = TextureWrapMode.Clamp }; UnityEngine.Object.DontDestroyOnLoad(emission); }
-            diffuse.SetPixels32(px); diffuse.Apply(true);
-            try { System.IO.File.WriteAllBytes(System.IO.Path.Combine(BepInEx.Paths.BepInExRootPath, "hull-name-preview.png"), diffuse.EncodeToPNG()); } catch { }
-            emission.SetPixels32(glow); emission.Apply(true);
-            Plugin.Log.LogInfo($"Hull name: \"{hull}\" / \"{reg}\" in {face.Name}, drawn in {(Time.realtimeSinceStartup - started) * 1000f:0} ms");
+            if (decal.Diffuse == null)
+            {
+                decal.Diffuse = new Texture2D(size, size, TextureFormat.RGBA32, true) { name = decal.Texture + " (crew's name)", wrapMode = TextureWrapMode.Clamp, anisoLevel = 4 };
+                UnityEngine.Object.DontDestroyOnLoad(decal.Diffuse);
+            }
+            decal.Diffuse.SetPixels32(px); decal.Diffuse.Apply(true);
+            if (Plugin.HullPreview.Value)
+                try { System.IO.File.WriteAllBytes(System.IO.Path.Combine(BepInEx.Paths.BepInExRootPath, "hull-name-" + decal.Ship + ".png"), decal.Diffuse.EncodeToPNG()); } catch { }
+            if (glow != null)
+            {
+                if (decal.Glow == null)
+                {
+                    decal.Glow = new Texture2D(size, size, TextureFormat.RGB24, true) { name = decal.Texture + " glow (crew's name)", wrapMode = TextureWrapMode.Clamp };
+                    UnityEngine.Object.DontDestroyOnLoad(decal.Glow);
+                }
+                decal.Glow.SetPixels32(glow); decal.Glow.Apply(true);
+            }
+            Plugin.Log.LogInfo($"Hull name: {decal.Ship}: \"{string.Join("\" / \"", texts.Distinct().ToArray())}\" in {face.Name}, drawn in {(Time.realtimeSinceStartup - started) * 1000f:0} ms");
             return true;
         }
     }
