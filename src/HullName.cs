@@ -51,7 +51,7 @@ namespace StbcRevival
                 string name = ShipName.Name, registry = ShipName.Registry;
                 if (name.Length == 0) { Restore(); return; }
                 string want = name + "|" + registry + "|" + Plugin.HullFont.Value;
-                if (drawnFor != want) { if (!Draw(name, registry)) return; drawnFor = want; }
+                if (drawnFor != want) { if (!Draw(name, registry)) { nextScan = Time.unscaledTime + 30f; return; } drawnFor = want; }
                 var mats = Resources.FindObjectsOfTypeAll<Material>().Where(IsDecal).ToList(); // none: no Aegis loaded yet
                 foreach (var m in mats)
                 {
@@ -134,7 +134,9 @@ namespace StbcRevival
             font.RequestCharactersInTexture(chars, px, FontStyle.Normal);
             var tex = font.material != null ? font.material.mainTexture : null;
             if (tex == null) return null;
-            var face = new Face { Name = fontName, Values = ReadBack(tex, out int w, out int h), W = w, H = h };
+            var read = ReadBack(tex, out int w, out int h);
+            if (read == null) return null;
+            var face = new Face { Name = fontName, Values = read, W = w, H = h };
             var glyphs = new Dictionary<char, Glyph>();
             foreach (char c in chars)
             {
@@ -151,7 +153,9 @@ namespace StbcRevival
             var asset = fonts.FirstOrDefault(f => f.name == "UnitedSansSmCdBd SDF") ?? fonts.FirstOrDefault(f => f.name.StartsWith("UnitedSansSmCdBd SDF", StringComparison.Ordinal) && f.atlas != null);
             if (asset == null || asset.atlas == null) return null;
             var info = asset.fontInfo;
-            var face = new Face { Name = asset.name, Values = ReadBack(asset.atlas, out int w, out int h), W = w, H = h, Sdf = true, Spread = info.Padding + 1f };
+            var read = ReadBack(asset.atlas, out int w, out int h);
+            if (read == null) return null;
+            var face = new Face { Name = asset.name, Values = read, W = w, H = h, Sdf = true, Spread = info.Padding + 1f };
             var dict = asset.characterDictionary;
             float pad = info.Padding;
             face.Get = c =>
@@ -167,13 +171,41 @@ namespace StbcRevival
             return face;
         }
 
-        /// <summary>A texture's alpha (or red, for a texture without one) as bytes, whether or not it's readable.</summary>
+        /// <summary>
+        /// A glyph texture's coverage (or distance) values as bytes, whether or not it's readable: read directly if it
+        /// is, else drawn onto a black target with the font shader (red = the glyph's alpha), else copied as it is.
+        /// A read with no spread of values (all empty or all full) doesn't count.
+        /// </summary>
         private static byte[] ReadBack(Texture tex, out int w, out int h)
         {
             w = tex.width; h = tex.height;
+            byte[] values;
+            var t2 = tex as Texture2D;
+            if (t2 != null)
+            {
+                try { values = Pick(t2.GetPixels32(), "direct"); if (values != null) return values; } catch { }
+            }
+            var shader = Shader.Find("GUI/Text Shader");
+            if (shader != null)
+            {
+                var mat = new Material(shader) { color = Color.white };
+                values = Pick(Blit(tex, w, h, mat), "font shader");
+                UnityEngine.Object.Destroy(mat);
+                if (values != null) return values;
+            }
+            values = Pick(Blit(tex, w, h, null), "copy");
+            if (values != null) return values;
+            Plugin.Log.LogWarning($"Hull name: couldn't read the glyphs of {tex.name} ({tex.width}x{tex.height})");
+            return null;
+        }
+
+        private static Color32[] Blit(Texture tex, int w, int h, Material mat)
+        {
             var rt = RenderTexture.GetTemporary(w, h, 0, RenderTextureFormat.ARGB32, RenderTextureReadWrite.Linear);
             var was = RenderTexture.active;
-            Graphics.Blit(tex, rt);
+            RenderTexture.active = rt;
+            GL.Clear(true, true, new Color(0f, 0f, 0f, 0f));
+            if (mat != null) Graphics.Blit(tex, rt, mat); else Graphics.Blit(tex, rt);
             RenderTexture.active = rt;
             var copy = new Texture2D(w, h, TextureFormat.RGBA32, false, true);
             copy.ReadPixels(new Rect(0, 0, w, h), 0, 0);
@@ -182,9 +214,30 @@ namespace StbcRevival
             RenderTexture.ReleaseTemporary(rt);
             var px = copy.GetPixels32();
             UnityEngine.Object.Destroy(copy);
+            return px;
+        }
+
+        /// <summary>The channel that holds the glyphs (the one whose values spread from empty to full), or null.</summary>
+        private static byte[] Pick(Color32[] px, string how)
+        {
+            if (px == null || px.Length == 0) return null;
+            int best = -1, bestSpread = 0;
+            var stats = new System.Text.StringBuilder();
+            for (int c = 0; c < 4; c++)
+            {
+                int lo = 255, hi = 0, mid = 0;
+                for (int i = 0; i < px.Length; i += 7)
+                {
+                    byte v = c == 0 ? px[i].r : c == 1 ? px[i].g : c == 2 ? px[i].b : px[i].a;
+                    if (v < lo) lo = v; if (v > hi) hi = v; if (v > 32 && v < 224) mid++;
+                }
+                stats.Append($" {"rgba"[c]} {lo}-{hi} mid {mid}");
+                if (lo < 64 && hi > 192 && mid > bestSpread) { best = c; bestSpread = mid; }
+            }
+            Plugin.Log.LogInfo($"Hull name: glyph read ({how}):{stats}{(best < 0 ? " - no glyphs" : " - using " + "rgba"[best])}");
+            if (best < 0) return null;
             var values = new byte[px.Length];
-            bool anyAlpha = px.Any(p => p.a > 0 && p.a < 255);
-            for (int i = 0; i < px.Length; i++) values[i] = anyAlpha ? px[i].a : px[i].r;
+            for (int i = 0; i < px.Length; i++) values[i] = best == 0 ? px[i].r : best == 1 ? px[i].g : best == 2 ? px[i].b : px[i].a;
             return values;
         }
 
