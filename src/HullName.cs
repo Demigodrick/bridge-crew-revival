@@ -54,7 +54,7 @@ namespace StbcRevival
             public string DrawnFor;
         }
 
-        private static readonly Style AegisStyle = new Style { Fill = new Color32(0x22, 0x11, 0x22, 255), Rim = new Color32(0x77, 0x11, 0x11, 255), RimWidth = 0.014f, Outer = new Color32(0xB0, 0xB0, 0xB0, 255), OuterWidth = 0.01f };
+        private static readonly Style AegisStyle = new Style { Fill = new Color32(0x22, 0x11, 0x22, 255), Rim = new Color32(0x77, 0x11, 0x11, 255), RimWidth = 0.014f }; // no light outer rim
         private static readonly Style EnterpriseRimmed = new Style { Fill = new Color32(0, 0, 0, 255), Gap = 0.02f, Rim = new Color32(0xB5, 0x39, 0x3A, 255), RimWidth = 0.033f };
         private static readonly Style EnterpriseSmallRimmed = new Style { Fill = new Color32(0, 0, 0, 255), Gap = 0.025f, Rim = new Color32(0xB5, 0x51, 0x52, 255), RimWidth = 0.034f };
         private static readonly Style EnterprisePlain = new Style { Fill = new Color32(0, 0, 0, 255) };
