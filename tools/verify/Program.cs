@@ -649,5 +649,10 @@ Check("InitialLoader/<SelectVRMode>.MoveNext (VR device)", selectVr?.GetMethod("
 foreach (var (f, what) in new[] { ("DBNIHIBHOLC", "state"), ("EONPCBMAPBK", "VR wanted"), ("DIHFOIJGJBK", "device list"), ("ILLBDLPMFPB", "current") })
     Check($"  <SelectVRMode>.{f} ({what})", selectVr?.GetField(f, Inst));
 
+// Ranks (reflected names)
+var playerInfo = game.GetType("NovaPlayerInfo");
+Check("NovaPlayerInfo.FPCLMHFIGLD setter (CurrentPlayerRank)", playerInfo?.GetProperty("FPCLMHFIGLD", Inst)?.SetMethod);
+Check("BodyCustomization.OMJKMLCLMNI (worn rank)", game.GetType("BodyCustomization")?.GetField("OMJKMLCLMNI", Inst));
+
 Console.WriteLine(failures == 0 ? "\nAll targets resolved." : $"\n{failures} target(s) missing.");
 return failures == 0 ? 0 : 1;

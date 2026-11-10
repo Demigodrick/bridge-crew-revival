@@ -197,7 +197,7 @@ namespace StbcRevival
                 "[Experimental, work in progress] Every hairstyle on any head in the character creator: the HAIR choice runs through all the game's hairstyles of the same sex (the other presets' looks, put together with this head's face) and the counters show the real numbers. Each hairstyle is made when first shown, so the creator takes noticeably longer to show them. Crewmates with the mod see them too (without it they see the head's fourth look).");
             Rank = Config.Bind("Avatar", "Rank", -1,
                 new ConfigDescription("The rank you wear (on your uniform, in the briefing room, on your name plate), seen by your whole crew: -1 the one you've earned, "
-                                      + "0 Ensign, 1 Lieutenant Junior Grade, 2 Lieutenant, 3 Lieutenant Commander, 4 Commander, 5 Captain.", new AcceptableValueRange<int>(-1, 5)));
+                                      + "or a lower one (a higher one is held to the earned one): 0 Ensign, 1 Lieutenant Junior Grade, 2 Lieutenant, 3 Lieutenant Commander, 4 Commander, 5 Captain.", new AcceptableValueRange<int>(-1, 5)));
             NamePlates = Config.Bind("Avatar", "NamePlates", true, "Rank and name over each crewmate's head.");
             KlingonHeadChoice = Config.Bind("Avatar", "KlingonHeadChoice", Math.Max(1, KlingonHead.Value),
                 new ConfigDescription("Which Klingon captain's head the character creator's KLINGON wears: 1 the captain, 2 the flagship's captain "
@@ -370,6 +370,7 @@ namespace StbcRevival
             Safely("klingon head", StbcRevival.KlingonHead.Update);
             Safely("hairstyles", StbcRevival.HairStyles.Tick);
             Safely("ranks", StbcRevival.Ranks.Update);
+            Safely("name plates", StbcRevival.NamePlates.Tick);
             Safely("player volumes", PlayerVolumes.Update);
             Safely("creator species choices", SpeciesCreatorOptions.Update);
             Safely("revival settings", RevivalSettings.Update);

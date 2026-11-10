@@ -12,8 +12,9 @@ namespace StbcRevival
     ///   - Rank: the game already has ranks, earned with experience (Ensign to Captain): each player's is a Photon
     ///     player property ("CurrentPlayerRank", NovaPlayerInfo.FPCLMHFIGLD) the game sets in the briefing room,
     ///     shown on the uniform (pips on the TNG collar, braid on the others: BodyCustomization.SetRankType) and as an
-    ///     icon in the briefing room. Here you can wear the one you choose instead (-1: the earned one): the property
-    ///     is set to it, so crewmates see it too, with or without the mod. Every character's uniform follows its
+    ///     icon in the briefing room. Here you can wear a lower one than you've earned (-1: the earned one; a higher
+    ///     choice is held to the earned one): the property is set to it, so crewmates see it too, with or without the
+    ///     mod. Every character's uniform follows its
     ///     player's rank as it changes (the game only sets it as the character is made).
     ///   - Name plates: rank and name over each crewmate's head ("Lt. Cmdr. Yannök"), in LCARS orange, facing you.
     /// </summary>
@@ -29,6 +30,17 @@ namespace StbcRevival
 
         internal static int Chosen => Mathf.Clamp(Plugin.Rank.Value, -1, Names.Length - 1);
 
+        // The rank worn for an earned one: the chosen one, no higher than earned.
+        private static int Wear(int earned) => Chosen < 0 ? earned : Math.Min(Chosen, earned);
+
+        // The menu's next choice: earned, then Ensign up to the earned rank (all six while it isn't known), then earned.
+        internal static int NextChoice()
+        {
+            int top = Earned();
+            if (top < 0) top = Names.Length - 1;
+            return Chosen >= top ? -1 : Chosen + 1;
+        }
+
         internal static void Patch(Harmony harmony)
         {
             var setter = AccessTools.PropertySetter(typeof(NovaPlayerInfo), "FPCLMHFIGLD");
@@ -42,7 +54,7 @@ namespace StbcRevival
         // (The setter's parameter isn't called "value" in the game's assembly: taken by position.)
         private static void SetRank_Prefix(NovaPlayerInfo __instance, ref int __0)
         {
-            if (Chosen >= 0 && IsLocal(__instance)) __0 = Chosen;
+            if (Chosen >= 0 && IsLocal(__instance)) __0 = Wear(__0);
         }
 
         private static bool IsLocal(NovaPlayerInfo info)
@@ -50,9 +62,11 @@ namespace StbcRevival
             try { return info != null && info == NovaPlayerManager.IEFBKOMBFGO?.AJPNCBOKCLC; } catch { return false; }
         }
 
+        // The rank earned with experience, or -1 if the save can't be read (yet).
         internal static int Earned()
         {
-            try { return NetworkCore.IEFBKOMBFGO.CMDONECIBMP.LocalPlayerLevel.CurrentTitle; } catch { return 0; }
+            try { return Mathf.Clamp(NetworkCore.IEFBKOMBFGO.CMDONECIBMP.LocalPlayerLevel.CurrentTitle, 0, Names.Length - 1); }
+            catch { return -1; }
         }
 
         internal static string ShortName(int rank)
@@ -63,7 +77,6 @@ namespace StbcRevival
 
         internal static void Update()
         {
-            NamePlates.Tick();
             if (Time.unscaledTime < nextCheck) return;
             nextCheck = Time.unscaledTime + 1f;
             try
@@ -71,15 +84,16 @@ namespace StbcRevival
                 var local = NovaPlayerManager.IEFBKOMBFGO?.AJPNCBOKCLC;
                 if (local != null && local.PKIBEAIHJNE != null && NDIOGIGMPBH.PGJDPPDBGBL) // in a room
                 {
-                    int want = Chosen >= 0 ? Chosen : Earned();
-                    // The chosen rank on (or, chosen back to "earned", the earned one back on).
-                    if ((Chosen >= 0 || lastChosen >= 0) && local.FPCLMHFIGLD != want)
+                    int earned = Earned(), want = Wear(earned);
+                    // The chosen rank on (or, chosen back to "earned", the earned one back on); nothing while the
+                    // earned one can't be read, rather than a wrong rank for the whole crew.
+                    if (earned >= 0 && (Chosen >= 0 || lastChosen >= 0) && local.FPCLMHFIGLD != want)
                     {
                         local.FPCLMHFIGLD = want;
-                        Plugin.Log.LogInfo($"Ranks: wearing {Names[Mathf.Clamp(want, 0, Names.Length - 1)]}{(Chosen < 0 ? " (earned)" : "")}");
+                        Plugin.Log.LogInfo($"Ranks: wearing {Names[want]}{(want == earned ? " (earned)" : "")}");
                     }
+                    if (earned >= 0) lastChosen = Chosen;
                 }
-                lastChosen = Chosen;
                 // Every character's uniform with its player's rank.
                 foreach (var info in Walking.Bridge.Players())
                 {
@@ -97,7 +111,7 @@ namespace StbcRevival
     /// <summary>Rank and name over each crewmate's head (not your own), turned to the camera.</summary>
     internal static class NamePlates
     {
-        private sealed class Plate { public GameObject Go; public TextMesh Text; public NovaPlayerInfo Info; public Transform Head; public string Shown; }
+        private sealed class Plate { public GameObject Go; public TextMesh Text; public NovaPlayerInfo Info; public Transform Head; public bool Looked; public string Shown; }
 
         private static readonly Dictionary<NovaPlayerInfo, Plate> plates = new Dictionary<NovaPlayerInfo, Plate>();
         private static Font font;
@@ -125,10 +139,10 @@ namespace StbcRevival
                 if (!plates.TryGetValue(info, out var plate) || plate.Go == null) plates[info] = plate = Make(info);
                 string text = $"{Ranks.ShortName(info.FPCLMHFIGLD)} {Name(info)}";
                 if (text != plate.Shown) { plate.Text.text = text; plate.Shown = text; }
-                if (plate.Head == null)
+                if (plate.Head == null && !plate.Looked)
                 {
-                    var anim = info.VisualPawnObject.GetComponentInChildren<Animator>();
-                    plate.Head = anim != null && anim.isHuman ? anim.GetBoneTransform(HumanBodyBones.Head) : null;
+                    plate.Head = FindHead(info.VisualPawnObject);
+                    plate.Looked = true;
                 }
             }
             var gone = new List<NovaPlayerInfo>();
@@ -148,13 +162,44 @@ namespace StbcRevival
             UnityEngine.Object.DontDestroyOnLoad(go);
             var text = go.AddComponent<TextMesh>();
             text.font = font;
+            text.richText = false; // names come from other players: no <size=...> filling your view
             text.fontSize = 64;
             text.characterSize = 0.008f;
             text.anchor = TextAnchor.LowerCenter;
             text.alignment = TextAlignment.Center;
             text.color = Lcars;
-            go.GetComponent<MeshRenderer>().sharedMaterial = font.material;
+            go.GetComponent<MeshRenderer>().sharedMaterial = Material();
             return new Plate { Go = go, Text = text, Info = info };
+        }
+
+        // The font's own material draws through walls (its shader always passes the depth test). The UI shader
+        // takes the depth test as a property, and reads the font's alpha-only texture as uGUI's Text does (white
+        // plus the texture's alpha, tinted by the text colour). Falls back to the font's material.
+        private static Material material;
+        private static Material Material()
+        {
+            if (material != null) return material;
+            var shader = Shader.Find("UI/Default");
+            if (shader == null) return material = font.material;
+            material = new Material(shader) { mainTexture = font.material.mainTexture };
+            material.SetInt("unity_GUIZTestMode", (int)UnityEngine.Rendering.CompareFunction.LessEqual);
+            material.SetVector("_TextureSampleAdd", new Vector4(1f, 1f, 1f, 0f));
+            material.renderQueue = 3000;
+            return material;
+        }
+
+        // The head bone of a humanoid rig, else a child called "Head", else none (the plate then sits over the pawn).
+        private static Transform FindHead(GameObject pawn)
+        {
+            var anim = pawn.GetComponentInChildren<Animator>();
+            if (anim != null && anim.isHuman)
+            {
+                var bone = anim.GetBoneTransform(HumanBodyBones.Head);
+                if (bone != null) return bone;
+            }
+            foreach (var t in pawn.GetComponentsInChildren<Transform>(true))
+                if (t.name.EndsWith("Head", StringComparison.OrdinalIgnoreCase)) return t;
+            return null;
         }
 
         private static void Clear()
@@ -172,11 +217,12 @@ namespace StbcRevival
                 foreach (var plate in plates.Values)
                 {
                     if (plate.Go == null) continue;
-                    bool show = plate.Info != null && plate.Head != null && plate.Info.VisualPawnObject != null && plate.Info.VisualPawnObject.activeInHierarchy;
+                    bool show = plate.Info != null && plate.Info.VisualPawnObject != null && plate.Info.VisualPawnObject.activeInHierarchy;
                     if (plate.Go.activeSelf != show) plate.Go.SetActive(show);
                     if (!show) continue;
                     Vector3 up = plate.Info.PawnObject != null ? plate.Info.PawnObject.transform.up : Vector3.up;
-                    plate.Go.transform.position = plate.Head.position + up * 0.28f;
+                    plate.Go.transform.position = plate.Head != null ? plate.Head.position + up * 0.28f
+                        : plate.Info.VisualPawnObject.transform.position + up * 1.95f;
                     if (cam != null) plate.Go.transform.rotation = Quaternion.LookRotation(plate.Go.transform.position - cam.transform.position, up);
                 }
             }
