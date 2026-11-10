@@ -7,17 +7,22 @@ namespace StbcRevival
     /// [Rooms] BoatswainWhistle: when someone joins your crew (PlayerJoinedAlert notices), the boatswain's whistle
     /// pipes them aboard. The sound is made here, not taken from anywhere: a whistle gliding up an octave, held with
     /// a vibrato and a short warble, and gliding back down, with a little breath in it. Made once, played as 2D sound.
+    /// Your own sound goes first: a 16-bit .wav at BepInEx/sounds/bootsmannspfeife.wav (not part of the mod).
     /// </summary>
     internal static class BoatswainWhistle
     {
         private static AudioClip clip;
         private static AudioSource source;
 
+        // Your own whistle, if you've put one here (a .wav, 16-bit PCM): it's played instead of the made one. It stays
+        // on your PC; the mod brings none.
+        internal const string OwnFile = "BepInEx/sounds/bootsmannspfeife.wav";
+
         internal static void Play()
         {
             try
             {
-                if (clip == null) clip = Make(44100);
+                if (clip == null) clip = Own() ?? Make(44100);
                 if (source == null)
                 {
                     var go = new GameObject("Revival boatswain whistle");
@@ -30,6 +35,46 @@ namespace StbcRevival
                 source.PlayOneShot(clip);
             }
             catch (Exception e) { Plugin.Log.LogInfo("Boatswain whistle: " + e.Message); }
+        }
+
+        private static AudioClip Own()
+        {
+            try
+            {
+                string path = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(Application.dataPath), OwnFile);
+                if (!System.IO.File.Exists(path)) return null;
+                var bytes = System.IO.File.ReadAllBytes(path);
+                if (bytes.Length < 44 || System.Text.Encoding.ASCII.GetString(bytes, 0, 4) != "RIFF" || System.Text.Encoding.ASCII.GetString(bytes, 8, 4) != "WAVE")
+                    throw new Exception("not a .wav file");
+                int channels = 0, rate = 0, bits = 0, dataAt = -1, dataSize = 0;
+                for (int o = 12; o + 8 <= bytes.Length;)
+                {
+                    string id = System.Text.Encoding.ASCII.GetString(bytes, o, 4);
+                    int size = BitConverter.ToInt32(bytes, o + 4);
+                    if (id == "fmt ")
+                    {
+                        if (BitConverter.ToInt16(bytes, o + 8) != 1) throw new Exception("not PCM");
+                        channels = BitConverter.ToInt16(bytes, o + 10);
+                        rate = BitConverter.ToInt32(bytes, o + 12);
+                        bits = BitConverter.ToInt16(bytes, o + 22);
+                    }
+                    else if (id == "data") { dataAt = o + 8; dataSize = Math.Min(size, bytes.Length - dataAt); break; }
+                    o += 8 + size + (size & 1);
+                }
+                if (bits != 16 || channels < 1 || rate <= 0 || dataAt < 0) throw new Exception($"{bits}-bit, {channels} channel(s): only 16-bit PCM is read");
+                int frames = dataSize / 2 / channels;
+                var samples = new float[frames * channels];
+                for (int i = 0; i < samples.Length; i++) samples[i] = BitConverter.ToInt16(bytes, dataAt + i * 2) / 32768f;
+                var own = AudioClip.Create("Boatswain whistle (yours)", frames, channels, rate, false);
+                own.SetData(samples, 0);
+                Plugin.Log.LogInfo($"Boatswain whistle: yours, {OwnFile} ({frames / (float)rate:F2} s)");
+                return own;
+            }
+            catch (Exception e)
+            {
+                Plugin.Log.LogWarning($"Boatswain whistle: {OwnFile}: {e.Message}; playing the mod's own");
+                return null;
+            }
         }
 
         private static AudioClip Make(int rate)

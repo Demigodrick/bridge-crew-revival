@@ -163,7 +163,7 @@ namespace StbcRevival
             PlayerJoinedAlert = Config.Bind("Rooms", "PlayerJoinedAlert", true,
                 "When someone joins your crew: a chime, and the game's taskbar entry flashes if the window isn't in front. Handy while waiting with the headset off.");
             BoatswainWhistle = Config.Bind("Rooms", "BoatswainWhistle", true,
-                "When someone joins your crew: the boatswain's whistle, piping them aboard.");
+                "When someone joins your crew: the boatswain's whistle, piping them aboard. Your own sound instead: a 16-bit .wav at " + StbcRevival.BoatswainWhistle.OwnFile + " (it stays on your PC).");
             BugReportKey = Config.Bind("Debug", "BugReportKey", UnityEngine.KeyCode.F10,
                 "Saves the logs and settings needed for a bug report as one zip in the game folder.");
             CrewLogsKey = Config.Bind("Debug", "CrewLogsKey", UnityEngine.KeyCode.F11,
