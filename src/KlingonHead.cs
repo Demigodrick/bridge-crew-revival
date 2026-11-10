@@ -152,6 +152,8 @@ namespace StbcRevival
         // The Klingon head on this avatar's Head bone: their mesh in their Head bone's space (its bind pose), then
         // moved and scaled so their eyes (eye bones, in Head space) land on the avatar's. The two rigs share
         // their bone layout (the eye bones sit at the same place in both Heads), so no turn is needed.
+        private const float DropPerEyeSpacing = 0.2f;   // about 1.25 cm on a 6.25 cm eye spacing
+
         private static KlingonHeadGraft Graft(GameObject avatar, SkinnedMeshRenderer head, int variant)
         {
             var source = sources[variant];
@@ -171,9 +173,13 @@ namespace StbcRevival
                 var mid = bone.InverseTransformPoint((left.position + right.position) * 0.5f);
                 float spacing = (bone.InverseTransformPoint(left.position) - bone.InverseTransformPoint(right.position)).magnitude;
                 float scale = spacing / source.HeadEyeSpacing;
+                // Eyes on eyes leaves the head sitting a little high, with a gap above the collar: it's dropped
+                // along the avatar's up by a share of the eye spacing (so it scales with the avatar).
+                float drop = (left.position - right.position).magnitude * DropPerEyeSpacing;
+                mid += bone.InverseTransformVector(-avatar.transform.up * drop);
                 var local = Matrix4x4.TRS(mid, Quaternion.identity, Vector3.one * scale)
                             * Matrix4x4.TRS(-source.HeadEyeMid, Quaternion.identity, Vector3.one) * source.MeshToHead;
-                string how = $"eyes {F(mid)} apart {spacing:F4}, scale {scale:F3}";
+                string how = $"eyes {F(mid)} apart {spacing:F4}, scale {scale:F3}, dropped {drop:F3}";
 
                 var go = new GameObject("Klingon head");
                 go.transform.SetParent(bone, false);
