@@ -38,9 +38,9 @@ namespace StbcRevival
         private static readonly FieldInfo LookNames = AccessTools.Field(typeof(FaceCustomization), "LookMaterialNames");
         private static readonly MethodInfo RenderOrder = AccessTools.Method(typeof(FaceCustomization), "HLDEKGCKKKA");
 
+        // Patched whatever the setting: the hooks do nothing while it's off, so Revival Settings can switch it at once.
         internal static void Patch(Harmony harmony)
         {
-            if (!Plugin.AllHairStyles.Value) return;
             if (FaceMesh == null || LookIdx == null || LookNames == null) { Plugin.Log.LogWarning("Hairstyles: FaceCustomization's fields not found; off"); return; }
             Hook(harmony, typeof(FaceCustomization), "SetNextLook", nameof(Next_Prefix), null);
             Hook(harmony, typeof(FaceCustomization), "SetPrevLook", nameof(Prev_Prefix), null);
@@ -108,6 +108,7 @@ namespace StbcRevival
 
         private static bool Next_Prefix(FaceCustomization __instance)
         {
+            if (!Plugin.AllHairStyles.Value) return true;
             int count = Count(__instance);
             if (count <= GameLooks) return true;
             __instance.SetLook((Current(__instance) + 1) % count);
@@ -116,6 +117,7 @@ namespace StbcRevival
 
         private static bool Prev_Prefix(FaceCustomization __instance)
         {
+            if (!Plugin.AllHairStyles.Value) return true;
             int count = Count(__instance);
             if (count <= GameLooks) return true;
             __instance.SetLook(((Current(__instance) - 1) % count + count) % count);
@@ -128,6 +130,7 @@ namespace StbcRevival
         // on once it's put together (at once if it's been made before), with its look's head shape.
         private static void SetLook_Postfix(FaceCustomization __instance, int __0)
         {
+            if (!Plugin.AllHairStyles.Value) return;
             var f = Of(__instance);
             if (f == null) return;
             Prefetch(__instance, f);
@@ -150,6 +153,27 @@ namespace StbcRevival
         private static bool Romulan(SkinnedMeshRenderer renderer) =>
             renderer.sharedMaterial != null && renderer.sharedMaterial.name.IndexOf("Romulan", StringComparison.OrdinalIgnoreCase) >= 0;
 
+        // Each face's copy of the hairstyle it wears (see Wear).
+        private static readonly Dictionary<FaceCustomization, Material> wornCopies = new Dictionary<FaceCustomization, Material>();
+
+        // Copies whose face is gone, or has another material on now (the game put one of its own looks on), go.
+        private static void ForgetWorn()
+        {
+            List<FaceCustomization> gone = null;
+            foreach (var pair in wornCopies)
+            {
+                var on = pair.Key != null ? (FaceMesh.GetValue(pair.Key) as SkinnedMeshRenderer)?.sharedMaterial : null;
+                if (pair.Key == null || on != pair.Value) (gone ?? (gone = new List<FaceCustomization>())).Add(pair.Key);
+            }
+            if (gone == null) return;
+            foreach (var face in gone)
+            {
+                var copy = wornCopies[face];
+                wornCopies.Remove(face);
+                if (copy != null) UnityEngine.Object.Destroy(copy);
+            }
+        }
+
         private static void Wear(FaceCustomization face, Material material)
         {
             var renderer = FaceMesh.GetValue(face) as SkinnedMeshRenderer;
@@ -157,8 +181,12 @@ namespace StbcRevival
             try
             {
                 var before = renderer.sharedMaterial;
-                renderer.material = material;
-                var now = renderer.material;
+                // The face's own copy (its skin settings go on it), made here once per wearing: renderer.material would
+                // make a new one each time, never freed. The copy it had before goes, unless it's still the one on.
+                var now = new Material(material) { name = material.name };
+                renderer.sharedMaterial = now;
+                if (wornCopies.TryGetValue(face, out var old) && old != null && old != now) UnityEngine.Object.Destroy(old);
+                wornCopies[face] = now;
                 if (before != null)
                 {
                     foreach (var p in SkinColors) if (before.HasProperty(p) && now.HasProperty(p)) now.SetColor(p, before.GetColor(p));
@@ -201,7 +229,9 @@ namespace StbcRevival
         private static Thread worker;
         private static Dictionary<string, List<KeyValuePair<string, long>>> textureIndex; // texture name: (file, path id)
         private static readonly object indexGate = new object();
-        private const int Keep = 26; // made hairstyles kept (beyond those worn): a whole head's other ones (24 at most), ahead
+        // Made hairstyles kept (beyond those worn), and how many each way of the one on are made ahead: three 2048²
+        // DXT5 maps with mips are about 17 MB of video memory a hairstyle, so 8 is about 135 MB (26 was about 430 MB).
+        private const int Keep = 8, Ahead = 3;
 
         private static void Request(FaceCustomization face, Face f, Style style, string key, bool prefetch)
         {
@@ -258,6 +288,10 @@ namespace StbcRevival
                 while (true)
                 {
                     Job job;
+                    bool idle;
+                    lock (gate) idle = queue.Count == 0;
+                    // Nothing to make: the head's data, the spare buffers and the open asset files go until there is.
+                    if (idle) Idle();
                     lock (gate)
                     {
                         while (queue.Count == 0) Monitor.Wait(gate);
@@ -278,9 +312,9 @@ namespace StbcRevival
         private static void Prefetch(FaceCustomization face, Face f)
         {
             if (creator == null || !creator.isActiveAndEnabled) return;
-            // All of this head's, nearest first (next, previous, the one after...), so after a while every one is ready.
+            // The nearest few each way (next, previous, the one after...): stepping on, the next few are ready.
             int look = Current(face), count = GameLooks + f.Others.Count;
-            for (int i = 1; i < count; i++)
+            for (int i = 1; i < count && i <= 2 * Ahead; i++)
             {
                 int step = (i + 1) / 2 * (i % 2 == 1 ? 1 : -1);
                 int index = ((look + step) % count + count) % count;
@@ -308,7 +342,12 @@ namespace StbcRevival
         /// <summary>Main thread: finished texture sets become materials, worn by the faces still on that look.</summary>
         internal static void Tick()
         {
-            if (!Plugin.AllHairStyles.Value) return;
+            if (!Plugin.AllHairStyles.Value)
+            {
+                // Switched off: the hairstyles made and not worn go (one still worn stays until the look changes).
+                if (made.Count > 0) Forget(0);
+                return;
+            }
             Counters();
             List<Job> done = null;
             lock (gate)
@@ -339,20 +378,21 @@ namespace StbcRevival
                 }
                 catch (Exception e) { Plugin.Log.LogWarning($"Hairstyles: making {job.Key}: {e.Message}"); }
             }
-            Forget();
+            Forget(Keep);
         }
 
         // Beyond the last few made, hairstyles no face wears go (their textures too).
-        private static void Forget()
+        private static void Forget(int keep)
         {
-            if (made.Count <= Keep) return;
+            ForgetWorn();
+            if (made.Count <= keep) return;
             var worn = new HashSet<string>();
             foreach (var face in UnityEngine.Object.FindObjectsOfType<FaceCustomization>())
             {
                 var m = (FaceMesh.GetValue(face) as SkinnedMeshRenderer)?.sharedMaterial;
                 if (m != null && m.name.StartsWith("Hairstyle ")) worn.Add(m.name.Replace(" (Instance)", ""));
             }
-            for (int i = 0; i < madeOrder.Count && made.Count > Keep;)
+            for (int i = 0; i < madeOrder.Count && made.Count > keep;)
             {
                 string key = madeOrder[i];
                 if (made.TryGetValue(key, out var material) && material != null && !worn.Contains(material.name))
@@ -378,47 +418,95 @@ namespace StbcRevival
             public int[] MW, MH;
         }
 
-        private static readonly Dictionary<string, FaceBase> faces = new Dictionary<string, FaceBase>(); // worker only
-        private static readonly List<string> faceOrder = new List<string>();
+        // The face of the preset last worked on (worker only): one at a time, about 55 MB at 2048².
+        private static FaceBase cached;
+        private static string cachedPreset;
 
+        private static void ReleaseFace()
+        {
+            if (cached == null) return;
+            Return(cached.Df);
+            foreach (var m in cached.Map) Return(m);
+            cached = null;
+            cachedPreset = null;
+        }
+
+        // Worker, with nothing queued.
+        private static void Idle()
+        {
+            ReleaseFace();
+            lock (pool) pool.Clear();
+            lock (openFiles)
+            {
+                foreach (var f in openFiles.Values) try { f.Dispose(); } catch { }
+                openFiles.Clear();
+            }
+        }
+
+        // Read one look at a time (not all four at once): at each spot the look with least hair so far is kept.
         private static FaceBase BaseOf(string dataDir, Job job)
         {
-            if (faces.TryGetValue(job.Preset, out var fb)) { faceOrder.Remove(job.Preset); faceOrder.Add(job.Preset); return fb; }
-            fb = new FaceBase { Map = new Color32[Maps.Length][], MW = new int[Maps.Length], MH = new int[Maps.Length] };
-            var own = new Color32[GameLooks][];
+            if (cached != null && cachedPreset == job.Preset) return cached;
+            ReleaseFace();
+            var fb = new FaceBase { Map = new Color32[Maps.Length][], MW = new int[Maps.Length], MH = new int[Maps.Length] };
             for (int i = 0; i < GameLooks; i++)
             {
-                own[i] = Read(dataDir, job.Own[i][0], out int ow, out int oh);
-                if (i == 0) { fb.W = ow; fb.H = oh; }
-                else if (ow != fb.W || oh != fb.H) own[i] = Resize(own[i], ow, oh, fb.W, fb.H);
-            }
-            int n = fb.W * fb.H;
-            fb.Pick = new byte[n]; fb.Hair = new byte[n]; fb.Df = new Color32[n];
-            for (int p = 0; p < n; p++)
-            {
-                int best = 0; byte least = 255;
-                for (int i = 0; i < GameLooks; i++) if (own[i][p].a < least) { least = own[i][p].a; best = i; }
-                fb.Pick[p] = (byte)best; fb.Hair[p] = least; fb.Df[p] = own[best][p];
+                var px = Read(dataDir, job.Own[i][0], out int ow, out int oh);
+                if (i == 0)
+                {
+                    fb.W = ow; fb.H = oh;
+                    int count = ow * oh;
+                    fb.Pick = new byte[count]; fb.Hair = new byte[count]; fb.Df = Rent(count);
+                    for (int p = 0; p < count; p++) { fb.Hair[p] = px[p].a; fb.Df[p] = px[p]; }
+                }
+                else
+                {
+                    if (ow != fb.W || oh != fb.H) { var sized = Resize(px, ow, oh, fb.W, fb.H); Return(px); px = sized; }
+                    for (int p = 0; p < px.Length; p++)
+                        if (px[p].a < fb.Hair[p]) { fb.Hair[p] = px[p].a; fb.Pick[p] = (byte)i; fb.Df[p] = px[p]; }
+                }
+                Return(px);
             }
             for (int m = 1; m < Maps.Length; m++)
             {
                 int mw = 0, mh = 0;
+                Color32[] map = null;
                 for (int i = 0; i < GameLooks; i++)
                 {
-                    own[i] = Read(dataDir, job.Own[i][m], out int ow, out int oh);
-                    if (i == 0) { mw = ow; mh = oh; }
-                    else if (ow != mw || oh != mh) own[i] = Resize(own[i], ow, oh, mw, mh);
+                    var px = Read(dataDir, job.Own[i][m], out int ow, out int oh);
+                    if (i == 0) { mw = ow; mh = oh; map = Rent(mw * mh); }
+                    else if (ow != mw || oh != mh) { var sized = Resize(px, ow, oh, mw, mh); Return(px); px = sized; }
+                    for (int y = 0; y < mh; y++)
+                        for (int x = 0; x < mw; x++)
+                            if (fb.Pick[(y * fb.H / mh) * fb.W + (x * fb.W / mw)] == i) map[y * mw + x] = px[y * mw + x];
+                    Return(px);
                 }
-                var map = new Color32[mw * mh];
-                for (int y = 0; y < mh; y++)
-                    for (int x = 0; x < mw; x++)
-                        map[y * mw + x] = own[fb.Pick[(y * fb.H / mh) * fb.W + (x * fb.W / mw)]][y * mw + x];
                 fb.Map[m] = map; fb.MW[m] = mw; fb.MH[m] = mh;
             }
-            faces[job.Preset] = fb;
-            faceOrder.Add(job.Preset);
-            while (faceOrder.Count > 2) { faces.Remove(faceOrder[0]); faceOrder.RemoveAt(0); }
+            cached = fb;
+            cachedPreset = job.Preset;
             return fb;
+        }
+
+        // Scratch pixel buffers by size, reused: Unity 5.4's Mono never gives memory back, and a fresh 16 MB buffer
+        // for every texture read let its heap grow for good. A few of each size are kept (until the worker is idle).
+        private static readonly Dictionary<int, Stack<Color32[]>> pool = new Dictionary<int, Stack<Color32[]>>();
+
+        private static Color32[] Rent(int count)
+        {
+            lock (pool)
+                if (pool.TryGetValue(count, out var stack) && stack.Count > 0) return stack.Pop();
+            return new Color32[count];
+        }
+
+        private static void Return(Color32[] buffer)
+        {
+            if (buffer == null) return;
+            lock (pool)
+            {
+                if (!pool.TryGetValue(buffer.Length, out var stack)) pool[buffer.Length] = stack = new Stack<Color32[]>();
+                if (stack.Count < 4) stack.Push(buffer);
+            }
         }
 
         private static void Compose(string dataDir, Job job)
@@ -431,7 +519,7 @@ namespace StbcRevival
             job.Height = new int[maps];
 
             var hairDf = Read(dataDir, job.Hair[0], out int hw, out int hh);
-            if (hw != w || hh != h) hairDf = Resize(hairDf, hw, hh, w, h);
+            if (hw != w || hh != h) { var sized = Resize(hairDf, hw, hh, w, h); Return(hairDf); hairDf = sized; }
 
             // The normal and specular maps side by side with the colour map: the face's where neither has hair, the
             // chosen look's elsewhere.
@@ -446,9 +534,9 @@ namespace StbcRevival
                     {
                         int mw = fb.MW[map], mh = fb.MH[map];
                         var hair = Read(dataDir, job.Hair[map], out int ow, out int oh);
-                        if (ow != mw || oh != mh) hair = Resize(hair, ow, oh, mw, mh);
+                        if (ow != mw || oh != mh) { var sized = Resize(hair, ow, oh, mw, mh); Return(hair); hair = sized; }
                         var face = fb.Map[map];
-                        var outMap = new Color32[mw * mh];
+                        var outMap = Rent(mw * mh);
                         for (int y = 0; y < mh; y++)
                             for (int x = 0; x < mw; x++)
                             {
@@ -457,7 +545,9 @@ namespace StbcRevival
                                 var a = face[p]; var b = hair[p];
                                 outMap[p] = new Color32((byte)((a.r * ik + b.r * k) / 255), (byte)((a.g * ik + b.g * k) / 255), (byte)((a.b * ik + b.b * k) / 255), (byte)((a.a * ik + b.a * k) / 255));
                             }
+                        Return(hair);
                         job.Dxt[map] = Dxt5(outMap, mw, mh); job.Width[map] = mw; job.Height[map] = mh;
+                        Return(outMap);
                     }
                     catch (Exception e) { lock (errors) errors.Add(e.Message); }
                 }) { IsBackground = true, Name = "Hairstyles map " + map };
@@ -475,7 +565,7 @@ namespace StbcRevival
             }
             // In 1/256ths.
             int tr = count > 0 && hr > 0 ? (int)(fr / hr * 256) : 256, tg = count > 0 && hg > 0 ? (int)(fg / hg * 256) : 256, tb = count > 0 && hbl > 0 ? (int)(fbl / hbl * 256) : 256;
-            var df = new Color32[n];
+            var df = Rent(n);
             for (int p = 0; p < n; p++)
             {
                 var face = fb.Df[p]; var hair = hairDf[p];
@@ -487,7 +577,9 @@ namespace StbcRevival
                 df[p] = new Color32((byte)((r * iha + hair.r * ha) / 255), (byte)((g * iha + hair.g * ha) / 255), (byte)((b * iha + hair.b * ha) / 255), hair.a);
             }
             job.Dxt[0] = Dxt5(df, w, h); job.Width[0] = w; job.Height[0] = h;
+            Return(df);
             foreach (var t in threads) t.Join();
+            Return(hairDf);
             if (errors.Count > 0) throw new Exception(errors[0]);
         }
 
@@ -509,15 +601,18 @@ namespace StbcRevival
                 o = EncodeLevel(level, lw, lh, data, o);
                 if (lw == 1 && lh == 1) break;
                 int nw = Math.Max(1, lw / 2), nh = Math.Max(1, lh / 2);
-                level = Half(level, lw, lh, nw, nh);
+                var next = Half(level, lw, lh, nw, nh);
+                if (level != top) Return(level);
+                level = next;
                 lw = nw; lh = nh;
             }
+            if (level != top) Return(level);
             return data;
         }
 
         private static Color32[] Half(Color32[] src, int sw, int sh, int dw, int dh)
         {
-            var dst = new Color32[dw * dh];
+            var dst = Rent(dw * dh);
             for (int y = 0; y < dh; y++)
                 for (int x = 0; x < dw; x++)
                 {
@@ -598,7 +693,7 @@ namespace StbcRevival
 
         private static Color32[] Resize(Color32[] src, int sw, int sh, int dw, int dh)
         {
-            var dst = new Color32[dw * dh];
+            var dst = Rent(dw * dh);
             for (int y = 0; y < dh; y++) for (int x = 0; x < dw; x++) dst[y * dw + x] = src[(y * sh / dh) * sw + (x * sw / dw)];
             return dst;
         }
@@ -643,17 +738,24 @@ namespace StbcRevival
             lock (file) t = TextureAsset.Read(file.At(file.Find(where.Value)));
             width = t.Width; height = t.Height;
             source.Linear = t.ColorSpace == 0;
+            if (t.Format != 12 && t.Format != 10) throw new NotSupportedException($"texture {source.Name}: format {t.Format}");
+            // Sizes as the file says, checked before anything that size is made or read.
+            if (t.Width <= 0 || t.Height <= 0 || t.Width > 8192 || t.Height > 8192) throw new InvalidDataException($"texture {source.Name}: size {t.Width}x{t.Height}");
+            bool dxt5 = t.Format == 12;
             byte[] data = t.Data.Length > 0 ? t.Data : Stream(dataDir, t);
-            if (t.Format == 12) return Dxt(data, t.Width, t.Height, true);
-            if (t.Format == 10) return Dxt(data, t.Width, t.Height, false);
-            throw new NotSupportedException($"texture {source.Name}: format {t.Format}");
+            long need = (long)((t.Width + 3) / 4) * ((t.Height + 3) / 4) * (dxt5 ? 16 : 8);
+            if (data.Length < need) throw new InvalidDataException($"texture {source.Name}: {data.Length} bytes, {need} needed");
+            return Dxt(data, t.Width, t.Height, dxt5);
         }
 
         private static readonly Dictionary<string, AssetFile> openFiles = new Dictionary<string, AssetFile>();
 
         private static byte[] Stream(string dataDir, TextureAsset t)
         {
-            using (var s = new FileStream(Path.Combine(dataDir, t.StreamPath), FileMode.Open, FileAccess.Read, FileShare.Read))
+            // Only ever a file beside the asset files (the .resS the texture names), whatever path it gives.
+            string name = Path.GetFileName(t.StreamPath ?? "");
+            if (name.Length == 0 || t.StreamSize <= 0 || t.StreamSize > 256L * 1024 * 1024) throw new InvalidDataException($"texture {t.Name}: stream {t.StreamPath} ({t.StreamSize} bytes)");
+            using (var s = new FileStream(Path.Combine(dataDir, name), FileMode.Open, FileAccess.Read, FileShare.Read))
             {
                 s.Position = t.StreamOffset;
                 var bytes = new byte[t.StreamSize];
@@ -670,7 +772,7 @@ namespace StbcRevival
         // DXT1 / DXT5 to pixels: the top mip only, rows in Unity's order (as SetPixels32 takes them).
         private static Color32[] Dxt(byte[] d, int w, int h, bool dxt5)
         {
-            var px = new Color32[w * h];
+            var px = Rent(w * h);
             int bw = (w + 3) / 4, bh = (h + 3) / 4, o = 0;
             var c = new Color32[4];
             var a = new byte[8];
@@ -739,6 +841,7 @@ namespace StbcRevival
         {
             if (Time.unscaledTime < nextCounters) return;
             nextCounters = Time.unscaledTime + 0.25f;
+            ForgetWorn();
             if (creator == null && Time.unscaledTime >= nextCreatorSearch)
             {
                 nextCreatorSearch = Time.unscaledTime + 1f;

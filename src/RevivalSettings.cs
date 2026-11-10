@@ -68,6 +68,7 @@ namespace StbcRevival
                     Plugin.Log.LogInfo($"Revival settings: Klingon head {KlingonHead.Names[HeadChoice()]}");
                 },
             },
+            Switch("All hairstyles (experimental)", () => Plugin.AllHairStyles),
             Switch("Chime when someone joins", () => Plugin.PlayerJoinedAlert),
             Switch("Public crews in VR", () => Plugin.VrRoomPanels),
             new Entry
