@@ -446,6 +446,32 @@ public class JitterBufferTests
         Assert.Equal(0, st.Fec);
     }
 
+    // As above, but the second burst's packets land x ms after the listener's tick for their BurstStart seq: that
+    // tick is concealed while dry, and the BurstStart arrives below the play position.
+    [Theory]
+    [InlineData(1)]
+    [InlineData(5)]
+    [InlineData(10)]
+    [InlineData(15)]
+    public void ShortPauseIsSilenceWhenBurstStartLandsAfterItsTick(int x)
+    {
+        var jb = new JitterBuffer(new FakeDecoder());
+        var packets = new List<(uint seq, double at, bool start)>();
+        for (uint s = 0; s <= 3; s++) packets.Add((s, 60, s == 0));
+        for (uint s = 4; s <= 19; s++) packets.Add((s, s * 20.0, false));
+        for (uint s = 21; s <= 24; s++) packets.Add((s, 24 * 20.0 + x, s == 21));
+        for (uint s = 25; s <= 60; s++) packets.Add((s, s * 20.0 + x, false));
+        Run(jb, packets.GetRange(0, 4), 0, 80);
+        int before = jb.TakeStats().TargetMs;
+        Run(jb, packets.GetRange(4, packets.Count - 4), 80, 1400);
+        var st = jb.TakeStats();
+        Assert.Equal(before, st.TargetMs);
+        Assert.Equal(0, st.Underruns);
+        Assert.Equal(0, st.Concealed);
+        Assert.Equal(0, st.Late);
+        Assert.Equal(0, st.Lost);
+    }
+
     [Fact]
     public void SilenceBeforeHeldBurstStartIsNotLoss()
     {

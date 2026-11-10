@@ -52,6 +52,8 @@ namespace StbcRevival.Voice
         uint highest;          // highest held seq, valid while held is non-empty
         int concealRun;        // Conceal calls in a row
         int tailPending;       // frames concealed in a row with nothing later held, not yet known as underrun or silence
+        bool dry;              // the latest ticks were concealed with nothing held, from dryFrom on, and nothing has played since
+        uint dryFrom;
 
         readonly double[] transits = new double[TransitWindow];
         readonly double[] sortScratch = new double[TransitWindow];
@@ -87,6 +89,19 @@ namespace StbcRevival.Voice
                 }
 
                 uint seq = packet.Seq;
+
+                // A new burst whose start we already ticked past while dry (its pre-roll batch landed just after its
+                // tick): those ticks were the speaker's silence. Start the new burst here instead of dropping its
+                // BurstStart as late and calling the dry run an underrun.
+                if (packet.BurstStart && dry && hasPlayed && seq < nextSeq && seq >= dryFrom)
+                {
+                    ResolveTail(false);
+                    playing = false;
+                    concealRun = 0;
+                    dry = false;
+                    nextSeq = seq;
+                }
+
                 if (hasPlayed && seq < nextSeq)
                 {
                     late++;
@@ -110,7 +125,7 @@ namespace StbcRevival.Voice
                 if (held.Count == 0 || seq > highest) highest = seq;
                 held[seq] = f;
 
-                if (!playing) TryStart();
+                if (!playing) TryStart(true);
             }
         }
 
@@ -120,7 +135,7 @@ namespace StbcRevival.Voice
             source = FrameSource.Concealed;
             lock (sync)
             {
-                if (!playing) TryStart();
+                if (!playing) TryStart(false);
                 if (!playing)
                 {
                     Array.Clear(pcm, 0, pcm.Length);
@@ -139,7 +154,7 @@ namespace StbcRevival.Voice
         {
             lock (sync)
             {
-                jitterMs = ComputeJitterMs();
+                jitterMs = ComputeJitterMs(false);
                 int seen = lost + received;
                 var s = new JitterStats
                 {
@@ -187,7 +202,7 @@ namespace StbcRevival.Voice
                 if (IsSilenceBefore(low, seq))
                 {
                     playing = false;
-                    TryStart();
+                    TryStart(false);
                     if (!playing) { source = FrameSource.Concealed; return false; }
                     return PlayNext(pcm, out source);
                 }
@@ -221,7 +236,11 @@ namespace StbcRevival.Voice
             n = decoder.Conceal(pcm);
             if (n < 0) n = 0;
             if (anyLater) concealed++;
-            else tailPending++;
+            else
+            {
+                if (!dry) { dry = true; dryFrom = seq; }
+                tailPending++;
+            }
             concealRun++;
             nextSeq = seq + 1;
 
@@ -239,6 +258,7 @@ namespace StbcRevival.Voice
         bool Played(FrameSource src, out FrameSource source)
         {
             source = src;
+            dry = false;
             nextSeq++;
             concealRun = 0;
             return true;
@@ -258,6 +278,7 @@ namespace StbcRevival.Voice
             if (tailPending == 0) return;
             if (underrun)
             {
+                dry = false;
                 underruns++;
                 concealed += tailPending;
                 targetMs = Math.Min(MaxTargetMs, targetMs + TargetStepMs);
@@ -266,14 +287,16 @@ namespace StbcRevival.Voice
             tailPending = 0;
         }
 
-        void TryStart()
+        // From Push, the batch this packet belongs to may still be arriving: its transit is the newest so far, not the
+        // smallest (the newest seq) it will end with, so that start leaves it out.
+        void TryStart(bool batchOpen)
         {
             if (held.Count == 0) return;
 
             // Adapt at each start, where a depth change can't warp speech; shrink at most one step per start.
             // The candidate is tested against the span now, so a link that got jittery is covered at the very
             // next burst; it is only committed when the start happens, so idle Pushes don't ratchet the shrink.
-            int j = ComputeJitterMs();
+            int j = ComputeJitterMs(batchOpen);
             int t = Math.Max(MinTargetMs, Math.Min(MaxTargetMs, j + VoiceFormat.FrameMs));
             int cand = Math.Max(t, targetMs - TargetStepMs);
 
@@ -346,6 +369,7 @@ namespace StbcRevival.Voice
             nextSeq = 0;
             concealRun = 0;
             ResolveTail(false);
+            dry = false;
             transitCount = transitNext = 0;
             hasBatch = false;
             depthMs = 0;
@@ -369,14 +393,16 @@ namespace StbcRevival.Voice
             if (transitCount < TransitWindow) transitCount++;
         }
 
-        // p95 of (transit - min transit) over the last 100 arrival batches.
-        int ComputeJitterMs()
+        // p95 of (transit - min transit) over the last 100 arrival batches; skipNewest leaves out the newest batch.
+        int ComputeJitterMs(bool skipNewest)
         {
-            int c = transitCount;
+            int skip = skipNewest && transitCount > 1 ? (transitNext + TransitWindow - 1) % TransitWindow : -1;
+            int c = 0;
+            for (int i = 0; i < transitCount; i++) if (i != skip) sortScratch[c++] = transits[i];
             if (c == 0) return 0;
             double min = double.MaxValue;
-            for (int i = 0; i < c; i++) if (transits[i] < min) min = transits[i];
-            for (int i = 0; i < c; i++) sortScratch[i] = transits[i] - min;
+            for (int i = 0; i < c; i++) if (sortScratch[i] < min) min = sortScratch[i];
+            for (int i = 0; i < c; i++) sortScratch[i] -= min;
             Array.Sort(sortScratch, 0, c);
             int k = (int)Math.Ceiling(0.95 * c) - 1;
             if (k < 0) k = 0;

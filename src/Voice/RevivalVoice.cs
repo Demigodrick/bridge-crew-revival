@@ -123,7 +123,7 @@ namespace StbcRevival
                 peer.Actor = view.Actor;
                 peer.Name = view.Name;
                 string why = !view.Direct ? "no direct link: an older mod, or Steam can't connect you"
-                           : !view.Revival ? "their mod is older, or their Revival voice is off or not capturing"
+                           : !view.Revival ? "their mod is older or uses a different Revival voice version, or their Revival voice is off, not capturing, or has no Opus decoder"
                            : !capturing ? "your microphone isn't being captured" : null;
                 bool now = why == null;
                 if (now != peer.On)
