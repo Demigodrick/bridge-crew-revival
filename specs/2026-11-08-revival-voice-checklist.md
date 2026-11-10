@@ -66,13 +66,4 @@ About 30 minutes with two or more crewmates, default settings, no `DebugNetSim`:
 
 - no reports of chop
 - the 30 s reports show concealed near 0 and underruns rare
-- the buffer and actual delay stay low (watch for creep; see the known issue below)
-
-## Known open issue
-
-When a short pause in speech ends, the next sentence's first packets can arrive just after the listener's
-playout tick. The jitter buffer then drops that first packet as late, counts the pause as an underrun, and
-raises its delay target by 20 ms. On a good link this can add delay over a conversation until the next
-real restart. Suggested fix (`shared/Voice/JitterBuffer.cs`): a BurstStart packet arriving during a dry run
-starts a new burst even if its seq is below the play position. Add a test where the second burst arrives a
-few ms after its tick.
+- the buffer and actual delay stay low, without creeping up over the session
