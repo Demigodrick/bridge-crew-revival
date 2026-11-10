@@ -359,6 +359,8 @@ main() {
     step "2. Removing Bridge Crew Revival"
     rm -f "$game/BepInEx/plugins/StbcRevival.dll" "$game/BepInEx/plugins/StbcRevival.pdb" \
           "$game/BepInEx/plugins/StbcCore.dll" "$game/BepInEx/plugins/StbcCore.pdb"
+    rm -f "$game/BepInEx/native/rnnoise.dll"
+    rmdir "$game/BepInEx/native" 2>/dev/null || true
     # Without winhttp.dll BepInEx doesn't load at all; the BepInEx folder is left for you to delete.
     rm -f "$game/winhttp.dll" "$game/doorstop_config.ini" "$game/.doorstop_version" "$game/changelog.txt"
     set_prefix_override "$game" off || true
@@ -444,6 +446,11 @@ main() {
 
   cp "$plugins/"Stbc*.dll "$game/BepInEx/plugins/"
   cp "$plugins/"Stbc*.pdb "$game/BepInEx/plugins/" 2>/dev/null || true
+  # Noise suppression's native DLL, beside plugins/ in the zip (older releases don't have it).
+  if [ -f "$plugins/../native/rnnoise.dll" ]; then
+    mkdir -p "$game/BepInEx/native"
+    cp "$plugins/../native/rnnoise.dll" "$game/BepInEx/native/"
+  fi
   ok "Bridge Crew Revival${version:+ $version} installed"
   if [ -n "$beta" ]; then
     set_pvp_test "$game" "$beta"

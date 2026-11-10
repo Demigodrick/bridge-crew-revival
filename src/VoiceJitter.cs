@@ -116,6 +116,15 @@ namespace StbcRevival
             return false;
         }
 
+        /// <summary>Revival voice's audio, straight to the player: it has its own buffer, so the cushion leaves it alone.</summary>
+        internal static void Bypass(WwiseAudioPlayer player, Samples samples)
+        {
+            bool was = handingOver;
+            handingOver = true;
+            try { player.BufferAudio(samples); }
+            finally { handingOver = was; }
+        }
+
         // What's held, to the player in pieces it takes (each also goes to Wwise as it comes).
         private static void HandOver(WwiseAudioPlayer player, Speaker s)
         {

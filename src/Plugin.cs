@@ -21,6 +21,15 @@ namespace StbcRevival
 
     public enum PhotonProtocol { Udp, Tcp }
 
+    /// <summary>Whose voice chat carries your voice to crewmates with the mod, in Steam mode.</summary>
+    public enum VoiceEngine
+    {
+        /// <summary>The mod's own: 48 kHz Opus with noise suppression, auto gain and a speech gate, straight over Steam.</summary>
+        Revival,
+        /// <summary>The game's own voice chat, as before.</summary>
+        Game,
+    }
+
     [BepInPlugin(Guid, Name, Version)]
     public class Plugin : BaseUnityPlugin
     {
@@ -74,6 +83,12 @@ namespace StbcRevival
         internal static ConfigEntry<VrDeviceChoice> VrDevice;
         internal static ConfigEntry<int> VoiceJitterBufferMs;
         internal static ConfigEntry<bool> DirectVoice;
+        internal static ConfigEntry<VoiceEngine> VoiceEngineChoice;
+        internal static ConfigEntry<bool> VoiceNoiseSuppression;
+        internal static ConfigEntry<bool> VoiceAutoGain;
+        internal static ConfigEntry<int> VoiceBitrate;
+        internal static ConfigEntry<string> VoiceDebugNetSim;
+        internal static ConfigEntry<bool> VoiceDebugLoopback;
         internal static ConfigEntry<bool> PvpSeparateSpace;
         internal static ConfigEntry<string> BlockedPlayers;
         internal static ConfigEntry<string> VoiceVolumes;
@@ -92,6 +107,10 @@ namespace StbcRevival
         internal static ConfigEntry<bool> BridgeWalkAnimate;
         internal static ConfigEntry<bool> BridgeWalkTestCorridor;
         internal static Plugin Instance { get; private set; }
+
+        /// <summary>Revival voice runs: Steam mode, and [Voice] Engine = Revival.</summary>
+        internal static bool RevivalVoiceActive =>
+            Mode != null && Mode.Value == PhotonMode.Steam && VoiceEngineChoice != null && VoiceEngineChoice.Value == VoiceEngine.Revival;
         internal static ConfigEntry<string> PlayerName;
         internal static ConfigEntry<string> ExtraDevConfig;
         internal static ConfigEntry<bool> Diagnostics;
@@ -225,6 +244,22 @@ namespace StbcRevival
             DirectVoice = Config.Bind("Voice", "DirectVoice", true,
                 "Steam mode: voice chat goes straight between players over Steam, instead of through the host's game, so a hitch on the host's "
                 + "game or a lost packet doesn't hold everyone's voice up. Crewmates without it (or whom Steam can't reach directly) still get your voice through the host.");
+            VoiceEngineChoice = Config.Bind("Voice", "Engine", VoiceEngine.Revival,
+                "Steam mode: Revival = voice chat with crewmates who have the mod goes through the mod's own pipeline (clearer 48 kHz sound, "
+                + "noise suppression, automatic gain, no clipped first words, and it holds up better on a bad connection); crewmates without "
+                + "it still hear you the game's way. Game = the game's own voice chat for everyone (JitterBufferMs and DirectVoice apply).");
+            VoiceNoiseSuppression = Config.Bind("Voice", "NoiseSuppression", true,
+                "Revival voice: filter fans, keyboards and other background noise out of your microphone (needs BepInEx/native/rnnoise.dll; "
+                + "without it, it's off and logged).");
+            VoiceAutoGain = Config.Bind("Voice", "AutoGain", true,
+                "Revival voice: lift a quiet microphone and tame a loud one towards an even speaking level (only while you speak).");
+            VoiceBitrate = Config.Bind("Voice", "Bitrate", 48,
+                new ConfigDescription("Revival voice: how much sound quality your voice is sent with, in kbit/s (24-96). Higher is clearer and uses more bandwidth.",
+                                      new AcceptableValueRange<int>(24, 96)));
+            VoiceDebugNetSim = Config.Bind("Voice", "DebugNetSim", "",
+                "Testing only, Revival voice: make crewmates' voices arrive as over a bad connection, e.g. \"loss=5,burst=2,reorder=2,jitter=50\". Empty: off.");
+            VoiceDebugLoopback = Config.Bind("Voice", "DebugLoopback", false,
+                "Testing only, Revival voice: record the first 10 seconds of what you send (encoded and decoded again) to BepInEx/voice-loopback.wav.");
             ControllerGraceSeconds = Config.Bind("VR", "ControllerGraceSeconds", 30f,
                 "How long a VR controller the headset stops reporting (resting controllers often go to sleep) still counts as connected before the game's \"controllers disconnected\" warning shows. 0 = the game's own behaviour (at once).");
             VrDevice = Config.Bind("VR", "Device", VrDeviceChoice.Auto,
@@ -283,6 +318,9 @@ namespace StbcRevival
 
             harmony = new Harmony(Guid);
             Patches.Apply(harmony);
+            Safely("revival voice capture patches", () => VoiceCapture.Patch(harmony));
+            Safely("revival voice patches", () => RevivalVoice.Patch(harmony));
+            Safely("revival voice playback patches", () => RevivalPlayback.Patch(harmony));
             SteamMode.Install(harmony);
             ShuttleControls.Install();
 
@@ -339,6 +377,8 @@ namespace StbcRevival
             Safely("mod version check", ModVersionCheck.Update);
             Safely("host hand-off", HostHandoff.Update);
             Safely("voice commands", StbcRevival.VoiceCommands.Update);
+            Safely("revival voice capture", VoiceCapture.Update);
+            Safely("revival voice playback", RevivalPlayback.Update);
             Safely("ubisoft save import", UbisoftSaveImport.Update);
             Safely("crash report", CrashReport.Update);
             Safely("bridge walk", Walking.BridgeWalk.Update);

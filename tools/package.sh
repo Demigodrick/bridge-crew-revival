@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Build the mod and pack the release zip: dist/BridgeCrewRevival-<version>.zip
-#   install.sh / install.cmd / install.ps1, plugins/StbcRevival.dll + StbcCore.dll, README.txt
+#   install.sh / install.cmd / install.ps1, plugins/StbcRevival.dll + StbcCore.dll, native/rnnoise.dll, README.txt
 set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 version="$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' "$root/src/StbcRevival.csproj")"
@@ -11,6 +11,10 @@ out="$root/dist/$name"
 rm -rf "$out" "$root/dist/$name.zip"
 mkdir -p "$out/plugins"
 cp "$root/src/bin/Release/net35/StbcRevival.dll" "$root/src/bin/Release/net35/StbcCore.dll" "$out/plugins/"
+# Noise suppression: native RNNoise, built once with Docker (tools/rnnoise/build.sh); not under plugins/, which BepInEx scans.
+[ -f "$root/tools/rnnoise/out/rnnoise.dll" ] || "$root/tools/rnnoise/build.sh"
+mkdir -p "$out/native"
+cp "$root/tools/rnnoise/out/rnnoise.dll" "$out/native/"
 cp "$root/docs/install.sh" "$out/"
 chmod +x "$out/install.sh"
 # Windows files with CRLF line endings.

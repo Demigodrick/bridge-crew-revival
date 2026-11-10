@@ -22,9 +22,12 @@ quality-of-life fixes.
   Steam's network. No ports to open, no accounts, no monthly server bill.
 - **Host left? No problem.** If the host drops, the crew regroups in the briefing room under the next
   player (or the one after, if they're gone too) instead of everyone landing back at the main menu.
-- **Voice chat** between crewmates, smoothed out so it doesn't stutter on a shaky connection. Mute a
-  crewmate, or just turn them down, with their voice slider in the escape menu's player list; the mod
-  remembers it for next time.
+- **Voice chat** between crewmates, with the mod's own voice in Steam mode: clearer (full-band, like
+  Discord) and it holds together on a shaky connection. It filters out background noise and evens out
+  quiet voices. Everyone needs the new version to benefit; players on older versions still hear and are
+  heard the old way. Set `Engine = Game` under `[Voice]` in the config to go back to the game's voice.
+  Self-hosted and Cloud modes keep the game's voice. Mute a crewmate, or just turn them down, with
+  their voice slider in the escape menu's player list; the mod remembers it for next time.
 - **Passwords and blocking.** Lock a public crew with a password from the briefing room. Kick a troublemaker
   and you can block them from your crews; anyone you've blocked on Steam can't join either.
 
@@ -119,6 +122,10 @@ SkipIntro = true         # straight to the shuttle
 
 [Voice]
 VoiceCommands = true
+Engine = Revival         # Game = the game's own voice chat
+NoiseSuppression = true  # filter background noise out of your mic
+AutoGain = true          # even out quiet and loud voices
+Bitrate = 48             # voice quality in kbit/s, 24-96
 
 [Rooms]
 BrowserKey = F7
@@ -196,7 +203,9 @@ can't), which publishes `BridgeCrewRevival.zip` and its `.sha256`. The installer
 3. Launch once so BepInEx creates its folders, then quit.
 4. **Required:** in `BepInEx/config/BepInEx.cfg`, under `[Preloader.Entrypoint]`, change
    `Type = Application` to `Type = MonoBehaviour`. Without it the game hangs on a black screen.
-5. Copy `StbcRevival.dll` and `StbcCore.dll` into `BepInEx/plugins/` and launch.
+5. Copy `StbcRevival.dll` and `StbcCore.dll` into `BepInEx/plugins/`, and `rnnoise.dll` (voice chat's noise
+   suppression) into `BepInEx/native/`, creating that folder if it isn't there. Without `rnnoise.dll` voice chat
+   still works; noise suppression is simply off. Then launch.
 
 The log is `BepInEx/LogOutput.log`.
 

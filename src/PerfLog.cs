@@ -171,7 +171,7 @@ namespace StbcRevival
         // Voice chat's microphone, looked up again only when voice chat's input changes.
         private static string MicrophoneInfo()
         {
-            var input = VoiceCommands.ChatInput();
+            var input = MicTap.ChatInput();
             if (input == null) return "microphone unknown";
             if (!ReferenceEquals(input, micInput))
             {
@@ -185,7 +185,7 @@ namespace StbcRevival
         {
             try
             {
-                if (!VoiceCommands.ChatDevice(input, out string device)) return $"microphone via {input.GetType().Name}";
+                if (!MicTap.ChatDevice(input, out string device)) return $"microphone via {input.GetType().Name}";
                 UnityEngine.Microphone.GetDeviceCaps(device, out int min, out int max);
                 string rates = min == 0 && max == 0 ? "any rate" : min == max ? $"{min} Hz" : $"{min}-{max} Hz";
                 return $"microphone '{(string.IsNullOrEmpty(device) ? "default" : device)}' ({rates}, via {input.GetType().Name})";
