@@ -114,6 +114,7 @@ namespace StbcRevival
                     }
                 }
                 UpdatePaints(mats, name, registry);
+                UpdatePlaque(mats, name, registry);
             }
             catch (Exception e) { Plugin.Log.LogWarning("Hull name: " + e); nextScan = Time.unscaledTime + 30f; }
         }
@@ -133,10 +134,13 @@ namespace StbcRevival
                 {
                     kv.Key.SetTexture("_MainTex", kv.Value[0]);
                     if (kv.Value[1] != null) kv.Key.SetTexture("_EmissionMap", kv.Value[1]);
+                    if (kv.Value.Length > 2 && kv.Value[2] != null) kv.Key.SetTexture("_OcclusionMap", kv.Value[2]);
+                    if (kv.Value.Length > 3 && kv.Value[3] != null) kv.Key.SetTexture("_BumpMap", kv.Value[3]);
                 }
             originals.Clear();
             foreach (var d in Decals) d.DrawnFor = null;
             foreach (var p in Paints) p.DrawnFor = null;
+            plaqueFor = null;
         }
 
         /// <summary>The Enterprise-D decal's gold plate (beside the lettering, kept as it is): red-brown frame, gold inside.</summary>

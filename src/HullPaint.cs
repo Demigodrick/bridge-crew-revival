@@ -152,11 +152,11 @@ namespace StbcRevival
         }
 
         /// <summary>A texture's header and all its bytes (every mip), read from the game's resources.assets.</summary>
-        private static bool ReadTexture(string name, out TextureAsset texture, out byte[] data)
+        private static bool ReadTexture(string name, out TextureAsset texture, out byte[] data, string fileName = "resources.assets")
         {
             texture = null; data = null;
             string dataDir = Application.dataPath;
-            using (var file = new AssetFile(Path.Combine(dataDir, "resources.assets")))
+            using (var file = new AssetFile(Path.Combine(dataDir, fileName)))
             {
                 foreach (var e in file.Objects)
                 {
@@ -168,7 +168,7 @@ namespace StbcRevival
                     break;
                 }
             }
-            if (texture == null) { Plugin.Log.LogWarning($"Hull name: {name} isn't in resources.assets"); return false; }
+            if (texture == null) { Plugin.Log.LogWarning($"Hull name: {name} isn't in {fileName}"); return false; }
             if (texture.Data != null && texture.Data.Length > 0) { data = texture.Data; return true; }
             using (var s = new FileStream(Path.Combine(dataDir, texture.StreamPath), FileMode.Open, FileAccess.Read, FileShare.Read))
             {
