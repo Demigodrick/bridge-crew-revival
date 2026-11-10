@@ -18,7 +18,7 @@ namespace StbcRevival
 
         internal static void Update()
         {
-            if (!Plugin.PlayerJoinedAlert.Value || Time.realtimeSinceStartup < nextCheck) return;
+            if ((!Plugin.PlayerJoinedAlert.Value && !Plugin.JoinSound.Value) || Time.realtimeSinceStartup < nextCheck) return;
             nextCheck = Time.realtimeSinceStartup + 0.5f;
             var current = GameState.RoomName();
             if (current == null || GameState.Loading())
@@ -36,7 +36,8 @@ namespace StbcRevival
             if (count > players)
             {
                 Plugin.Log.LogInfo($"Player joined your crew ({count} aboard)");
-                Alert();
+                if (Plugin.PlayerJoinedAlert.Value) Alert();
+                if (Plugin.JoinSound.Value) JoinSound.Play();
             }
             players = count;
         }
