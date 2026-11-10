@@ -4,18 +4,15 @@ using UnityEngine;
 namespace StbcRevival
 {
     /// <summary>
-    /// [Rooms] BoatswainWhistle: when someone joins your crew (PlayerJoinedAlert notices), the boatswain's whistle
-    /// pipes them aboard. The sound is made here, not taken from anywhere: a whistle gliding up an octave, held with
-    /// a vibrato and a short warble, and gliding back down, with a little breath in it. Made once, played as 2D sound.
-    /// Your own sound goes first: a 16-bit .wav at BepInEx/sounds/player-joined.wav (not part of the mod).
+    /// [Rooms] JoinSound: when someone joins your crew (PlayerJoinedAlert notices), an LCARS-style notification sound.
+    /// The mod brings no recording: its own sound is made here, a short computer chirp of two rising tones. Your own
+    /// sound goes first: a 16-bit .wav at BepInEx/sounds/player-joined.wav (not part of the mod). Played as 2D sound.
     /// </summary>
-    internal static class BoatswainWhistle
+    internal static class JoinSound
     {
         private static AudioClip clip;
         private static AudioSource source;
 
-        // Your own whistle, if you've put one here (a .wav, 16-bit PCM): it's played instead of the made one. It stays
-        // on your PC; the mod brings none.
         internal const string OwnFile = "BepInEx/sounds/player-joined.wav";
 
         internal static void Play()
@@ -25,7 +22,7 @@ namespace StbcRevival
                 if (clip == null) clip = Own() ?? Make(44100);
                 if (source == null)
                 {
-                    var go = new GameObject("Revival boatswain whistle");
+                    var go = new GameObject("Revival join sound");
                     UnityEngine.Object.DontDestroyOnLoad(go);
                     source = go.AddComponent<AudioSource>();
                     source.spatialBlend = 0f;
@@ -34,7 +31,7 @@ namespace StbcRevival
                 source.volume = 0.6f;
                 source.PlayOneShot(clip);
             }
-            catch (Exception e) { Plugin.Log.LogInfo("Boatswain whistle: " + e.Message); }
+            catch (Exception e) { Plugin.Log.LogInfo("Join sound: " + e.Message); }
         }
 
         private static AudioClip Own()
@@ -65,44 +62,37 @@ namespace StbcRevival
                 int frames = dataSize / 2 / channels;
                 var samples = new float[frames * channels];
                 for (int i = 0; i < samples.Length; i++) samples[i] = BitConverter.ToInt16(bytes, dataAt + i * 2) / 32768f;
-                var own = AudioClip.Create("Boatswain whistle (yours)", frames, channels, rate, false);
+                var own = AudioClip.Create("Join sound (yours)", frames, channels, rate, false);
                 own.SetData(samples, 0);
-                Plugin.Log.LogInfo($"Boatswain whistle: yours, {OwnFile} ({frames / (float)rate:F2} s)");
+                Plugin.Log.LogInfo($"Join sound: yours, {OwnFile} ({frames / (float)rate:F2} s)");
                 return own;
             }
             catch (Exception e)
             {
-                Plugin.Log.LogWarning($"Boatswain whistle: {OwnFile}: {e.Message}; playing the mod's own");
+                Plugin.Log.LogWarning($"Join sound: {OwnFile}: {e.Message}; playing the mod's own");
                 return null;
             }
         }
 
+        // Two short tones, the second higher, each with a quick attack and a soft tail: a computer chirp.
         private static AudioClip Make(int rate)
         {
-            const float low = 1400f, high = 2800f, up = 0.32f, hold = 1.15f, down = 0.38f;
-            float total = up + hold + down;
+            float[] starts = { 0f, 0.11f }, lengths = { 0.09f, 0.16f }, freqs = { 1180f, 1570f };
+            float total = 0.32f;
             int n = (int)(total * rate);
             var s = new float[n];
-            double phase = 0;
-            var rng = new System.Random(7);
-            float noise = 0;
-            for (int i = 0; i < n; i++)
+            for (int k = 0; k < starts.Length; k++)
             {
-                float t = i / (float)rate, f;
-                if (t < up) f = low * Mathf.Pow(high / low, t / up);
-                else if (t < up + hold)
+                int from = (int)(starts[k] * rate), count = (int)(lengths[k] * rate);
+                for (int i = 0; i < count && from + i < n; i++)
                 {
-                    float h = t - up;
-                    f = high + 14f * Mathf.Sin(2f * Mathf.PI * 6.5f * h);                     // vibrato
-                    if (h > 0.45f && h < 0.75f) f += 90f * Mathf.Sin(2f * Mathf.PI * 18f * h); // warble
+                    float t = i / (float)rate;
+                    float env = Mathf.Min(1f, t / 0.005f) * Mathf.Exp(-t / (lengths[k] * 0.45f));
+                    float wave = Mathf.Sin(2f * Mathf.PI * freqs[k] * t) + 0.25f * Mathf.Sin(2f * Mathf.PI * freqs[k] * 2f * t);
+                    s[from + i] += env * wave * 0.4f;
                 }
-                else f = high * Mathf.Pow(low / high, (t - up - hold) / down);
-                phase += 2 * Math.PI * f / rate;
-                float env = Mathf.Min(1f, t / 0.03f) * Mathf.Min(1f, (total - t) / 0.15f);
-                noise = noise * 0.92f + (float)(rng.NextDouble() * 2 - 1) * 0.08f;       // breath
-                s[i] = env * (0.82f * (float)Math.Sin(phase) + 0.08f * (float)Math.Sin(2 * phase) + 0.10f * noise) * 0.5f;
             }
-            var made = AudioClip.Create("Boatswain whistle", n, 1, rate, false);
+            var made = AudioClip.Create("Join sound", n, 1, rate, false);
             made.SetData(s, 0);
             return made;
         }
