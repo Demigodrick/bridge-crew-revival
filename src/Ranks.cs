@@ -32,14 +32,17 @@ namespace StbcRevival
         internal static void Patch(Harmony harmony)
         {
             var setter = AccessTools.PropertySetter(typeof(NovaPlayerInfo), "FPCLMHFIGLD");
-            if (setter != null) harmony.Patch(setter, prefix: new HarmonyMethod(typeof(Ranks), nameof(SetRank_Prefix)));
-            else Plugin.Log.LogWarning("Ranks: NovaPlayerInfo's rank property not found; the chosen rank won't be worn");
+            if (setter == null) { Plugin.Log.LogWarning("Ranks: NovaPlayerInfo's rank property not found; the chosen rank won't be worn"); return; }
+            // A failed patch here mustn't stop the patches after it (the bridge walk's among them).
+            try { harmony.Patch(setter, prefix: new HarmonyMethod(typeof(Ranks), nameof(SetRank_Prefix))); }
+            catch (Exception e) { Plugin.Log.LogWarning("Ranks: patching the rank property: " + e.Message); }
         }
 
         // The game setting the local player's rank (the earned one, in the briefing room): the chosen one instead.
-        private static void SetRank_Prefix(NovaPlayerInfo __instance, ref int value)
+        // (The setter's parameter isn't called "value" in the game's assembly: taken by position.)
+        private static void SetRank_Prefix(NovaPlayerInfo __instance, ref int __0)
         {
-            if (Chosen >= 0 && IsLocal(__instance)) value = Chosen;
+            if (Chosen >= 0 && IsLocal(__instance)) __0 = Chosen;
         }
 
         private static bool IsLocal(NovaPlayerInfo info)
