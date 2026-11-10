@@ -172,7 +172,7 @@ namespace StbcRevival
     /// <summary>The desktop window for the ship's name: prefix (NCC / NX), number and name in one go.</summary>
     internal static class ShipNamePrompt
     {
-        private static bool open;
+        private static bool open, focusName; // focusName: put the cursor in the name field once, when it opens
         private static int prefix; // 0 NCC, 1 NX
         private static string number = "", name = "";
         private static Rect window = new Rect(0, 0, 380, 150);
@@ -188,6 +188,7 @@ namespace StbcRevival
             window.x = (Screen.width - window.width) / 2;
             window.y = (Screen.height - window.height) / 3;
             open = true;
+            focusName = true;
             Cursor.visible = true;
             Cursor.lockState = CursorLockMode.None;
             if (UnityEngine.VR.VRSettings.enabled)
@@ -211,9 +212,16 @@ namespace StbcRevival
             GUILayout.BeginHorizontal();
             GUILayout.Label(Translation.T("Registry"), GUILayout.Width(80));
             prefix = GUILayout.Toolbar(prefix, Prefixes, GUILayout.Width(100));
+            GUI.SetNextControlName("shipnumber");
             number = GUILayout.TextField(number, 12);
             GUILayout.EndHorizontal();
-            if (GUI.GetNameOfFocusedControl() == "") GUI.FocusControl("shipname");
+            if (focusName && Event.current.type == EventType.Repaint) { GUI.FocusControl("shipname"); focusName = false; }
+            // Tab: from the name to the number and back.
+            if (Event.current.type == EventType.KeyDown && (Event.current.keyCode == KeyCode.Tab || Event.current.character == '	'))
+            {
+                GUI.FocusControl(GUI.GetNameOfFocusedControl() == "shipname" ? "shipnumber" : "shipname");
+                Event.current.Use();
+            }
             bool enter = Event.current.type == EventType.KeyDown && (Event.current.keyCode == KeyCode.Return || Event.current.keyCode == KeyCode.KeypadEnter);
             GUILayout.BeginHorizontal();
             bool ok = GUILayout.Button(Translation.T("OK")) || enter;
