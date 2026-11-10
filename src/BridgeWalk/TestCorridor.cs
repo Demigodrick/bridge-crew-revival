@@ -102,6 +102,10 @@ namespace StbcRevival.Walking
                 }
             }
             if (found == null) return; // not the Aegis bridge (or not loaded yet): tried again in 2 s
+            // Out of the bridge is worked out from where you sit: wait for your character (the first run built it
+            // before you were in your seat, measuring from the bridge's origin instead).
+            var me = Bridge.Local();
+            if (me == null || me.PawnObject == null) return;
 
             door = found;
             var parent = door.parent;
@@ -129,9 +133,7 @@ namespace StbcRevival.Walking
 
             // Out of the bridge: away from your seat (the door is in the bridge's outer wall).
             Vector3 normal = thinX ? Vector3.right : Vector3.forward;
-            Vector3 seat = Vector3.zero;
-            var me = Bridge.Local();
-            if (me != null && me.PawnObject != null) seat = parent != null ? parent.InverseTransformPoint(me.PawnObject.transform.position) : me.PawnObject.transform.position;
+            Vector3 seat = parent != null ? parent.InverseTransformPoint(me.PawnObject.transform.position) : me.PawnObject.transform.position;
             if (Vector3.Dot(center - seat, normal) < 0f) normal = -normal;
 
             root = new GameObject(RootName);
@@ -145,6 +147,9 @@ namespace StbcRevival.Walking
             var mats = Materials(renderers);
             BuildRoom(mats);
             BuildDoor(renderers, mats);
+            Vector3 far = root.transform.TransformPoint(new Vector3(0, 0, z0 + Length));
+            Plugin.Log.LogInfo($"Test corridor: door at {center}, you at {seat} (in {(parent != null ? parent.name : "the scene")}); the corridor runs from {root.transform.position} to {far} (world), "
+                               + $"{Vector3.Distance(far, me.PawnObject.transform.position):F1} m from you at its end");
             Plugin.Log.LogInfo($"Test corridor: built behind {Bridge.Path(door)}: door {doorW:F2} x {doorH:F2} m, {doorT:F2} m thick, facing {normal} in {(parent != null ? parent.name : "the scene")} "
                                + $"(rotation {(parent != null ? parent.rotation.eulerAngles : Vector3.zero)}); you at {seat}; corridor {Length} x {Width} x {height:F1} m; "
                                + $"materials: wall {Name(mats.Wall)}, floor {Name(mats.Floor)}, ceiling {Name(mats.Ceiling)}, strip {Name(mats.Strip)}, door {Name(mats.Door)}, frame {Name(mats.Frame)}");
@@ -159,12 +164,12 @@ namespace StbcRevival.Walking
             var byObject = new Dictionary<string, Material>(StringComparer.OrdinalIgnoreCase);
             foreach (var top in scene.GetRootGameObjects())
                 foreach (var r in top.GetComponentsInChildren<Renderer>(true))
-                    if (r.sharedMaterial != null && !byObject.ContainsKey(r.name)) byObject[r.name] = r.sharedMaterial;
+                    if (Surface(r.sharedMaterial) && !byObject.ContainsKey(r.name)) byObject[r.name] = r.sharedMaterial;
             var all = Resources.FindObjectsOfTypeAll<Material>();
             Func<string[], string[], Material> pick = (objects, names) =>
             {
                 foreach (var o in objects) if (byObject.TryGetValue(o, out var m)) return m;
-                foreach (var n in names) foreach (var m in all) if (m != null && m.name.IndexOf(n, StringComparison.OrdinalIgnoreCase) >= 0) return m;
+                foreach (var n in names) foreach (var m in all) if (Surface(m) && m.name.IndexOf(n, StringComparison.OrdinalIgnoreCase) >= 0) return m;
                 return null;
             };
             var mats = new Mats
@@ -183,6 +188,15 @@ namespace StbcRevival.Walking
             if (mats.Frame == null) mats.Frame = mats.Wall;
             if (mats.Door == null) mats.Door = mats.Wall;
             return mats;
+        }
+
+        // A material for a wall or floor: not a particle or additive effect (the first run's ceiling got 'EmissiveSparks').
+        private static bool Surface(Material m)
+        {
+            if (m == null || m.shader == null) return false;
+            string sh = m.shader.name;
+            return sh.IndexOf("Particle", StringComparison.OrdinalIgnoreCase) < 0 && sh.IndexOf("Additive", StringComparison.OrdinalIgnoreCase) < 0
+                   && m.name.IndexOf("Spark", StringComparison.OrdinalIgnoreCase) < 0;
         }
 
         private static void BuildRoom(Mats m)
