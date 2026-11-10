@@ -303,6 +303,9 @@ function Install-BridgeCrewRevival([string]$GameDir, [bool]$Uninstall, [string]$
         foreach ($name in "StbcRevival.dll", "StbcRevival.pdb", "StbcCore.dll", "StbcCore.pdb") {
             Remove-Item -LiteralPath (Join-Path $plugins $name) -ErrorAction SilentlyContinue
         }
+        $native = Join-Path $GameDir "BepInEx\native"
+        Remove-Item -LiteralPath (Join-Path $native "rnnoise.dll") -ErrorAction SilentlyContinue
+        if ((Test-Path $native) -and -not (Get-ChildItem -LiteralPath $native -Force)) { Remove-Item -LiteralPath $native -ErrorAction SilentlyContinue }
         # Without winhttp.dll BepInEx doesn't load at all; the BepInEx folder is left for you to delete.
         foreach ($name in "winhttp.dll", "doorstop_config.ini", ".doorstop_version", "changelog.txt") {
             Remove-Item -LiteralPath (Join-Path $GameDir $name) -ErrorAction SilentlyContinue
@@ -391,6 +394,13 @@ function Install-BridgeCrewRevival([string]$GameDir, [bool]$Uninstall, [string]$
         # ---- Install ------------------------------------------------------------------------------
 
         Copy-Item -Path (Join-Path $source "Stbc*") -Destination $plugins -Force
+        # Noise suppression's native DLL, beside plugins\ in the zip (older releases don't have it).
+        $nativeSource = Join-Path (Split-Path -Parent $source) "native\rnnoise.dll"
+        if (Test-Path $nativeSource) {
+            $native = Join-Path $GameDir "BepInEx\native"
+            New-Item -ItemType Directory -Force -Path $native | Out-Null
+            Copy-Item -LiteralPath $nativeSource -Destination $native -Force
+        }
         Install-Vosk $GameDir $tmp
         Install-VoiceLanguage $GameDir $tmp $Voice
     } finally {

@@ -21,12 +21,21 @@ namespace StbcRevival
 
     public enum PhotonProtocol { Udp, Tcp }
 
+    /// <summary>Whose voice chat carries your voice to crewmates with the mod, in Steam mode.</summary>
+    public enum VoiceEngine
+    {
+        /// <summary>The mod's own: 48 kHz Opus with noise suppression, auto gain and a speech gate, straight over Steam.</summary>
+        Revival,
+        /// <summary>The game's own voice chat, as before.</summary>
+        Game,
+    }
+
     [BepInPlugin(Guid, Name, Version)]
     public class Plugin : BaseUnityPlugin
     {
         public const string Guid = "stbc.revival";
         public const string Name = "Bridge Crew Revival";
-        public const string Version = "0.7.34";
+        public const string Version = "0.7.36";
 
         internal static ManualLogSource Log;
 
@@ -61,6 +70,9 @@ namespace StbcRevival
         internal static ConfigEntry<UnityEngine.KeyCode> GameDumpKey;
         internal static ConfigEntry<bool> RomulanFace;
         internal static ConfigEntry<int> KlingonHead;
+        internal static ConfigEntry<bool> AllHairStyles;
+        internal static ConfigEntry<int> Rank;
+        internal static ConfigEntry<bool> NamePlates;
         internal static ConfigEntry<int> KlingonHeadChoice;
         internal static ConfigEntry<string> MapOverride;
         internal static ConfigEntry<int> FleetBattleSize;
@@ -76,6 +88,12 @@ namespace StbcRevival
         internal static ConfigEntry<VrDeviceChoice> VrDevice;
         internal static ConfigEntry<int> VoiceJitterBufferMs;
         internal static ConfigEntry<bool> DirectVoice;
+        internal static ConfigEntry<VoiceEngine> VoiceEngineChoice;
+        internal static ConfigEntry<bool> VoiceNoiseSuppression;
+        internal static ConfigEntry<bool> VoiceAutoGain;
+        internal static ConfigEntry<int> VoiceBitrate;
+        internal static ConfigEntry<string> VoiceDebugNetSim;
+        internal static ConfigEntry<bool> VoiceDebugLoopback;
         internal static ConfigEntry<bool> PvpSeparateSpace;
         internal static ConfigEntry<string> BlockedPlayers;
         internal static ConfigEntry<string> VoiceVolumes;
@@ -92,7 +110,12 @@ namespace StbcRevival
         internal static ConfigEntry<bool> BridgeWalkCollisions;
         internal static ConfigEntry<bool> BridgeWalkWalls;
         internal static ConfigEntry<bool> BridgeWalkAnimate;
+        internal static ConfigEntry<bool> BridgeWalkTestCorridor;
         internal static Plugin Instance { get; private set; }
+
+        /// <summary>Revival voice runs: Steam mode, and [Voice] Engine = Revival.</summary>
+        internal static bool RevivalVoiceActive =>
+            Mode != null && Mode.Value == PhotonMode.Steam && VoiceEngineChoice != null && VoiceEngineChoice.Value == VoiceEngine.Revival;
         internal static ConfigEntry<string> PlayerName;
         internal static ConfigEntry<string> ExtraDevConfig;
         internal static ConfigEntry<bool> Diagnostics;
@@ -163,7 +186,7 @@ namespace StbcRevival
             CrewContentFilter = Config.Bind("Rooms", "Content", CrewContent.Any,
                 "Crew lists: Any, NextGenerationOnly (crews with The Next Generation content on) or NoNextGeneration.");
             PlayerJoinedAlert = Config.Bind("Rooms", "PlayerJoinedAlert", true,
-                "When someone joins your crew: a chime, and the game's taskbar entry flashes if the window isn't in front. Handy while waiting with the headset off.");
+                "When someone joins your crew: an LCARS-style sound, and the game's taskbar entry flashes if the window isn't in front. Handy while waiting with the headset off. Your own sound instead: a 16-bit .wav at " + StbcRevival.JoinSound.OwnFile + " (it stays on your PC).");
             ShipName = Config.Bind("Rooms", "ShipName", "",
                 "Your crew's ship when you host: name and registry, e.g. \"USS Cosmo, NCC-91234\". It replaces USS Aegis (NX-1787) and USS Enterprise (NCC 1701-D) in the game's texts (console headers, briefings) for everyone in your room with the mod. Empty: the game's names.");
             HullFont = Config.Bind("Rooms", "HullFont", "Starfleet Bold Extended",
@@ -179,6 +202,12 @@ namespace StbcRevival
             KlingonHead = Config.Bind("Avatar", "KlingonHead", 0,
                 new ConfigDescription("Wear a Klingon captain's head: 0 off, 1 the captain, 2 the flagship's captain. Male Human character presets only; crewmates with the mod see it too. "
                                       + "The heads are loaded from the bridge's assets as the game starts.", new AcceptableValueRange<int>(0, 2)));
+            AllHairStyles = Config.Bind("Avatar", "AllHairStyles", false,
+                "[Experimental, work in progress] Every hairstyle on any head in the character creator: the HAIR choice runs through all the game's hairstyles of the same sex (the other presets' looks, put together with this head's face) and the counters show the real numbers. Each hairstyle is made when first shown, so the creator takes noticeably longer to show them. Crewmates with the mod see them too (without it they see the head's fourth look).");
+            Rank = Config.Bind("Avatar", "Rank", -1,
+                new ConfigDescription("The rank you wear (on your uniform, in the briefing room, on your name plate), seen by your whole crew: -1 the one you've earned, "
+                                      + "or a lower one (a higher one is held to the earned one): 0 Ensign, 1 Lieutenant Junior Grade, 2 Lieutenant, 3 Lieutenant Commander, 4 Commander, 5 Captain.", new AcceptableValueRange<int>(-1, 5)));
+            NamePlates = Config.Bind("Avatar", "NamePlates", true, "Rank and name over each crewmate's head.");
             KlingonHeadChoice = Config.Bind("Avatar", "KlingonHeadChoice", Math.Max(1, KlingonHead.Value),
                 new ConfigDescription("Which Klingon captain's head the character creator's KLINGON wears: 1 the captain, 2 the flagship's captain "
                                       + "(Revival settings changes it).", new AcceptableValueRange<int>(1, 2)));
@@ -230,6 +259,22 @@ namespace StbcRevival
             DirectVoice = Config.Bind("Voice", "DirectVoice", true,
                 "Steam mode: voice chat goes straight between players over Steam, instead of through the host's game, so a hitch on the host's "
                 + "game or a lost packet doesn't hold everyone's voice up. Crewmates without it (or whom Steam can't reach directly) still get your voice through the host.");
+            VoiceEngineChoice = Config.Bind("Voice", "Engine", VoiceEngine.Revival,
+                "Steam mode: Revival = voice chat with crewmates who have the mod goes through the mod's own pipeline (clearer 48 kHz sound, "
+                + "noise suppression, automatic gain, no clipped first words, and it holds up better on a bad connection); crewmates without "
+                + "it still hear you the game's way. Game = the game's own voice chat for everyone (JitterBufferMs and DirectVoice apply).");
+            VoiceNoiseSuppression = Config.Bind("Voice", "NoiseSuppression", true,
+                "Revival voice: filter fans, keyboards and other background noise out of your microphone (needs BepInEx/native/rnnoise.dll; "
+                + "without it, it's off and logged).");
+            VoiceAutoGain = Config.Bind("Voice", "AutoGain", true,
+                "Revival voice: lift a quiet microphone and tame a loud one towards an even speaking level (only while you speak).");
+            VoiceBitrate = Config.Bind("Voice", "Bitrate", 48,
+                new ConfigDescription("Revival voice: how much sound quality your voice is sent with, in kbit/s (24-96). Higher is clearer and uses more bandwidth.",
+                                      new AcceptableValueRange<int>(24, 96)));
+            VoiceDebugNetSim = Config.Bind("Voice", "DebugNetSim", "",
+                "Testing only, Revival voice: make crewmates' voices arrive as over a bad connection, e.g. \"loss=5,burst=2,reorder=2,jitter=50\". Empty: off.");
+            VoiceDebugLoopback = Config.Bind("Voice", "DebugLoopback", false,
+                "Testing only, Revival voice: record the first 10 seconds of what you send (encoded and decoded again) to BepInEx/voice-loopback.wav.");
             ControllerGraceSeconds = Config.Bind("VR", "ControllerGraceSeconds", 30f,
                 "How long a VR controller the headset stops reporting (resting controllers often go to sleep) still counts as connected before the game's \"controllers disconnected\" warning shows. 0 = the game's own behaviour (at once).");
             VrDevice = Config.Bind("VR", "Device", VrDeviceChoice.Auto,
@@ -251,6 +296,9 @@ namespace StbcRevival
             BridgeWalkCollisions = Config.Bind("Bridge Walk", "Collisions", true, "Walls, floors, ramps and steps stop or carry you (from the bridge's colliders and meshes). Off: walk through everything at seat floor height.");
             BridgeWalkWalls = Config.Bind("Bridge Walk", "Walls", true, "Walls and furniture stop you. Off: walk through them; floors, ramps and steps still carry you (with Collisions on).");
             BridgeWalkAnimate = Config.Bind("Bridge Walk", "Animate", true, "Animate standing and walking characters (yours and crewmates').");
+            BridgeWalkTestCorridor = Config.Bind("Bridge Walk", "TestCorridor", false,
+                "Test: on the Aegis bridge, one of the doors opens onto a corridor to walk down (its side doors are scenery). "
+                + "While on, you can walk up to 40 m from your seat. Takes effect on reaching the bridge.");
             PlayerName = Config.Bind("Login", "PlayerName", "",
                 "Name shown to other players. Empty = your Steam persona name (falls back to the OS user name).");
 
@@ -285,6 +333,9 @@ namespace StbcRevival
 
             harmony = new Harmony(Guid);
             Patches.Apply(harmony);
+            Safely("revival voice capture patches", () => VoiceCapture.Patch(harmony));
+            Safely("revival voice patches", () => RevivalVoice.Patch(harmony));
+            Safely("revival voice playback patches", () => RevivalPlayback.Patch(harmony));
             SteamMode.Install(harmony);
             ShuttleControls.Install();
 
@@ -329,6 +380,9 @@ namespace StbcRevival
             Safely("game dump", GameDump.Update);
             Safely("romulan face", StbcRevival.RomulanFace.Update);
             Safely("klingon head", StbcRevival.KlingonHead.Update);
+            Safely("hairstyles", StbcRevival.HairStyles.Tick);
+            Safely("ranks", StbcRevival.Ranks.Update);
+            Safely("name plates", StbcRevival.NamePlates.Tick);
             Safely("player volumes", PlayerVolumes.Update);
             Safely("creator species choices", SpeciesCreatorOptions.Update);
             Safely("revival settings", RevivalSettings.Update);
@@ -343,6 +397,8 @@ namespace StbcRevival
             Safely("mod version check", ModVersionCheck.Update);
             Safely("host hand-off", HostHandoff.Update);
             Safely("voice commands", StbcRevival.VoiceCommands.Update);
+            Safely("revival voice capture", VoiceCapture.Update);
+            Safely("revival voice playback", RevivalPlayback.Update);
             Safely("ubisoft save import", UbisoftSaveImport.Update);
             Safely("crash report", CrashReport.Update);
             Safely("bridge walk", Walking.BridgeWalk.Update);

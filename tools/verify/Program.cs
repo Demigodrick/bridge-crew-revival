@@ -621,6 +621,23 @@ Check("AI.AgentShip.CPMKGMJPINE (cloak, fleet battle)", game.GetType("AI.AgentSh
 foreach (var m in new[] { "get_CurrentBridgeScene", "get_HolodeckBridgeScene" })
     Check($"Loader.{m} (excelsior)", game.GetType("Loader")?.GetMethod(m, BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic));
 
+// Bridge Walk (reflected names)
+var nac = game.GetType("SVR.NovaAnimationController");
+foreach (var m in new[] { "EEEKOHNIDBH", "FIFMENKIJFI" }) Check($"SVR.NovaAnimationController.{m} (seat turn, backrest lean)", nac?.GetMethod(m, Inst));
+Check("  PawnComponent.HAMOMEFCFNB (_playerInfo)", game.GetType("PawnComponent")?.GetField("HAMOMEFCFNB", Inst));
+var oec = game.GetType("OrientExternalCamera");
+foreach (var f in new[] { "_pivot", "BJGOCLMLBLD", "_bridgeViewOcclusionProxy" }) Check($"  OrientExternalCamera.{f}", oec?.GetField(f, Inst));
+Check("  ShuttleCameraMover.BatchLateUpdate", game.GetType("ShuttleCameraMover")?.GetMethod("BatchLateUpdate", Inst));
+
+// Hairstyles (reflected names)
+var faceCust = game.GetType("FaceCustomization");
+foreach (var f in new[] { "_faceMesh", "_currentLookIdx", "LookMaterialNames" }) Check($"FaceCustomization.{f} (hairstyles)", faceCust?.GetField(f, Inst));
+foreach (var m in new[] { "SetNextLook", "SetPrevLook", "HLDEKGCKKKA" }) Check($"  FaceCustomization.{m}", faceCust?.GetMethod(m, Inst, null, Type.EmptyTypes, null));
+Check("  FaceCustomization.SetLook(int)", faceCust?.GetMethods(Inst).FirstOrDefault(x => x.Name == "SetLook" && x.GetParameters().Length == 1 && x.GetParameters()[0].ParameterType.Name == "Int32"));
+var custMgr = game.GetType("CustomizationManager");
+foreach (var f in new[] { "_lookText", "_headText", "IBONPLINBFL", "EPNEDLICCMJ", "COABBGKIHFL", "OGGAMIKLGBM", "PPILFEEKDAP", "JGOBPBOKGKO" }) Check($"  CustomizationManager.{f}", custMgr?.GetField(f, Inst));
+foreach (var m in new[] { "ENPBOKEDLLO", "PEMPNBCOPFL" }) Check($"  CustomizationManager.{m} (static)", custMgr?.GetMethod(m, AnyS));
+
 // VR controller grace
 var inputManager = game.GetType("SVR.InputManager");
 Check("SVR.InputManager.AADJJIOIJJA(bool) (controller check)", inputManager?.GetMethods(Inst).FirstOrDefault(m => m.Name == "AADJJIOIJJA" && m.GetParameters().Length == 1));
@@ -631,6 +648,11 @@ var selectVr = game.GetType("InitialLoader")?.GetNestedTypes(BindingFlags.NonPub
 Check("InitialLoader/<SelectVRMode>.MoveNext (VR device)", selectVr?.GetMethod("MoveNext", Inst));
 foreach (var (f, what) in new[] { ("DBNIHIBHOLC", "state"), ("EONPCBMAPBK", "VR wanted"), ("DIHFOIJGJBK", "device list"), ("ILLBDLPMFPB", "current") })
     Check($"  <SelectVRMode>.{f} ({what})", selectVr?.GetField(f, Inst));
+
+// Ranks (reflected names)
+var playerInfo = game.GetType("NovaPlayerInfo");
+Check("NovaPlayerInfo.FPCLMHFIGLD setter (CurrentPlayerRank)", playerInfo?.GetProperty("FPCLMHFIGLD", Inst)?.SetMethod);
+Check("BodyCustomization.OMJKMLCLMNI (worn rank)", game.GetType("BodyCustomization")?.GetField("OMJKMLCLMNI", Inst));
 
 Console.WriteLine(failures == 0 ? "\nAll targets resolved." : $"\n{failures} target(s) missing.");
 return failures == 0 ? 0 : 1;

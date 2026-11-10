@@ -5,13 +5,13 @@ using UnityEngine;
 namespace StbcRevival
 {
     /// <summary>
-    /// [Rooms] PlayerJoinedAlert: when someone joins your crew, play the game's "objective complete" chime
-    /// and flash the game's taskbar entry (if the window isn't in front). For waiting in a briefing room
-    /// with the headset off. Watches the room's player count; the first reading in each room is just noted.
+    /// [Rooms] PlayerJoinedAlert: when someone joins your crew, play the join sound (JoinSound: an LCARS-style
+    /// chirp, or your own .wav) and flash the game's taskbar entry (if the window isn't in front). For waiting in
+    /// a briefing room with the headset off. Watches the room's player count; the first reading in each room is
+    /// just noted, and is when the sound is loaded.
     /// </summary>
     internal static class PlayerJoinedAlert
     {
-        private const string Chime = "Play_UI_Tutorial_Objective_Complete";
         private static string room;
         private static int players;
         private static float nextCheck;
@@ -31,6 +31,7 @@ namespace StbcRevival
             {
                 room = current;
                 players = count;
+                JoinSound.Load();
                 return;
             }
             if (count > players)
@@ -43,8 +44,7 @@ namespace StbcRevival
 
         private static void Alert()
         {
-            try { WwiseSoundUtil.PostEvent(Chime, null); }
-            catch (Exception e) { Plugin.Log.LogInfo("Player joined alert: no chime: " + e.Message); }
+            JoinSound.Play();
             try { FlashGameWindow(); }
             catch (Exception e) { Plugin.Log.LogInfo("Player joined alert: no flash: " + e.Message); }
         }

@@ -4,7 +4,7 @@
     <AssemblyName>StbcRevival</AssemblyName>
     <RootNamespace>StbcRevival</RootNamespace>
     <LangVersion>latest</LangVersion>
-    <Version>0.7.34</Version>
+    <Version>0.7.36</Version>
     <!-- Point this at your install, or pass -p:GameDir=... -->
     <GameDir Condition="'$(GameDir)' == ''">$(HOME)/.local/share/Steam/steamapps/common/Star Trek Bridge Crew</GameDir>
     <ManagedDir>$(GameDir)/stbc_Data/Managed</ManagedDir>
@@ -15,6 +15,7 @@
   <ItemGroup>
     <ProjectReference Include="../server/StbcCore/StbcCore.csproj" />
     <Compile Include="../shared/VirtualSockets.cs" Link="Shared/VirtualSockets.cs" />
+    <Compile Include="../shared/Voice/*.cs" Link="Shared/Voice/%(Filename).cs" />
   </ItemGroup>
 
   <ItemGroup>

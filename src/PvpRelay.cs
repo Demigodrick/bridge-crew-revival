@@ -76,30 +76,39 @@ namespace StbcRevival
 
         private static readonly HashSet<int> toldOtherShip = new HashSet<int>();
 
-        private static bool VoiceChat_Prefix(byte __0, object __1, int __2)
+        private static bool VoiceChat_Prefix(byte __0, object __1, int __2, bool __runOriginal)
         {
-            if (__0 != 125 || GamePhaseManager.IEFBKOMBFGO == null) return true;
-            var phase = GamePhaseManager.IEFBKOMBFGO.GetCurrentGamePhase();
-            if (phase == typeof(GamePhase_BriefingRoom) && PvpLobby.InPvpRoom) return LobbyVoice(__1, __2);
-            if (!PvpPrototype.Active || phase != typeof(GamePhase_Bridge)) return true;
-            var player = PvpShips.Player(__2);
-            if (player == null || PvpShips.Of(player) == PvpShips.Mine) return true;
+            if (!__runOriginal) return false; // another prefix (Revival voice's handover) already let it go
+            if (__0 != 125 || Hears(__2)) return true;
             if (__1 is SVR.Network.PLPKPDFOLDL packet) SVR.Network.PLPKPDFOLDL.Release(packet); // back to its pool, as the game does
-            if (toldOtherShip.Add(__2)) Plugin.Log.LogInfo($"PvP: voice chat from player {__2} (the other ship) not played here");
+            var phase = GamePhaseManager.IEFBKOMBFGO?.GetCurrentGamePhase();
+            if (phase == typeof(GamePhase_Bridge) && toldOtherShip.Add(__2))
+                Plugin.Log.LogInfo($"PvP: voice chat from player {__2} (the other ship) not played here");
             return false;
         }
 
+        /// <summary>Whether voice from this player is played here: false for the other ship's players on the bridge,
+        /// and for the other table in the PvP lobby when either side chose TABLE CHAT. No side effects, so game voice
+        /// and Revival voice share it.</summary>
+        internal static bool Hears(int actor)
+        {
+            if (GamePhaseManager.IEFBKOMBFGO == null) return true;
+            var phase = GamePhaseManager.IEFBKOMBFGO.GetCurrentGamePhase();
+            if (phase == typeof(GamePhase_BriefingRoom) && PvpLobby.InPvpRoom) return LobbyHears(actor);
+            if (!PvpPrototype.Active || phase != typeof(GamePhase_Bridge)) return true;
+            var player = PvpShips.Player(actor);
+            return player == null || PvpShips.Of(player) == PvpShips.Mine;
+        }
+
         // The PvP lobby: a player at the other table isn't heard when either of you chose TABLE CHAT.
-        private static bool LobbyVoice(object packet, int actor)
+        private static bool LobbyHears(int actor)
         {
             var player = PvpShips.Player(actor);
             bool theirs = player != null && PvpShips.Props(player)?[PvpRoles.ChatKey] as string == "T";
             if (!PvpRoles.TableChat && !theirs) return true;
             var mine = TableOf(PvpShips.Actor(PvpShips.Me));
             var their = TableOf(actor);
-            if (mine == null || their == null || mine == their) return true;
-            if (packet is SVR.Network.PLPKPDFOLDL voice) SVR.Network.PLPKPDFOLDL.Release(voice);
-            return false;
+            return mine == null || their == null || mine == their;
         }
 
         // A player's table in the PvP lobby: the second set of chairs (PvpConsoles' copies) is table B.

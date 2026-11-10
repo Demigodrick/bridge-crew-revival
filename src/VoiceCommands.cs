@@ -588,7 +588,7 @@ namespace StbcRevival
             // Voice chat records the mic all the time; starting or ending a recording here would take the mic
             // from it (one recording per microphone), so crewmates stopped hearing you. Listen in on its
             // recording instead, and record ourselves only when voice chat isn't (playing alone).
-            tap = VoiceChatRecording();
+            tap = MicTap.TryFind(out var tapDevice, out var tapClip) ? new ChatRecording { Device = tapDevice, Clip = tapClip } : null;
             if (tap != null)
             {
                 micDevice = tap.Device;
@@ -599,8 +599,8 @@ namespace StbcRevival
             {
                 // Not listening in. If voice chat was recording this microphone all the same, ending our recording
                 // ends it too, so it's started again afterwards (Stop); if it wasn't (muted, off), it stays off.
-                var chat = ChatInput();
-                chatCut = chat != null && ChatDevice(chat, out var chatDevice) && Microphone.IsRecording(chatDevice);
+                var chat = MicTap.ChatInput();
+                chatCut = chat != null && MicTap.ChatDevice(chat, out var chatDevice) && Microphone.IsRecording(chatDevice);
                 clip = Microphone.Start(micDevice, false, MaxSeconds, SampleRate);
             }
             TakeDestinations();
@@ -618,53 +618,6 @@ namespace StbcRevival
         private static ChatRecording tap;
         private static int tapStart;
         private static bool chatCut; // recording ourselves ended the microphone under voice chat: start it again
-
-        internal static DaikonForge.VoIP.AudioInputDeviceBase ChatInput() =>
-            VoIpManager.IEFBKOMBFGO == null ? null : VoIpManager.IEFBKOMBFGO.GetLocalMicrophoneInputDevice();
-
-        // The microphone voice chat records from (by input class). False if the class isn't one this knows.
-        internal static bool ChatDevice(DaikonForge.VoIP.AudioInputDeviceBase input, out string device)
-        {
-            device = null;
-            // Looked up quietly (AccessTools.Field warns about the one a class doesn't have).
-            System.Reflection.FieldInfo Find(Type type, string name)
-            {
-                for (; type != null; type = type.BaseType)
-                    if (type.GetField(name, System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public
-                                            | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.DeclaredOnly) is System.Reflection.FieldInfo f)
-                        return f;
-                return null;
-            }
-            var field = new[] { "FJNHDGFAOLB", "GMNCBFBICKK" }.Select(n => Find(input.GetType(), n))
-                .FirstOrDefault(f => f != null && f.FieldType == typeof(string));
-            if (field == null)
-            {
-                Plugin.Log.LogWarning($"Voice commands: voice chat's microphone ({input.GetType().Name}) isn't one this knows");
-                return false;
-            }
-            device = field.GetValue(input) as string;
-            return true;
-        }
-
-        // The voice chat's own recording of your microphone (a looping clip on its AudioSource), if it's recording.
-        // Its input is either DaikonForge's UnityMicrophoneInputDevice (device in FJNHDGFAOLB) or the game's
-        // WwiseMicrophoneInputDevice (GMNCBFBICKK), by voice template; both record with Unity's Microphone.
-        private static ChatRecording VoiceChatRecording()
-        {
-            try
-            {
-                var input = ChatInput();
-                if (input == null || !ChatDevice(input, out var device)) return null;
-                var source = AccessTools.Field(input.GetType(), "EALMEBPADKI")?.GetValue(input) as AudioSource;
-                if (source == null || source.clip == null || !Microphone.IsRecording(device)) return null;
-                return new ChatRecording { Device = device, Clip = source.clip };
-            }
-            catch (Exception e)
-            {
-                Plugin.Log.LogWarning("Voice commands: voice chat's recording: " + e.Message);
-                return null;
-            }
-        }
 
         // What was said since the button went down, from the voice chat's looping recording, as 16 kHz mono.
         private static float[] FromChatRecording()
@@ -735,7 +688,7 @@ namespace StbcRevival
                 chatCut = false;
                 try
                 {
-                    ChatInput()?.StartRecording();
+                    MicTap.ChatInput()?.StartRecording();
                     Plugin.Log.LogInfo("Voice commands: voice chat's microphone started again");
                 }
                 catch (Exception e)

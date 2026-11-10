@@ -68,7 +68,19 @@ namespace StbcRevival
                     Plugin.Log.LogInfo($"Revival settings: Klingon head {KlingonHead.Names[HeadChoice()]}");
                 },
             },
-            Switch("Chime when someone joins", () => Plugin.PlayerJoinedAlert),
+            Switch("All hairstyles (experimental)", () => Plugin.AllHairStyles),
+            Switch("Sound when someone joins", () => Plugin.PlayerJoinedAlert),
+            // The rank you wear: the earned one, or a lower one (crewmates see it too).
+            new Entry
+            {
+                Text = () => "Rank: " + (Ranks.Chosen < 0 ? "EARNED" : Ranks.Names[Ranks.Chosen].ToUpperInvariant()),
+                Press = () =>
+                {
+                    Plugin.Rank.Value = Ranks.NextChoice();
+                    Plugin.Log.LogInfo($"Revival settings: rank {(Ranks.Chosen < 0 ? "earned" : Ranks.Names[Ranks.Chosen])}");
+                },
+            },
+            Switch("Name plates", () => Plugin.NamePlates),
             new Entry
             {
                 Text = () => Translation.T("Ship name") + ": " + (ShipName.Own.Length == 0 ? Translation.T("the game's") : ShipName.Own),
