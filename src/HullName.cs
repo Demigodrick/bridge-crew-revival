@@ -15,10 +15,10 @@ namespace StbcRevival
     /// The letters come from [Rooms] HullFont if that font is installed in Windows (e.g. Starfleet Bold Extended,
     /// which isn't shipped with the mod), else from the game's own United Sans.
     /// </summary>
-    internal static class HullName
+    internal static partial class HullName
     {
         private enum Shape { Straight, Smile, Frown } // a smile reads with the angle rising, letters' tops to the centre; a frown the other way
-        private enum Says { Name, BareName, Registry } // "U.S.S. COSMO", "COSMO", "NCC-91234"
+        private enum Says { Name, BareName, Registry, Number } // "U.S.S. COSMO", "COSMO", "NCC-91234", "91234"
 
         /// <summary>How a line's letters are coloured: the fill, then a gap and up to two rims outside it (widths in capital heights).</summary>
         private sealed class Style
@@ -113,6 +113,7 @@ namespace StbcRevival
                         if (decal.Emission) m.SetTexture("_EmissionMap", decal.Glow);
                     }
                 }
+                UpdatePaints(mats, name, registry);
             }
             catch (Exception e) { Plugin.Log.LogWarning("Hull name: " + e); nextScan = Time.unscaledTime + 30f; }
         }
@@ -135,6 +136,7 @@ namespace StbcRevival
                 }
             originals.Clear();
             foreach (var d in Decals) d.DrawnFor = null;
+            foreach (var p in Paints) p.DrawnFor = null;
         }
 
         /// <summary>The Enterprise-D decal's gold plate (beside the lettering, kept as it is): red-brown frame, gold inside.</summary>
@@ -514,6 +516,7 @@ namespace StbcRevival
 
         private static string TextFor(Line line, string name, string registry, Decal decal)
         {
+            if (line.Says == Says.Number) return NumberOf(registry.Length > 0 ? registry : decal.DefaultRegistry).ToUpperInvariant();
             if (line.Says == Says.Registry) return (registry.Length > 0 ? registry : decal.DefaultRegistry).ToUpperInvariant();
             string hull = HullText(name);
             return line.Says == Says.BareName && hull.StartsWith("U.S.S. ", StringComparison.Ordinal) ? hull.Substring(7) : hull;

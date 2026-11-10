@@ -79,6 +79,9 @@ namespace StbcRevival
                     .Replace("USS Enterprise (NCC 1701-D)", withRegistry)
                     .Replace("USS AEGIS", name.ToUpperInvariant())
                     .Replace("USS Aegis", name);
+                // Other spellings (e.g. the German "U.S.S. ENTERPRISE (NCC 1701-D)"): name and registry each.
+                __result = System.Text.RegularExpressions.Regex.Replace(__result, @"U\.\s?S\.\s?S\.\s?(ENTERPRISE|AEGIS)", m => (m.Groups[1].Value == m.Groups[1].Value.ToUpperInvariant() ? name.ToUpperInvariant() : name), System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                if (registry.Length > 0) __result = System.Text.RegularExpressions.Regex.Replace(__result, @"NCC[\s\-]1701[\s\-]D|NX[\s\-]1787", registry);
             }
             catch { }
         }
