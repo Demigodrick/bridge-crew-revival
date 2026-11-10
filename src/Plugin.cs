@@ -53,6 +53,7 @@ namespace StbcRevival
         internal static ConfigEntry<bool> HideCrewsInMission;
         internal static ConfigEntry<CrewContent> CrewContentFilter;
         internal static ConfigEntry<bool> PlayerJoinedAlert;
+        internal static ConfigEntry<string> ShipName;
         internal static ConfigEntry<UnityEngine.KeyCode> BugReportKey;
         internal static ConfigEntry<UnityEngine.KeyCode> CrewLogsKey;
         internal static ConfigEntry<UnityEngine.KeyCode> GameDumpKey;
@@ -161,6 +162,8 @@ namespace StbcRevival
                 "Crew lists: Any, NextGenerationOnly (crews with The Next Generation content on) or NoNextGeneration.");
             PlayerJoinedAlert = Config.Bind("Rooms", "PlayerJoinedAlert", true,
                 "When someone joins your crew: a chime, and the game's taskbar entry flashes if the window isn't in front. Handy while waiting with the headset off.");
+            ShipName = Config.Bind("Rooms", "ShipName", "",
+                "Your crew's ship when you host: name and registry, e.g. \"USS Cosmo, NCC-91234\". It replaces USS Aegis (NX-1787) and USS Enterprise (NCC 1701-D) in the game's texts (console headers, briefings) for everyone in your room with the mod. Empty: the game's names.");
             BugReportKey = Config.Bind("Debug", "BugReportKey", UnityEngine.KeyCode.F10,
                 "Saves the logs and settings needed for a bug report as one zip in the game folder.");
             CrewLogsKey = Config.Bind("Debug", "CrewLogsKey", UnityEngine.KeyCode.F11,
@@ -311,6 +314,7 @@ namespace StbcRevival
             Safely("vr room panels", StbcRevival.VrRoomPanels.Update);
             Safely("update check", UpdateCheck.Update);
             Safely("player joined alert", StbcRevival.PlayerJoinedAlert.Update);
+            Safely("ship name", StbcRevival.ShipName.Update);
             Safely("bug report", BugReport.Update);
             Safely("crew logs", CrewLogs.Update);
             Safely("performance log", PerfLog.Update);

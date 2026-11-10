@@ -242,6 +242,7 @@ namespace StbcRevival
             VoiceCommands.Patch(harmony);
             CrewOrders.Patch(harmony);
             Translation.Patch(harmony);
+            ShipName.Patch(harmony);
             ControllerGrace.Patch(harmony);
             LoadingScreenLabel.Patch(harmony);
             Excelsior.Patch(harmony);

@@ -200,6 +200,9 @@ namespace StbcRevival
             Add("Crews listed: TNG only", "Angezeigte Crews: nur TNG");
             Add("Crews listed: no TNG", "Angezeigte Crews: ohne TNG");
             Add("Crews listed: any", "Angezeigte Crews: alle");
+            Add("Ship name", "Schiffsname");
+            Add("the game's", "wie im Spiel");
+            Add("Ship name, registry (e.g. USS Cosmo, NCC-91234); empty for the game's", "Schiffsname, Registriernummer (z. B. USS Cosmo, NCC-91234); leer für die Namen des Spiels");
             Add("Blocked players: none (block someone after kicking them)", "Gesperrte Spieler: keine (sperre jemanden, nachdem du ihn rausgeworfen hast)");
             Add("Blocked players: {0}", "Gesperrte Spieler: {0}");
             Add("Blocked players: {0} (unblock all)", "Gesperrte Spieler: {0} (alle entsperren)");
