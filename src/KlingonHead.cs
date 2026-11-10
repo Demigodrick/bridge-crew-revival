@@ -582,14 +582,23 @@ namespace StbcRevival
             // of another's picture would otherwise take "off" as the state to put back, and the head stayed off.
             Camera.onPreCull += c =>
             {
+                hidingNow = true;
                 foreach (var g in live)
                     if (g != null && g.original != null) g.original.enabled = false;
             };
-            Camera.onPostRender += c =>
-            {
-                foreach (var g in live)
-                    if (g != null && g.original != null) g.original.enabled = g.wasEnabled;
-            };
+            Camera.onPostRender += c => PutBack();
+        }
+
+        // Set between a camera's cull and the end of its drawing. Still set in LateUpdate (no camera draws then), a
+        // camera started without finishing: the heads are put back first, or "off" would be taken as their state
+        // and the human and Klingon heads would both stay hidden for good.
+        private static bool hidingNow, stuckLogged;
+
+        private static void PutBack()
+        {
+            foreach (var g in live)
+                if (g != null && g.original != null) g.original.enabled = g.wasEnabled;
+            hidingNow = false;
         }
 
         // The creator used to hide the avatar's head by its materials; they're left alone now.
@@ -620,6 +629,11 @@ namespace StbcRevival
             {
                 Destroy(gameObject);
                 return;
+            }
+            if (hidingNow)
+            {
+                if (!stuckLogged) { stuckLogged = true; Plugin.Log.LogInfo("Klingon head: a camera didn't finish drawing; the avatars' own heads were put back before reading them"); }
+                PutBack();
             }
             wasEnabled = original.enabled;
             worn.enabled = wasEnabled;
