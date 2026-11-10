@@ -20,6 +20,10 @@ namespace StbcRevival
         private static string current = "";   // "Name, REGISTRY" in use, or ""
         private static string name = "", registry = "";
 
+        /// <summary>The ship name in use (the room's, or your own out of a room) and its registry; "" for the game's.</summary>
+        internal static string Name => name;
+        internal static string Registry => registry;
+
         internal static void Patch(Harmony harmony)
         {
             var lookup = AccessTools.Method(typeof(SVR.Localization), "GetLocalizedText", new[] { typeof(string), typeof(int) });
