@@ -371,6 +371,7 @@ namespace StbcRevival
         {
             Safely("room browser window", RoomBrowser.OnGUI);
             Safely("text prompt", TextPrompt.OnGUI);
+            Safely("ship name prompt", ShipNamePrompt.OnGUI);
         }
     }
 

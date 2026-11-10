@@ -10,23 +10,23 @@ using UnityEngine.UI;
 namespace StbcRevival
 {
     /// <summary>
-    /// The briefing console's SHIP NAME box: a copy of its SHIP box, above GAME TYPE, with three rows: the registry's
-    /// prefix (NCC or NX, a click switches), its number and the ship's name (a click asks, on the desktop or on
-    /// SteamVR's keyboard). The host or the captain changes it for the room; everyone sees it.
+    /// The briefing console's ship name button: a copy of its OPEN ROOM button (crew password), just above it,
+    /// showing the crew's ship ("USS COSMO  NCC-91234"). A click opens one window for all of it: the registry's prefix
+    /// (NCC or NX), its number and the ship's name (on SteamVR, its keyboard asks for the name, then the registry).
+    /// The host or the captain changes it for the room; everyone sees it.
     /// </summary>
     internal static class ShipNameBox
     {
         private sealed class Box
         {
-            public ConsoleBriefingRoom Console;
             public GameObject Root;
-            public Toggle Prefix, Number, Name;
+            public Button Button;
+            public TMP_Text[] Labels;
         }
 
         private static readonly List<Box> boxes = new List<Box>();
-        private static float nextRefresh;
         private static readonly Dictionary<TMP_Text, string> shown = new Dictionary<TMP_Text, string>();
-        private const float Scale = 0.7f; // the copy is smaller: the space above GAME TYPE is lower than the SHIP box
+        private static float nextRefresh;
 
         internal static void Patch(Harmony harmony)
         {
@@ -35,22 +35,8 @@ namespace StbcRevival
             harmony.Patch(start, postfix: new HarmonyMethod(typeof(ShipNameBox), nameof(Start_Postfix)) { priority = Priority.Low });
         }
 
-        private static T Field<T>(ConsoleBriefingRoom console, string name) where T : class =>
-            AccessTools.Field(typeof(ConsoleBriefingRoom), name)?.GetValue(console) as T;
-
-        /// <summary>The highest ancestor of a that doesn't also hold b: a's whole box.</summary>
-        private static Transform BoxOf(Transform a, Transform b)
-        {
-            var box = a;
-            while (box.parent != null && !b.IsChildOf(box.parent)) box = box.parent;
-            return box;
-        }
-
-        /// <summary>The rectangle a box's graphics cover, in its parent's space.</summary>
-        private static Rect Extent(Transform box) => ExtentIn(box, box.parent);
-
-        /// <summary>The rectangle a box's graphics cover, in another transform's space.</summary>
-        private static Rect ExtentIn(Transform box, Transform parent)
+        /// <summary>The rectangle a transform's graphics cover, in another transform's space.</summary>
+        private static Rect ExtentIn(Transform box, Transform space)
         {
             float xMin = float.MaxValue, yMin = float.MaxValue, xMax = float.MinValue, yMax = float.MinValue;
             var corners = new Vector3[4];
@@ -59,162 +45,50 @@ namespace StbcRevival
                 g.rectTransform.GetWorldCorners(corners);
                 foreach (var c in corners)
                 {
-                    var p = parent.InverseTransformPoint(c);
+                    var p = space.InverseTransformPoint(c);
                     xMin = Mathf.Min(xMin, p.x); xMax = Mathf.Max(xMax, p.x); yMin = Mathf.Min(yMin, p.y); yMax = Mathf.Max(yMax, p.y);
                 }
             }
             return xMin > xMax ? new Rect() : Rect.MinMaxRect(xMin, yMin, xMax, yMax);
         }
 
-        /// <summary>
-        /// The parent's children that make up the box around these toggles: anything (frame, heading, lines) lying
-        /// within their area widened a little, and a heading's height above it, that isn't another control.
-        /// </summary>
-        private static List<Transform> Members(Transform parent, IList<Transform> core, ICollection<Transform> skip, out Rect area)
-        {
-            area = core.Select(Extent).Aggregate((a, b) => Rect.MinMaxRect(Mathf.Min(a.xMin, b.xMin), Mathf.Min(a.yMin, b.yMin), Mathf.Max(a.xMax, b.xMax), Mathf.Max(a.yMax, b.yMax)));
-            float row = core.Count > 1 ? area.height / core.Count : area.height;
-            var wide = Rect.MinMaxRect(area.xMin - 0.25f * area.width, area.yMin - 0.8f * row, area.xMax + 0.25f * area.width, area.yMax + 1.8f * row);
-            var members = new List<Transform>(core);
-            foreach (Transform child in parent)
-            {
-                if (members.Contains(child) || skip.Contains(child) || !child.gameObject.activeSelf) continue;
-                if (child.GetComponentsInChildren<Selectable>(true).Length > 0) continue;
-                var r = Extent(child);
-                if (r.width <= 0f || !wide.Contains(r.min) || !wide.Contains(r.max)) continue;
-                members.Add(child);
-            }
-            foreach (var m in members)
-            {
-                var r = Extent(m);
-                area = Rect.MinMaxRect(Mathf.Min(area.xMin, r.xMin), Mathf.Min(area.yMin, r.yMin), Mathf.Max(area.xMax, r.xMax), Mathf.Max(area.yMax, r.yMax));
-            }
-            return members;
-        }
-
-        private static string Describe(IEnumerable<Transform> ts) => string.Join(", ", ts.Select(t => $"{t.name} {Extent(t)}").ToArray());
-
         private static void Start_Postfix(ConsoleBriefingRoom __instance)
         {
             var console = __instance;
             try
             {
-                var aegis = Field<Toggle>(console, "_aegisToggle");
-                var enterprise = Field<Toggle>(console, "_enterpriseToggle");
-                var tng = Field<Toggle>(console, "_tngToggle");
-                var campaign = Field<Toggle>(console, "_campaignMissionToggle");
-                if (aegis == null || enterprise == null || tng == null || campaign == null) return;
+                var open = console.GetComponentsInChildren<Button>(true).FirstOrDefault(b => b.name == "OpenRoom");
+                if (open == null) { Plugin.Log.LogWarning("Ship name box: the console's OpenRoom button wasn't found; no ship name button"); return; }
+                var parent = open.transform.parent;
+                var openRect = ExtentIn(open.transform, parent);
 
-                // The SHIP box's pieces are side by side in one panel: its three toggles and whatever lies around them.
-                var parent = aegis.transform.parent;
-                if (enterprise.transform.parent != parent || tng.transform.parent != parent) { Plugin.Log.LogWarning("Ship name box: the ship toggles aren't side by side; no box"); return; }
-                var typeBox = BoxOf(campaign.transform, aegis.transform);
-                var tngBacks = new[] { Field<Image>(console, "_tngToggleBackground1"), Field<Image>(console, "_tngToggleBackground2") }.Where(i => i != null).Select(i => i.transform).ToList();
-                var skip = new HashSet<Transform>();
-                foreach (Transform child in parent) if (tngBacks.Any(b => b == child || b.IsChildOf(child))) skip.Add(child);
-                var core = new List<Transform> { aegis.transform, enterprise.transform, tng.transform };
-                var shipParts = Members(parent, core, skip, out var ship);
-                if (typeBox.parent != parent) { Plugin.Log.LogWarning($"Ship name box: GAME TYPE ({typeBox.name}) isn't in the ship toggles' panel; no box"); return; }
-                skip.UnionWith(shipParts);
-                var typeParts = Members(parent, new List<Transform> { typeBox }, skip, out var type);
-                Plugin.Log.LogInfo($"Ship name box: SHIP {ship}: {Describe(shipParts)}");
-                Plugin.Log.LogInfo($"Ship name box: GAME TYPE {type}: {Describe(typeParts)}");
-
-                // A copy of the pieces in a holder of its own, at the panel's origin; then moved and shrunk.
-                var holder = new GameObject("Ship Name Box", typeof(RectTransform));
-                holder.layer = parent.gameObject.layer;
-                holder.transform.SetParent(parent, false);
-                holder.transform.SetSiblingIndex(aegis.transform.GetSiblingIndex());
-                Transform copyOfTng = null, copyOfEnterprise = null, copyOfAegis = null;
-                foreach (var part in shipParts)
-                {
-                    var copy = (GameObject)UnityEngine.Object.Instantiate(part.gameObject, holder.transform, false);
-                    copy.name = part.name;
-                    copy.transform.localPosition = part.localPosition; copy.transform.localRotation = part.localRotation; copy.transform.localScale = part.localScale;
-                    if (part == tng.transform) copyOfTng = copy.transform;
-                    if (part == enterprise.transform) copyOfEnterprise = copy.transform;
-                    if (part == aegis.transform) copyOfAegis = copy.transform;
-                }
-                // The third row: another plain toggle where the Enterprise-D's black and orange one was.
-                var plain = (GameObject)UnityEngine.Object.Instantiate(copyOfEnterprise.gameObject, holder.transform, false);
-                plain.name = "Ship Name Toggle 3";
-                plain.transform.localPosition = copyOfTng.localPosition; plain.transform.localScale = copyOfTng.localScale;
-                UnityEngine.Object.DestroyImmediate(copyOfTng.gameObject);
-
-                // A frame like GAME TYPE's around the rows (the SHIP box's own is part of the panel's backdrop).
-                var rowsRect = new[] { copyOfAegis, copyOfEnterprise, plain.transform }.Select(Extent)
-                    .Aggregate((a, b) => Rect.MinMaxRect(Mathf.Min(a.xMin, b.xMin), Mathf.Min(a.yMin, b.yMin), Mathf.Max(a.xMax, b.xMax), Mathf.Max(a.yMax, b.yMax)));
-                var frameSource = typeBox.GetComponentsInChildren<Image>(true).Where(i => i.GetComponentInParent<Toggle>() == null)
-                    .OrderByDescending(i => i.rectTransform.rect.width * i.rectTransform.rect.height).FirstOrDefault();
-                if (frameSource != null)
-                {
-                    var frame = (GameObject)UnityEngine.Object.Instantiate(frameSource.gameObject, holder.transform, false);
-                    frame.name = "Ship Name Frame";
-                    foreach (var c in frame.transform.Cast<Transform>().ToList()) UnityEngine.Object.DestroyImmediate(c.gameObject);
-                    foreach (var extra in frame.GetComponents<Component>().Where(c => !(c is Transform) && !(c is Graphic) && !(c is CanvasRenderer)).ToList()) UnityEngine.Object.DestroyImmediate(extra);
-                    var rt = (RectTransform)frame.transform;
-                    rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0.5f, 0.5f);
-                    rt.localRotation = Quaternion.identity; rt.localScale = Vector3.one;
-                    const float pad = 4f;
-                    rt.sizeDelta = new Vector2(rowsRect.width + 2f * pad, rowsRect.height + 2f * pad);
-                    rt.localPosition = new Vector3(rowsRect.center.x, rowsRect.center.y, 0f);
-                    frame.transform.SetAsFirstSibling();
-                    Plugin.Log.LogInfo($"Ship name box: frame from {frameSource.name}");
-                }
-                var full = Extent(holder.transform);
-
-                // Above GAME TYPE and whatever control sits on top of it (the crew password button).
-                float baseY = type.yMax;
-                bool found = false;
-                foreach (var control in console.GetComponentsInChildren<Selectable>(true))
-                {
-                    var t = control.transform;
-                    if (t.IsChildOf(holder.transform) || shipParts.Any(p => t.IsChildOf(p)) || typeParts.Any(p => t.IsChildOf(p))) continue;
-                    var r = ExtentIn(t, parent);
-                    if (r.width <= 0f || r.xMax < type.xMin || r.xMin > type.xMax || r.yMin < type.yMax - 2f || r.yMin > type.yMax + 40f) continue;
-                    Plugin.Log.LogInfo($"Ship name box: above {t.name} {r}");
-                    baseY = Mathf.Max(baseY, r.yMax);
-                    found = true;
-                }
-
-                // Bottom just above GAME TYPE (with its heading), left edges lined up, as large as fits up to the
-                // panel's top row of decorations.
-                holder.transform.localScale = Vector3.one * Scale;
-                if (!found) baseY += 20f; // the crew password button's height, wherever it is
-                Vector2 at = new Vector2(type.xMin - full.xMin * Scale, baseY + 3f - full.yMin * Scale);
-                holder.transform.localPosition = new Vector3(at.x, at.y, 0f);
-
-                var box = new Box { Console = console, Root = holder, Name = copyOfAegis.GetComponent<Toggle>(), Prefix = copyOfEnterprise.GetComponent<Toggle>(), Number = plain.GetComponent<Toggle>() }; // the name on top
-                var rows = new[] { box.Prefix, box.Number, box.Name };
-                var actions = new Action[] { SwitchPrefix, AskNumber, AskName };
-                for (int i = 0; i < rows.Length; i++)
-                {
-                    var toggle = rows[i]; var action = actions[i];
-                    toggle.group = null;
-                    toggle.onValueChanged.RemoveAllListeners();
-                    toggle.isOn = false;
-                    toggle.onValueChanged.AddListener(on => { if (!on) return; toggle.isOn = false; action(); });
-                }
-                // The heading: the copied texts outside the toggles.
-                foreach (var label in holder.GetComponentsInChildren<TMP_Text>(true))
-                    if (label.GetComponentInParent<Toggle>() == null) label.SetLocalizedText(Translation.T("SHIP NAME"));
+                var root = (GameObject)UnityEngine.Object.Instantiate(open.gameObject, parent, false);
+                root.name = "Ship Name Button";
+                root.SetActive(true);
+                root.transform.localPosition = open.transform.localPosition + new Vector3(0f, openRect.height + 3f, 0f);
+                root.transform.SetSiblingIndex(open.transform.GetSiblingIndex() + 1);
+                var button = root.GetComponent<Button>();
+                button.onClick = new Button.ButtonClickedEvent(); // not the room's own (persistent) handler
+                button.onClick.AddListener(Clicked);
+                var box = new Box { Root = root, Button = button, Labels = root.GetComponentsInChildren<TMP_Text>(true) };
                 boxes.Add(box);
                 Refresh(box);
 
-                // Decorations under the new box (the console's circuit drawing there) go.
-                var mine = Extent(holder.transform);
-                foreach (Transform sibling in parent)
+                // Decorations under the new button (the console's circuit drawing there) go.
+                var mine = ExtentIn(root.transform, parent);
+                foreach (var image in console.GetComponentsInChildren<Image>(true))
                 {
-                    if (sibling == holder.transform || shipParts.Contains(sibling) || typeParts.Contains(sibling) || sibling.GetComponentsInChildren<Selectable>(true).Length > 0) continue;
-                    var r = Extent(sibling);
+                    var t = image.transform;
+                    if (t.IsChildOf(root.transform) || image.GetComponentInParent<Selectable>() != null || t.GetComponentsInChildren<Selectable>(true).Length > 0 || t.GetComponentsInChildren<TMP_Text>(true).Length > 0) continue;
+                    var r = ExtentIn(t, parent);
                     float overlap = Mathf.Max(0f, Mathf.Min(r.xMax, mine.xMax) - Mathf.Max(r.xMin, mine.xMin)) * Mathf.Max(0f, Mathf.Min(r.yMax, mine.yMax) - Mathf.Max(r.yMin, mine.yMin));
-                    if (r.width > 0f && overlap >= 0.4f * r.width * r.height && r.width < mine.width * 1.6f && r.height < mine.height * 1.6f)
+                    if (r.width > 0f && overlap >= 0.5f * r.width * r.height && r.width < mine.width * 1.5f && r.height < mine.height * 1.5f)
                     {
-                        Plugin.Log.LogInfo($"Ship name box: hiding the decoration {sibling.name} {r} under it");
-                        sibling.gameObject.SetActive(false);
+                        Plugin.Log.LogInfo($"Ship name box: hiding the decoration {t.name} {r} under it");
+                        t.gameObject.SetActive(false);
                     }
                 }
-                Plugin.Log.LogInfo($"Ship name box: added at {mine}");
+                Plugin.Log.LogInfo($"Ship name box: button added at {mine}, above {open.name} {openRect}");
             }
             catch (Exception e) { Plugin.Log.LogWarning("Ship name box: " + e); }
         }
@@ -223,19 +97,18 @@ namespace StbcRevival
 
         private static readonly Regex RegistryParts = new Regex(@"^\s*(NCC|NX)?[\s\-]*(.*)$", RegexOptions.IgnoreCase);
 
-        private static void Parts(out string prefix, out string number, out string name)
+        internal static void Parts(out string prefix, out string number, out string name)
         {
             name = ShipName.Name; string registry = ShipName.Registry;
-            if (name.Length == 0) { name = "USS Aegis"; registry = "NX-1787"; } // the game's, until someone names it
             var m = RegistryParts.Match(registry);
             prefix = m.Groups[1].Success && m.Groups[1].Value.Length > 0 ? m.Groups[1].Value.ToUpperInvariant() : "NCC";
             number = m.Groups[2].Value.Trim();
         }
 
-        private static void SetParts(string prefix, string number, string name)
+        internal static void SetParts(string prefix, string number, string name)
         {
-            name = name.Trim();
-            number = number.Trim();
+            name = (name ?? "").Trim();
+            number = (number ?? "").Trim();
             string value = name.Length == 0 ? "" : number.Length > 0 ? $"{name}, {prefix}-{number}" : name;
             ShipName.Set(value, true);
             Plugin.Log.LogInfo($"Ship name box: \"{value}\"");
@@ -249,34 +122,26 @@ namespace StbcRevival
             catch { return false; }
         }
 
-        private static void SwitchPrefix()
+        private static void Clicked()
         {
             if (!CanEdit()) return;
             Parts(out var prefix, out var number, out var name);
-            SetParts(prefix == "NCC" ? "NX" : "NCC", number, name);
+            if (UnityEngine.VR.VRSettings.enabled && UnityEngine.VR.VRSettings.loadedDeviceName == "OpenVR")
+            {
+                // SteamVR's keyboard: the name, then the registry ("NX-74205"; without a prefix the current one).
+                VrKeyboard.Open(Translation.T("Ship name (e.g. USS Cosmo)"), 30, newName =>
+                    VrKeyboard.Open(Translation.T("Registry (e.g. NCC-91234)"), 16, registry =>
+                    {
+                        var m = RegistryParts.Match(registry ?? "");
+                        string p = m.Groups[1].Success && m.Groups[1].Value.Length > 0 ? m.Groups[1].Value.ToUpperInvariant() : prefix;
+                        SetParts(p, m.Groups[2].Value, newName);
+                    }));
+                return;
+            }
+            ShipNamePrompt.Open(prefix, number, name);
         }
 
-        private static void AskNumber()
-        {
-            if (!CanEdit()) return;
-            Parts(out var prefix, out var number, out var name);
-            Ask(Translation.T("Registry number (e.g. 91234)"), 12, text => SetParts(prefix, text ?? number, name));
-        }
-
-        private static void AskName()
-        {
-            if (!CanEdit()) return;
-            Parts(out var prefix, out var number, out var name);
-            Ask(Translation.T("Ship name (e.g. USS Cosmo); empty for the game's"), 30, text => SetParts(prefix, number, text ?? name));
-        }
-
-        private static void Ask(string what, int max, Action<string> done)
-        {
-            if (UnityEngine.VR.VRSettings.enabled && UnityEngine.VR.VRSettings.loadedDeviceName == "OpenVR") VrKeyboard.Open(what, (uint)max, done);
-            else TextPrompt.Ask(what, false, done);
-        }
-
-        // ---- keeping the rows current ----
+        // ---- keeping the button current ----
 
         internal static void Update()
         {
@@ -291,20 +156,74 @@ namespace StbcRevival
             try
             {
                 Parts(out var prefix, out var number, out var name);
+                string text = name.Length == 0 ? Translation.T("SHIP NAME") : (name + (number.Length > 0 ? $"  {prefix}-{number}" : "")).ToUpperInvariant();
                 bool edit = CanEdit();
-                Label(b.Prefix, Translation.T("PREFIX") + ": " + prefix, edit);
-                Label(b.Number, Translation.T("NUMBER") + ": " + (number.Length > 0 ? number : "-"), edit);
-                Label(b.Name, Translation.T("NAME") + ": " + name.ToUpperInvariant(), edit);
+                if (b.Button.interactable != edit) b.Button.interactable = edit;
+                foreach (var label in b.Labels)
+                {
+                    if (label == null) continue;
+                    if (!shown.TryGetValue(label, out var was) || was != text) { label.SetLocalizedText(text); shown[label] = text; }
+                }
             }
             catch (Exception e) { Plugin.Log.LogDebug("Ship name box: " + e.Message); }
         }
+    }
 
-        private static void Label(Toggle toggle, string text, bool interactable)
+    /// <summary>The desktop window for the ship's name: prefix (NCC / NX), number and name in one go.</summary>
+    internal static class ShipNamePrompt
+    {
+        private static bool open;
+        private static int prefix; // 0 NCC, 1 NX
+        private static string number = "", name = "";
+        private static Rect window = new Rect(0, 0, 380, 150);
+        private static readonly string[] Prefixes = { "NCC", "NX" };
+
+        internal static bool IsOpen => open;
+
+        internal static void Open(string currentPrefix, string currentNumber, string currentName)
         {
-            if (toggle == null) return;
-            if (toggle.interactable != interactable) toggle.interactable = interactable;
-            foreach (var label in toggle.GetComponentsInChildren<TMP_Text>(true))
-                if (!shown.TryGetValue(label, out var was) || was != text) { label.SetLocalizedText(text); shown[label] = text; }
+            prefix = currentPrefix == "NX" ? 1 : 0;
+            number = currentNumber ?? "";
+            name = currentName ?? "";
+            window.x = (Screen.width - window.width) / 2;
+            window.y = (Screen.height - window.height) / 3;
+            open = true;
+            Cursor.visible = true;
+            Cursor.lockState = CursorLockMode.None;
+            if (UnityEngine.VR.VRSettings.enabled)
+                try { UI.PopupMgr.ShowPopup(Translation.T("Name the ship in the window on the desktop."), null, UI.PDHCCBFJODN.Notification, true); }
+                catch { /* no popups here */ }
+        }
+
+        internal static void OnGUI()
+        {
+            if (!open) return;
+            window = GUILayout.Window(0x5BC9, window, Draw, Translation.T("Ship name"));
+        }
+
+        private static void Draw(int id)
+        {
+            GUILayout.BeginHorizontal();
+            GUILayout.Label(Translation.T("Name"), GUILayout.Width(80));
+            GUI.SetNextControlName("shipname");
+            name = GUILayout.TextField(name, 30);
+            GUILayout.EndHorizontal();
+            GUILayout.BeginHorizontal();
+            GUILayout.Label(Translation.T("Registry"), GUILayout.Width(80));
+            prefix = GUILayout.Toolbar(prefix, Prefixes, GUILayout.Width(100));
+            number = GUILayout.TextField(number, 12);
+            GUILayout.EndHorizontal();
+            if (GUI.GetNameOfFocusedControl() == "") GUI.FocusControl("shipname");
+            bool enter = Event.current.type == EventType.KeyDown && (Event.current.keyCode == KeyCode.Return || Event.current.keyCode == KeyCode.KeypadEnter);
+            GUILayout.BeginHorizontal();
+            bool ok = GUILayout.Button(Translation.T("OK")) || enter;
+            bool reset = GUILayout.Button(Translation.T("The game's"));
+            bool cancel = GUILayout.Button(Translation.T("Cancel")) || (Event.current.type == EventType.KeyDown && Event.current.keyCode == KeyCode.Escape);
+            GUILayout.EndHorizontal();
+            if (ok) { open = false; ShipNameBox.SetParts(Prefixes[prefix], number, name); }
+            else if (reset) { open = false; ShipNameBox.SetParts(Prefixes[prefix], "", ""); }
+            else if (cancel) open = false;
+            GUI.DragWindow();
         }
     }
 }

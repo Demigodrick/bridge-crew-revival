@@ -206,6 +206,12 @@ namespace StbcRevival
             Add("NUMBER", "NUMMER");
             Add("NAME", "NAME");
             Add("Ship", "Schiff");
+            Add("Name", "Name");
+            Add("Registry", "Registrierung");
+            Add("The game's", "Wie im Spiel");
+            Add("Ship name (e.g. USS Cosmo)", "Schiffsname (z. B. USS Cosmo)");
+            Add("Registry (e.g. NCC-91234)", "Registrierung (z. B. NCC-91234)");
+            Add("Name the ship in the window on the desktop.", "Benenne das Schiff im Fenster auf dem Desktop.");
             Add("Registry number (e.g. 91234)", "Registriernummer (z. B. 91234)");
             Add("Ship name (e.g. USS Cosmo); empty for the game's", "Schiffsname (z. B. USS Cosmo); leer für die Namen des Spiels");
             Add("the game's", "wie im Spiel");
