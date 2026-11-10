@@ -26,7 +26,7 @@ namespace StbcRevival
         private static readonly List<Box> boxes = new List<Box>();
         private static float nextRefresh;
         private static readonly Dictionary<TMP_Text, string> shown = new Dictionary<TMP_Text, string>();
-        private const float Scale = 0.75f; // the copy is smaller: the space above GAME TYPE is lower than the SHIP box
+        private const float Scale = 0.7f; // the copy is smaller: the space above GAME TYPE is lower than the SHIP box
 
         internal static void Patch(Harmony harmony)
         {
@@ -64,6 +64,34 @@ namespace StbcRevival
             return xMin > xMax ? new Rect() : Rect.MinMaxRect(xMin, yMin, xMax, yMax);
         }
 
+        /// <summary>
+        /// The parent's children that make up the box around these toggles: anything (frame, heading, lines) lying
+        /// within their area widened a little, and a heading's height above it, that isn't another control.
+        /// </summary>
+        private static List<Transform> Members(Transform parent, IList<Transform> core, ICollection<Transform> skip, out Rect area)
+        {
+            area = core.Select(Extent).Aggregate((a, b) => Rect.MinMaxRect(Mathf.Min(a.xMin, b.xMin), Mathf.Min(a.yMin, b.yMin), Mathf.Max(a.xMax, b.xMax), Mathf.Max(a.yMax, b.yMax)));
+            float row = core.Count > 1 ? area.height / core.Count : area.height;
+            var wide = Rect.MinMaxRect(area.xMin - 0.25f * area.width, area.yMin - 0.8f * row, area.xMax + 0.25f * area.width, area.yMax + 1.8f * row);
+            var members = new List<Transform>(core);
+            foreach (Transform child in parent)
+            {
+                if (members.Contains(child) || skip.Contains(child) || !child.gameObject.activeSelf) continue;
+                if (child.GetComponentsInChildren<Selectable>(true).Length > 0) continue;
+                var r = Extent(child);
+                if (r.width <= 0f || !wide.Contains(r.min) || !wide.Contains(r.max)) continue;
+                members.Add(child);
+            }
+            foreach (var m in members)
+            {
+                var r = Extent(m);
+                area = Rect.MinMaxRect(Mathf.Min(area.xMin, r.xMin), Mathf.Min(area.yMin, r.yMin), Mathf.Max(area.xMax, r.xMax), Mathf.Max(area.yMax, r.yMax));
+            }
+            return members;
+        }
+
+        private static string Describe(IEnumerable<Transform> ts) => string.Join(", ", ts.Select(t => $"{t.name} {Extent(t)}").ToArray());
+
         private static void Start_Postfix(ConsoleBriefingRoom __instance)
         {
             var console = __instance;
@@ -75,31 +103,49 @@ namespace StbcRevival
                 var campaign = Field<Toggle>(console, "_campaignMissionToggle");
                 if (aegis == null || enterprise == null || tng == null || campaign == null) return;
 
-                var shipBox = BoxOf(aegis.transform, campaign.transform);
+                // The SHIP box's pieces are side by side in one panel: its three toggles and whatever lies around them.
+                var parent = aegis.transform.parent;
+                if (enterprise.transform.parent != parent || tng.transform.parent != parent) { Plugin.Log.LogWarning("Ship name box: the ship toggles aren't side by side; no box"); return; }
                 var typeBox = BoxOf(campaign.transform, aegis.transform);
-                if (shipBox.parent != typeBox.parent) { Plugin.Log.LogWarning("Ship name box: SHIP and GAME TYPE aren't side by side; no box"); return; }
-                Rect ship = Extent(shipBox), type = Extent(typeBox);
-                Plugin.Log.LogInfo($"Ship name box: SHIP box {shipBox.name} {ship}, GAME TYPE box {typeBox.name} {type}");
+                var tngBacks = new[] { Field<Image>(console, "_tngToggleBackground1"), Field<Image>(console, "_tngToggleBackground2") }.Where(i => i != null).Select(i => i.transform).ToList();
+                var skip = new HashSet<Transform>();
+                foreach (Transform child in parent) if (tngBacks.Any(b => b == child || b.IsChildOf(child))) skip.Add(child);
+                var core = new List<Transform> { aegis.transform, enterprise.transform, tng.transform };
+                var shipParts = Members(parent, core, skip, out var ship);
+                if (typeBox.parent != parent) { Plugin.Log.LogWarning($"Ship name box: GAME TYPE ({typeBox.name}) isn't in the ship toggles' panel; no box"); return; }
+                skip.UnionWith(shipParts);
+                var typeParts = Members(parent, new List<Transform> { typeBox }, skip, out var type);
+                Plugin.Log.LogInfo($"Ship name box: SHIP {ship}: {Describe(shipParts)}");
+                Plugin.Log.LogInfo($"Ship name box: GAME TYPE {type}: {Describe(typeParts)}");
 
-                var root = (GameObject)UnityEngine.Object.Instantiate(shipBox.gameObject, shipBox.parent, false);
-                root.name = "Ship Name Box";
-                root.transform.localScale = shipBox.localScale * Scale;
-                // Its bottom just above GAME TYPE's top, left edges lined up.
-                Vector2 offset = new Vector2(ship.xMin, ship.yMin) - (Vector2)shipBox.localPosition;
-                Vector2 at = new Vector2(type.xMin, type.yMax + 0.06f * type.height) - offset * Scale;
-                root.transform.localPosition = new Vector3(at.x, at.y, shipBox.localPosition.z);
+                // A copy of the pieces in a holder of its own, at the panel's origin; then moved and shrunk.
+                var holder = new GameObject("Ship Name Box", typeof(RectTransform));
+                holder.layer = parent.gameObject.layer;
+                holder.transform.SetParent(parent, false);
+                holder.transform.SetSiblingIndex(aegis.transform.GetSiblingIndex());
+                Transform copyOfTng = null, copyOfEnterprise = null, copyOfAegis = null;
+                foreach (var part in shipParts)
+                {
+                    var copy = (GameObject)UnityEngine.Object.Instantiate(part.gameObject, holder.transform, false);
+                    copy.name = part.name;
+                    copy.transform.localPosition = part.localPosition; copy.transform.localRotation = part.localRotation; copy.transform.localScale = part.localScale;
+                    if (part == tng.transform) copyOfTng = copy.transform;
+                    if (part == enterprise.transform) copyOfEnterprise = copy.transform;
+                    if (part == aegis.transform) copyOfAegis = copy.transform;
+                }
+                // The third row: another plain toggle where the Enterprise-D's black and orange one was.
+                var plain = (GameObject)UnityEngine.Object.Instantiate(copyOfEnterprise.gameObject, holder.transform, false);
+                plain.name = "Ship Name Toggle 3";
+                plain.transform.localPosition = copyOfTng.localPosition; plain.transform.localScale = copyOfTng.localScale;
+                UnityEngine.Object.Destroy(copyOfTng.gameObject);
 
-                // The copies of the three ship toggles: Aegis and Enterprise as they are, the Enterprise-D's (black and
-                // orange) swapped for another plain one.
-                Toggle Copy(Toggle original) => root.GetComponentsInChildren<Toggle>(true).FirstOrDefault(t => t.name == original.name && t.transform.localPosition == original.transform.localPosition);
-                var first = Copy(aegis); var second = Copy(enterprise); var third = Copy(tng);
-                if (first == null || second == null || third == null) { UnityEngine.Object.Destroy(root); Plugin.Log.LogWarning("Ship name box: the copied toggles weren't found"); return; }
-                var plain = (GameObject)UnityEngine.Object.Instantiate(second.gameObject, third.transform.parent, false);
-                plain.transform.localPosition = third.transform.localPosition;
-                plain.transform.SetSiblingIndex(third.transform.GetSiblingIndex());
-                UnityEngine.Object.Destroy(third.gameObject);
+                // Bottom just above GAME TYPE (with its heading), left edges lined up, as large as fits up to the
+                // panel's top row of decorations.
+                holder.transform.localScale = Vector3.one * Scale;
+                Vector2 at = new Vector2(type.xMin - ship.xMin * Scale, type.yMax + 0.04f * ship.height - ship.yMin * Scale);
+                holder.transform.localPosition = new Vector3(at.x, at.y, 0f);
 
-                var box = new Box { Console = console, Root = root, Prefix = first, Number = second, Name = plain.GetComponent<Toggle>() };
+                var box = new Box { Console = console, Root = holder, Prefix = copyOfAegis.GetComponent<Toggle>(), Number = copyOfEnterprise.GetComponent<Toggle>(), Name = plain.GetComponent<Toggle>() };
                 var rows = new[] { box.Prefix, box.Number, box.Name };
                 var actions = new Action[] { SwitchPrefix, AskNumber, AskName };
                 for (int i = 0; i < rows.Length; i++)
@@ -110,19 +156,19 @@ namespace StbcRevival
                     toggle.isOn = false;
                     toggle.onValueChanged.AddListener(on => { if (!on) return; toggle.isOn = false; action(); });
                 }
-                // Its heading: the SHIP box's own text outside the toggles.
-                foreach (var label in root.GetComponentsInChildren<TMP_Text>(true))
+                // The heading: the copied texts outside the toggles.
+                foreach (var label in holder.GetComponentsInChildren<TMP_Text>(true))
                     if (label.GetComponentInParent<Toggle>() == null) label.SetLocalizedText(Translation.T("SHIP NAME"));
                 boxes.Add(box);
                 Refresh(box);
 
                 // Decorations under the new box (the console's circuit drawing there) go.
-                var mine = Extent(root.transform);
-                foreach (Transform sibling in shipBox.parent)
+                var mine = Extent(holder.transform);
+                foreach (Transform sibling in parent)
                 {
-                    if (sibling == root.transform || sibling == shipBox || sibling == typeBox || sibling.GetComponentInChildren<Selectable>(true) != null || sibling.GetComponentInChildren<TMP_Text>(true) != null) continue;
+                    if (sibling == holder.transform || shipParts.Contains(sibling) || typeParts.Contains(sibling) || sibling.GetComponentsInChildren<Selectable>(true).Length > 0 || sibling.GetComponentsInChildren<TMP_Text>(true).Length > 0) continue;
                     var r = Extent(sibling);
-                    if (r.width > 0f && mine.Contains(r.center) && r.width < mine.width * 1.5f && r.height < mine.height * 1.5f)
+                    if (r.width > 0f && mine.Overlaps(r) && mine.Contains(r.center) && r.width < mine.width * 1.5f && r.height < mine.height * 1.5f)
                     {
                         Plugin.Log.LogInfo($"Ship name box: hiding the decoration {sibling.name} {r} under it");
                         sibling.gameObject.SetActive(false);
