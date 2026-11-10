@@ -345,7 +345,7 @@ namespace StbcRevival
                 finally
                 {
                     talking = false;
-                    WriteLoopback();
+                    WriteLoopback(loopbackFill >= LoopbackSamples); // not full yet: the next capture records again
                     if (loopback != null) loopback.Dispose();
                     if (encoder != null) encoder.Dispose();
                     if (noise != null) noise.Dispose();
@@ -429,8 +429,14 @@ namespace StbcRevival
                 encoded++;
 
                 int send = gate.Step(speech, out bool burstStart);
+                bool wasTalking = talking;
                 talking = gate.Open;
-                if (send <= 0) return;
+                if (send <= 0)
+                {
+                    // Save the loopback so far at the end of each sentence, so quitting the game doesn't lose it.
+                    if (wasTalking && loopback != null) WriteLoopback(false);
+                    return;
+                }
                 Interlocked.Increment(ref speechFrames);
                 send = (int)Math.Min(send, Math.Min(encoded, Ring));
                 for (int k = send - 1; k >= 0; k--)
@@ -464,13 +470,16 @@ namespace StbcRevival
                 n = Math.Min(n, LoopbackSamples - loopbackFill);
                 Array.Copy(decoded, 0, loopbackPcm, loopbackFill, n);
                 loopbackFill += n;
-                if (loopbackFill >= LoopbackSamples) WriteLoopback();
+                if (loopbackFill >= LoopbackSamples) WriteLoopback(true);
             }
 
-            private void WriteLoopback()
+            // Writes what's been collected so far. With final, it's the last write this run: the decoder is
+            // freed and later captures don't record again.
+            private void WriteLoopback(bool final = true)
             {
                 if (loopback == null || loopbackFill == 0) return;
-                if (Interlocked.CompareExchange(ref loopbackWritten, 1, 0) != 0) return;
+                if (Interlocked.CompareExchange(ref loopbackWritten, 0, 0) != 0) return;
+                if (final) Interlocked.Exchange(ref loopbackWritten, 1);
                 try
                 {
                     using (var file = new BinaryWriter(File.Create(loopbackPath)))
@@ -494,12 +503,14 @@ namespace StbcRevival
                             file.Write((short)(s > 32767f ? 32767 : s < -32768f ? -32768 : (int)s));
                         }
                     }
-                    Plugin.Log.LogInfo($"Revival voice: loopback ({loopbackFill / (float)VoiceFormat.SampleRate:0.0} s of what was sent) written to {loopbackPath}");
+                    Plugin.Log.LogInfo($"Revival voice: loopback ({loopbackFill / (float)VoiceFormat.SampleRate:0.0} s of what was sent) written to {loopbackPath}"
+                                       + (final ? "" : " (more is added as you talk, up to 10 s)"));
                 }
                 catch (Exception e)
                 {
                     Plugin.Log.LogWarning("Revival voice: couldn't write the loopback recording: " + e.Message);
                 }
+                if (!final) return;
                 loopback.Dispose();
                 loopback = null;
             }
