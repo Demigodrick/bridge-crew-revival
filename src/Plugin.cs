@@ -53,6 +53,7 @@ namespace StbcRevival
         internal static ConfigEntry<bool> HideCrewsInMission;
         internal static ConfigEntry<CrewContent> CrewContentFilter;
         internal static ConfigEntry<bool> PlayerJoinedAlert;
+        internal static ConfigEntry<bool> BoatswainWhistle;
         internal static ConfigEntry<UnityEngine.KeyCode> BugReportKey;
         internal static ConfigEntry<UnityEngine.KeyCode> CrewLogsKey;
         internal static ConfigEntry<UnityEngine.KeyCode> GameDumpKey;
@@ -161,6 +162,8 @@ namespace StbcRevival
                 "Crew lists: Any, NextGenerationOnly (crews with The Next Generation content on) or NoNextGeneration.");
             PlayerJoinedAlert = Config.Bind("Rooms", "PlayerJoinedAlert", true,
                 "When someone joins your crew: a chime, and the game's taskbar entry flashes if the window isn't in front. Handy while waiting with the headset off.");
+            BoatswainWhistle = Config.Bind("Rooms", "BoatswainWhistle", true,
+                "When someone joins your crew: the boatswain's whistle, piping them aboard.");
             BugReportKey = Config.Bind("Debug", "BugReportKey", UnityEngine.KeyCode.F10,
                 "Saves the logs and settings needed for a bug report as one zip in the game folder.");
             CrewLogsKey = Config.Bind("Debug", "CrewLogsKey", UnityEngine.KeyCode.F11,
