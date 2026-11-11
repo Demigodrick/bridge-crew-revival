@@ -665,7 +665,7 @@ var spacecraft = game.GetType("Sector.Spacecraft.BaseSpacecraft");
 Check("BaseSpacecraft._body (Nova)", spacecraft?.GetField("_body", Inst));
 Check("  BaseSpacecraft.Awake", spacecraft?.GetMethod("Awake", Inst));
 Check("Loader._tngBridgeScene (Nova)", game.GetType("Loader")?.GetField("_tngBridgeScene", Inst));
-foreach (var f in new[] { "_aegisToggle", "_enterpriseToggle", "_tngToggle", "_tngToggleBackground1", "_tngToggleBackground2", "IMHCKEMPKJA" })
+foreach (var f in new[] { "_aegisToggle", "_enterpriseToggle", "_tngToggle", "_tngToggleBackground1", "_tngToggleBackground2", "IMHCKEMPKJA", "AABMEMPEEGB" })
     Check($"ConsoleBriefingRoom.{f} (ship choice)", game.GetType("ConsoleBriefingRoom")?.GetField(f, Inst));
 
 Console.WriteLine(failures == 0 ? "\nAll targets resolved." : $"\n{failures} target(s) missing.");
