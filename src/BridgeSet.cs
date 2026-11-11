@@ -36,6 +36,8 @@ namespace StbcRevival
             public Dictionary<string, ObjModel.Material> Materials;
             public Dictionary<string, byte[]> Images = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
             public Vector3 Captain = new Vector3(0f, 0.30f, -0.75f);
+            public Vector3? Screen;     // the set's viewscreen: the middle of its back plane (model file)
+            public float ScreenHeight;  // and its height
             public string Error;
         }
 
@@ -43,6 +45,8 @@ namespace StbcRevival
         private static Thread loading;
         private static volatile Loaded loaded;
         private static GameObject template;
+        private static Vector3 placedCaptain; // the set's captain's place in its model file (the last one built)
+        private static Vector3? screen; private static float screenHeight;
         private static int dressedScene = -1;
         private static float next;
 
@@ -90,6 +94,12 @@ namespace StbcRevival
                     foreach (var line in File.ReadAllLines(placeFile))
                     {
                         var p = line.Trim().Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+                        if (p.Length >= 5 && p[0] == "screen")
+                        {
+                            var inv = System.Globalization.CultureInfo.InvariantCulture;
+                            result.Screen = new Vector3(float.Parse(p[1], inv), float.Parse(p[2], inv), float.Parse(p[3], inv));
+                            result.ScreenHeight = float.Parse(p[4], inv);
+                        }
                         if (p.Length >= 4 && p[0] == "captain")
                             result.Captain = new Vector3(float.Parse(p[1], System.Globalization.CultureInfo.InvariantCulture), float.Parse(p[2], System.Globalization.CultureInfo.InvariantCulture), float.Parse(p[3], System.Globalization.CultureInfo.InvariantCulture));
                     }
@@ -146,6 +156,7 @@ namespace StbcRevival
             // Model file -> bridge: turned half round (its +z ahead becomes the bridge's -z), its captain's place on the
             // game's. (x, y, z) -> (x, y, -z) mirrors, as right-handed to left-handed does, so the triangles turn too.
             var c = data.Captain;
+            placedCaptain = c; screen = data.Screen; screenHeight = data.ScreenHeight;
             Func<Vector3, Vector3> place = v => new Vector3(v.x - c.x, v.y - c.y, -(v.z - c.z)) + GameCaptain;
             int pieces = 0, tris = 0;
             for (int n = 0; n < data.Parts.Count; n++)
@@ -178,6 +189,34 @@ namespace StbcRevival
             return root;
         }
 
+        /// <summary>
+        /// The game's viewscreen (its glass, which shows space, and the crew's screen overlays) moved and scaled into the
+        /// set's viewscreen: as tall as it, its back against the set's screen plane.
+        /// </summary>
+        private static void MoveViewscreen()
+        {
+            if (screen == null || screenHeight <= 0f) return;
+            var glass = GameObject.Find("Bridge/ViewScreenReferencePoint");
+            if (glass == null) { Plugin.Log.LogWarning("Bridge set: the viewscreen wasn't found"); return; }
+            var renderers = glass.GetComponentsInChildren<Renderer>(true);
+            if (renderers.Length == 0) return;
+            var bounds = renderers[0].bounds;
+            foreach (var r in renderers) bounds.Encapsulate(r.bounds);
+            float k = screenHeight / Mathf.Max(0.01f, bounds.size.y);
+            var s = screen.Value; var c = placedCaptain;
+            var back = new Vector3(s.x - c.x, s.y - c.y, -(s.z - c.z)) + GameCaptain;
+            var target = back + new Vector3(0f, 0f, bounds.size.z * k * 0.5f); // toward the captain: the screen's depth in front of the plane
+            foreach (var path in new[] { "Bridge/ViewScreenReferencePoint", "Bridge/ViewscreenUI-1701D" })
+            {
+                var go = GameObject.Find(path);
+                if (go == null) continue;
+                var t = go.transform;
+                t.position = target + (t.position - bounds.center) * k;
+                t.localScale *= k;
+            }
+            Plugin.Log.LogInfo($"Bridge set {name}: viewscreen moved to {target} at {k:0.###} its size (was {bounds.center}, {bounds.size})");
+        }
+
         private static Material BaseMaterial()
         {
             var ship = Resources.Load<GameObject>("Sector/Ships/Ship - Aegis");
@@ -200,6 +239,7 @@ namespace StbcRevival
             set.name = "Bridge set " + name;
             UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(set, scene);
             set.SetActive(true);
+            MoveViewscreen();
             Plugin.Log.LogInfo($"Bridge set {name}: put into {scene.name}, {hidden} of the game's renderers hidden");
         }
     }
