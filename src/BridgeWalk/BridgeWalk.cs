@@ -66,7 +66,6 @@ namespace StbcRevival.Walking
             Walker.Tick(typing);
             Remotes.Tick();
             TestCorridor.Tick(phase == typeof(GamePhase_Bridge));
-            BridgeEditor.Tick(phase == typeof(GamePhase_Bridge));
         }
     }
 
@@ -176,10 +175,6 @@ namespace StbcRevival.Walking
         private static bool savedCursorVisible;
         /// <summary>Sat down with Escape: the game's menu actions stay off until Escape is let go.</summary>
         public static bool SwallowEscape;
-        /// <summary>The bridge editor is dragging with the mouse: it doesn't turn you.</summary>
-        public static bool HoldLook;
-        /// <summary>The 2D camera while standing (null seated).</summary>
-        public static Transform Eye => Standing ? cam : null;
 
         // The bridge moves with the ship: everything is worked out relative to the character's parent.
         private static Transform Basis => pawn != null ? pawn.parent : null;
@@ -306,7 +301,7 @@ namespace StbcRevival.Walking
                 try { mx = Input.GetAxisRaw("Mouse X"); my = Input.GetAxisRaw("Mouse Y"); }
                 catch { mouseAxisOk = false; Plugin.Log.LogWarning("Bridge walk: no mouse axes; look around with Q/E and Page Up/Down"); }
             }
-            float s = HoldLook ? 0f : Plugin.BridgeWalkMouseSensitivity.Value; // the bridge editor is using the mouse
+            float s = Plugin.BridgeWalkMouseSensitivity.Value;
             yaw += mx * s;
             pitch = Mathf.Clamp(pitch - my * s, -80f, 80f);
             if (Input.GetKey(KeyCode.Q)) yaw -= 90f * Time.deltaTime;
