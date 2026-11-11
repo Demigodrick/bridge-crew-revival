@@ -31,6 +31,7 @@ namespace StbcRevival
             public Vector3 Step;              // from one row to the next
             public Toggle Up, Down;           // the scroll buttons on the box's left edge
             public int Offset = -1, LastChosen = -1;
+            public TMP_Text[] NovaLabels; public Color[] NovaColours;
             public bool Applying;
         }
 
@@ -110,6 +111,9 @@ namespace StbcRevival
             }
             catch (Exception e) { Plugin.Log.LogWarning("Ship choice: " + e); }
         }
+
+        /// <summary>A briefing console's ship box is about (the briefing room is open).</summary>
+        internal static bool InBriefing => boxes.Count > 0 && boxes.Exists(b => b.Console != null);
 
         private static Toggle[] Rows(Box box) => new[] { box.Aegis, box.Tos, box.Tng, box.Nova };
 
@@ -247,10 +251,16 @@ namespace StbcRevival
             {
                 var t = c.transform;
                 Vector3 a = t.InverseTransformPoint(corners[0]), b = t.InverseTransformPoint(corners[2]);
-                string was = $"{c.size.x:0.##}x{c.size.y:0.##}";
-                c.center = new Vector3((a.x + b.x) / 2f, (a.y + b.y) / 2f, c.center.z);
-                c.size = new Vector3(Mathf.Max(1e-3f, Mathf.Abs(b.x - a.x)), Mathf.Max(1e-3f, Mathf.Abs(b.y - a.y)), c.size.z);
-                fitted.Add($"{t.name} {was} -> {c.size.x:0.##}x{c.size.y:0.##}");
+                // The button's rectangle in the collider's own axes: two of them span it, the third (where it has no
+                // extent) is the trigger's depth, kept as it is.
+                var ext = new Vector3(Mathf.Abs(b.x - a.x), Mathf.Abs(b.y - a.y), Mathf.Abs(b.z - a.z));
+                int depth = ext.x <= ext.y && ext.x <= ext.z ? 0 : ext.y <= ext.z ? 1 : 2;
+                string was = $"{c.size.x:0.##}x{c.size.y:0.##}x{c.size.z:0.##}";
+                Vector3 centre = c.center, size = c.size;
+                for (int i = 0; i < 3; i++)
+                    if (i != depth) { centre[i] = (a[i] + b[i]) / 2f; size[i] = Mathf.Max(1e-3f, ext[i]); }
+                c.center = centre; c.size = size;
+                fitted.Add($"{t.name} {was} -> {c.size.x:0.##}x{c.size.y:0.##}x{c.size.z:0.##} (depth {"xyz"[depth]})");
             }
             foreach (var g in go.GetComponentsInChildren<Graphic>(true))
                 if (g.rectTransform != visual && !g.transform.IsChildOf(visual)) g.raycastTarget = false; // only the button itself takes the mouse
@@ -290,92 +300,6 @@ namespace StbcRevival
             Enable(box.Down, offset < rows.Length - Visible);
         }
 
-        // The holotable's three ship holograms (SetHologramModels: Aegis, original Enterprise, Enterprise-D) and the one
-        // shown (SyncBridgeToggles swaps it as the ship changes). All four consoles share the one holotable.
-        private static readonly System.Reflection.FieldInfo TngHologramField = AccessTools.Field(typeof(ConsoleBriefingRoom), "IMHCKEMPKJA");
-        private static readonly System.Reflection.FieldInfo ShownHologramField = AccessTools.Field(typeof(ConsoleBriefingRoom), "AABMEMPEEGB");
-
-        private static GameObject novaHologram;          // one, for the holotable (not one per console)
-        private static int hologramVersion = -1;         // NovaShip.Version it was made for
-        private static GameObject hiddenFor;             // the game's hologram hidden while the Nova's shows
-        private static readonly List<Renderer> hiddenParts = new List<Renderer>();
-
-        /// <summary>
-        /// The holotable: with NOVA chosen the Nova's hologram shows where the ships' do and the game's own (the Aegis's
-        /// or the Enterprise-D's, whichever it shows) is hidden; otherwise the game's shows as it does. The Nova's is made
-        /// once, beside the game's three (not inside one: they're switched off as the ship changes), as long as the
-        /// Enterprise-D's, from the Nova body's meshes and materials (the other ships' are lit models too).
-        /// </summary>
-        private static void Hologram(ConsoleBriefingRoom console, bool nova)
-        {
-            var shown = ShownHologramField?.GetValue(console) as GameObject;
-            if (novaHologram != null && hologramVersion != NovaShip.Version) { UnityEngine.Object.Destroy(novaHologram); novaHologram = null; }
-            if (novaHologram == null && nova) MakeHologram(console);
-            bool showNova = nova && novaHologram != null && shown != null;
-            // The game's hologram back when it's no longer hidden for the Nova (or the game shows another one now).
-            if (hiddenFor != null && (!showNova || hiddenFor != shown))
-            {
-                foreach (var r in hiddenParts) if (r != null) r.enabled = true;
-                hiddenParts.Clear(); hiddenFor = null;
-            }
-            if (showNova && hiddenFor == null)
-            {
-                foreach (var r in shown.GetComponentsInChildren<Renderer>(true)) if (r.enabled) { r.enabled = false; hiddenParts.Add(r); }
-                hiddenFor = shown;
-            }
-            if (novaHologram != null && novaHologram.activeSelf != showNova) novaHologram.SetActive(showNova);
-        }
-
-        private static void MakeHologram(ConsoleBriefingRoom console)
-        {
-            var tng = TngHologramField?.GetValue(console) as GameObject;
-            var parts = NovaShip.ModelParts;
-            if (tng == null || parts.Length == 0) return;
-            hologramVersion = NovaShip.Version;
-            var renderers = tng.GetComponentsInChildren<Renderer>(true).Where(r => r is MeshRenderer).ToArray();
-            // The ship itself among its parts (there are window layers and effects too): the hologram shader's (it has a
-            // noise texture), the most vertices.
-            var first = renderers.Where(r => r.GetComponent<MeshFilter>()?.sharedMesh != null)
-                .OrderByDescending(r => r.sharedMaterial != null && r.sharedMaterial.HasProperty("_Noise") ? 1 : 0)
-                .ThenByDescending(r => r.GetComponent<MeshFilter>().sharedMesh.vertexCount).FirstOrDefault();
-            if (first == null) return;
-            var space = tng.transform.parent ?? tng.transform; // beside the game's holograms, not inside one
-            // The Enterprise-D's size and place on the table, in that space (forward z, up y, as the ships' bodies).
-            Vector3 lo = Vector3.one * float.MaxValue, hi = Vector3.one * float.MinValue;
-            var mf = first.GetComponent<MeshFilter>();
-            var b = mf.sharedMesh.bounds;
-            for (int i = 0; i < 8; i++)
-            {
-                var c = new Vector3((i & 1) == 0 ? b.min.x : b.max.x, (i & 2) == 0 ? b.min.y : b.max.y, (i & 4) == 0 ? b.min.z : b.max.z);
-                var p = space.InverseTransformPoint(first.transform.TransformPoint(c));
-                lo = Vector3.Min(lo, p); hi = Vector3.Max(hi, p);
-            }
-            Vector3 novaLo = Vector3.one * float.MaxValue, novaHi = Vector3.one * float.MinValue;
-            foreach (var f in parts) { var nb = f.sharedMesh.bounds; novaLo = Vector3.Min(novaLo, nb.min); novaHi = Vector3.Max(novaHi, nb.max); }
-            float length = Mathf.Max(hi.z - lo.z, hi.x - lo.x);
-            float scale = length / Mathf.Max(1e-3f, novaHi.z - novaLo.z);
-            // Turned as the Enterprise-D's ship is in that space.
-            var turn = Quaternion.Inverse(space.rotation) * first.transform.rotation;
-
-            var holo = new GameObject("Nova Hologram");
-            holo.layer = first.gameObject.layer;
-            holo.transform.SetParent(space, false);
-            holo.transform.localRotation = turn;
-            holo.transform.localScale = Vector3.one * scale;
-            holo.transform.localPosition = (lo + hi) / 2f - turn * ((novaLo + novaHi) / 2f * scale);
-            foreach (var f in parts)
-            {
-                var go = new GameObject(f.name);
-                go.layer = holo.layer;
-                go.transform.SetParent(holo.transform, false);
-                go.AddComponent<MeshFilter>().sharedMesh = f.sharedMesh;
-                go.AddComponent<MeshRenderer>().sharedMaterial = f.GetComponent<MeshRenderer>()?.sharedMaterial ?? first.sharedMaterial;
-            }
-            holo.SetActive(false);
-            novaHologram = holo;
-            Plugin.Log.LogInfo($"Ship choice: Nova hologram on the holotable ({parts.Length} parts, scale {scale:0.###}, beside {tng.name})");
-        }
-
         /// <summary>Each frame: NOVA's mark and whether it can be clicked follow the room; the TNG row hides its mark under it.</summary>
         private static float nextUpdate;
 
@@ -385,7 +309,6 @@ namespace StbcRevival
             nextUpdate = Time.unscaledTime + 0.2f; // five times a second is plenty for a mark and a hologram
             boxes.RemoveAll(b => b.Console == null || b.Nova == null);
             bool nova = NovaShip.ActiveNow;
-            try { Hologram(boxes[0].Console, nova); } catch (Exception e) { Plugin.Log.LogDebug("Ship choice: hologram: " + e.Message); }
             foreach (var box in boxes)
             {
                 try
@@ -397,6 +320,16 @@ namespace StbcRevival
                     // and not for the campaign (its missions are the Aegis's own).
                     bool campaign = NovaShip.Campaign;
                     bool canChoose = !campaign && (box.Tng.interactable || box.Aegis.interactable);
+                    // The game colours its rows' labels itself (a locked row's goes grey): NOVA's follows the same.
+                    if (box.NovaLabels == null)
+                    {
+                        box.NovaLabels = box.Nova.GetComponentsInChildren<TMP_Text>(true);
+                        box.NovaColours = box.NovaLabels.Select(l => l.color).ToArray();
+                    }
+                    var greyed = box.Tos.GetComponentsInChildren<TMP_Text>(true).FirstOrDefault();
+                    var grey = greyed != null && !box.Tos.interactable ? greyed.color : new Color(0.5f, 0.5f, 0.5f, 0.6f);
+                    for (int k = 0; k < box.NovaLabels.Length; k++)
+                        if (box.NovaLabels[k] != null) box.NovaLabels[k].color = canChoose ? box.NovaColours[k] : grey;
                     if (campaign && nova && box.Aegis.interactable && !JustPressed) { NovaShip.SetForRoom(false); nova = false; }
                     if (box.Nova.interactable != canChoose) box.Nova.interactable = canChoose;
                     // The row the Nova flies on shows no mark of its own while NOVA's shows.

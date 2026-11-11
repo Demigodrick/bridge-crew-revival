@@ -15,6 +15,8 @@ namespace StbcRevival
     ///     It's a copy of the ship prefab's visible meshes only (no AI, physics or network parts), in the
     ///     Aegis hologram's material, under the same spinning mount. The game's own hologram is hidden by
     ///     switching its renderers off and back on, so its own ship choice is left alone.
+    ///     With the Nova chosen (NovaShip) and no Revival mission's enemy to show, the Nova shows there the same way,
+    ///     in its own materials (as the game's ships are their own lit models).
     /// </summary>
     internal static class BriefingRoomDecor
     {
@@ -37,7 +39,8 @@ namespace StbcRevival
         };
 
         private static float nextCheck;
-        private static string shown;          // the mission whose ship is on the table, or null
+        private static string shown;          // the mission whose ship is on the table ("Nova:<version>" for the Nova), or null
+        private const string NovaKey = "Nova:";
         private static GameObject hologram;   // our ship
         private static readonly List<Renderer> hidden = new List<Renderer>(); // the game's hologram, switched off
         private static readonly List<Light> dimmed = new List<Light>();
@@ -60,10 +63,13 @@ namespace StbcRevival
             if (wereOut && !placed) PlaceProps(); // a tick after switching them on, when their bounds are known
             var mission = RevivalBriefing.RoomSelection();
             if (mission == null || !Enemies.ContainsKey(mission)) mission = null;
-            if (mission == shown && (mission == null || hologram != null)) return;
+            // The table shows one ship: the Revival mission's enemy, else the Nova when the crew flies it.
+            string want = mission ?? (NovaShip.ActiveNow && NovaShip.ModelParts.Length > 0 ? NovaKey + NovaShip.Version : null);
+            if (want == shown && (want == null || hologram != null)) return;
             Restore();
-            shown = mission;
+            shown = want;
             if (mission != null) Show(root, mission);
+            else if (want != null) Show(root, null);
         }
 
         // True when every prop was already out (nothing switched on this time).
@@ -159,10 +165,10 @@ namespace StbcRevival
                 var material = aegis != null ? aegis.sharedMaterial : null;
                 int layer = aegis != null ? aegis.gameObject.layer : root.layer;
 
-                var ship = Copy(Enemies[mission], material, layer);
+                var ship = mission != null ? Copy(Enemies[mission], material, layer) : CopyNova(layer);
                 if (ship == null)
                 {
-                    Plugin.Log.LogWarning($"Briefing room: no ship model for {mission}; the table keeps its own hologram");
+                    Plugin.Log.LogWarning($"Briefing room: no ship model for {mission ?? "the Nova"}; the table keeps its own hologram");
                     return;
                 }
 
@@ -189,7 +195,7 @@ namespace StbcRevival
                         dimmed.Add(l);
                     }
                 }
-                Plugin.Log.LogInfo($"Briefing room: hologram shows {mission}'s {ship.name}");
+                Plugin.Log.LogInfo(mission != null ? $"Briefing room: hologram shows {mission}'s {ship.name}" : "Briefing room: hologram shows the Nova");
             }
             catch (Exception e)
             {
@@ -206,6 +212,29 @@ namespace StbcRevival
             foreach (var l in dimmed) if (l != null) l.enabled = true;
             hidden.Clear();
             dimmed.Clear();
+        }
+
+        // The Nova's look: its body's meshes (hull, lights, plasma, name decals; in its body's space: forward z, up y, as
+        // the ships' prefabs) in their own materials.
+        private static GameObject CopyNova(int layer)
+        {
+            var parts = NovaShip.ModelParts;
+            if (parts.Length == 0) return null;
+            var model = new GameObject("Nova") { layer = layer };
+            foreach (var f in parts)
+            {
+                var part = new GameObject(f.name) { layer = layer };
+                part.transform.SetParent(model.transform, false);
+                part.transform.localPosition = f.transform.localPosition;
+                part.transform.localRotation = f.transform.localRotation;
+                part.transform.localScale = f.transform.localScale;
+                part.AddComponent<MeshFilter>().sharedMesh = f.sharedMesh;
+                var copy = part.AddComponent<MeshRenderer>();
+                copy.sharedMaterials = f.GetComponent<MeshRenderer>().sharedMaterials;
+                copy.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                copy.receiveShadows = false;
+            }
+            return model;
         }
 
         // A ship's look, without the ship: its visible meshes (the most detailed level, where it has levels of

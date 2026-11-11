@@ -186,7 +186,9 @@ namespace StbcRevival
             bool now = Active;
             if (Time.unscaledTime >= holdUntil || now == wanted) { ActiveNow = now; holdUntil = 0f; }
             // The model is read ahead of time (in the briefing room), not while the mission loads.
-            if (!started && ActiveNow && Available)
+            // Read and built as the briefing room opens (with the model here), so NOVA's hologram and ship are ready
+            // when it's pressed rather than seconds after.
+            if (!started && (ActiveNow || ShipChoice.InBriefing) && Available)
             {
                 started = true;
                 loading = new Thread(Load) { IsBackground = true, Name = "Nova model", Priority = System.Threading.ThreadPriority.BelowNormal };
@@ -358,16 +360,29 @@ namespace StbcRevival
                 for (int n = 0; n < data.Parts.Count; n++)
                 {
                     var part = data.Parts[n];
-                    var verts = oriented[n].Select(v => (v - centre) * scale).ToArray();
                     var material = MaterialFor(data, part.Texture, hullMaterial, materials);
                     if (material == null) continue; // fully see-through in the model (its window glass): left out
-                    var tris = new int[part.Triangles.Length];
-                    for (int i = 0; i < tris.Length; i += 3) { tris[i] = part.Triangles[i]; tris[i + 1] = part.Triangles[i + 2]; tris[i + 2] = part.Triangles[i + 1]; }
-                    var mesh = new Mesh { name = "Nova " + part.Name, vertices = verts, triangles = tris };
-                    if (part.Uv != null && part.Uv.Length == verts.Length) mesh.uv = part.Uv;
-                    if (part.Normals != null && part.Normals.Length == verts.Length && part.Normals.Any(x => x != Vector3.zero)) mesh.normals = part.Normals.Select(x => orient(x).normalized).ToArray();
-                    else mesh.RecalculateNormals();
-                    mesh.RecalculateBounds();
+                    // The meshes are made once and shared by both bodies (they're the same shape in the same space).
+                    if (!meshes.TryGetValue(n, out var shared))
+                    {
+                        var verts = oriented[n].Select(v => (v - centre) * scale).ToArray();
+                        var tris = new int[part.Triangles.Length];
+                        for (int i = 0; i < tris.Length; i += 3) { tris[i] = part.Triangles[i]; tris[i + 1] = part.Triangles[i + 2]; tris[i + 2] = part.Triangles[i + 1]; }
+                        var m = new Mesh { name = "Nova " + part.Name, vertices = verts, triangles = tris };
+                        if (part.Uv != null && part.Uv.Length == verts.Length) m.uv = part.Uv;
+                        if (part.Normals != null && part.Normals.Length == verts.Length && part.Normals.Any(x => x != Vector3.zero)) m.normals = part.Normals.Select(x => orient(x).normalized).ToArray();
+                        else m.RecalculateNormals();
+                        m.RecalculateBounds();
+                        UnityEngine.Object.DontDestroyOnLoad(m);
+                        shared = new PartMeshes { Hull = m, Verts = verts, Tris = tris };
+                        // Its Bussard collectors' faces (the red plasma) apart, alive, and its navigation lights (red to
+                        // port, green to starboard) blinking together: taken out of the hull piece.
+                        shared.Plasma = NovaWarp.TakePlasma(m, 15f * scale); // out on the nacelles (the hull has a few red lights too)
+                        shared.Port = NovaWarp.TakeLight(m, true);
+                        shared.Starboard = NovaWarp.TakeLight(m, false);
+                        meshes[n] = shared;
+                    }
+                    var mesh = shared.Hull; var tris0 = shared.Tris; var verts0 = shared.Verts;
                     var go = new GameObject("Nova_" + part.Name + "_" + n);
                     go.layer = model.gameObject.layer;
                     go.transform.SetParent(model, false);
@@ -375,12 +390,10 @@ namespace StbcRevival
                     var renderer = go.AddComponent<MeshRenderer>();
                     renderer.sharedMaterial = material;
                     renderers.Add(renderer);
-                    // Its Bussard collectors' faces (the red plasma) apart, alive.
-                    var plasma = NovaWarp.TakePlasma(mesh, 15f * scale); // out on the nacelles (the hull has a few red lights too)
-                    // And its navigation lights (red to port, green to starboard), blinking together.
+                    var plasma = shared.Plasma;
                     foreach (bool port in new[] { true, false })
                     {
-                        var bulbs = NovaWarp.TakeLight(mesh, port);
+                        var bulbs = port ? shared.Port : shared.Starboard;
                         if (bulbs == null) continue;
                         var light = new GameObject((port ? "Nova_PortLight_" : "Nova_StarboardLight_") + n);
                         light.layer = model.gameObject.layer;
@@ -401,7 +414,7 @@ namespace StbcRevival
                         glowRenderer.sharedMaterial = NovaWarp.Material(material);
                         renderers.Add(glowRenderer);
                     }
-                    if (all.Count + verts.Length <= 65000 * 4) { int offset = all.Count; all.AddRange(verts); allTris.AddRange(tris.Select(t => t + offset)); }
+                    if (all.Count + verts0.Length <= 65000 * 4) { int offset = all.Count; all.AddRange(verts0); allTris.AddRange(tris0.Select(t => t + offset)); }
                     yield return null; // a piece per frame
                 }
                 yield return null;
@@ -524,6 +537,9 @@ namespace StbcRevival
             var centre = weapons.Find("Turret Center Reference");
             if (centre != null && turrets.Count > 0) centre.localPosition = turrets.Aggregate(Vector3.zero, (a, b) => a + b) / turrets.Count;
         }
+
+        private sealed class PartMeshes { public Mesh Hull, Plasma, Port, Starboard; public Vector3[] Verts; public int[] Tris; }
+        private static readonly Dictionary<int, PartMeshes> meshes = new Dictionary<int, PartMeshes>();
 
         // ---- materials ----
 
