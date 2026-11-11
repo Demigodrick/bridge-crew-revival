@@ -762,6 +762,50 @@ namespace StbcRevival
             return d;
         }
 
+        /// <summary>A power-of-two rectangle as DXT5 blocks with every mip down to 1×1 (box-filtered), as Unity lays them out.</summary>
+        private static byte[] BlocksRect(Color32[] px, int w, int h)
+        {
+            int total = 0;
+            for (int lw = w, lh = h; ; lw = Math.Max(1, lw / 2), lh = Math.Max(1, lh / 2))
+            {
+                total += Math.Max(1, (lw + 3) / 4) * Math.Max(1, (lh + 3) / 4) * 16;
+                if (lw == 1 && lh == 1) break;
+            }
+            var d = new byte[total];
+            var level = px;
+            int offset = 0;
+            for (int lw = w, lh = h; ; )
+            {
+                var enc = level; int ew = lw, eh = lh;
+                if (lw < 4 || lh < 4) // a level narrower than a block: its pixels repeated to fill whole blocks
+                {
+                    ew = Math.Max(4, lw); eh = Math.Max(4, lh);
+                    enc = new Color32[ew * eh];
+                    for (int y = 0; y < eh; y++) for (int x = 0; x < ew; x++) enc[y * ew + x] = level[(y % lh) * lw + x % lw];
+                }
+                EncodeDxt1(enc, ew, eh, d, offset, ew, 0, 0, 16);
+                EncodeAlpha(enc, ew, eh, d, offset, ew, 0, 0);
+                offset += Math.Max(1, (lw + 3) / 4) * Math.Max(1, (lh + 3) / 4) * 16;
+                if (lw == 1 && lh == 1) break;
+                int nw = Math.Max(1, lw / 2), nh = Math.Max(1, lh / 2);
+                var next = new Color32[nw * nh];
+                for (int y = 0; y < nh; y++)
+                    for (int x = 0; x < nw; x++)
+                    {
+                        int r = 0, g = 0, b = 0, a = 0, n = 0;
+                        for (int dy = 0; dy < 2; dy++)
+                            for (int dx = 0; dx < 2; dx++)
+                            {
+                                int sx = Math.Min(x * 2 + dx, lw - 1), sy = Math.Min(y * 2 + dy, lh - 1);
+                                var p = level[sy * lw + sx]; r += p.r; g += p.g; b += p.b; a += p.a; n++;
+                            }
+                        next[y * nw + x] = new Color32((byte)(r / n), (byte)(g / n), (byte)(b / n), (byte)(a / n));
+                    }
+                level = next; lw = nw; lh = nh;
+            }
+            return d;
+        }
+
         /// <summary>[Debug] HullNamePreview: an image saved as a PNG in the BepInEx folder (main thread).</summary>
         private static void SavePreview(Color32[] px, int w, int h, string file)
         {

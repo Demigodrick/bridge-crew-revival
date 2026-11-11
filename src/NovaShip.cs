@@ -109,18 +109,42 @@ namespace StbcRevival
 
         // ---- the crew's choice ----
 
-        private static object Room => Patches.PhotonNetworkType?.GetMethod("get_room", Static)?.Invoke(null, null);
+        // Photon's room and its properties, looked up once (they're read often).
+        private static MethodInfo getRoom, getMaster, getProps;
+        private static object Room
+        {
+            get
+            {
+                if (getRoom == null) getRoom = Patches.PhotonNetworkType?.GetMethod("get_room", Static);
+                return getRoom?.Invoke(null, null);
+            }
+        }
+        private static bool IsMaster()
+        {
+            if (getMaster == null) getMaster = Patches.PhotonNetworkType?.GetMethod("get_isMasterClient", Static);
+            return getMaster?.Invoke(null, null) is bool m && m;
+        }
+        private static IDictionary Props(object room)
+        {
+            if (getProps == null || getProps.DeclaringType != room.GetType() && !getProps.DeclaringType.IsAssignableFrom(room.GetType()))
+                getProps = room.GetType().GetMethod("get_customProperties", All);
+            return getProps?.Invoke(room, null) as IDictionary;
+        }
 
-        /// <summary>The room this game is in flies the Nova (or, out of a room, your own choice is the Nova).</summary>
+        /// <summary>The room this game is in flies the Nova (or, out of a room, your own choice is the Nova). Read now.</summary>
         internal static bool Active
         {
             get
             {
                 var room = Room;
                 if (room == null) return Chosen;
-                return (room.GetType().GetMethod("get_customProperties", All)?.Invoke(room, null) as IDictionary)?[Excelsior.Key] as string == Name;
+                return Props(room)?[Excelsior.Key] as string == Name;
             }
         }
+
+        /// <summary><see cref="Active"/> as of the last check (twice a second): for what runs every frame.</summary>
+        internal static bool ActiveNow { get; private set; }
+        private static float nextCheck;
 
         /// <summary>The ship box's choice: the Nova (true) or the game's own ship, for the room (or your default out of one).</summary>
         internal static void SetForRoom(bool nova)
@@ -139,31 +163,75 @@ namespace StbcRevival
         internal static void Update()
         {
             NovaWarp.Animate();
+            if (Time.unscaledTime < nextCheck) return;
+            nextCheck = Time.unscaledTime + 0.5f;
             var room = Room;
-            if (room != null && Patches.PhotonNetworkType.GetMethod("get_isMasterClient", Static)?.Invoke(null, null) is bool master && master)
+            if (room != null && IsMaster())
             {
                 // A new room starts with the host's default; after that the briefing room's ship box decides.
-                var props = room.GetType().GetMethod("get_customProperties", All)?.Invoke(room, null) as IDictionary;
+                var props = Props(room);
                 if (props != null && !props.Contains(Excelsior.Key) && Chosen && PhotonProps.Set(room, Excelsior.Key, Name))
                     Plugin.Log.LogInfo("Nova: the crew flies the Nova (the host's default)");
             }
+            ActiveNow = Active;
             // The model is read ahead of time (in the briefing room), not while the mission loads.
-            if (!started && Active && Available)
+            if (!started && ActiveNow && Available)
             {
                 started = true;
-                loading = new Thread(Load) { IsBackground = true, Name = "Nova model" };
+                loading = new Thread(Load) { IsBackground = true, Name = "Nova model", Priority = System.Threading.ThreadPriority.BelowNormal };
                 loading.Start();
             }
+            // Then the bodies are built a piece per frame, so the briefing room doesn't stop for it.
             if (!built && loaded != null)
             {
                 built = true;
-                if (loaded.Error != null) Plugin.Log.LogWarning("Nova: reading the model: " + loaded.Error);
-                else
+                var data = loaded; loaded = null;
+                if (data.Error != null) Plugin.Log.LogWarning("Nova: reading the model: " + data.Error);
+                else Plugin.Instance.StartCoroutine(BuildAll(data));
+            }
+        }
+
+        /// <summary>Bumped as a body is built or decorated: what shows the Nova's pieces (the hologram) looks again.</summary>
+        internal static int Version { get; private set; }
+        internal static void Changed() => Version++;
+
+        private static IEnumerator BuildAll(Loaded data)
+        {
+            var watch = System.Diagnostics.Stopwatch.StartNew();
+            // The textures first, one per frame, made once for both bodies.
+            foreach (var m in data.Materials.Values)
+            {
+                foreach (var file in new[] { m.Diffuse, m.Emission })
+                    if (file != null && !textures.ContainsKey(file)) { textures[file] = MakeTexture(data, file); yield return null; }
+                if (m.Emission != null && m.Diffuse != null && m.Emission != m.Diffuse)
                 {
-                    aegisTemplate = Build(loaded, "Sector/Ships/Ship - Aegis", "Aegis");
-                    tngTemplate = Build(loaded, "Sector/Ships/Ship - Enterprise 1701D", "Enterprise-D");
+                    string key = m.Emission + " glow";
+                    if (!textures.ContainsKey(key)) { textures[key] = Glow(data, m.Diffuse, m.Emission); yield return null; }
                 }
-                loaded = null;
+            }
+            SpacecraftBody body = null;
+            yield return Guard(Build(data, "Sector/Ships/Ship - Aegis", "Aegis", b => body = b), "building its body (Aegis)");
+            aegisTemplate = body; body = null;
+            yield return Guard(Build(data, "Sector/Ships/Ship - Enterprise 1701D", "Enterprise-D", b => body = b), "building its body (Enterprise-D)");
+            tngTemplate = body;
+            data.ImageFiles.Clear();
+            Changed();
+            Plugin.Log.LogInfo($"Nova: built over {watch.ElapsedMilliseconds} ms, a piece per frame");
+        }
+
+        /// <summary>A coroutine that stops (and says why) at an exception rather than breaking the caller.</summary>
+        private static IEnumerator Guard(IEnumerator inner, string what)
+        {
+            while (true)
+            {
+                object current;
+                try
+                {
+                    if (!inner.MoveNext()) yield break;
+                    current = inner.Current;
+                }
+                catch (Exception e) { Plugin.Log.LogWarning($"Nova: {what}: {e}"); yield break; }
+                yield return current;
             }
         }
 
@@ -174,14 +242,15 @@ namespace StbcRevival
             try
             {
                 if (!(__instance is PlayerSpacecraft) || !Active || Loader.JCEFNOJHCKO) return; // not on the original Enterprise
-                if (aegisTemplate == null && tngTemplate == null && loading != null && loading.IsAlive)
-                {
-                    Plugin.Log.LogInfo("Nova: the model is still being read; waiting for it");
-                    loading.Join(30000);
-                    Update();
-                }
                 var template = Loader.IOMGCNMDDCK ? tngTemplate : aegisTemplate;
-                if (template == null) { Plugin.Log.LogWarning("Nova: no Nova body (see above); the ship keeps its own"); return; }
+                // Never waited for here (that would hold up the mission's loading, a frozen headset in VR): a Nova
+                // that isn't ready yet means the game's own ship this time.
+                if (template == null)
+                {
+                    Plugin.Log.LogWarning(started && !built || loaded != null ? "Nova: the model isn't ready yet; the ship keeps its own body this time"
+                        : "Nova: no Nova body (see above); the ship keeps its own");
+                    return;
+                }
                 BodyField.SetValue(__instance, template);
                 Plugin.Log.LogInfo($"Nova: {__instance.name} takes the Nova's body");
             }
@@ -225,14 +294,13 @@ namespace StbcRevival
         // ---- the body (main thread) ----
 
         /// <summary>The Nova's body made from a player ship's own (its cameras, warp effects, damage spots, hardpoints), or null.</summary>
-        private static SpacecraftBody Build(Loaded data, string shipPrefabPath, string label)
+        private static IEnumerator Build(Loaded data, string shipPrefabPath, string label, Action<SpacecraftBody> done)
         {
             var started = Time.realtimeSinceStartup;
-            try
             {
                 var shipPrefab = Resources.Load<GameObject>(shipPrefabPath);
                 var aegisBody = shipPrefab != null ? BodyField.GetValue(shipPrefab.GetComponent<BaseSpacecraft>()) as SpacecraftBody : null;
-                if (aegisBody == null) { Plugin.Log.LogWarning($"Nova: the {label}'s body wasn't found"); return null; }
+                if (aegisBody == null) { Plugin.Log.LogWarning($"Nova: the {label}'s body wasn't found"); yield break; }
 
                 if (holder == null)
                 {
@@ -245,7 +313,7 @@ namespace StbcRevival
 
                 // The Aegis's model goes (its hull collider stays, to take the Nova's shape).
                 var model = body.transform.Cast<Transform>().FirstOrDefault(t => t.name.StartsWith("Mdl_", StringComparison.Ordinal));
-                if (model == null) { Plugin.Log.LogWarning($"Nova: the {label}'s body has no model"); UnityEngine.Object.Destroy(body); return null; }
+                if (model == null) { Plugin.Log.LogWarning($"Nova: the {label}'s body has no model"); UnityEngine.Object.Destroy(body); yield break; }
                 var collider = model.GetComponentInChildren<MeshCollider>(true);
                 var hullMaterial = model.GetComponentsInChildren<MeshRenderer>(true).Select(r => r.sharedMaterial).FirstOrDefault(m => m != null && m.name.StartsWith("Aegis_Body", StringComparison.Ordinal))
                                    ?? model.GetComponentsInChildren<MeshRenderer>(true).Select(r => r.sharedMaterial).FirstOrDefault(m => m != null);
@@ -322,11 +390,15 @@ namespace StbcRevival
                         renderers.Add(glowRenderer);
                     }
                     if (all.Count + verts.Length <= 65000 * 4) { int offset = all.Count; all.AddRange(verts); allTris.AddRange(tris.Select(t => t + offset)); }
+                    yield return null; // a piece per frame
                 }
+                yield return null;
                 if (collider != null)
                 {
                     collider.transform.localPosition = Vector3.zero; collider.transform.localRotation = Quaternion.identity; collider.transform.localScale = Vector3.one;
                     collider.sharedMesh = ColliderMesh(all, allTris);
+                    var rb = body.GetComponentInParent<Rigidbody>();
+                    Plugin.Log.LogInfo($"Nova: hull collider ({label}): convex {collider.convex}, rigidbody {(rb == null ? "none" : rb.isKinematic ? "kinematic" : "dynamic")}");
                 }
                 var transparency = body.GetComponent<ShipTransparencyController>();
                 if (transparency != null) transparency.ShipParts = renderers.ToArray();
@@ -360,23 +432,18 @@ namespace StbcRevival
                 }
 
                 var made = body.GetComponent<SpacecraftBody>();
-                Plugin.Log.LogInfo($"Nova: body ({label}) built from Nova.obj: {data.Parts.Count} pieces, {data.Parts.Sum(p => p.Vertices.Length)} vertices, {data.Parts.Sum(p => p.Triangles.Length) / 3} triangles, {materials.Count} materials; read in {data.Seconds:0.0} s, built in {(Time.realtimeSinceStartup - started) * 1000f:0} ms; size {half * 2f}");
-                return made;
-            }
-            catch (Exception e)
-            {
-                Plugin.Log.LogWarning("Nova: building its body: " + e);
-                return null;
+                Plugin.Log.LogInfo($"Nova: body ({label}) built from Nova.obj: {data.Parts.Count} pieces, {data.Parts.Sum(p => p.Vertices.Length)} vertices, {data.Parts.Sum(p => p.Triangles.Length) / 3} triangles, {materials.Count} materials; read in {data.Seconds:0.0} s, built over {(Time.realtimeSinceStartup - started) * 1000f:0} ms; size {half * 2f}");
+                done(made);
             }
         }
 
         /// <summary>The hull collider's shape: the model's triangles (at most 65000 vertices, every other piece dropped beyond that).</summary>
         private static Mesh ColliderMesh(List<Vector3> verts, List<int> tris)
         {
-            if (verts.Count <= 65000) return new Mesh { name = "Nova hull collider", vertices = verts.ToArray(), triangles = tris.ToArray() };
-            // Too many for one mesh: weld to a coarse grid (the collider needs the shape, not the detail).
+            // Always welded to a coarse grid: the collider needs the shape, not the detail, and a light mesh cooks quickly
+            // (on the main thread) and costs less in every physics query.
             var map = new Dictionary<long, int>(); var outV = new List<Vector3>(); var outT = new List<int>();
-            const float cell = 0.25f;
+            const float cell = 0.3f;
             int Weld(Vector3 v)
             {
                 long key = ((long)Mathf.RoundToInt(v.x / cell) & 0xFFFFF) << 40 | ((long)Mathf.RoundToInt(v.y / cell) & 0xFFFFF) << 20 | ((long)Mathf.RoundToInt(v.z / cell) & 0xFFFFF);
@@ -388,6 +455,7 @@ namespace StbcRevival
                 int a = Weld(verts[tris[i]]), b = Weld(verts[tris[i + 1]]), c = Weld(verts[tris[i + 2]]);
                 if (a != b && b != c && a != c) { outT.Add(a); outT.Add(b); outT.Add(c); }
             }
+            Plugin.Log.LogInfo($"Nova: hull collider {outV.Count} vertices, {outT.Count / 3} triangles (from {verts.Count} / {tris.Count / 3})");
             return new Mesh { name = "Nova hull collider", vertices = outV.ToArray(), triangles = outT.ToArray() };
         }
 
@@ -447,6 +515,9 @@ namespace StbcRevival
 
         // ---- materials ----
 
+        // The model's textures, made once (a piece per frame) and shared by both bodies: by file name, and "<mask> glow".
+        private static readonly Dictionary<string, Texture2D> textures = new Dictionary<string, Texture2D>(StringComparer.OrdinalIgnoreCase);
+
         private static Texture2D MakeTexture(Loaded data, string name)
         {
             if (name == null) return null;
@@ -458,8 +529,9 @@ namespace StbcRevival
             }
             if (tex == null) return null;
             tex.anisoLevel = 4;
-            tex.Compress(true);
+            tex.Compress(false); // the fast compressor: this runs in the briefing room
             tex.Apply(false, true);
+            UnityEngine.Object.DontDestroyOnLoad(tex);
             return tex;
         }
 
@@ -474,8 +546,9 @@ namespace StbcRevival
             try
             {
                 if (!m.LoadImage(maskBytes) || !c.LoadImage(colourBytes)) return null;
-                int w = m.width, h = m.height;
+                int w = m.width, h = m.height, cw = c.width, ch = c.height;
                 var maskPx = m.GetPixels32();
+                var colPx = c.GetPixels32(); // read once: sampled here, not by an engine call per pixel
                 var glow = new Color32[w * h];
                 bool any = false;
                 for (int y = 0; y < h; y++)
@@ -484,17 +557,25 @@ namespace StbcRevival
                         var k = maskPx[y * w + x];
                         float lit = Mathf.Max(k.r, Mathf.Max(k.g, k.b)) / 255f;
                         if (lit <= 0.02f) { glow[y * w + x] = new Color32(0, 0, 0, 255); continue; }
-                        var col = c.GetPixelBilinear((x + 0.5f) / w, (y + 0.5f) / h);
-                        glow[y * w + x] = new Color(col.r * lit, col.g * lit, col.b * lit, 1f);
+                        // Bilinear, the colour texture at this pixel's place.
+                        float fx = (x + 0.5f) / w * cw - 0.5f, fy = (y + 0.5f) / h * ch - 0.5f;
+                        int x0 = Mathf.Clamp((int)Mathf.Floor(fx), 0, cw - 1), y0 = Mathf.Clamp((int)Mathf.Floor(fy), 0, ch - 1);
+                        int x1 = Math.Min(x0 + 1, cw - 1), y1 = Math.Min(y0 + 1, ch - 1);
+                        float tx = Mathf.Clamp01(fx - x0), ty = Mathf.Clamp01(fy - y0);
+                        var col = Color32.Lerp(Color32.Lerp(colPx[y0 * cw + x0], colPx[y0 * cw + x1], tx), Color32.Lerp(colPx[y1 * cw + x0], colPx[y1 * cw + x1], tx), ty);
+                        glow[y * w + x] = new Color32((byte)(col.r * lit), (byte)(col.g * lit), (byte)(col.b * lit), 255);
                         any = true;
                     }
                 if (!any) return null;
                 var tex = new Texture2D(w, h, TextureFormat.RGB24, true) { name = mask + " glow", anisoLevel = 4 };
-                tex.SetPixels32(glow); tex.Apply(true); tex.Compress(true); tex.Apply(false, true);
+                tex.SetPixels32(glow); tex.Apply(true); tex.Compress(false); tex.Apply(false, true);
+                UnityEngine.Object.DontDestroyOnLoad(tex);
                 return tex;
             }
             finally { UnityEngine.Object.Destroy(m); UnityEngine.Object.Destroy(c); }
         }
+
+        private static Texture2D Made(string key) => key != null && textures.TryGetValue(key, out var t) ? t : null;
 
         /// <summary>A material for a piece: the Aegis hull's (its shader), with the piece's own textures and colour.</summary>
         private static UnityEngine.Material MaterialFor(Loaded data, string key, UnityEngine.Material hull, Dictionary<string, UnityEngine.Material> made)
@@ -513,8 +594,8 @@ namespace StbcRevival
             Texture2D albedo, glow;
             Color tint = Color.white;
             data.Materials.TryGetValue(key, out var om);
-            albedo = MakeTexture(data, om?.Diffuse);
-            glow = om?.Emission == null ? null : om.Emission == om.Diffuse ? MakeTexture(data, om.Emission) : Glow(data, om.Diffuse, om.Emission);
+            albedo = Made(om?.Diffuse);
+            glow = om?.Emission == null ? null : om.Emission == om.Diffuse ? Made(om.Emission) : Made(om.Emission + " glow");
             if (om != null && albedo == null) tint = om.Colour;
             if (om != null && om.Opacity < 0.1f) { made[key] = null; UnityEngine.Object.Destroy(m); return null; } // see-through glass: not drawn
             if (m.HasProperty("_Color")) m.SetColor("_Color", tint);

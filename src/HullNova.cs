@@ -46,18 +46,22 @@ namespace StbcRevival
             var places = new List<NovaPlace>();
             if (!File.Exists(file)) return places;
             var inv = CultureInfo.InvariantCulture;
+            int number = 0;
             foreach (var raw in File.ReadAllLines(file))
             {
+                number++;
                 var line = raw.Trim();
                 if (line.Length == 0 || line[0] == '#') continue;
                 var p = line.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
-                if (p.Length < 12) continue;
-                float F(int i) => float.Parse(p[i], inv);
+                var f = new float[11];
+                bool ok = p.Length >= 12;
+                for (int i = 0; ok && i < 11; i++) ok = float.TryParse(p[i + 1], NumberStyles.Float, inv, out f[i]);
+                if (!ok || f[9] <= 0f || f[10] <= 0f) { Plugin.Log.LogWarning($"Hull name: Nova.lettering.txt line {number} isn't a place; skipped"); continue; }
                 places.Add(new NovaPlace
                 {
                     Kind = p[0].ToLowerInvariant(),
-                    Centre = new Vector3(F(1), F(2), F(3)), Normal = new Vector3(F(4), F(5), F(6)), Axis = new Vector3(F(7), F(8), F(9)),
-                    Length = F(10), Height = F(11),
+                    Centre = new Vector3(f[0], f[1], f[2]), Normal = new Vector3(f[3], f[4], f[5]), Axis = new Vector3(f[6], f[7], f[8]),
+                    Length = f[9], Height = f[10],
                 });
             }
             return places;
@@ -71,7 +75,11 @@ namespace StbcRevival
             {
                 var bodies = NovaShip.Templates;
                 if (bodies.Length == 0 || NovaShip.FileToModel(Vector3.zero) == null) return;
-                if (novaPlaces == null) novaPlaces = ReadNovaPlaces();
+                if (novaPlaces == null)
+                {
+                    try { novaPlaces = ReadNovaPlaces(); }
+                    catch (Exception e) { novaPlaces = new List<NovaPlace>(); Plugin.Log.LogWarning("Hull name: Nova.lettering.txt: " + e.Message); } // read once, however it went
+                }
                 if (novaPlaces.Count == 0) return;
                 string name = ShipName.Name, registry = ShipName.Registry;
                 bool show = name.Length > 0;
@@ -81,7 +89,7 @@ namespace StbcRevival
                     if (novaDrawnFor != want && DrawNovaTexts(name, registry)) novaDrawnFor = want;
                     if (novaTexts.Count == 0) return;
                     foreach (var body in bodies)
-                        if (body != null && novaDecorated.Add(body.GetInstanceID())) AddNovaDecals(body);
+                        if (body != null && novaDecorated.Add(body.GetInstanceID())) { AddNovaDecals(body); NovaShip.Changed(); }
                 }
                 // Every Nova about (the templates and the ships made from them) shares the materials: see-through without a name.
                 foreach (var t in novaTexts.Values)
@@ -118,7 +126,7 @@ namespace StbcRevival
             {
                 var place = novaPlaces.First(p => p.Kind == kind);
                 const int w = 1024;
-                int h = Mathf.Clamp(Mathf.RoundToInt(w * place.Height / Mathf.Max(0.01f, place.Length)), 64, 512);
+                int h = Mathf.ClosestPowerOfTwo(Mathf.Clamp(Mathf.RoundToInt(w * place.Height / Mathf.Max(0.01f, place.Length)), 64, 512));
                 var lines = new List<KeyValuePair<Line, string>>();
                 Line Make(float cy, float cap, string reference, float fill, string text) =>
                     new Line { Shape = Shape.Straight, Cx = w / 2f, Cy = cy, Cap = cap, Reference = reference, ReferenceLength = w * fill, MaxLength = w * 0.96f, Tracking = 0.1f, Style = NovaStyle };
@@ -141,16 +149,18 @@ namespace StbcRevival
                 if (!novaTexts.TryGetValue(kind, out var t))
                 {
                     t = new NovaText { W = w, H = h };
-                    t.Texture = new Texture2D(w, h, TextureFormat.RGBA32, true) { name = "Nova " + kind, wrapMode = TextureWrapMode.Clamp, anisoLevel = 4 };
-                    UnityEngine.Object.DontDestroyOnLoad(t.Texture);
                     t.Material = new Material(baseMaterial) { name = "Nova Name Decal (" + kind + ")" };
-                    t.Material.SetTexture("_MainTex", t.Texture);
+                    UnityEngine.Object.DontDestroyOnLoad(t.Material);
                     novaTexts[kind] = t;
                 }
-                t.Texture.SetPixels32(px);
-                t.Texture.Apply(true);
-                if (Plugin.HullPreview.Value)
-                    try { File.WriteAllBytes(Path.Combine(BepInEx.Paths.BepInExRootPath, "hull-name-Nova-" + kind + ".png"), t.Texture.EncodeToPNG()); } catch { }
+                // DXT5 with its mips, not readable (no copy kept in memory); the old one freed. Both sides are whole
+                // blocks: 1024 wide, the height rounded to a power of two below.
+                var old = t.Texture;
+                t.Texture = FromBlocks("Nova " + kind, w, h, TextureFormat.DXT5, true, false, BlocksRect(px, w, h), null);
+                t.Texture.wrapMode = TextureWrapMode.Clamp; t.Texture.anisoLevel = 4;
+                t.Material.SetTexture("_MainTex", t.Texture);
+                if (old != null) UnityEngine.Object.Destroy(old);
+                if (Plugin.HullPreview.Value) SavePreview(px, w, h, "hull-name-Nova-" + kind + ".png");
             }
             Plugin.Log.LogInfo($"Hull name: the Nova's: \"{reg}\" / \"{hull}\" in {face.Name}, {novaTexts.Count} kinds of place");
             return true;

@@ -13,10 +13,11 @@ namespace StbcRevival
     /// The briefing console's SHIP box with more ships than its three rows: NOVA under the Next Generation (and room
     /// for more), and a slider on its left to scroll the list. The box still shows three rows; the game's own toggles
     /// (Aegis, original Enterprise, Next Generation) move up and out of sight as the list scrolls, the added ones come
-    /// in below. NOVA flies on the Next Generation's ship: choosing it turns the game's TNG toggle on and puts "Nova" on
-    /// the room (NovaShip), so the bridge, consoles and crew are the Enterprise-D's and the hull the Nova's. The TNG
-    /// row then shows no mark; NOVA does. Choosing any of the game's ships takes "Nova" off the room again. NOVA is
-    /// there only with the Nova's model on this PC, and can be chosen whenever the TNG toggle can.
+    /// in below. NOVA flies on the Next Generation's ship when the crew can choose it (it's DLC), else on the Aegis's:
+    /// choosing it turns that toggle on and puts "Nova" on the room (NovaShip), so the bridge, consoles and crew are
+    /// that ship's and the hull the Nova's. That row then shows no mark; NOVA does. Choosing any of the game's ships
+    /// (a click on the one already on too) takes "Nova" off the room again. NOVA is there only with the Nova's model
+    /// on this PC, and can be chosen whenever the Aegis or the Next Generation can.
     /// </summary>
     internal static class ShipChoice
     {
@@ -32,7 +33,7 @@ namespace StbcRevival
             public GameObject NovaHologram;   // on the holotable, under the Next Generation's hologram
             public Renderer[] TngHologram;    // that hologram's own parts (hidden while the Nova shows)
             public int HologramParts;         // how many of the Nova's pieces it was made of (more later: made again)
-            public int Offset = -1, LastChosen = -1;
+            public int Offset = -1, LastChosen = -1, HologramVersion = -1;
             public bool Applying;
         }
 
@@ -87,16 +88,20 @@ namespace StbcRevival
                 foreach (var own in new[] { aegis, tos, tng })
                 {
                     var t = own;
-                    t.onValueChanged.AddListener(on => { if (on && !box.Applying && NovaShip.Active && (t != tng || !box.Nova.isOn)) NovaShip.SetForRoom(false); });
+                    t.onValueChanged.AddListener(on => { if (on && !box.Applying && NovaShip.Active) NovaShip.SetForRoom(false); });
                 }
 
-                // A click on the Next Generation's row while the Nova is chosen: back to the Next Generation (the toggle is on
+                // A click on the row the Nova flies on while the Nova is chosen: back to that ship (its toggle is on
                 // already, so it says nothing itself).
-                var trigger = tng.gameObject.GetComponent<EventTrigger>() ?? tng.gameObject.AddComponent<EventTrigger>();
-                var click = new EventTrigger.Entry { eventID = EventTriggerType.PointerClick };
-                click.callback.AddListener(_ => { if (NovaShip.Active && (tng.interactable || tng.isOn)) NovaShip.SetForRoom(false); });
-                if (trigger.triggers == null) trigger.triggers = new List<EventTrigger.Entry>();
-                trigger.triggers.Add(click);
+                foreach (var under in new[] { aegis, tng })
+                {
+                    var u = under;
+                    var trigger = u.gameObject.GetComponent<EventTrigger>() ?? u.gameObject.AddComponent<EventTrigger>();
+                    var click = new EventTrigger.Entry { eventID = EventTriggerType.PointerClick };
+                    click.callback.AddListener(_ => { if (NovaShip.Active && u.isOn) NovaShip.SetForRoom(false); });
+                    if (trigger.triggers == null) trigger.triggers = new List<EventTrigger.Entry>();
+                    trigger.triggers.Add(click);
+                }
 
                 MakeArrows(box, rows.Length - Visible);
                 boxes.Add(box);
@@ -115,7 +120,9 @@ namespace StbcRevival
             try
             {
                 NovaShip.SetForRoom(true);
-                if (!box.Tng.isOn) box.Tng.isOn = true; // the game's own choice: the Next Generation's ship
+                // The game's own choice under it: the Next Generation's ship if the crew can have it, else the Aegis's.
+                var under = box.Tng.interactable || box.Tng.isOn ? box.Tng : box.Aegis;
+                if (!under.isOn) under.isOn = true;
             }
             finally { box.Applying = false; }
         }
@@ -262,7 +269,7 @@ namespace StbcRevival
         private static void Hologram(Box box, bool nova)
         {
             // A piece put on the Nova since (its name decal): the hologram is made again with it.
-            if (box.NovaHologram != null && NovaShip.ModelParts.Length != box.HologramParts)
+            if (box.NovaHologram != null && box.HologramVersion != NovaShip.Version && NovaShip.ModelParts.Length != box.HologramParts)
             {
                 UnityEngine.Object.Destroy(box.NovaHologram);
                 box.NovaHologram = null;
@@ -320,27 +327,34 @@ namespace StbcRevival
                 box.HologramParts = parts.Length;
                 Plugin.Log.LogInfo($"Ship choice: Nova hologram under {tng.name} ({parts.Length} parts, scale {scale:0.###}, {box.TngHologram.Length} Enterprise-D parts)");
             }
+            box.HologramVersion = NovaShip.Version;
+            if (box.NovaHologram == null) return;
             if (box.NovaHologram.activeSelf != nova) box.NovaHologram.SetActive(nova);
             foreach (var r in box.TngHologram) if (r != null && r.enabled == nova) r.enabled = !nova;
         }
 
         /// <summary>Each frame: NOVA's mark and whether it can be clicked follow the room; the TNG row hides its mark under it.</summary>
+        private static float nextUpdate;
+
         internal static void Update()
         {
-            if (boxes.Count == 0) return;
+            if (boxes.Count == 0 || Time.unscaledTime < nextUpdate) return;
+            nextUpdate = Time.unscaledTime + 0.2f; // five times a second is plenty for a mark and a hologram
             boxes.RemoveAll(b => b.Console == null || b.Nova == null);
-            bool nova = NovaShip.Active;
+            bool nova = NovaShip.ActiveNow;
             foreach (var box in boxes)
             {
                 try
                 {
                     Hologram(box, nova);
                     box.Applying = true;
-                    bool on = nova && box.Tng.isOn;
+                    bool on = nova && (box.Tng.isOn || box.Aegis.isOn);
                     if (box.Nova.isOn != on) box.Nova.isOn = on;
-                    bool canChoose = box.Tng.interactable || (box.Tng.isOn && (box.Aegis.interactable || box.Tos.interactable));
+                    bool canChoose = box.Tng.interactable || box.Aegis.interactable || box.Tng.isOn || box.Aegis.isOn;
                     if (box.Nova.interactable != canChoose) box.Nova.interactable = canChoose;
-                    if (box.Tng.graphic != null) box.Tng.graphic.canvasRenderer.SetAlpha(on ? 0f : (box.Tng.isOn ? 1f : 0f));
+                    // The row the Nova flies on shows no mark of its own while NOVA's shows.
+                    foreach (var under in new[] { box.Tng, box.Aegis })
+                        if (under.graphic != null) under.graphic.canvasRenderer.SetAlpha(on && under.isOn ? 0f : (under.isOn ? 1f : 0f));
                     box.Applying = false;
                     // Scrolled so the ship chosen is in sight, when the choice changes (scrolling away is free after that).
                     int chosen = on ? 3 : box.Tng.isOn ? 2 : box.Tos.isOn ? 1 : 0;

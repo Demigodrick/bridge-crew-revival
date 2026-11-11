@@ -660,5 +660,13 @@ Check("Room (AOFOFMFGNGN).get_propertiesListedInLobby (ship name)", room?.GetMet
 Check("  Room.SetPropertiesListedInLobby(string[])", room?.GetMethods(BindingFlags.Public | BindingFlags.Instance).FirstOrDefault(m => m.Name == "SetPropertiesListedInLobby" && m.GetParameters().Length == 1));
 Check("SVR.Localization.GetLocalizedText(string, int) (ship name)", game.GetType("SVR.Localization")?.GetMethods(AnyS).FirstOrDefault(m => m.Name == "GetLocalizedText" && m.GetParameters().Length == 2));
 
+// Nova (reflected names)
+var spacecraft = game.GetType("Sector.Spacecraft.BaseSpacecraft");
+Check("BaseSpacecraft._body (Nova)", spacecraft?.GetField("_body", Inst));
+Check("  BaseSpacecraft.Awake", spacecraft?.GetMethod("Awake", Inst));
+Check("Loader._tngBridgeScene (Nova)", game.GetType("Loader")?.GetField("_tngBridgeScene", Inst));
+foreach (var f in new[] { "_aegisToggle", "_enterpriseToggle", "_tngToggle", "_tngToggleBackground1", "_tngToggleBackground2", "IMHCKEMPKJA" })
+    Check($"ConsoleBriefingRoom.{f} (ship choice)", game.GetType("ConsoleBriefingRoom")?.GetField(f, Inst));
+
 Console.WriteLine(failures == 0 ? "\nAll targets resolved." : $"\n{failures} target(s) missing.");
 return failures == 0 ? 0 : 1;

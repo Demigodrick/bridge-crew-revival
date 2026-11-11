@@ -30,6 +30,9 @@ namespace StbcRevival
         }
 
         private const int MaxVertices = 65000;
+        // Sanity limits for a ship (Mono's heap never shrinks, and the whole model is held while it's built): the Nova
+        // has about 300,000 positions and 430,000 triangles.
+        private const int MaxPositions = 2000000, MaxFaces = 4000000;
 
         internal static List<Part> Read(string path, out Dictionary<string, Material> materials)
         {
@@ -38,6 +41,7 @@ namespace StbcRevival
             var faces = new Dictionary<string, List<int[]>>(); // material → corners (v, vt, vn per corner, flattened per face)
             var order = new List<string>();
             string current = "";
+            int faceCount = 0;
             var inv = CultureInfo.InvariantCulture;
             var sep = new[] { ' ', '\t' };
             using (var reader = new StreamReader(path))
@@ -50,7 +54,7 @@ namespace StbcRevival
                     if (p.Length == 0) continue;
                     switch (p[0])
                     {
-                        case "v": pos.Add(new Vector3(float.Parse(p[1], inv), float.Parse(p[2], inv), float.Parse(p[3], inv))); break;
+                        case "v": if (pos.Count >= MaxPositions) throw new InvalidDataException($"over {MaxPositions} vertices"); pos.Add(new Vector3(float.Parse(p[1], inv), float.Parse(p[2], inv), float.Parse(p[3], inv))); break;
                         case "vt": uv.Add(new Vector2(float.Parse(p[1], inv), p.Length > 2 ? float.Parse(p[2], inv) : 0f)); break;
                         case "vn": nrm.Add(new Vector3(float.Parse(p[1], inv), float.Parse(p[2], inv), float.Parse(p[3], inv))); break;
                         case "usemtl": current = p.Length > 1 ? p[1] : ""; break;
@@ -72,6 +76,8 @@ namespace StbcRevival
                                 corners[i * 3 + 1] = idx.Length > 1 && idx[1].Length > 0 ? Index(idx[1], uv.Count) : -1;
                                 corners[i * 3 + 2] = idx.Length > 2 && idx[2].Length > 0 ? Index(idx[2], nrm.Count) : -1;
                             }
+                            if (++faceCount > MaxFaces) throw new InvalidDataException($"over {MaxFaces} faces");
+                            if (n < 3 || n > 64) break; // not a face (or not one a ship needs)
                             if (!faces.TryGetValue(current, out var list)) { faces[current] = list = new List<int[]>(); order.Add(current); }
                             list.Add(corners);
                             break;
@@ -118,7 +124,9 @@ namespace StbcRevival
         private static int Index(string s, int count)
         {
             int i = int.Parse(s, CultureInfo.InvariantCulture);
-            return i < 0 ? count + i : i - 1;
+            int at = i < 0 ? count + i : i - 1;
+            if (at < 0 || at >= count) throw new InvalidDataException($"index {i} with {count} defined");
+            return at;
         }
 
         private static void ReadMtl(string path, Dictionary<string, Material> materials)
