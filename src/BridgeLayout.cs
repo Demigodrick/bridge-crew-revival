@@ -45,12 +45,44 @@ namespace StbcRevival
         }
 
         /// <summary>A layout file's changes (format 1); throws, saying what's wrong, if it isn't one.</summary>
-        internal static List<LayoutPiece> ParseLayout(string text)
+        internal static List<LayoutPiece> ParseLayout(string text) => ParseLayout(text, out _);
+
+        /// <summary>A layout file's changes and added parts (format 1); throws, saying what's wrong, if it isn't one.</summary>
+        internal static List<LayoutPiece> ParseLayout(string text, out List<BridgeParts.Spec> added)
         {
+            added = new List<BridgeParts.Spec>();
             var root = MiniJson.Parse(text) as Dictionary<string, object>;
             if (root == null) throw new FormatException("not a JSON object");
             if (!root.TryGetValue("format", out var format) || !(format is double f) || f != 1) throw new FormatException($"format {format ?? "missing"}, not 1");
             var list = new List<LayoutPiece>();
+            Vector3 VecOf(Dictionary<string, object> o, string name, string what)
+            {
+                if (!o.TryGetValue(name, out var v) || !(v is List<object> a) || a.Count != 3 || !(a[0] is double) || !(a[1] is double) || !(a[2] is double))
+                    throw new FormatException($"{what}: {name} isn't [x, y, z]");
+                return new Vector3((float)(double)a[0], (float)(double)a[1], (float)(double)a[2]);
+            }
+            if (root.TryGetValue("added", out var addedList) && addedList is List<object> adds)
+            {
+                int k = 0;
+                foreach (var item in adds)
+                {
+                    k++;
+                    if (!(item is Dictionary<string, object> o)) throw new FormatException($"added part {k} isn't an object");
+                    string Str(string name) => o.TryGetValue(name, out var v) ? v as string : null;
+                    var spec = new BridgeParts.Spec
+                    {
+                        Id = Str("id") ?? k.ToString(),
+                        Scene = Str("scene"), Path = Str("path"), Model = Str("model"),
+                        Level = o.TryGetValue("level", out var lv) && lv is double ld ? (int)ld : -1,
+                        Pivot = VecOf(o, "pivot", $"added part {k}"),
+                        Move = VecOf(o, "move", $"added part {k}"),
+                        Turn = o.TryGetValue("turn", out var t) && t is double td ? (float)td : 0f,
+                        Scale = o.TryGetValue("scale", out var sc) && sc is double sd ? (float)sd : 1f,
+                    };
+                    if (spec.Model == null && (spec.Path == null || spec.Level < 0)) throw new FormatException($"added part {k}: neither a model nor a bridge's piece (path and level)");
+                    added.Add(spec);
+                }
+            }
             if (!root.TryGetValue("pieces", out var pieces) || pieces == null) return list;
             if (!(pieces is List<object> array)) throw new FormatException("pieces isn't a list");
             int n = 0;
@@ -116,6 +148,7 @@ namespace StbcRevival
             if (Plugin.BridgeLayouts == null || !Plugin.BridgeLayouts.Value) return;
             if (boundRoot != 0)
             {
+                BridgeParts.Update();
                 // Copies of batched pieces wait for the scene's file to be read.
                 foreach (var c in changes) if (c.T != null && c.Moved && c.Batched.Count > 0 && c.Copy == null && c.CopyProblem == null) Refresh(c);
             }
@@ -134,6 +167,7 @@ namespace StbcRevival
                     Plugin.Log.LogInfo($"Bridge layout: {Path.GetFileName(boundFile)} changed: put on again");
                     foreach (var c in changes) Reset(c);
                     ResetFollowers();
+                    BridgeParts.Clear();
                     Forget();
                 }
             }
@@ -166,9 +200,11 @@ namespace StbcRevival
         private static void Load(string file)
         {
             List<LayoutPiece> layout;
-            try { layout = ParseLayout(File.ReadAllText(file)); }
+            List<BridgeParts.Spec> added;
+            try { layout = ParseLayout(File.ReadAllText(file), out added); }
             catch (Exception e) { Plugin.Log.LogWarning($"Bridge layout: {file} isn't a layout this version can read: {e.Message}"); return; }
-            Plugin.Log.LogInfo($"Bridge layout: {Path.GetFileName(file)} for {scene.name}: {layout.Count} change(s)");
+            Plugin.Log.LogInfo($"Bridge layout: {Path.GetFileName(file)} for {scene.name}: {layout.Count} change(s), {added.Count} added part(s)");
+            BridgeParts.Start(added, scene);
             if (layout.Count == 0) return;
             var byPath = Index();
             int on = 0, missing = 0, refused = 0;
@@ -397,6 +433,7 @@ namespace StbcRevival
         /// <summary>The scene's gone (its objects with it) or its layout is put on again: what we made goes.</summary>
         private static void Forget()
         {
+            BridgeParts.Clear();
             followers.Clear();
             seatsDone.Clear();
             foreach (var c in changes) foreach (var m in c.CopyMeshes) if (m != null) UnityEngine.Object.Destroy(m);
@@ -559,7 +596,12 @@ namespace StbcRevival
         {
             MeshAsset m;
             lock (meshes) meshes.TryGetValue(piece.Combined, out m);
-            if (m == null) return null;
+            return m == null ? null : SliceMesh(m, piece.SubMeshes, BridgeLayout.CopyName + " piece");
+        }
+
+        /// <summary>Some of a mesh's sub-meshes, as a mesh of its own (only the vertices they use; any vertex format).</summary>
+        internal static Mesh SliceMesh(MeshAsset m, IList<int> subMeshes, string name)
+        {
             var map = new Dictionary<int, int>();
             var vertices = new List<Vector3>();
             var normals = m.Has(1) ? new List<Vector3>() : null;
@@ -567,7 +609,7 @@ namespace StbcRevival
             var uv2s = m.Has(4) ? new List<Vector2>() : null;
             var tangents = m.Has(7) ? new List<Vector4>() : null;
             var triangles = new List<int[]>();
-            foreach (var s in piece.SubMeshes)
+            foreach (var s in subMeshes)
             {
                 if (s < 0 || s >= m.SubMeshes.Count) continue;
                 var sub = m.SubMeshes[s];
@@ -590,7 +632,7 @@ namespace StbcRevival
                 triangles.Add(tri);
             }
             if (vertices.Count == 0) return null;
-            var mesh = new Mesh { name = BridgeLayout.CopyName + " piece" };
+            var mesh = new Mesh { name = name };
             mesh.vertices = vertices.ToArray();
             if (normals != null) mesh.normals = normals.ToArray();
             if (uvs != null) mesh.uv = uvs.ToArray();

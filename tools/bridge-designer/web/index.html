@@ -30,6 +30,16 @@
       <button id="save" type="button" class="primary" title="Save (Ctrl+S)" disabled>Save layout</button>
     </div>
   </div>
+  <details id="addParts" class="tools">
+    <summary>Add parts</summary>
+    <select id="source" aria-label="Take parts from"></select>
+    <input id="partSearch" type="search" placeholder="Filter parts…" aria-label="Filter parts">
+    <ul id="parts" aria-label="Parts"></ul>
+    <div class="row">
+      <button id="addPart" type="button" disabled>Add</button>
+      <button id="addGroup" type="button" disabled title="The group it's in">Add its group</button>
+    </div>
+  </details>
   <div class="tools">
     <input id="search" type="search" placeholder="Filter pieces…" aria-label="Filter pieces">
     <div class="row">
@@ -58,6 +68,7 @@
       <label>Y <input id="fy" type="number" step="0.05"></label>
       <label>Z <input id="fz" type="number" step="0.05"></label>
       <label>Turn° <input id="fturn" type="number" step="15"></label>
+      <label id="fscaleWrap" hidden>Scale <input id="fscale" type="number" step="0.05" min="0.05" max="20"></label>
     </div>
   </section>
   <div id="toast" role="status" hidden></div>

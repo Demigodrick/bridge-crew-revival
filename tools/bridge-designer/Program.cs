@@ -7,7 +7,7 @@
 // Layouts (what was moved, turned or hidden) are saved to BepInEx/bridges/<scene>.json in the game folder, the
 // previous one kept as .json.bak; the mod puts a bridge's layout on whenever that bridge loads.
 //
-// Usage: dotnet run -- [--game <game folder>] [--port 8770] [--no-open] [--web <folder>] [--layouts <folder>]
+// Usage: dotnet run -- [--game <game folder>] [--port 8770] [--no-open] [--web <folder>] [--layouts <folder>] [--models <folder>]
 //        (the game folder also from $GAME_DIR; default: Steam's usual place. --web serves the page from a folder,
 //        e.g. web/ in the source, to try changes to it without a rebuild.)
 using System.Diagnostics;
@@ -18,7 +18,7 @@ using System.Text.Json;
 string gameDir = Environment.GetEnvironmentVariable("GAME_DIR");
 int port = 8770;
 bool open = true;
-string webArg = null, layoutsArg = null;
+string webArg = null, layoutsArg = null, modelsArg = null;
 for (int i = 0; i < args.Length; i++)
 {
     if (args[i] == "--game" && i + 1 < args.Length) gameDir = args[++i];
@@ -26,7 +26,8 @@ for (int i = 0; i < args.Length; i++)
     else if (args[i] == "--no-open") open = false;
     else if (args[i] == "--web" && i + 1 < args.Length) webArg = Path.GetFullPath(args[++i]);
     else if (args[i] == "--layouts" && i + 1 < args.Length) layoutsArg = Path.GetFullPath(args[++i]);
-    else { Console.Error.WriteLine("usage: bridge-designer [--game <folder>] [--port 8770] [--no-open] [--web <folder>] [--layouts <folder>]"); return 1; }
+    else if (args[i] == "--models" && i + 1 < args.Length) modelsArg = Path.GetFullPath(args[++i]);
+    else { Console.Error.WriteLine("usage: bridge-designer [--game <folder>] [--port 8770] [--no-open] [--web <folder>] [--layouts <folder>] [--models <folder>]"); return 1; }
 }
 gameDir ??= DefaultGameDir();
 string dataDir = Path.Combine(gameDir, "stbc_Data");
@@ -41,7 +42,10 @@ Console.WriteLine($"Bridges: {string.Join(", ", bridges.Select(b => $"{b.Name} (
 
 string web = webArg ?? Path.Combine(AppContext.BaseDirectory, "web");
 string layouts = layoutsArg ?? Path.Combine(gameDir, "BepInEx", "bridges");
+// Models to add to a bridge (.obj with their .mtl and textures): the mod reads them from the game's folder.
+string models = modelsArg ?? Path.Combine(gameDir, "BepInEx", "bridges", "models");
 Console.WriteLine($"Layouts: {layouts}");
+Console.WriteLine($"Models: {models}{(Directory.Exists(models) ? "" : " (not there yet: put .obj models in it to add them to bridges)")}");
 var cache = new Dictionary<int, byte[]>();
 var listener = new HttpListener();
 string url = $"http://127.0.0.1:{port}/";
@@ -84,6 +88,24 @@ void Serve(HttpListenerContext ctx)
                 }
             }
             Send(res, "model/gltf-binary", glb);
+            return;
+        }
+        if (path == "/api/models")
+        {
+            var list = Directory.Exists(models)
+                ? Directory.GetFiles(models, "*.obj", SearchOption.AllDirectories).Select(f => Path.GetRelativePath(models, f).Replace('\\', '/')).OrderBy(f => f).ToArray()
+                : Array.Empty<string>();
+            Send(res, "application/json", JsonSerializer.SerializeToUtf8Bytes(list));
+            return;
+        }
+        if (path.StartsWith("/api/models/"))
+        {
+            // A model's own files (the .obj, its .mtl and textures), from the models folder only.
+            string modelRel = Uri.UnescapeDataString(path["/api/models/".Length..]);
+            string full = Path.GetFullPath(Path.Combine(models, modelRel));
+            if (!full.StartsWith(Path.GetFullPath(models) + Path.DirectorySeparatorChar) || !File.Exists(full)) { res.StatusCode = 404; res.Close(); return; }
+            string mtype = Path.GetExtension(full).ToLowerInvariant() switch { ".png" => "image/png", ".jpg" or ".jpeg" => "image/jpeg", _ => "text/plain" };
+            Send(res, mtype, File.ReadAllBytes(full));
             return;
         }
         if (path.StartsWith("/api/layout/"))
@@ -144,6 +166,15 @@ static string CheckLayout(string body, string sceneName)
             p.GetProperty("turn").GetDouble();
             p.GetProperty("hidden").GetBoolean();
         }
+        if (r.TryGetProperty("added", out var added))
+            foreach (var a in added.EnumerateArray())
+            {
+                bool model = a.TryGetProperty("model", out var m) && m.ValueKind == JsonValueKind.String;
+                bool piece = a.TryGetProperty("path", out var pp) && pp.ValueKind == JsonValueKind.String && a.TryGetProperty("level", out var lv) && lv.ValueKind == JsonValueKind.Number;
+                if (!model && !piece) return "an added part that's neither a model nor a bridge's piece";
+                foreach (var v in new[] { "pivot", "move" }) if (a.GetProperty(v).GetArrayLength() != 3) return $"added part: {v} isn't x, y, z";
+                a.GetProperty("turn").GetDouble();
+            }
         return null;
     }
     catch (Exception e) { return "not a layout: " + e.Message; }

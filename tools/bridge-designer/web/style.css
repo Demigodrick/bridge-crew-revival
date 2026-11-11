@@ -60,3 +60,15 @@ button:disabled { opacity: .45; cursor: default; }
 #fields { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 8px; }
 #fields label { display: grid; gap: 2px; color: var(--muted); font-size: 11px; }
 #fields input { width: 100%; font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px; }
+#addParts summary { cursor: pointer; color: var(--accent); font-weight: 600; }
+#addParts[open] { gap: 8px; }
+#parts { list-style: none; margin: 0; padding: 0; max-height: 180px; overflow: auto; border: 1px solid var(--line); border-radius: 6px; }
+#parts li { padding: 3px 8px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#parts li:hover { background: #ffffff08; }
+#parts li.sel { background: var(--accent-dim); box-shadow: inset 3px 0 var(--accent); }
+#parts li.muted { cursor: default; white-space: normal; }
+#fields { grid-template-columns: repeat(5, 1fr); }
+/* Long part names mustn't widen the sidebar: grid items may shrink below their content. */
+.tools { grid-template-columns: minmax(0, 1fr); }
+.tools > * { min-width: 0; }
+.tools .row > * { min-width: 0; }
