@@ -1,0 +1,9 @@
+# Where Nova.obj had its own name and registry (measured on the original model, in its raw .obj coordinates).
+# kind     centre x y z          normal x y z        reading axis x y z   length  height
+# kind: both (registry large, "U.S.S. NAME" under it), registry, name. The letters' tops face the ship's middle.
+both       0.70 30.20 61.50     0.00  0.97  0.23     1 0 0                12.7   3.1
+registry   0.00 21.70 69.50     0.00 -1.00  0.00     1 0 0                11.0   2.0
+registry  28.70 36.80 -37.30    0.00  1.00 -0.02     0 0 1                20.0   2.1
+registry -28.70 36.80 -37.30    0.00  1.00 -0.02     0 0 1                20.0   2.1
+registry  28.70 29.70 -37.30    0.00 -1.00 -0.01     0 0 1                20.0   2.1
+registry -28.70 29.70 -37.30    0.00 -1.00 -0.01     0 0 1                20.0   2.1
