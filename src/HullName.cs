@@ -92,13 +92,16 @@ namespace StbcRevival
 
         internal static void Update()
         {
+            // A scan of every material shows as a hitch: often just after a scene loads (the ships come then), rarely after.
+            var scene = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name + "/" + UnityEngine.SceneManagement.SceneManager.sceneCount;
+            if (scene != lastScene) { lastScene = scene; burstUntil = Time.unscaledTime + 25f; nextScan = 0f; }
             if (Time.unscaledTime < nextScan) return;
-            nextScan = Time.unscaledTime + 5f; // a scan of every material: not too often (it shows as a hitch)
+            nextScan = Time.unscaledTime + (Time.unscaledTime < burstUntil ? 2f : 30f);
             try
             {
                 string name = ShipName.Name, registry = ShipName.Registry;
                 if (name.Length == 0) { Restore(); return; }
-                var mats = Resources.FindObjectsOfTypeAll<Material>();
+                var mats = Candidates(Resources.FindObjectsOfTypeAll<Material>()); // one pass; the rest only look at these
                 foreach (var decal in Decals)
                 {
                     var mine = mats.Where(m => IsDecal(decal, m)).ToList();
@@ -117,6 +120,29 @@ namespace StbcRevival
                 UpdatePlaque(mats, name, registry);
             }
             catch (Exception e) { Plugin.Log.LogWarning("Hull name: " + e); nextScan = Time.unscaledTime + 30f; }
+        }
+
+        private static string lastScene;
+        private static float burstUntil;
+
+        /// <summary>The materials that wear one of the textures (or decal materials) this class repaints, or one of its own.</summary>
+        private static Material[] Candidates(Material[] all)
+        {
+            var names = new HashSet<string>(StringComparer.Ordinal);
+            var ours = new HashSet<Texture>();
+            foreach (var d in Decals) { names.Add(d.Texture); if (d.Diffuse != null) ours.Add(d.Diffuse); }
+            foreach (var p in Paints) { names.Add(p.Texture); if (p.Done != null) ours.Add(p.Done); }
+            foreach (var p in Plaques) { names.Add(p.Diffuse); if (p.D != null) ours.Add(p.D); }
+            var found = new List<Material>();
+            foreach (var m in all)
+            {
+                if (m == null) continue;
+                bool decalByName = Decals.Any(d => m.name.StartsWith(d.Material, StringComparison.Ordinal));
+                if (!decalByName && !m.HasProperty("_MainTex")) continue;
+                var t = m.HasProperty("_MainTex") ? m.GetTexture("_MainTex") : null;
+                if (decalByName || (t != null && (names.Contains(t.name) || ours.Contains(t)))) found.Add(m);
+            }
+            return found.ToArray();
         }
 
         private static bool IsDecal(Decal decal, Material m)
