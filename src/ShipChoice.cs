@@ -15,7 +15,7 @@ namespace StbcRevival
     /// (Aegis, original Enterprise, Next Generation) move up and out of sight as the list scrolls, the added ones come
     /// in below. NOVA is a copy of the Aegis's row (always choosable, never locked). NOVA flies on the Next Generation's ship when the crew can choose it (it's DLC), else on the Aegis's:
     /// choosing it turns that toggle on and puts "Nova" on the room (NovaShip), so the bridge, consoles and crew are
-    /// that ship's and the hull the Nova's. Both rows show as chosen: that one and NOVA. Choosing any of the game's ships
+    /// that ship's and the hull the Nova's. That row then shows no mark; NOVA does. Choosing any of the game's ships
     /// (a click on the one already on too) takes "Nova" off the room again. NOVA is there only with the Nova's model
     /// on this PC, and can be chosen whenever the Aegis or the Next Generation can.
     /// </summary>
@@ -359,11 +359,9 @@ namespace StbcRevival
                         if (box.NovaLabels[k] != null) box.NovaLabels[k].color = canChoose ? box.NovaColours[k] : grey;
                     if (campaign && nova && box.Aegis.interactable && !JustPressed) { NovaShip.SetForRoom(false); nova = false; }
                     if (box.Nova.interactable != canChoose) box.Nova.interactable = canChoose;
-                    // The row the Nova flies on stays marked too: its bridge and systems are that ship's, only the hull is
-                    // the Nova's. (Hiding its mark made the Next Generation's row, whose mark is its orange fill, look
-                    // greyed out.) Marks hidden by an earlier build are shown again.
+                    // The row the Nova flies on shows no mark of its own while NOVA's shows.
                     foreach (var under in new[] { box.Tng, box.Aegis })
-                        if (under.graphic != null && under.isOn && under.graphic.canvasRenderer.GetAlpha() < 1f) under.graphic.canvasRenderer.SetAlpha(1f);
+                        if (under.graphic != null) under.graphic.canvasRenderer.SetAlpha(on && under.isOn ? 0f : (under.isOn ? 1f : 0f));
                     box.Applying = false;
                     // Scrolled so the ship chosen is in sight, when the choice changes (scrolling away is free after that).
                     int chosen = on ? 3 : box.Tng.isOn ? 2 : box.Tos.isOn ? 1 : 0;
