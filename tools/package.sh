@@ -15,6 +15,8 @@ cp "$root/src/bin/Release/net35/StbcRevival.dll" "$root/src/bin/Release/net35/St
 [ -f "$root/tools/rnnoise/out/rnnoise.dll" ] || "$root/tools/rnnoise/build.sh"
 mkdir -p "$out/native"
 cp "$root/tools/rnnoise/out/rnnoise.dll" "$out/native/"
+# The models of our own ship classes and bridge sets (BepInEx/ships, BepInEx/bridges), beside plugins/ in the zip.
+for d in ships bridges; do [ -d "$root/assets/$d" ] && mkdir -p "$out/$d" && cp -r "$root/assets/$d/." "$out/$d/"; done
 cp "$root/docs/install.sh" "$out/"
 chmod +x "$out/install.sh"
 # Windows files with CRLF line endings.

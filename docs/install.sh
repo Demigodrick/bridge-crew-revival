@@ -451,6 +451,10 @@ main() {
     mkdir -p "$game/BepInEx/native"
     cp "$plugins/../native/rnnoise.dll" "$game/BepInEx/native/"
   fi
+  # Ship classes and bridge sets of our own, beside plugins/ in the zip.
+  for d in ships bridges; do
+    if [ -d "$plugins/../$d" ]; then mkdir -p "$game/BepInEx/$d" && cp -r "$plugins/../$d/." "$game/BepInEx/$d/"; fi
+  done
   ok "Bridge Crew Revival${version:+ $version} installed"
   if [ -n "$beta" ]; then
     set_pvp_test "$game" "$beta"

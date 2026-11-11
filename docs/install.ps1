@@ -401,6 +401,15 @@ function Install-BridgeCrewRevival([string]$GameDir, [bool]$Uninstall, [string]$
             New-Item -ItemType Directory -Force -Path $native | Out-Null
             Copy-Item -LiteralPath $nativeSource -Destination $native -Force
         }
+        # Ship classes and bridge sets of our own, beside plugins\ in the zip.
+        foreach ($d in "ships", "bridges") {
+            $assetSource = Join-Path (Split-Path -Parent $source) $d
+            if (Test-Path $assetSource) {
+                $assetTarget = Join-Path $GameDir "BepInEx\$d"
+                New-Item -ItemType Directory -Force -Path $assetTarget | Out-Null
+                Copy-Item -Path (Join-Path $assetSource "*") -Destination $assetTarget -Recurse -Force
+            }
+        }
         Install-Vosk $GameDir $tmp
         Install-VoiceLanguage $GameDir $tmp $Voice
     } finally {

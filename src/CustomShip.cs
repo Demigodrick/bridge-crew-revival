@@ -14,7 +14,7 @@ namespace StbcRevival
 {
     /// <summary>
     /// [Ships] PlayerShip = Nova or Sovereign (beta): the crew flies a ship class of its own, built from a model on this PC in
-    /// BepInEx/ships/&lt;Name&gt; (none of it ships with the mod): a Wavefront &lt;Name&gt;.obj with its .mtl and textures (.png
+    /// BepInEx/ships/&lt;Name&gt; (comes with the mod, from assets/ships): a Wavefront &lt;Name&gt;.obj with its .mtl and textures (.png
     /// or .jpg beside it). The ship and its bridge stay the game's own: the Aegis, or the Enterprise-D with the Next
     /// Generation chosen.
     ///
