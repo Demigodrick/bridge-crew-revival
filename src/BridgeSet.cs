@@ -53,6 +53,7 @@ namespace StbcRevival
             public Vector3? Screen;     // the set's viewscreen: the middle of its back plane (model file)
             public float ScreenHeight;  // and its height
             public Vector3? Tactical, TacticalNormal, TacticalStand; // its tactical console's screen (middle, facing) and where its officer stands
+            public float? TacticalPitch; // how far down the tactical officer's camera looks by default (degrees; the game's is 16)
             public List<PanelPlace> Panels = new List<PanelPlace>();  // which of the game's tactical panels goes on which of its screens
             public Dictionary<string, TacticalSplit.Screen> Splits = new Dictionary<string, TacticalSplit.Screen>(); // its console screens for the split tactical panel
             public string Error;
@@ -65,6 +66,7 @@ namespace StbcRevival
         private static Vector3 placedCaptain; // the set's captain's place in its model file (the last one built)
         private static Vector3? screen; private static float screenHeight;
         private static Vector3? tactical, tacticalNormal, tacticalStand;
+        private static float? tacticalPitch;
         private static List<PanelPlace> panels = new List<PanelPlace>();
         private static bool panelsPlaced;
         private static Dictionary<string, TacticalSplit.Screen> splits = new Dictionary<string, TacticalSplit.Screen>();
@@ -183,6 +185,8 @@ namespace StbcRevival
                                 Width = float.Parse(p[8], inv),
                             });
                         }
+                        if (p.Length >= 2 && p[0] == "tacticalpitch")
+                            result.TacticalPitch = float.Parse(p[1], System.Globalization.CultureInfo.InvariantCulture);
                         if (p.Length >= 4 && p[0] == "tacticalstand")
                         {
                             var inv = System.Globalization.CultureInfo.InvariantCulture;
@@ -257,7 +261,7 @@ namespace StbcRevival
             // game's. (x, y, z) -> (x, y, -z) mirrors, as right-handed to left-handed does, so the triangles turn too.
             var c = data.Captain;
             placedCaptain = c; screen = data.Screen; screenHeight = data.ScreenHeight;
-            tactical = data.Tactical; tacticalNormal = data.TacticalNormal; tacticalStand = data.TacticalStand; panels = data.Panels; splits = data.Splits;
+            tacticalPitch = data.TacticalPitch; tactical = data.Tactical; tacticalNormal = data.TacticalNormal; tacticalStand = data.TacticalStand; panels = data.Panels; splits = data.Splits;
             Func<Vector3, Vector3> place = v => new Vector3(v.x - c.x, v.y - c.y, -(v.z - c.z)) + GameCaptain;
             int pieces = 0, tris = 0, carved = 0;
             for (int n = 0; n < data.Parts.Count; n++)
@@ -363,7 +367,23 @@ namespace StbcRevival
             var t = root.transform;
             t.position = stand + turn * (t.position - o);
             t.rotation = turn * t.rotation;
+            if (tacticalPitch != null) PitchTacticalCamera(tacticalPitch.Value);
             Plugin.Log.LogInfo($"Bridge set {name}: tactical officer at {stand}, facing the console ({turn.eulerAngles.y:0} degrees turned)");
+        }
+
+        /// <summary>The tactical officer's default (mouse and keyboard) camera turned down so far, through the game's own per-station override.</summary>
+        private static void PitchTacticalCamera(float pitch)
+        {
+            var helpers = UnityEngine.Object.FindObjectsOfType<MonoBehaviour>().FirstOrDefault(m => m != null && m.GetType().Name == "BridgeHelperObjects");
+            var field = helpers?.GetType().GetField("_nonVRCameraSettingsTactical", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public);
+            var settings = field?.GetValue(helpers);
+            if (settings == null) { Plugin.Log.LogWarning("Bridge set: the tactical camera settings weren't found"); return; }
+            var t = settings.GetType();
+            var angles = (Vector3)t.GetField("cameraAngles").GetValue(settings);
+            bool had = (bool)t.GetField("OverrideDefaultCameraAngles").GetValue(settings);
+            t.GetField("OverrideDefaultCameraAngles").SetValue(settings, true);
+            t.GetField("cameraAngles").SetValue(settings, new Vector3(pitch, 0f, 0f));
+            Plugin.Log.LogInfo($"Bridge set {name}: tactical camera looks {pitch:0} degrees down (was {(had ? angles.x.ToString("0") + " (set by the bridge)" : "the game's 16")})");
         }
 
         /// <summary>
