@@ -50,6 +50,7 @@ namespace StbcRevival
         private static Vector3? screen; private static float screenHeight;
         private static Vector3? tactical, tacticalNormal, tacticalStand;
         private static int dressedScene = -1;
+        private static bool panelDumped;
         private static float next;
 
         private static string Folder => Path.Combine(BepInEx.Paths.BepInExRootPath, Path.Combine("bridges", name));
@@ -71,6 +72,12 @@ namespace StbcRevival
                 loaded = null;
             }
             if (template == null || Time.unscaledTime < next) return;
+            // The tactical panel is made once a mission runs: its make-up written out then (for splitting it onto the set's screens).
+            if (!panelDumped && dressedScene != -1)
+            {
+                var tacticalUi = GameObject.Find("Bridge/Stations-1701D/Tactical_root/Tactical_UIParent");
+                if (tacticalUi != null && tacticalUi.transform.childCount > 0) { panelDumped = true; DumpTactical(tacticalUi.transform.parent); Plugin.Log.LogInfo("Bridge set: tactical panel written out"); }
+            }
             next = Time.unscaledTime + 1f;
             var marker = GameObject.Find(Marker);
             if (marker == null) return;
