@@ -37,7 +37,7 @@ namespace StbcRevival
         /// </summary>
         internal static void Set(string value, bool forRoom)
         {
-            value = (value ?? "").Trim();
+            value = Clean(value);
             var room = Room();
             if (room == null || IsHost()) Plugin.ShipName.Value = value;
             if (room != null && forRoom | IsHost()) PhotonProps.Set(room, Key, value);
@@ -45,10 +45,32 @@ namespace StbcRevival
             nextCheck = Time.unscaledTime + 1f;
         }
 
+        internal const int MaxName = 40, MaxRegistry = 16;
+
+        /// <summary>
+        /// A ship name as it may be shown: "Name, REGISTRY" with no markup or control characters (it comes from other
+        /// players: the room's host, or any lobby's in the room lists), the name at most 40 characters and the
+        /// registry 16. TMP and IMGUI would otherwise read "&lt;size=...&gt;" and the like as formatting.
+        /// </summary>
+        internal static string Clean(string value)
+        {
+            if (string.IsNullOrEmpty(value)) return "";
+            if (value.Length > 256) value = value.Substring(0, 256);
+            var sb = new System.Text.StringBuilder(value.Length);
+            foreach (char c in value)
+                if (c >= ' ' && c != '<' && c != '>' && c != '\u007F' && !char.IsSurrogate(c)) sb.Append(c);
+            string all = sb.ToString().Trim();
+            int comma = all.LastIndexOf(',');
+            string n = (comma >= 0 ? all.Substring(0, comma) : all).Trim(), r = comma >= 0 ? all.Substring(comma + 1).Trim() : "";
+            if (n.Length > MaxName) n = n.Substring(0, MaxName).Trim();
+            if (r.Length > MaxRegistry) r = r.Substring(0, MaxRegistry).Trim();
+            return comma >= 0 && r.Length > 0 ? n + ", " + r : n;
+        }
+
         /// <summary>"USS Cosmo, NCC-91234" (a room's SHN) → "USS Cosmo (NCC-91234)"; "" for none.</summary>
         internal static string Format(string value)
         {
-            value = (value ?? "").Trim();
+            value = Clean(value);
             int comma = value.LastIndexOf(',');
             if (comma < 0) return value;
             string n = value.Substring(0, comma).Trim(), r = value.Substring(comma + 1).Trim();
@@ -63,8 +85,15 @@ namespace StbcRevival
             if (ReferenceEquals(listedFor, room)) return;
             try
             {
-                var field = AccessTools.Field(room.GetType(), "KJNGOJCPCDJ");
-                var listed = field?.GetValue(room) as string[] ?? new string[0];
+                // The game's own listed properties are read first and kept: setting the list replaces it, so a list
+                // that couldn't be read is left alone rather than replaced with SHN alone.
+                var get = room.GetType().GetMethod("get_propertiesListedInLobby", BindingFlags.Public | BindingFlags.Instance);
+                if (!(get?.Invoke(room, null) is string[] listed))
+                {
+                    Plugin.Log.LogInfo("Ship name: the room's lobby listing couldn't be read; not listed in the lobby");
+                    listedFor = room;
+                    return;
+                }
                 if (!listed.Contains(Key))
                 {
                     var set = room.GetType().GetMethod("SetPropertiesListedInLobby", new[] { typeof(string[]) });
@@ -89,7 +118,7 @@ namespace StbcRevival
         }
 
         /// <summary>The name shown in the settings: the one you set, or "the game's".</summary>
-        internal static string Own => (Plugin.ShipName.Value ?? "").Trim();
+        internal static string Own => Clean(Plugin.ShipName.Value);
 
         internal static void Update()
         {
@@ -103,7 +132,7 @@ namespace StbcRevival
                 if (room != null)
                 {
                     var props = room.GetType().GetMethod("get_customProperties")?.Invoke(room, null) as IDictionary;
-                    string onRoom = props != null && props.Contains(Key) ? props[Key] as string ?? "" : "";
+                    string onRoom = Clean(props != null && props.Contains(Key) ? props[Key] as string : null);
                     bool host = photon.GetMethod("get_isMasterClient", BindingFlags.Public | BindingFlags.Static)?.Invoke(null, null) is bool m && m;
                     // The room's name is the one in use. A new room gets the host's; after that the briefing room's
                     // SHIP NAME box changes it (host or captain), for everyone.
@@ -118,7 +147,7 @@ namespace StbcRevival
 
         private static void Use(string value)
         {
-            current = value ?? "";
+            current = Clean(value);
             int comma = current.LastIndexOf(',');
             name = (comma >= 0 ? current.Substring(0, comma) : current).Trim();
             registry = comma >= 0 ? current.Substring(comma + 1).Trim() : "";

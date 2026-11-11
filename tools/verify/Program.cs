@@ -654,5 +654,11 @@ var playerInfo = game.GetType("NovaPlayerInfo");
 Check("NovaPlayerInfo.FPCLMHFIGLD setter (CurrentPlayerRank)", playerInfo?.GetProperty("FPCLMHFIGLD", Inst)?.SetMethod);
 Check("BodyCustomization.OMJKMLCLMNI (worn rank)", game.GetType("BodyCustomization")?.GetField("OMJKMLCLMNI", Inst));
 
+// Ship name (reflected names)
+var room = game.GetType("AOFOFMFGNGN");
+Check("Room (AOFOFMFGNGN).get_propertiesListedInLobby (ship name)", room?.GetMethod("get_propertiesListedInLobby", BindingFlags.Public | BindingFlags.Instance));
+Check("  Room.SetPropertiesListedInLobby(string[])", room?.GetMethods(BindingFlags.Public | BindingFlags.Instance).FirstOrDefault(m => m.Name == "SetPropertiesListedInLobby" && m.GetParameters().Length == 1));
+Check("SVR.Localization.GetLocalizedText(string, int) (ship name)", game.GetType("SVR.Localization")?.GetMethods(AnyS).FirstOrDefault(m => m.Name == "GetLocalizedText" && m.GetParameters().Length == 2));
+
 Console.WriteLine(failures == 0 ? "\nAll targets resolved." : $"\n{failures} target(s) missing.");
 return failures == 0 ? 0 : 1;

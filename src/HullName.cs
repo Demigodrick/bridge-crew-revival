@@ -52,6 +52,7 @@ namespace StbcRevival
             public Action<Color32[], int> Extra;
             public Texture2D Diffuse, Glow;
             public string DrawnFor;
+            public bool Pending;              // being drawn
         }
 
         private static readonly Style AegisStyle = new Style { Fill = new Color32(0x22, 0x11, 0x22, 255), Rim = new Color32(0x77, 0x11, 0x11, 255), RimWidth = 0.014f }; // no light outer rim
@@ -88,42 +89,131 @@ namespace StbcRevival
         };
 
         private static readonly Dictionary<Material, Texture[]> originals = new Dictionary<Material, Texture[]>();
-        private static float nextScan;
+        private static float nextScan, scanUntil;
+        private static string lastScene, lastWant;
+        private static int generation; // goes up as the game's textures are put back: drawings started before are dropped
+
+        // Material properties this class swaps textures in.
+        private static readonly string[] Props = { "_MainTex", "_EmissionMap", "_OcclusionMap", "_BumpMap" };
 
         internal static void Update()
         {
-            // A scan of every material shows as a hitch: often just after a scene loads (the ships come then), rarely after.
+            Jobs();
+            // A scan of every material costs a few milliseconds, so it only runs for a while after a scene loads (the
+            // ships come with it), after the name changes, and just after a drawing is done; not all the time.
             var scene = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name + "/" + UnityEngine.SceneManagement.SceneManager.sceneCount;
-            if (scene != lastScene) { lastScene = scene; burstUntil = Time.unscaledTime + 25f; nextScan = 0f; }
-            if (Time.unscaledTime < nextScan) return;
-            nextScan = Time.unscaledTime + (Time.unscaledTime < burstUntil ? 2f : 30f);
+            if (scene != lastScene) { lastScene = scene; ScanFor(25f); }
+            string name = ShipName.Name, registry = ShipName.Registry;
+            string want = name + "|" + registry + "|" + Plugin.HullFont.Value + "|" + Plugin.HullPreview.Value;
+            if (want != lastWant) { lastWant = want; ScanFor(10f); }
+            if (Time.unscaledTime > scanUntil || Time.unscaledTime < nextScan) return;
+            nextScan = Time.unscaledTime + 2f;
             try
             {
-                string name = ShipName.Name, registry = ShipName.Registry;
                 if (name.Length == 0) { Restore(); return; }
                 var mats = Candidates(Resources.FindObjectsOfTypeAll<Material>()); // one pass; the rest only look at these
                 foreach (var decal in Decals)
                 {
                     var mine = mats.Where(m => IsDecal(decal, m)).ToList();
                     if (mine.Count == 0 && !Plugin.HullPreview.Value) continue; // that ship isn't loaded (the preview draws them all)
-                    string want = name + "|" + registry + "|" + Plugin.HullFont.Value;
-                    if (decal.DrawnFor != want) { if (!Draw(decal, name, registry)) { nextScan = Time.unscaledTime + 30f; return; } decal.DrawnFor = want; }
+                    string drawFor = name + "|" + registry + "|" + Plugin.HullFont.Value;
+                    if (decal.DrawnFor != drawFor && !decal.Pending)
+                    {
+                        if (!Draw(decal, name, registry, drawFor)) continue; // no font yet: tried again at the next scan
+                    }
+                    if (decal.Diffuse == null) continue; // still being drawn
                     foreach (var m in mine)
                     {
                         if (m.GetTexture("_MainTex") == decal.Diffuse) continue;
                         if (!originals.ContainsKey(m)) originals[m] = new[] { m.GetTexture("_MainTex"), decal.Emission ? m.GetTexture("_EmissionMap") : null };
                         m.SetTexture("_MainTex", decal.Diffuse);
-                        if (decal.Emission) m.SetTexture("_EmissionMap", decal.Glow);
+                        if (decal.Emission && decal.Glow != null) m.SetTexture("_EmissionMap", decal.Glow);
                     }
                 }
                 UpdatePaints(mats, name, registry);
                 UpdatePlaque(mats, name, registry);
             }
-            catch (Exception e) { Plugin.Log.LogWarning("Hull name: " + e); nextScan = Time.unscaledTime + 30f; }
+            catch (Exception e) { Plugin.Log.LogWarning("Hull name: " + e); scanUntil = 0f; }
         }
 
-        private static string lastScene;
-        private static float burstUntil;
+        private static void ScanFor(float seconds)
+        {
+            scanUntil = Mathf.Max(scanUntil, Time.unscaledTime + seconds);
+            nextScan = 0f;
+        }
+
+        // ---- drawing off the main thread ----
+        // Reading the game's files, decoding and encoding the texture blocks and drawing the letters run on a worker
+        // thread, one drawing at a time (so the memory they need is only ever needed once); the textures are made from
+        // the result on the main thread. The fonts are read on the main thread first (that needs Unity).
+
+        private sealed class Job { public string What; public Func<Action> Work; public Action Apply, Finally; public Exception Error; public int Generation; public volatile bool Done; }
+        private static readonly Queue<Job> queued = new Queue<Job>();
+        private static Job running;
+
+        /// <summary>Queues work for the worker thread; its result (an action) runs on the main thread when it's done.</summary>
+        /// Finally runs on the main thread however it went (dropped, failed or done).
+        private static void Run(string what, Func<Action> work, Action @finally) => queued.Enqueue(new Job { What = what, Work = work, Finally = @finally, Generation = generation });
+
+        private static void Jobs()
+        {
+            if (running != null)
+            {
+                if (!running.Done) return;
+                var job = running; running = null;
+                if (job.Error != null) Plugin.Log.LogWarning($"Hull name: {job.What}: {job.Error}");
+                else if (job.Generation != generation) Plugin.Log.LogInfo($"Hull name: {job.What}: the game's textures are back meanwhile; dropped");
+                else
+                {
+                    try { job.Apply?.Invoke(); }
+                    catch (Exception e) { Plugin.Log.LogWarning($"Hull name: {job.What}: {e}"); }
+                }
+                try { job.Finally?.Invoke(); } catch { }
+                ScanFor(3f); // the new texture onto the materials
+            }
+            if (queued.Count == 0) return;
+            var next = running = queued.Dequeue();
+            var thread = new System.Threading.Thread(() =>
+            {
+                try { next.Apply = next.Work(); }
+                catch (Exception e) { next.Error = e; }
+                next.Done = true;
+            }) { IsBackground = true, Name = "Revival hull name", Priority = System.Threading.ThreadPriority.BelowNormal };
+            thread.Start();
+        }
+
+        /// <summary>A texture of ours replaced by a new one: every material wearing the old one gets the new, the old is freed.</summary>
+        private static void Swap(Texture old, Texture now)
+        {
+            if (old == null || old == now) return;
+            foreach (var m in originals.Keys)
+                if (m != null)
+                    foreach (var prop in Props)
+                        if (m.HasProperty(prop) && m.GetTexture(prop) == old) m.SetTexture(prop, now);
+            UnityEngine.Object.Destroy(old);
+        }
+
+        /// <summary>
+        /// A texture from DXT blocks (every mip), as the game's own are: not readable, so no copy stays in memory.
+        /// </summary>
+        private static Texture2D FromBlocks(string name, int w, int h, TextureFormat format, bool mips, bool linear, byte[] data, Texture like)
+        {
+            var tex = new Texture2D(w, h, format, mips, linear) { name = name };
+            if (like != null) { tex.wrapMode = like.wrapMode; tex.filterMode = like.filterMode; tex.anisoLevel = like.anisoLevel; tex.mipMapBias = like.mipMapBias; }
+            tex.LoadRawTextureData(data);
+            tex.Apply(false, true);
+            UnityEngine.Object.DontDestroyOnLoad(tex);
+            return tex;
+        }
+
+        // Large working buffers kept for the next drawing (one drawing runs at a time): Mono's heap never gives memory
+        // back, so allocating them afresh for each drawing would only make it grow.
+        private static Color32[] pixels, glowPixels;
+        private static Color32[] Pixels(ref Color32[] buffer, int n)
+        {
+            if (buffer == null || buffer.Length != n) buffer = new Color32[n];
+            return buffer;
+        }
 
         /// <summary>The materials that wear one of the textures (or decal materials) this class repaints, or one of its own.</summary>
         private static Material[] Candidates(Material[] all)
@@ -137,11 +227,15 @@ namespace StbcRevival
             foreach (var m in all)
             {
                 if (m == null) continue;
-                bool decalByName = Decals.Any(d => m.name.StartsWith(d.Material, StringComparison.Ordinal));
-                if (!decalByName && !m.HasProperty("_MainTex")) continue;
-                var t = m.HasProperty("_MainTex") ? m.GetTexture("_MainTex") : null;
+                bool decalByName = false;
+                foreach (var d in Decals) if (m.name.StartsWith(d.Material, StringComparison.Ordinal)) { decalByName = true; break; }
+                bool hasMain = m.HasProperty("_MainTex");
+                if (!decalByName && !hasMain) continue;
+                var t = hasMain ? m.GetTexture("_MainTex") : null;
                 if (decalByName || (t != null && (names.Contains(t.name) || ours.Contains(t)))) found.Add(m);
             }
+            // Materials of scenes that have gone.
+            foreach (var gone in originals.Keys.Where(k => k == null).ToList()) originals.Remove(gone);
             return found.ToArray();
         }
 
@@ -153,8 +247,14 @@ namespace StbcRevival
             return t != null && (t.name == decal.Texture || (decal.Diffuse != null && t == decal.Diffuse));
         }
 
+        /// <summary>The game's textures back on every material, and ours freed.</summary>
         private static void Restore()
         {
+            if (originals.Count == 0 && running == null && queued.Count == 0
+                && Decals.All(d => d.Diffuse == null) && Paints.All(p => p.Done == null) && Plaques.All(p => p.D == null && p.N == null)) return;
+            generation++; // a drawing still running is dropped when it's done
+            foreach (var job in queued) try { job.Finally?.Invoke(); } catch { }
+            queued.Clear();
             foreach (var kv in originals)
                 if (kv.Key != null)
                 {
@@ -164,9 +264,12 @@ namespace StbcRevival
                     if (kv.Value.Length > 3 && kv.Value[3] != null) kv.Key.SetTexture("_BumpMap", kv.Value[3]);
                 }
             originals.Clear();
-            foreach (var d in Decals) d.DrawnFor = null;
-            foreach (var p in Paints) p.DrawnFor = null;
-            foreach (var p in Plaques) p.DrawnFor = null;
+            void Free<T>(ref T tex) where T : Texture { if (tex != null) UnityEngine.Object.Destroy(tex); tex = null; }
+            foreach (var d in Decals) { d.DrawnFor = null; d.Pending = false; Free(ref d.Diffuse); Free(ref d.Glow); }
+            foreach (var p in Paints) { p.DrawnFor = null; p.Pending = false; Free(ref p.Done); }
+            foreach (var p in Plaques) { p.DrawnFor = null; p.Pending = false; Free(ref p.D); Free(ref p.N); }
+            pixels = glowPixels = null;
+            Plugin.Log.LogInfo("Hull name: the game's names back on the hulls");
         }
 
         /// <summary>The Enterprise-D decal's gold plate (beside the lettering, kept as it is): red-brown frame, gold inside.</summary>
@@ -552,20 +655,52 @@ namespace StbcRevival
             return line.Says == Says.BareName && hull.StartsWith("U.S.S. ", StringComparison.Ordinal) ? hull.Substring(7) : hull;
         }
 
-        private static bool Draw(Decal decal, string name, string registry)
+        /// <summary>
+        /// Starts drawing a decal (the font read here, the rest on the worker thread); false if it can't be (logged).
+        /// The textures are DXT5 (DXT1 for the glow) with every mip, made on the main thread when it's done.
+        /// </summary>
+        private static bool Draw(Decal decal, string name, string registry, string drawFor)
         {
             var texts = decal.Lines.Select(line => TextFor(line, name, registry, decal)).ToArray();
             var face = LoadFace(string.Concat(texts));
             if (face == null) { Plugin.Log.LogInfo("Hull name: no font loaded yet"); return false; }
-            var started = Time.realtimeSinceStartup;
-            int size = decal.Size;
+            bool preview = Plugin.HullPreview.Value;
+            decal.Pending = true;
+            Run($"{decal.Ship}'s decal", () =>
+            {
+                var watch = System.Diagnostics.Stopwatch.StartNew();
+                int size = decal.Size;
+                var px = Pixels(ref pixels, size * size);
+                for (int i = 0; i < px.Length; i++) px[i] = decal.Clear;
+                var glow = decal.Emission ? Pixels(ref glowPixels, size * size) : null;
+                if (glow != null) for (int i = 0; i < glow.Length; i++) glow[i] = new Color32(255, 255, 255, 255);
+                decal.Extra?.Invoke(px, size);
+                DrawLines(decal, face, texts, px, glow, size);
+                var diffuse = Blocks(px, size, true);
+                var emission = glow != null ? Blocks(glow, size, false) : null;
+                long ms = watch.ElapsedMilliseconds;
+                return () =>
+                {
+                    var old = decal.Diffuse; var oldGlow = decal.Glow;
+                    decal.Diffuse = FromBlocks(decal.Texture + " (crew's name)", size, size, TextureFormat.DXT5, true, false, diffuse, null);
+                    decal.Diffuse.wrapMode = TextureWrapMode.Clamp; decal.Diffuse.anisoLevel = 4;
+                    Swap(old, decal.Diffuse);
+                    if (emission != null)
+                    {
+                        decal.Glow = FromBlocks(decal.Texture + " glow (crew's name)", size, size, TextureFormat.DXT1, true, false, emission, null);
+                        decal.Glow.wrapMode = TextureWrapMode.Clamp;
+                        Swap(oldGlow, decal.Glow);
+                    }
+                    decal.DrawnFor = drawFor;
+                    if (preview) SavePreview(px, size, size, "hull-name-" + decal.Ship + ".png");
+                    Plugin.Log.LogInfo($"Hull name: {decal.Ship}: \"{string.Join("\" / \"", texts.Distinct().ToArray())}\" in {face.Name}, drawn in {ms} ms (off the main thread)");
+                };
+            }, () => decal.Pending = false);
+            return true;
+        }
 
-            var px = new Color32[size * size];
-            for (int i = 0; i < px.Length; i++) px[i] = decal.Clear;
-            var glow = decal.Emission ? new Color32[size * size] : null;
-            if (glow != null) for (int i = 0; i < glow.Length; i++) glow[i] = new Color32(255, 255, 255, 255);
-            decal.Extra?.Invoke(px, size);
-
+        private static void DrawLines(Decal decal, Face face, string[] texts, Color32[] px, Color32[] glow, int size)
+        {
             // Each line on its own: the rims' widths follow its letters' size.
             for (int n = 0; n < decal.Lines.Length; n++)
             {
@@ -600,25 +735,44 @@ namespace StbcRevival
                         }
                     }
             }
-            if (decal.Diffuse == null)
+        }
+
+        /// <summary>A square image as DXT5 (alpha) or DXT1 blocks, with every mip down to 1×1 (box-filtered).</summary>
+        private static byte[] Blocks(Color32[] px, int size, bool alpha)
+        {
+            int bytes = alpha ? 16 : 8, total = 0;
+            for (int s = size; ; s = Math.Max(1, s / 2)) { total += Math.Max(1, (s + 3) / 4) * Math.Max(1, (s + 3) / 4) * bytes; if (s == 1) break; }
+            var d = new byte[total];
+            var level = px;
+            int offset = 0;
+            for (int s = size; ; s = Math.Max(1, s / 2))
             {
-                decal.Diffuse = new Texture2D(size, size, TextureFormat.RGBA32, true) { name = decal.Texture + " (crew's name)", wrapMode = TextureWrapMode.Clamp, anisoLevel = 4 };
-                UnityEngine.Object.DontDestroyOnLoad(decal.Diffuse);
-            }
-            decal.Diffuse.SetPixels32(px); decal.Diffuse.Apply(true);
-            if (Plugin.HullPreview.Value)
-                try { System.IO.File.WriteAllBytes(System.IO.Path.Combine(BepInEx.Paths.BepInExRootPath, "hull-name-" + decal.Ship + ".png"), decal.Diffuse.EncodeToPNG()); } catch { }
-            if (glow != null)
-            {
-                if (decal.Glow == null)
+                var enc = level; int es = s;
+                if (s < 4) // a whole block from a level smaller than one: its pixels repeated
                 {
-                    decal.Glow = new Texture2D(size, size, TextureFormat.RGB24, true) { name = decal.Texture + " glow (crew's name)", wrapMode = TextureWrapMode.Clamp };
-                    UnityEngine.Object.DontDestroyOnLoad(decal.Glow);
+                    enc = new Color32[16]; es = 4;
+                    for (int y = 0; y < 4; y++) for (int x = 0; x < 4; x++) enc[y * 4 + x] = level[(y % s) * s + x % s];
                 }
-                decal.Glow.SetPixels32(glow); decal.Glow.Apply(true);
+                EncodeDxt1(enc, es, es, d, offset, es, 0, 0, bytes);
+                if (alpha) EncodeAlpha(enc, es, es, d, offset, es, 0, 0);
+                offset += Math.Max(1, (s + 3) / 4) * Math.Max(1, (s + 3) / 4) * bytes;
+                if (s == 1) break;
+                level = DownsampleRgba(level, s, s, 1);
             }
-            Plugin.Log.LogInfo($"Hull name: {decal.Ship}: \"{string.Join("\" / \"", texts.Distinct().ToArray())}\" in {face.Name}, drawn in {(Time.realtimeSinceStartup - started) * 1000f:0} ms");
-            return true;
+            return d;
+        }
+
+        /// <summary>[Debug] HullNamePreview: an image saved as a PNG in the BepInEx folder (main thread).</summary>
+        private static void SavePreview(Color32[] px, int w, int h, string file)
+        {
+            var preview = new Texture2D(w, h, TextureFormat.RGBA32, false);
+            try
+            {
+                preview.SetPixels32(px); preview.Apply();
+                System.IO.File.WriteAllBytes(System.IO.Path.Combine(BepInEx.Paths.BepInExRootPath, file), preview.EncodeToPNG());
+            }
+            catch (Exception e) { Plugin.Log.LogInfo($"Hull name: preview {file}: {e.Message}"); }
+            finally { UnityEngine.Object.Destroy(preview); }
         }
     }
 }

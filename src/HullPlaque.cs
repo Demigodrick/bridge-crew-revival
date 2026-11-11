@@ -36,6 +36,7 @@ namespace StbcRevival
             public PlaqueLine[] Lines;
             public Texture2D D, N;
             public string DrawnFor;
+            public bool Pending;
         }
 
         private static string Upper(string s) => (s ?? "").Trim().ToUpperInvariant();
@@ -100,10 +101,10 @@ namespace StbcRevival
                 var mine = mats.Where(m => m != null && m.HasProperty("_MainTex") && m.GetTexture("_MainTex") is Texture t && (t.name == plaque.Diffuse || (plaque.D != null && t == plaque.D))).ToList();
                 if (mine.Count == 0) continue;
                 string want = name + "|" + registry + "|" + Plugin.HullFont.Value;
-                if (plaque.DrawnFor != want)
+                if (plaque.DrawnFor != want && !plaque.Pending)
                 {
                     plaque.DrawnFor = want; // tried once per name, whether it works or not (failures are logged)
-                    if (!DrawPlaque(plaque, name, registry)) continue;
+                    DrawPlaque(plaque, name, registry);
                 }
                 if (plaque.D == null) continue;
                 foreach (var m in mine)
@@ -132,16 +133,19 @@ namespace StbcRevival
             return LoadFace(text);
         }
 
-        private static bool DrawPlaque(Plaque plaque, string name, string registry)
+        /// <summary>Starts painting a plaque: the font read here, the files and the blocks on the worker thread.</summary>
+        private static void DrawPlaque(Plaque plaque, string name, string registry)
         {
-            var started = Time.realtimeSinceStartup;
-            try
+            var texts = plaque.Lines.Select(l => l.Text(name, registry)).ToArray();
+            var face = PlaqueFace(plaque, string.Concat(texts));
+            if (face == null) return;
+            bool preview = Plugin.HullPreview.Value;
+            plaque.Pending = true;
+            Run($"the {plaque.Ship}'s plaque", () =>
             {
-                var texts = plaque.Lines.Select(l => l.Text(name, registry)).ToArray();
-                var face = PlaqueFace(plaque, string.Concat(texts));
-                if (face == null) return false;
-                if (!ReadTexture(plaque.Diffuse, out var t, out var data, plaque.File)) return false;
-                if (t.Format != 10 && t.Format != 12) { Plugin.Log.LogWarning($"Hull name: {plaque.Diffuse} is format {t.Format}"); return false; }
+                var watch = System.Diagnostics.Stopwatch.StartNew();
+                if (!ReadTexture(plaque.Diffuse, out var t, out var data, plaque.File)) return null;
+                if (t.Format != 10 && t.Format != 12) throw new Exception($"{plaque.Diffuse} is format {t.Format}");
                 int block = t.Format == 12 ? 16 : 8, w = t.Width, h = t.Height, aw = plaque.AreaW, ah = plaque.AreaH;
                 var px = DecodeDxt1(data, 0, w, plaque.AreaX, plaque.AreaY, aw, ah, block);
                 var height = new float[aw * ah]; // the new letters: + raised, - sunk; for the normal map
@@ -201,43 +205,45 @@ namespace StbcRevival
                             if (Mathf.Abs(hgt) > Mathf.Abs(height[i])) height[i] = hgt;
                         }
                 }
-                var patched = (byte[])data.Clone();
-                int offset = 0;
+                int offset = 0; // back into the blocks in place: the bytes were read for this
                 for (int m = 0; m < t.MipCount; m++)
                 {
                     int mw = Math.Max(1, w >> m), mh = Math.Max(1, h >> m);
                     if (m < PaintMips && (aw >> m) >= 4 && (ah >> m) >= 4)
-                        EncodeDxt1(Downsample(px, aw, ah, m), aw >> m, ah >> m, patched, offset, mw, plaque.AreaX >> m, plaque.AreaY >> m, block);
+                        EncodeDxt1(Downsample(px, aw, ah, m), aw >> m, ah >> m, data, offset, mw, plaque.AreaX >> m, plaque.AreaY >> m, block);
                     offset += Math.Max(1, (mw + 3) / 4) * Math.Max(1, (mh + 3) / 4) * block;
                 }
-                if (plaque.D == null) { plaque.D = new Texture2D(w, h, block == 16 ? TextureFormat.DXT5 : TextureFormat.DXT1, t.MipCount > 1, t.ColorSpace == 0) { name = plaque.Diffuse + " (crew's name)" }; UnityEngine.Object.DontDestroyOnLoad(plaque.D); }
-                plaque.D.LoadRawTextureData(patched);
-                plaque.D.Apply(false);
-
-                PressNormal(plaque, height, w);
-
-                if (Plugin.HullPreview.Value)
+                var normal = PressNormal(plaque, height, w);
+                long ms = watch.ElapsedMilliseconds;
+                return () =>
                 {
-                    var preview = new Texture2D(aw, ah, TextureFormat.RGBA32, false);
-                    preview.SetPixels32(px.Select(c => new Color32(c.r, c.g, c.b, 255)).ToArray()); preview.Apply();
-                    try { File.WriteAllBytes(Path.Combine(BepInEx.Paths.BepInExRootPath, "hull-name-" + plaque.Ship + "-plaque.png"), preview.EncodeToPNG()); } catch { }
-                    UnityEngine.Object.Destroy(preview);
-                }
-                Plugin.Log.LogInfo($"Hull name: the {plaque.Ship}'s plaque: \"{string.Join("\" / \"", texts)}\" in {face.Name}, {(Time.realtimeSinceStartup - started) * 1000f:0} ms");
-                return true;
-            }
-            catch (Exception e) { Plugin.Log.LogWarning($"Hull name: painting the {plaque.Ship}'s plaque: {e}"); return false; }
+                    var old = plaque.D;
+                    plaque.D = FromBlocks(plaque.Diffuse + " (crew's name)", w, h, block == 16 ? TextureFormat.DXT5 : TextureFormat.DXT1, t.MipCount > 1, t.ColorSpace == 0, data, null);
+                    Swap(old, plaque.D);
+                    if (normal != null)
+                    {
+                        var oldN = plaque.N;
+                        plaque.N = FromBlocks(plaque.Normal + " (crew's name)", normal.W, normal.H, normal.Format, normal.Mips, true, normal.Data, null);
+                        Swap(oldN, plaque.N);
+                    }
+                    if (preview) SavePreview(px.Select(c => new Color32(c.r, c.g, c.b, 255)).ToArray(), aw, ah, "hull-name-" + plaque.Ship + "-plaque.png");
+                    Plugin.Log.LogInfo($"Hull name: the {plaque.Ship}'s plaque: \"{string.Join("\" / \"", texts)}\" in {face.Name}, {ms} ms (off the main thread)");
+                };
+            }, () => plaque.Pending = false);
         }
+
+        /// <summary>A normal map's new blocks, for a texture made on the main thread.</summary>
+        private sealed class NormalBlocks { public int W, H; public TextureFormat Format; public bool Mips; public byte[] Data; }
 
         // ---- the normal map ----
 
         private const float Press = 0.28f; // how deep the new letters look
 
         /// <summary>The new letters pressed into the plaque's normal map (x in alpha, y in green), the old ones smoothed away.</summary>
-        private static void PressNormal(Plaque plaque, float[] height, int diffuseW)
+        private static NormalBlocks PressNormal(Plaque plaque, float[] height, int diffuseW)
         {
-            if (plaque.Normal == null) return;
-            if (!ReadTexture(plaque.Normal, out var nt, out var ndata, plaque.File)) { Plugin.Log.LogWarning($"Hull name: {plaque.Normal} wasn't read; the old letters may show through"); return; }
+            if (plaque.Normal == null) return null;
+            if (!ReadTexture(plaque.Normal, out var nt, out var ndata, plaque.File)) { Plugin.Log.LogWarning($"Hull name: {plaque.Normal} wasn't read; the old letters may show through"); return null; }
             int nw = nt.Width, nh = nt.Height, scale = Math.Max(1, diffuseW / nw), aw = plaque.AreaW, ah = plaque.AreaH;
             float Hgt(int x, int y) // the new letters at the normal map's size
             {
@@ -257,7 +263,6 @@ namespace StbcRevival
             }
             bool InErase(int x, int y) => plaque.Lines.Any(l => x >= l.EraseX0 / scale && x <= l.EraseX1 / scale && y >= l.EraseY0 / scale && y <= l.EraseY1 / scale);
 
-            Texture2D tex;
             if (nt.Format == 2) // ARGB4444, whole: every mip again from the top one
             {
                 var cx = new float[nw * nh]; var cy = new float[nw * nh];
@@ -284,8 +289,7 @@ namespace StbcRevival
                         }
                     cx = x2; cy = y2; lw = w2; lh = h2;
                 }
-                tex = plaque.N ?? new Texture2D(nw, nh, TextureFormat.ARGB4444, nt.MipCount > 1, true);
-                tex.LoadRawTextureData(raw);
+                return new NormalBlocks { W = nw, H = nh, Format = TextureFormat.ARGB4444, Mips = nt.MipCount > 1, Data = raw };
             }
             else if (nt.Format == 12) // DXT5: the piece with the lines, its alpha and colour blocks
             {
@@ -300,7 +304,7 @@ namespace StbcRevival
                             byte g = (byte)Mathf.RoundToInt(b * 255f);
                             px[i] = new Color32(px[i].r, g, px[i].b, (byte)Mathf.RoundToInt(a * 255f));
                         }
-                var patched = (byte[])ndata.Clone();
+                var patched = ndata; // in place: the bytes were read for this
                 int offset = 0;
                 for (int m = 0; m < nt.MipCount; m++)
                 {
@@ -313,13 +317,10 @@ namespace StbcRevival
                     }
                     offset += Math.Max(1, (mw + 3) / 4) * Math.Max(1, (mh + 3) / 4) * 16;
                 }
-                tex = plaque.N ?? new Texture2D(nw, nh, TextureFormat.DXT5, nt.MipCount > 1, true);
-                tex.LoadRawTextureData(patched);
+                return new NormalBlocks { W = nw, H = nh, Format = TextureFormat.DXT5, Mips = nt.MipCount > 1, Data = patched };
             }
-            else { Plugin.Log.LogWarning($"Hull name: {plaque.Normal} is format {nt.Format}; left as it is"); return; }
-            tex.name = plaque.Normal + " (crew's name)";
-            tex.Apply(false);
-            if (plaque.N == null) { plaque.N = tex; UnityEngine.Object.DontDestroyOnLoad(tex); }
+            Plugin.Log.LogWarning($"Hull name: {plaque.Normal} is format {nt.Format}; left as it is");
+            return null;
         }
 
         /// <summary>A rectangle of a DXT5 level (whole blocks): colours and alpha, rows in Unity's order.</summary>

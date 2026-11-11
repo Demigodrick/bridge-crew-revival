@@ -22,6 +22,7 @@ namespace StbcRevival
             public Line Line;
             public Texture2D Done;
             public string DrawnFor;
+            public bool Pending;
         }
 
         private const int PaintMips = 6; // mip 0 to 5; below that the number is a few texels
@@ -60,12 +61,13 @@ namespace StbcRevival
                 var mine = mats.Where(m => m != null && m.HasProperty("_MainTex") && m.GetTexture("_MainTex") is Texture t && (t.name == paint.Texture || t == paint.Done)).ToList();
                 if (mine.Count == 0) continue;
                 string want = registry + "|" + Plugin.HullFont.Value;
-                if (paint.DrawnFor != want)
+                if (paint.DrawnFor != want && !paint.Pending)
                 {
                     var original = mine.Select(m => m.GetTexture("_MainTex")).FirstOrDefault(t => t != paint.Done);
-                    if (!DrawPaint(paint, registry, original)) { paint.DrawnFor = want; continue; } // failed: logged, not tried again for this number
-                    paint.DrawnFor = want;
+                    paint.DrawnFor = want; // tried once per number, whether it works or not (failures are logged)
+                    DrawPaint(paint, registry, original);
                 }
+                if (paint.Done == null) continue;
                 foreach (var m in mine)
                 {
                     if (m.GetTexture("_MainTex") == paint.Done) continue;
@@ -75,17 +77,20 @@ namespace StbcRevival
             }
         }
 
-        private static bool DrawPaint(Paint paint, string registry, Texture original)
+        /// <summary>Starts painting a hull texture: the font read here, the files and the blocks on the worker thread.</summary>
+        private static void DrawPaint(Paint paint, string registry, Texture original)
         {
-            var started = Time.realtimeSinceStartup;
-            try
+            string text = paint.Line.Says == Says.Registry ? (registry.Length > 0 ? registry : paint.Line.Reference).ToUpperInvariant()
+                : NumberOf(registry.Length > 0 ? registry : paint.Line.Reference).ToUpperInvariant();
+            var face = LoadFace(text);
+            if (face == null) return;
+            bool preview = Plugin.HullPreview.Value;
+            paint.Pending = true;
+            Run($"painting {paint.Texture}", () =>
             {
-                string text = paint.Line.Says == Says.Registry ? (registry.Length > 0 ? registry : paint.Line.Reference).ToUpperInvariant()
-                    : NumberOf(registry.Length > 0 ? registry : paint.Line.Reference).ToUpperInvariant();
-                var face = LoadFace(text);
-                if (face == null) return false;
-                if (!ReadTexture(paint.Texture, out var t, out var data)) return false;
-                if (t.Format != 10 && t.Format != 12) { Plugin.Log.LogWarning($"Hull name: {paint.Texture} is format {t.Format}, not DXT1 or DXT5"); return false; }
+                var watch = System.Diagnostics.Stopwatch.StartNew();
+                if (!ReadTexture(paint.Texture, out var t, out var data)) return null;
+                if (t.Format != 10 && t.Format != 12) throw new Exception($"format {t.Format}, not DXT1 or DXT5");
                 int block = t.Format == 12 ? 16 : 8; // DXT5: its alpha half stays as it is, only the colours are painted
 
                 int w = t.Width, h = t.Height;
@@ -116,8 +121,7 @@ namespace StbcRevival
                             px[i] = Color32.Lerp(px[i], paint.Line.Style.Fill, c);
                         }
                 }
-                // Back into the blocks, each mip from the painted piece.
-                var patched = (byte[])data.Clone();
+                // Back into the blocks (in place: the bytes were read for this), each mip from the painted piece.
                 int offset = 0;
                 for (int m = 0; m < t.MipCount; m++)
                 {
@@ -125,30 +129,20 @@ namespace StbcRevival
                     if (m < PaintMips)
                     {
                         var level = Downsample(px, aw, paint.AreaH, m);
-                        EncodeDxt1(level, paint.AreaW >> m, paint.AreaH >> m, patched, offset, mw, paint.AreaX >> m, paint.AreaY >> m, block);
+                        EncodeDxt1(level, paint.AreaW >> m, paint.AreaH >> m, data, offset, mw, paint.AreaX >> m, paint.AreaY >> m, block);
                     }
                     offset += Math.Max(1, (mw + 3) / 4) * Math.Max(1, (mh + 3) / 4) * block;
                 }
-
-                if (paint.Done == null)
+                long ms = watch.ElapsedMilliseconds;
+                return () =>
                 {
-                    paint.Done = new Texture2D(w, h, block == 16 ? TextureFormat.DXT5 : TextureFormat.DXT1, t.MipCount > 1, t.ColorSpace == 0) { name = paint.Texture + " (crew's number)" };
-                    UnityEngine.Object.DontDestroyOnLoad(paint.Done);
-                }
-                if (original != null) { paint.Done.wrapMode = original.wrapMode; paint.Done.filterMode = original.filterMode; paint.Done.anisoLevel = original.anisoLevel; paint.Done.mipMapBias = original.mipMapBias; }
-                paint.Done.LoadRawTextureData(patched);
-                paint.Done.Apply(false);
-                if (Plugin.HullPreview.Value)
-                {
-                    var preview = new Texture2D(aw, paint.AreaH, TextureFormat.RGBA32, false);
-                    preview.SetPixels32(px); preview.Apply();
-                    try { File.WriteAllBytes(Path.Combine(BepInEx.Paths.BepInExRootPath, "hull-name-" + paint.Ship + "-" + paint.Texture + ".png"), preview.EncodeToPNG()); } catch { }
-                    UnityEngine.Object.Destroy(preview);
-                }
-                Plugin.Log.LogInfo($"Hull name: {paint.Ship}'s hull: \"{text}\" painted in {(Time.realtimeSinceStartup - started) * 1000f:0} ms");
-                return true;
-            }
-            catch (Exception e) { Plugin.Log.LogWarning($"Hull name: painting {paint.Texture}: {e}"); return false; }
+                    var old = paint.Done;
+                    paint.Done = FromBlocks(paint.Texture + " (crew's number)", w, h, block == 16 ? TextureFormat.DXT5 : TextureFormat.DXT1, t.MipCount > 1, t.ColorSpace == 0, data, original);
+                    Swap(old, paint.Done);
+                    if (preview) SavePreview(px, aw, paint.AreaH, "hull-name-" + paint.Ship + "-" + paint.Texture + ".png");
+                    Plugin.Log.LogInfo($"Hull name: {paint.Ship}'s hull: \"{text}\" painted in {ms} ms (off the main thread)");
+                };
+            }, () => paint.Pending = false);
         }
 
         /// <summary>A texture's header and all its bytes (every mip), read from the game's resources.assets.</summary>
