@@ -43,6 +43,17 @@ namespace StbcRevival
             var start = AccessTools.Method(typeof(ConsoleBriefingRoom), "Start");
             if (start == null) { Plugin.Log.LogWarning("Ship choice: the briefing console wasn't found"); return; }
             harmony.Patch(start, postfix: new HarmonyMethod(typeof(ShipChoice), nameof(Start_Postfix)) { priority = Priority.Low });
+            // A press on a row that's already on (the one the Nova flies on) changes nothing the game reports: the
+            // toggle is set off and its group puts it straight back on. That "off" is the press, unless the game is
+            // setting its toggles itself (SyncBridgeToggles, every frame, from the ship in use).
+            var sync = AccessTools.Method(typeof(ConsoleBriefingRoom), "KHFHCAELMKD");
+            var setOn = AccessTools.PropertySetter(typeof(Toggle), "isOn");
+            if (sync != null && setOn != null)
+            {
+                harmony.Patch(sync, prefix: new HarmonyMethod(typeof(ShipChoice), nameof(Sync_Prefix)), postfix: new HarmonyMethod(typeof(ShipChoice), nameof(Sync_Postfix)));
+                harmony.Patch(setOn, prefix: new HarmonyMethod(typeof(ShipChoice), nameof(SetOn_Prefix)));
+            }
+            else Plugin.Log.LogWarning("Ship choice: the toggles' sync wasn't found; pressing the Nova's own ship won't take it off");
         }
 
         private static T Field<T>(ConsoleBriefingRoom console, string name) where T : class =>
@@ -114,6 +125,22 @@ namespace StbcRevival
 
         /// <summary>A briefing console's ship box is about (the briefing room is open).</summary>
         internal static bool InBriefing => boxes.Count > 0 && boxes.Exists(b => b.Console != null);
+
+        private static bool syncing;
+        private static void Sync_Prefix() => syncing = true;
+        private static void Sync_Postfix() => syncing = false;
+
+        private static void SetOn_Prefix(Toggle __instance, bool value)
+        {
+            if (value || syncing || boxes.Count == 0 || !__instance.isOn || !NovaShip.ActiveNow || JustPressed || !__instance.interactable) return;
+            foreach (var box in boxes)
+                if (!box.Applying && (__instance == box.Aegis || __instance == box.Tos || __instance == box.Tng))
+                {
+                    Plugin.Log.LogInfo($"Ship choice: {__instance.name} pressed while the Nova is chosen: back to that ship");
+                    NovaShip.SetForRoom(false);
+                    return;
+                }
+        }
 
         private static Toggle[] Rows(Box box) => new[] { box.Aegis, box.Tos, box.Tng, box.Nova };
 
