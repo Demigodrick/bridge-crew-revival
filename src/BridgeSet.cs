@@ -76,6 +76,7 @@ namespace StbcRevival
                 template = Build(loaded);
                 loaded = null;
             }
+            VoyagerTactical.Update();
             if (template == null || Time.unscaledTime < next) return;
             // The tactical panel is made once a mission runs: its make-up written out then (for splitting it onto the set's screens).
             if (!panelDumped && dressedScene != -1)
@@ -86,7 +87,13 @@ namespace StbcRevival
             if (!panelsPlaced && dressedScene != -1 && panels.Count > 0)
             {
                 var tacticalUi = GameObject.Find("Bridge/Stations-1701D/Tactical_root/Tactical_UIParent");
-                if (tacticalUi != null && tacticalUi.transform.childCount > 0) { panelsPlaced = true; PlacePanels(tacticalUi.transform); }
+                if (tacticalUi != null && tacticalUi.transform.childCount > 0)
+                {
+                    panelsPlaced = true;
+                    var own = panels.FirstOrDefault(p => p.Part == "custom");
+                    if (own != null) VoyagerTactical.Build(tacticalUi.transform, Place(own.Centre), PlaceDirection(own.Normal), own.Width);
+                    else PlacePanels(tacticalUi.transform);
+                }
             }
             next = Time.unscaledTime + 1f;
             var marker = GameObject.Find(Marker);
