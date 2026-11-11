@@ -249,23 +249,20 @@ namespace StbcRevival
             foreach (var r in UnityEngine.Object.FindObjectsOfType<MeshRenderer>().Where(r => r.name == "BridgeTNG_TacticalConsole" || r.transform.parent != null && r.transform.parent.name == "BridgeTNG_TacticalConsole"))
                 r.enabled = false;
 
-            var n = PlaceDirection(tacticalNormal.Value);           // the screen's facing: up and toward its officer
-            var centre = Place(tactical.Value) + n * 0.012f;
-            var view = Vector3.ProjectOnPlane(-n, Vector3.up).normalized; // the officer looks this way
+            // The station as one: its officer's place (the station object) onto the set's floor before the console, turned
+            // so the way from the officer to the panel's anchor points at the console's screen. The panel itself is made
+            // later, under that anchor, so it comes along.
+            var officer = root.transform.Find("Tactical");
+            var o = officer != null ? officer.position : root.transform.position;
+            var dirGame = Vector3.ProjectOnPlane(ui.position - o, Vector3.up);
+            var stand = Place(tacticalStand.Value);
+            var dirSet = Vector3.ProjectOnPlane(Place(tactical.Value) - stand, Vector3.up);
+            if (dirGame.sqrMagnitude < 1e-6f || dirSet.sqrMagnitude < 1e-6f) return;
+            var turn = Quaternion.FromToRotation(dirGame.normalized, dirSet.normalized);
             var t = root.transform;
-            t.position = Place(tacticalStand.Value);
-            t.rotation = Quaternion.LookRotation(view, Vector3.up);
-
-            // The panel: the biggest drawn rectangle under it is its face.
-            var face = ui.GetComponentsInChildren<RectTransform>(true)
-                .OrderByDescending(r => r.rect.width * r.lossyScale.x * r.rect.height * r.lossyScale.y).FirstOrDefault();
-            if (face == null) { Plugin.Log.LogWarning("Bridge set: the tactical panel has no face"); return; }
-            var up = Vector3.ProjectOnPlane(Vector3.up, n).normalized;  // the screen's top: away from the officer, up the slope
-            var turn = Quaternion.LookRotation(-n, up) * Quaternion.Inverse(Quaternion.LookRotation(face.forward, face.up));
-            ui.rotation = turn * ui.rotation;
-            var faceCentre = face.TransformPoint(face.rect.center);
-            ui.position += centre - faceCentre;
-            Plugin.Log.LogInfo($"Bridge set {name}: tactical station at {t.position}, its panel ('{face.name}', {face.rect.width * face.lossyScale.x:0.00} x {face.rect.height * face.lossyScale.y:0.00} m) on the console at {centre}");
+            t.position = stand + turn * (t.position - o);
+            t.rotation = turn * t.rotation;
+            Plugin.Log.LogInfo($"Bridge set {name}: tactical officer at {stand}, facing the console ({turn.eulerAngles.y:0} degrees turned)");
         }
 
         private static void DumpTactical(Transform root)
