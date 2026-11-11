@@ -1,0 +1,44 @@
+# 3ds Max Wavefront OBJ Exporter v0.94b - (c)2007 guruware
+# File Created: 01.03.2013 16:28:31
+
+newmtl 05___Default
+	Ns 56.000000
+	Ni 1.500000
+	d 0.000000
+	Tr 0.000000
+	Tf 0.000000 0.000000 0.000000 
+	illum 2
+	Ka 0.588235 0.588235 0.588235
+	Kd 0.588235 0.588235 0.588235
+	Ks 0.378000 0.378000 0.378000
+	Ke 0.000000 0.000000 0.000000
+
+newmtl Nov
+	Ns 50.000000
+	Ni 1.500000
+	d 1.000000
+	Tr 1.000000
+	Tf 1.000000 1.000000 1.000000 
+	illum 2
+	Ka 0.505882 0.505882 0.505882
+	Kd 0.505882 0.505882 0.505882
+	Ks 0.648000 0.648000 0.648000
+	Ke 0.000000 0.000000 0.000000
+	map_Ka D:\3D\3ds Max 2009\BC2\Nova Class\Texture\NovDiff2.tif
+	map_Kd D:\3D\3ds Max 2009\BC2\Nova Class\Texture\NovDiff2.tif
+	map_Ke D:\3D\3ds Max 2009\BC2\Nova Class\Texture\NovLight.tif
+
+newmtl Int
+	Ns 21.000000
+	Ni 1.500000
+	d 1.000000
+	Tr 1.000000
+	Tf 1.000000 1.000000 1.000000 
+	illum 2
+	Ka 0.478431 0.478431 0.478431
+	Kd 0.478431 0.478431 0.478431
+	Ks 0.000000 0.000000 0.000000
+	Ke 0.000000 0.000000 0.000000
+	map_Ka D:\3D\3ds Max 2009\BC2\Nova Class\Texture\Int.tif
+	map_Kd D:\3D\3ds Max 2009\BC2\Nova Class\Texture\Int.tif
+	map_Ke D:\3D\3ds Max 2009\BC2\Nova Class\Texture\Int.tif
