@@ -91,6 +91,14 @@ namespace StbcRevival
             }
         }
 
+        /// <summary>A plain scene name of a bridge or briefing room: letters, digits, spaces, _ and - only (no path).</summary>
+        internal static bool SceneName(string name)
+        {
+            if (string.IsNullOrEmpty(name) || name.Length > 100 || !Shareable(name)) return false;
+            foreach (char c in name) if (!(char.IsLetterOrDigit(c) || c == '_' || c == '-' || c == ' ')) return false;
+            return true;
+        }
+
         // The bridges and briefing rooms (the scenes the designer has).
         private static bool Shareable(string name) =>
             name.IndexOf("Bridge", StringComparison.OrdinalIgnoreCase) >= 0 || name.IndexOf("Briefing", StringComparison.OrdinalIgnoreCase) >= 0;
@@ -122,6 +130,8 @@ namespace StbcRevival
             try
             {
                 if (!(content is object[] m) || m.Length < 3 || !(m[0] is byte proto) || proto != Proto || !(m[1] is byte kind) || !(m[2] is string scene)) return;
+                // A scene's name, nothing else: it names a file in the layouts folder.
+                if (!SceneName(scene)) return;
                 if (kind == Ask)
                 {
                     if (!IsHost) return;

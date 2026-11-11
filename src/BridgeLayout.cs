@@ -226,8 +226,16 @@ namespace StbcRevival
         /// <summary>This scene's layout as your own file has it (for the host to share), or null.</summary>
         internal static string OwnLayout(string sceneName)
         {
-            string file = Path.Combine(Folder, sceneName + ".json");
-            try { return File.Exists(file) ? File.ReadAllText(file) : null; } catch { return null; }
+            // Asked for by a crewmate: only a file right in the layouts folder.
+            if (!BridgeShare.SceneName(sceneName)) return null;
+            try
+            {
+                string folder = Path.GetFullPath(Folder);
+                string file = Path.GetFullPath(Path.Combine(folder, sceneName + ".json"));
+                if (!string.Equals(Path.GetDirectoryName(file), folder.TrimEnd(Path.DirectorySeparatorChar), StringComparison.OrdinalIgnoreCase)) return null;
+                return File.Exists(file) ? File.ReadAllText(file) : null;
+            }
+            catch { return null; }
         }
 
         private static int RootId(Scene s)
