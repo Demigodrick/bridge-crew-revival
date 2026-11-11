@@ -47,6 +47,7 @@ string models = modelsArg ?? Path.Combine(gameDir, "BepInEx", "bridges", "models
 Console.WriteLine($"Layouts: {layouts}");
 Console.WriteLine($"Models: {models}{(Directory.Exists(models) ? "" : " (not there yet: put .obj models in it to add them to bridges)")}");
 var cache = new Dictionary<int, byte[]>();
+var lightmaps = new Dictionary<(int, int), byte[]>();
 var listener = new HttpListener();
 string url = $"http://127.0.0.1:{port}/";
 listener.Prefixes.Add(url);
@@ -89,6 +90,18 @@ void Serve(HttpListenerContext ctx)
             }
             Send(res, "model/gltf-binary", glb);
             return;
+        }
+        if (path.StartsWith("/api/lightmap/level"))
+        {
+            // /api/lightmap/level6/0.png: one of a bridge's baked lightmaps.
+            var parts = path["/api/lightmap/level".Length..].Split('/');
+            if (parts.Length == 2 && int.TryParse(parts[0], out int lv) && parts[1].EndsWith(".png") && int.TryParse(parts[1][..^4], out int li) && bridges.Any(b => b.Level == lv))
+            {
+                byte[] png;
+                lock (lightmaps) if (!lightmaps.TryGetValue((lv, li), out png)) lightmaps[(lv, li)] = png = GlbExport.Lightmap(dataDir, lv, li);
+                if (png != null) { Send(res, "image/png", png); return; }
+            }
+            res.StatusCode = 404; res.Close(); return;
         }
         if (path == "/api/models")
         {

@@ -29,7 +29,8 @@ renderer.setPixelRatio(devicePixelRatio);
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0e1116);
 // The game's own light is baked into its bridges and isn't brought over: an even light to see by instead.
-scene.add(new THREE.HemisphereLight(0xffffff, 0x3a4050, 1.5));
+const hemi = new THREE.HemisphereLight(0xffffff, 0x3a4050, 1.5);
+scene.add(hemi);
 const key = new THREE.DirectionalLight(0xffffff, 1.1);
 key.position.set(4, 12, 6);
 scene.add(key);
@@ -66,6 +67,10 @@ function load(b) {
   pieces = [];
   edits = new Map();
   for (const a of added.values()) extras.remove(a.piece.obj);
+  for (const t of lightmapTextures.values()) t.dispose();
+  for (const m of bakedMaterials.values()) m.dispose();
+  lightmapTextures.clear();
+  bakedMaterials.clear();
   added = new Map();
   nextId = 1;
   undo.length = redo.length = 0;
@@ -92,6 +97,7 @@ function load(b) {
     buildList();
     await loadLayout();
     applyAll();
+    if ($('baked').checked) setBaked(true);
     frame(pieces.filter(p => !p.backdrop));
     const tris = countTriangles(root);
     $('stats').dataset.base = `${pieces.length} pieces · ${(tris / 1000).toFixed(0)}k triangles · ${((performance.now() - t0) / 1000).toFixed(1)} s`;
@@ -726,6 +732,52 @@ $('addGroup').addEventListener('click', () => {
 });
 $('addParts').addEventListener('toggle', () => { if ($('addParts').open && !$('parts').children.length) fillParts(); });
 
+// ------------------------------------------------------------------------------------------- baked light
+// The bridge's own lightmaps, as the game draws its fixed pieces: Unity's RGBM (the PNG holds colour times alpha;
+// times 5 in gamma space is about 34.5 in linear). Pieces without one are lit by light probes in the game: an even
+// fill light stands in. Added parts too (the game lights them by its probes).
+// three.js divides indirect light by π (its lighting is physically based); Unity's lightmaps aren't.
+const LightmapIntensity = 34.5 * Math.PI;
+const lightmapTextures = new Map(); // `${level}/${index}` -> texture
+const bakedMaterials = new Map();   // `${material.uuid}/${index}` -> material with that lightmap
+function lightmapTexture(level, index) {
+  const k = `${level}/${index}`;
+  if (!lightmapTextures.has(k)) {
+    const t = new THREE.TextureLoader().load(`/api/lightmap/level${level}/${index}.png`);
+    t.flipY = false;            // rows as stored, like the .glb's textures
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.channel = 1;              // the second UVs
+    lightmapTextures.set(k, t);
+  }
+  return lightmapTextures.get(k);
+}
+function setBaked(on) {
+  hemi.intensity = on ? 0.45 : 1.5;
+  key.intensity = on ? 0 : 1.1;
+  for (const p of pieces) {
+    if (p.added) continue;
+    const index = p.obj.userData.lightmap;
+    p.obj.traverse(m => {
+      if (!m.isMesh) return;
+      if (!m.userData.unbaked) m.userData.unbaked = m.material;
+      if (!on || index == null || !m.geometry.attributes.uv1) { m.material = m.userData.unbaked; return; }
+      m.material = [m.userData.unbaked].flat().map(mat => {
+        const k = `${mat.uuid}/${index}`;
+        if (!bakedMaterials.has(k)) {
+          const b = mat.clone();
+          b.lightMap = lightmapTexture(bridge.level, index);
+          b.lightMapIntensity = LightmapIntensity;
+          b.needsUpdate = true;
+          bakedMaterials.set(k, b);
+        }
+        return bakedMaterials.get(k);
+      });
+      if (!Array.isArray(m.userData.unbaked)) m.material = m.material[0];
+    });
+  }
+}
+$('baked').addEventListener('change', () => setBaked($('baked').checked));
+
 // ------------------------------------------------------------------------------------------- camera
 function frame(list) {
   const box = new THREE.Box3();
@@ -829,4 +881,4 @@ if (first) { $('bridge').value = first.level; load(first); }
 else $('stats').textContent = 'No bridges found in the game\'s files.';
 
 // For looking into the page from the browser's console.
-window.bridgeDesigner = { get edits() { return edits; }, get pieces() { return pieces; }, outline, members, get sel() { return sel; }, get added() { return added; }, addPart };
+window.bridgeDesigner = { get edits() { return edits; }, get pieces() { return pieces; }, outline, members, get sel() { return sel; }, get added() { return added; }, addPart, camera, controls };
