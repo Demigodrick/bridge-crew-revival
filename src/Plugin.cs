@@ -112,6 +112,7 @@ namespace StbcRevival
         internal static ConfigEntry<bool> BridgeWalkWalls;
         internal static ConfigEntry<bool> BridgeWalkAnimate;
         internal static ConfigEntry<bool> BridgeWalkTestCorridor;
+        internal static ConfigEntry<bool> BridgeLayouts;
         internal static Plugin Instance { get; private set; }
 
         /// <summary>Revival voice runs: Steam mode, and [Voice] Engine = Revival.</summary>
@@ -302,6 +303,9 @@ namespace StbcRevival
             BridgeWalkTestCorridor = Config.Bind("Bridge Walk", "TestCorridor", false,
                 "Test: on the Aegis bridge, one of the doors opens onto a corridor to walk down (its side doors are scenery). "
                 + "While on, you can walk up to 40 m from your seat. Takes effect on reaching the bridge.");
+            BridgeLayouts = Config.Bind("Bridges", "Layouts", true,
+                "Put on bridge layouts made with the bridge designer (BepInEx/bridges/<scene>.json): pieces moved, turned or hidden. "
+                + "Only you see them; a layout saved while the game runs shows at once.");
             PlayerName = Config.Bind("Login", "PlayerName", "",
                 "Name shown to other players. Empty = your Steam persona name (falls back to the OS user name).");
 
@@ -407,6 +411,7 @@ namespace StbcRevival
             Safely("revival voice playback", RevivalPlayback.Update);
             Safely("ubisoft save import", UbisoftSaveImport.Update);
             Safely("crash report", CrashReport.Update);
+            Safely("bridge layout", BridgeLayout.Update);
             Safely("bridge walk", Walking.BridgeWalk.Update);
         }
 

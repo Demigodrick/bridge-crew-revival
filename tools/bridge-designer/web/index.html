@@ -20,10 +20,22 @@
     <div id="stats" class="muted">Loading the bridge list…</div>
   </header>
   <div class="tools">
+    <div class="row">
+      <button id="modeMove" type="button" title="Move (T)">Move</button>
+      <button id="modeTurn" type="button" title="Turn (R)">Turn</button>
+      <button id="group" type="button" title="Pick the group it's in (U)">Group</button>
+      <label title="Move in 5 cm steps, turn in 15° steps"><input id="snap" type="checkbox" checked> Snap</label>
+    </div>
+    <div class="row">
+      <button id="undo" type="button" title="Undo (Ctrl+Z)">Undo</button>
+      <button id="resetAll" type="button">Reset all</button>
+      <button id="save" type="button" class="primary" title="Save (Ctrl+S)" disabled>Save layout</button>
+    </div>
+  </div>
+  <div class="tools">
     <input id="search" type="search" placeholder="Filter pieces…" aria-label="Filter pieces">
     <div class="row">
       <label><input id="backdrops" type="checkbox"> Backdrops</label>
-      <button id="showAll" type="button">Show all</button>
       <button id="frame" type="button">Frame</button>
     </div>
   </div>
@@ -40,10 +52,13 @@
       <dt>Size</dt><dd id="infoSize"></dd>
       <dt>Materials</dt><dd id="infoMats"></dd>
       <dt>Batched</dt><dd id="infoBatched"></dd>
+      <dt>Change</dt><dd id="infoChange"></dd>
     </dl>
   </section>
+  <div id="toast" role="status" hidden></div>
   <footer id="help">
-    Drag: orbit · Right-drag: pan · Wheel: zoom · WASD/QE: fly (Shift faster) · Click: pick · Double-click: orbit around that point · F: focus · H: hide/show · Esc: deselect
+    Drag: orbit · Right-drag: pan · Wheel: zoom · WASD/QE: fly (Shift faster) · Double-click: orbit around that point ·
+    Click: pick · U: its group · T/R: move/turn · H: hide · Backspace: put back · F: focus · Ctrl+Z: undo · Ctrl+S: save
   </footer>
 </main>
 <script type="module" src="app.js"></script>
