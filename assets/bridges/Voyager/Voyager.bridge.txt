@@ -1,0 +1,17 @@
+# Where the model has its captain's place: the floor under the middle of the command chairs (raw .obj coordinates, metres)
+captain 0 0.30 -0.75
+screen 0 1.635 5.85 1.77
+tactical -4.04 1.54 -0.82 -0.33 0.90 -0.29
+tacticalstand -4.274 0.592 -1.425
+# how far down the tactical officer looks by default (degrees; the game has 16 for its higher console)
+tacticalpitch 42
+#panel TacticalGUICurvedLeft -3.52 1.54 -1.43 -0.33 0.90 -0.29 0.55
+#panel TacticalGUICurvedCenter -4.04 1.56 -0.82 -0.33 0.90 -0.29 1.00
+#panel Navmap_Canvas -4.56 1.54 -0.21 -0.33 0.90 -0.29 0.55
+# the console screens the tactical panel is split onto (raw .obj coordinates: centre, facing, width, height), and the wall screen behind its officer
+split L -3.720 1.544 -1.189 -0.334 0.897 -0.289 0.284 0.368
+split C -4.037 1.544 -0.822 -0.333 0.898 -0.288 0.477 0.368
+split R -4.350 1.544 -0.460 -0.333 0.898 -0.288 0.275 0.368
+split wall -5.021 2.214 -1.761 0.758 0.000 0.652 1.326 0.744
+# taken out of the model: everything over the tactical console's three screens (left end, right end, the plane's facing, half its height up the plane, from/to off the plane)
+carve -3.617 1.544 -1.308  -4.450 1.544 -0.345  -0.333 0.898 -0.288  0.33  0.003 0.40
