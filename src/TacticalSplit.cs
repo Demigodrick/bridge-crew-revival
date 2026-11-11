@@ -106,6 +106,49 @@ namespace StbcRevival
             Plugin.Log.LogInfo($"Tactical split: culling checks overridden {CulledCalls} times; pictures saved again");
         }
 
+        private static readonly List<Collider> probeColliders = new List<Collider>();
+        private static Plane probePlane;
+        private static Collider probeTarget; private static float probeUntil, probeBest; private static string probeBone; private static int probeClicks;
+
+        /// <summary>
+        /// Each frame after the split: on a mouse click, which of the moved buttons the pointer is on, and for two seconds how
+        /// near the officer's hands come to it (a button is pressed only when a hand's trigger reaches its trigger).
+        /// </summary>
+        internal static void Probe()
+        {
+            if (probeColliders.Count == 0 || probeClicks > 12) return;
+            var cam = Camera.main; if (cam == null) return;
+            if (Input.GetMouseButtonDown(0) && probeTarget == null)
+            {
+                var ray = cam.ScreenPointToRay(Input.mousePosition);
+                var hits = probeColliders.Where(q => q != null && q.Raycast(ray, out _, 5f)).Select(q => q.name + (q.enabled ? "" : " (off)")).ToList();
+                Collider nearest = null; float best = float.MaxValue;
+                foreach (var q in probeColliders.Where(q => q != null && q.name.EndsWith("_Trigger") && !q.name.EndsWith("_MouseTrigger")))
+                {
+                    var sp = cam.WorldToScreenPoint(q.bounds.center); if (sp.z <= 0f) continue;
+                    float d = ((Vector2)sp - (Vector2)Input.mousePosition).sqrMagnitude; if (d < best) { best = d; nearest = q; }
+                }
+                var phys = Physics.RaycastAll(ray, 5f).OrderBy(h => h.distance).Take(3).Select(h => $"{h.collider.name} at {h.distance:0.00} m");
+                Plugin.Log.LogInfo($"Tactical probe: click; pointer on [{string.Join(", ", hits.ToArray())}]; nearest button {(nearest != null ? nearest.name : "none")} ({Mathf.Sqrt(best):0} px); first physics hits: {string.Join(", ", phys.ToArray())}");
+                probeClicks++;
+                if (nearest != null) { probeTarget = nearest; probeUntil = Time.unscaledTime + 2f; probeBest = float.MaxValue; probeBone = "-"; }
+            }
+            if (probeTarget == null) return;
+            foreach (var h in UnityEngine.Object.FindObjectsOfType<MonoBehaviour>().Where(m => m != null && m.GetType().Name == "HandAnimator"))
+                foreach (var f in h.GetType().GetFields(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic).Where(f => f.FieldType == typeof(Transform[])))
+                    foreach (var t in (Transform[])f.GetValue(h) ?? new Transform[0])
+                    {
+                        if (t == null) continue;
+                        float d = Mathf.Sqrt(probeTarget.bounds.SqrDistance(t.position));
+                        if (d < probeBest) { probeBest = d; probeBone = h.name + "/" + t.name; }
+                    }
+            if (Time.unscaledTime > probeUntil)
+            {
+                Plugin.Log.LogInfo($"Tactical probe: nearest hand point to {probeTarget.name} came within {probeBest * 1000f:0} mm ({probeBone}); the trigger is {probePlane.GetDistanceToPoint(probeTarget.bounds.center) * 1000f:0} mm in front of the console");
+                probeTarget = null;
+            }
+        }
+
         private static void Note(string line) { report.AppendLine(line); Plugin.Log.LogInfo("Tactical split: " + line); }
 
         // ---- the panel's picture ----
@@ -352,6 +395,11 @@ namespace StbcRevival
                 t.localPosition = local; t.localRotation = lr; t.localScale = ls;
             }
             p.Face.GetComponent<MeshRenderer>().enabled = false;
+            probeColliders.Clear();
+            probeColliders.AddRange(buttons.SelectMany(k => k.Key.GetComponentsInChildren<Collider>(true)));
+            probePlane = new Plane(placeDirection(surface.Normal), place(surface.Centre));
+            foreach (var col in probeColliders.Where(q => q.name.EndsWith("_Trigger") && !q.name.EndsWith("_MouseTrigger")).Take(6))
+                Note($"  {col.name}: {probePlane.GetDistanceToPoint(col.bounds.center) * 1000f:0} mm in front of the console, {col.bounds.size.x * 1000f:0}x{col.bounds.size.y * 1000f:0}x{col.bounds.size.z * 1000f:0} mm");
 
             // The nav map over its part of the panel.
             if (navOnPanel)
@@ -368,7 +416,8 @@ namespace StbcRevival
                 var face = radar.TransformPoint(radar.rect.center);
                 float haveW = radar.rect.width * radar.lossyScale.x;
                 float k = wantW / Mathf.Max(1e-4f, haveW);
-                var turn = Quaternion.LookRotation(-n, up) * Quaternion.Inverse(Quaternion.LookRotation(navRect.forward, navRect.up));
+                var turn = Quaternion.LookRotation(-n, up) * Quaternion.Inverse(Quaternion.LookRotation(radar.forward, radar.up));
+                target += n * 0.006f; // a little more in front, so no part of it goes under the panel
                 navRect.position = target + turn * (navRect.position - face) * k;
                 navRect.rotation = turn * navRect.rotation;
                 navRect.localScale *= k;
@@ -435,8 +484,10 @@ namespace StbcRevival
             go.transform.SetParent(root.parent, false);
             go.transform.position = origin;
             go.transform.rotation = Quaternion.LookRotation(Vector3.Cross(right, up), up);
+            // Local z runs into the screen: a z the original lifted toward the officer goes negative, as far as it lifted there
+            // (scaled as the picture is), so the buttons' triggers keep the depth they had.
             float zAbs = (Mathf.Abs(a * mPerU) + Mathf.Abs(c * mPerV)) * 0.5f;
-            var z = buttonLift > 0f ? -zAbs : zAbs; // local z runs into the screen: a z the original lifted toward the officer goes negative
+            var z = Mathf.Abs(buttonLift) > 1e-6f ? -buttonLift * pxSize / 0.00089f : zAbs;
             go.transform.localScale = Vector3.one;
             var ps = go.transform.lossyScale;
             go.transform.localScale = new Vector3(a * mPerU / ps.x, c * mPerV / ps.y, z / ps.z);

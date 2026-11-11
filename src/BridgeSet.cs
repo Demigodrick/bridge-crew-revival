@@ -98,6 +98,7 @@ namespace StbcRevival
                 var tacticalUi = GameObject.Find("Bridge/Stations-1701D/Tactical_root/Tactical_UIParent");
                 if (tacticalUi != null && tacticalUi.transform.childCount > 0) { panelDumped = true; DumpTactical(tacticalUi.transform.parent); Plugin.Log.LogInfo("Bridge set: tactical panel written out"); }
             }
+            if (panelsPlaced) { try { TacticalSplit.Probe(); } catch (Exception e) { Plugin.Log.LogWarning("Bridge set: probe: " + e.Message); } }
             if (splitAt > 0f && Time.unscaledTime - splitAt > 30f) { splitAt = -1f; try { TacticalSplit.Recheck(); } catch (Exception e) { Plugin.Log.LogWarning("Bridge set: recheck: " + e.Message); } }
             if (!panelsPlaced && dressedScene != -1 && splits.Count > 0)
             {
