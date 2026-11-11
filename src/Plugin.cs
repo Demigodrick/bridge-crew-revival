@@ -113,6 +113,7 @@ namespace StbcRevival
         internal static ConfigEntry<bool> BridgeWalkAnimate;
         internal static ConfigEntry<bool> BridgeWalkTestCorridor;
         internal static ConfigEntry<bool> BridgeLayouts;
+        internal static ConfigEntry<bool> BridgeShareLayouts;
         internal static Plugin Instance { get; private set; }
 
         /// <summary>Revival voice runs: Steam mode, and [Voice] Engine = Revival.</summary>
@@ -306,6 +307,9 @@ namespace StbcRevival
             BridgeLayouts = Config.Bind("Bridges", "Layouts", true,
                 "Put on bridge layouts made with the bridge designer (BepInEx/bridges/<scene>.json): pieces moved, turned or hidden. "
                 + "Only you see them; a layout saved while the game runs shows at once.");
+            BridgeShareLayouts = Config.Bind("Bridges", "ShareLayouts", true,
+                "In a crew, everyone with the mod sees the host's bridge layout (and not their own); hosting, your crew sees yours. "
+                + "Off: you neither send yours nor take the host's (your own layout, only for you).");
             PlayerName = Config.Bind("Login", "PlayerName", "",
                 "Name shown to other players. Empty = your Steam persona name (falls back to the OS user name).");
 
