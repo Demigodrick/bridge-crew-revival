@@ -167,7 +167,7 @@ namespace StbcRevival
         }
 
         /// <summary>
-        /// Once the officer is in place: his station moved (level) so the camera stands in the middle before the panel, near
+        /// Once the officer is in place: the station moved (level) so the camera stands in the middle before the panel, near
         /// enough to reach it, wherever the game's figure stands to its station point. Checked a second later.
         /// </summary>
         private static void Centre(Camera cam)
