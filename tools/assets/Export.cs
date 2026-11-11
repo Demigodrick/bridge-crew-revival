@@ -367,10 +367,16 @@ internal static class GlbExport
                 case 3:  for (int i = 0; i < w * h; i++) { o[i * 4] = d[i * 3]; o[i * 4 + 1] = d[i * 3 + 1]; o[i * 4 + 2] = d[i * 3 + 2]; o[i * 4 + 3] = 255; } return o; // RGB24
                 case 4:  Array.Copy(d, o, o.Length); return o; // RGBA32
                 case 5:  for (int i = 0; i < w * h; i++) { o[i * 4] = d[i * 4 + 1]; o[i * 4 + 1] = d[i * 4 + 2]; o[i * 4 + 2] = d[i * 4 + 3]; o[i * 4 + 3] = d[i * 4]; } return o; // ARGB32
+                // 16-bit: ARGB4444, RGB565, RGBA4444 (each little-endian).
+                case 2:  for (int i = 0; i < w * h; i++) { int v = d[i * 2] | d[i * 2 + 1] << 8; o[i * 4 + 3] = N4(v >> 12); o[i * 4] = N4(v >> 8); o[i * 4 + 1] = N4(v >> 4); o[i * 4 + 2] = N4(v); } return o;
+                case 7:  for (int i = 0; i < w * h; i++) { int v = d[i * 2] | d[i * 2 + 1] << 8; o[i * 4] = (byte)((v >> 11 & 31) * 255 / 31); o[i * 4 + 1] = (byte)((v >> 5 & 63) * 255 / 63); o[i * 4 + 2] = (byte)((v & 31) * 255 / 31); o[i * 4 + 3] = 255; } return o;
+                case 13: for (int i = 0; i < w * h; i++) { int v = d[i * 2] | d[i * 2 + 1] << 8; o[i * 4] = N4(v >> 12); o[i * 4 + 1] = N4(v >> 8); o[i * 4 + 2] = N4(v >> 4); o[i * 4 + 3] = N4(v); } return o;
                 case 14: for (int i = 0; i < w * h; i++) { o[i * 4] = d[i * 4 + 2]; o[i * 4 + 1] = d[i * 4 + 1]; o[i * 4 + 2] = d[i * 4]; o[i * 4 + 3] = d[i * 4 + 3]; } return o; // BGRA32
                 default: return null;
             }
         }
+
+        private static byte N4(int v) => (byte)((v & 15) * 17);
 
         private static void Dxt(byte[] d, int w, int h, byte[] o, bool dxt5)
         {

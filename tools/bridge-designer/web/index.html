@@ -7,8 +7,8 @@
 <link rel="stylesheet" href="style.css">
 <script type="importmap">
 { "imports": {
-  "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-  "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  "three": "/vendor/three/build/three.module.js",
+  "three/addons/": "/vendor/three/examples/jsm/"
 } }
 </script>
 </head>
@@ -21,9 +21,7 @@
   </header>
   <div class="tools">
     <div class="row">
-      <button id="modeMove" type="button" title="Move (T)">Move</button>
-      <button id="modeTurn" type="button" title="Turn (R)">Turn</button>
-      <button id="group" type="button" title="Pick the group it's in (U)">Group</button>
+      <button id="group" type="button" title="Pick the group it's in (U)">Pick its group</button>
       <label title="Move in 5 cm steps, turn in 15° steps"><input id="snap" type="checkbox" checked> Snap</label>
     </div>
     <div class="row">
@@ -36,6 +34,7 @@
     <input id="search" type="search" placeholder="Filter pieces…" aria-label="Filter pieces">
     <div class="row">
       <label><input id="backdrops" type="checkbox"> Backdrops</label>
+      <label title="Effects, debris, viewscreen helpers"><input id="helpers" type="checkbox"> Helpers</label>
       <button id="frame" type="button">Frame</button>
     </div>
   </div>
@@ -54,11 +53,18 @@
       <dt>Batched</dt><dd id="infoBatched"></dd>
       <dt>Change</dt><dd id="infoChange"></dd>
     </dl>
+    <div id="fields" hidden>
+      <label>X <input id="fx" type="number" step="0.05"></label>
+      <label>Y <input id="fy" type="number" step="0.05"></label>
+      <label>Z <input id="fz" type="number" step="0.05"></label>
+      <label>Turn° <input id="fturn" type="number" step="15"></label>
+    </div>
   </section>
   <div id="toast" role="status" hidden></div>
   <footer id="help">
-    Drag: orbit · Right-drag: pan · Wheel: zoom · WASD/QE: fly (Shift faster) · Double-click: orbit around that point ·
-    Click: pick · U: its group · T/R: move/turn · H: hide · Backspace: put back · F: focus · Ctrl+Z: undo · Ctrl+S: save
+    View: drag to orbit · right-drag pan · wheel zoom · WASD/QE fly · double-click: orbit there ·
+    Click: pick (Shift: several) · U: its group · Drag a picked piece: move it (Shift: up/down) · gizmo ring: turn ·
+    Arrows/PgUp/PgDn: nudge · [ ]: turn · H: hide · Backspace: put back · F: focus · Ctrl+Z: undo · Ctrl+S: save
   </footer>
 </main>
 <script type="module" src="app.js"></script>
