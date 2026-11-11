@@ -74,6 +74,26 @@ namespace StbcRevival
         private static volatile string threadError;
         private static bool decoderFailureLogged;
         private static int canDecode;               // 0 not known yet, 1 an Opus decoder can be made, -1 it can't
+        private static bool rateChosen;
+
+        // Decode to the rate the game's own voice plays at. Wwise's voice plugin is never told a rate and plays
+        // what it's given at the game's voice rate (24 kHz), so 48 kHz audio came out at half speed, an octave
+        // deep. Opus decodes straight to any of its rates; chosen once VoIpManager is up, before the first decoder.
+        private static void ChoosePlaybackRate()
+        {
+            if (rateChosen || VoIpManager.IEFBKOMBFGO == null) return; // Instance
+            rateChosen = true;
+            int rate;
+            try { rate = DaikonForge.VoIP.NJPHCGOEOPO.GetOutputSampleRate(); }
+            catch (Exception e)
+            {
+                Plugin.Log.LogWarning("Revival voice: the game's voice rate wasn't readable, playing at 24 kHz: " + e.Message);
+                rate = 24000;
+            }
+            if (rate != 8000 && rate != 12000 && rate != 16000 && rate != 24000 && rate != 48000) rate = 24000;
+            VoiceFormat.PlaybackRate = rate;
+            Plugin.Log.LogInfo($"Revival voice: crewmates' voices decoded at {rate} Hz, the game's voice rate");
+        }
 
         /// <summary>Main thread: whether this game can play Revival voice (an Opus decoder can be made). Probed once,
         /// or settled by the first speaker's decoder; the hello only offers Revival voice when it can.</summary>
@@ -140,6 +160,8 @@ namespace StbcRevival
 
         private static Speaker Create(int actor)
         {
+            ChoosePlaybackRate();
+            if (!rateChosen) return null; // no voice chat yet: the packet is dropped, as it would be without a player
             OpusDecoder decoder;
             try { decoder = new OpusDecoder(VoiceFormat.PlaybackRate); canDecode = 1; }
             catch (Exception e)
