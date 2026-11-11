@@ -10,28 +10,30 @@ using UnityEngine.UI;
 namespace StbcRevival
 {
     /// <summary>
-    /// The briefing console's SHIP box with more ships than its three rows: NOVA under the Next Generation (and room
-    /// for more), and a slider on its left to scroll the list. The box still shows three rows; the game's own toggles
-    /// (Aegis, original Enterprise, Next Generation) move up and out of sight as the list scrolls, the added ones come
-    /// in below. NOVA flies on the Next Generation's ship: choosing it turns the game's TNG toggle on and puts "Nova" on
-    /// the room (NovaShip), so the bridge, consoles and crew are the Enterprise-D's and the hull the Nova's. The TNG
-    /// row then shows no mark; NOVA does. Choosing any of the game's ships takes "Nova" off the room again. NOVA is
-    /// there only with the Nova's model on this PC, and can be chosen whenever the TNG toggle can.
+    /// The briefing console's SHIP box with more ships than its three rows: our classes (NOVA, SOVEREIGN) under the
+    /// Next Generation, and scroll buttons on its left. The box still shows three rows; the game's own toggles (Aegis,
+    /// original Enterprise, Next Generation) move up and out of sight as the list scrolls, the added ones come in below.
+    /// Our classes fly on the Next Generation's ship: choosing one turns the game's TNG toggle on and puts its name on
+    /// the room (CustomShip), so the bridge, consoles and crew are the Enterprise-D's and the hull the class's. The TNG
+    /// row then shows no mark; the class's row does. Choosing any of the game's ships takes it off the room again. A
+    /// class is there only with its model on this PC, and can be chosen whenever the TNG toggle can.
     /// </summary>
     internal static class ShipChoice
     {
         private sealed class Box
         {
             public ConsoleBriefingRoom Console;
-            public Toggle Aegis, Tos, Tng, Nova;
+            public Toggle Aegis, Tos, Tng;
+            public readonly List<CustomShip> Ships = new List<CustomShip>();  // our classes in the box, one row each
+            public readonly List<Toggle> Custom = new List<Toggle>();
             public List<Transform> TngExtras = new List<Transform>(); // the TNG row's orange backgrounds, moved with it
             public Vector3[] Home;            // each row's place at the top of the list (row 0..n-1)
             public Vector3[] TngExtraHome;
             public Vector3 Step;              // from one row to the next
             public Toggle Up, Down;           // the scroll buttons on the box's left edge
-            public GameObject NovaHologram;   // on the holotable, under the Next Generation's hologram
-            public Renderer[] TngHologram;    // that hologram's own parts (hidden while the Nova shows)
-            public int HologramParts;         // how many of the Nova's pieces it was made of (more later: made again)
+            public readonly Dictionary<CustomShip, GameObject> Holograms = new Dictionary<CustomShip, GameObject>(); // on the holotable, under the Next Generation's hologram
+            public readonly Dictionary<CustomShip, int> HologramParts = new Dictionary<CustomShip, int>(); // how many of the class's pieces it was made of (more later: made again)
+            public Renderer[] TngHologram;    // that hologram's own parts (hidden while one of ours shows)
             public int Offset = -1, LastChosen = -1;
             public bool Applying;
         }
@@ -53,7 +55,8 @@ namespace StbcRevival
         {
             try
             {
-                if (!NovaShip.Available) return; // nothing to add (more ships later: each with its own check)
+                var ours = CustomShip.All.Where(s => s.Available).ToList();
+                if (ours.Count == 0) return; // nothing to add
                 var console = __instance;
                 var aegis = Field<Toggle>(console, "_aegisToggle");
                 var tos = Field<Toggle>(console, "_enterpriseToggle");
@@ -63,16 +66,21 @@ namespace StbcRevival
                 var box = new Box { Console = console, Aegis = aegis, Tos = tos, Tng = tng };
                 box.Step = tng.transform.localPosition - tos.transform.localPosition;
 
-                // NOVA: a plain row (the original Enterprise's look) under the Next Generation's.
-                var copy = (GameObject)UnityEngine.Object.Instantiate(tos.gameObject, tos.transform.parent, false);
-                copy.name = "Nova Toggle";
-                var nova = copy.GetComponent<Toggle>();
-                nova.group = null;
-                nova.onValueChanged = new Toggle.ToggleEvent(); // not the original Enterprise's own (persistent) handler
-                nova.isOn = false;
-                foreach (var label in copy.GetComponentsInChildren<TMP_Text>(true)) label.SetLocalizedText("NOVA");
-                nova.onValueChanged.AddListener(on => Chose(box, on));
-                box.Nova = nova;
+                // Each class: a plain row (the original Enterprise's look) under the Next Generation's.
+                foreach (var ship in ours)
+                {
+                    var copy = (GameObject)UnityEngine.Object.Instantiate(tos.gameObject, tos.transform.parent, false);
+                    copy.name = ship.Name + " Toggle";
+                    var row = copy.GetComponent<Toggle>();
+                    row.group = null;
+                    row.onValueChanged = new Toggle.ToggleEvent(); // not the original Enterprise's own (persistent) handler
+                    row.isOn = false;
+                    foreach (var label in copy.GetComponentsInChildren<TMP_Text>(true)) label.SetLocalizedText(ship.Label);
+                    var chosen = ship;
+                    row.onValueChanged.AddListener(on => Chose(box, chosen, on));
+                    box.Ships.Add(ship);
+                    box.Custom.Add(row);
+                }
 
                 foreach (var image in new[] { Field<Image>(console, "_tngToggleBackground1"), Field<Image>(console, "_tngToggleBackground2") })
                     if (image != null && !image.transform.IsChildOf(tng.transform)) box.TngExtras.Add(image.transform);
@@ -83,38 +91,39 @@ namespace StbcRevival
                 box.Home[0] = aegis.transform.localPosition;
                 for (int i = 1; i < rows.Length; i++) box.Home[i] = box.Home[0] + box.Step * i;
 
-                // Choosing one of the game's ships takes the Nova off the room.
+                // Choosing one of the game's ships takes ours off the room.
                 foreach (var own in new[] { aegis, tos, tng })
                 {
                     var t = own;
-                    t.onValueChanged.AddListener(on => { if (on && !box.Applying && NovaShip.Active && (t != tng || !box.Nova.isOn)) NovaShip.SetForRoom(false); });
+                    t.onValueChanged.AddListener(on => { if (on && !box.Applying && CustomShip.Flown != null && (t != tng || !box.Custom.Any(c => c.isOn))) CustomShip.Choose(null); });
                 }
 
-                // A click on the Next Generation's row while the Nova is chosen: back to the Next Generation (the toggle is on
-                // already, so it says nothing itself).
+                // A click on the Next Generation's row while one of ours is chosen: back to the Next Generation (the toggle is
+                // on already, so it says nothing itself).
                 var trigger = tng.gameObject.GetComponent<EventTrigger>() ?? tng.gameObject.AddComponent<EventTrigger>();
                 var click = new EventTrigger.Entry { eventID = EventTriggerType.PointerClick };
-                click.callback.AddListener(_ => { if (NovaShip.Active && (tng.interactable || tng.isOn)) NovaShip.SetForRoom(false); });
+                click.callback.AddListener(_ => { if (CustomShip.Flown != null && (tng.interactable || tng.isOn)) CustomShip.Choose(null); });
                 if (trigger.triggers == null) trigger.triggers = new List<EventTrigger.Entry>();
                 trigger.triggers.Add(click);
 
                 MakeArrows(box, rows.Length - Visible);
                 boxes.Add(box);
                 Apply(box, 0);
-                Plugin.Log.LogInfo($"Ship choice: NOVA added to the ship box ({rows.Length} ships, scroll buttons {(box.Up != null ? "on" : "off")})");
+                Plugin.Log.LogInfo($"Ship choice: {string.Join(", ", ours.Select(o => o.Label).ToArray())} added to the ship box ({rows.Length} ships, scroll buttons {(box.Up != null ? "on" : "off")})");
             }
             catch (Exception e) { Plugin.Log.LogWarning("Ship choice: " + e); }
         }
 
-        private static Toggle[] Rows(Box box) => new[] { box.Aegis, box.Tos, box.Tng, box.Nova };
+        private static Toggle[] Rows(Box box) => new[] { box.Aegis, box.Tos, box.Tng }.Concat(box.Custom).ToArray();
 
-        private static void Chose(Box box, bool on)
+        private static void Chose(Box box, CustomShip ship, bool on)
         {
             if (box.Applying || !on) return;
             box.Applying = true;
             try
             {
-                NovaShip.SetForRoom(true);
+                CustomShip.Choose(ship);
+                for (int i = 0; i < box.Custom.Count; i++) if (box.Ships[i] != ship && box.Custom[i].isOn) box.Custom[i].isOn = false;
                 if (!box.Tng.isOn) box.Tng.isOn = true; // the game's own choice: the Next Generation's ship
             }
             finally { box.Applying = false; }
@@ -255,95 +264,115 @@ namespace StbcRevival
 
         /// <summary>
         /// The holotable: the console shows one ship hologram at a time (SetHologramModels gives it the Aegis's, the
-        /// original Enterprise's and the Enterprise-D's). The Nova's goes under the Enterprise-D's, which is the one shown
-        /// with NOVA chosen: its meshes and materials (the Nova body's own, lit like the other ships' models), as long;
-        /// the Enterprise-D's parts are hidden while it shows.
+        /// original Enterprise's and the Enterprise-D's). Our classes' go under the Enterprise-D's, which is the one shown
+        /// with one of them chosen: its meshes and materials (the class body's own, lit like the other ships' models), as
+        /// long; the Enterprise-D's parts are hidden while one of ours shows.
         /// </summary>
-        private static void Hologram(Box box, bool nova)
+        private static void Hologram(Box box, CustomShip flown)
         {
-            // A piece put on the Nova since (its name decal): the hologram is made again with it.
-            if (box.NovaHologram != null && NovaShip.ModelParts.Length != box.HologramParts)
+            var tng = TngHologramField?.GetValue(box.Console) as GameObject;
+            if (tng == null) return;
+            if (box.TngHologram == null) box.TngHologram = tng.GetComponentsInChildren<Renderer>(true).Where(r => r is MeshRenderer).ToArray();
+            if (box.TngHologram.Length == 0) return;
+            if (flown != null && box.Ships.Contains(flown))
             {
-                UnityEngine.Object.Destroy(box.NovaHologram);
-                box.NovaHologram = null;
-                if (box.TngHologram != null) foreach (var r in box.TngHologram) if (r != null) r.enabled = true;
-            }
-            if (box.NovaHologram == null)
-            {
-                var tng = TngHologramField?.GetValue(box.Console) as GameObject;
-                var parts = NovaShip.ModelParts;
-                if (tng == null || parts.Length == 0) return;
-                box.TngHologram = tng.GetComponentsInChildren<Renderer>(true).Where(r => r is MeshRenderer).ToArray();
-                if (box.TngHologram.Length == 0) return;
-                // The ship itself among its parts (there are window layers and effects too): the hologram shader's (it
-                // has a noise texture), the most vertices.
-                var first = box.TngHologram.Where(r => r.GetComponent<MeshFilter>()?.sharedMesh != null)
-                    .OrderByDescending(r => r.sharedMaterial != null && r.sharedMaterial.HasProperty("_Noise") ? 1 : 0)
-                    .ThenByDescending(r => r.GetComponent<MeshFilter>().sharedMesh.vertexCount).FirstOrDefault();
-                if (first == null) return;
-                var space = first.transform.parent ?? tng.transform;
-                // That ship's size, in the space its mesh hangs in (forward z, up y, as the ships' bodies).
-                Vector3 lo = Vector3.one * float.MaxValue, hi = Vector3.one * float.MinValue;
-                foreach (var r in new[] { first })
+                // A piece put on the class since (its name decals): the hologram is made again with it.
+                if (box.Holograms.TryGetValue(flown, out var old) && old != null && flown.ModelParts.Length != box.HologramParts[flown])
                 {
-                    var f = r.GetComponent<MeshFilter>(); if (f == null || f.sharedMesh == null) continue;
-                    var b = f.sharedMesh.bounds;
-                    for (int i = 0; i < 8; i++)
+                    UnityEngine.Object.Destroy(old);
+                    box.Holograms.Remove(flown);
+                }
+                if (!box.Holograms.TryGetValue(flown, out var made) || made == null)
+                {
+                    made = MakeHologram(box, tng, flown);
+                    if (made != null)
                     {
-                        var c = new Vector3((i & 1) == 0 ? b.min.x : b.max.x, (i & 2) == 0 ? b.min.y : b.max.y, (i & 4) == 0 ? b.min.z : b.max.z);
-                        var p = space.InverseTransformPoint(r.transform.TransformPoint(c));
-                        lo = Vector3.Min(lo, p); hi = Vector3.Max(hi, p);
+                        box.Holograms[flown] = made;
+                        box.HologramParts[flown] = flown.ModelParts.Length;
                     }
                 }
-                Vector3 novaLo = Vector3.one * float.MaxValue, novaHi = Vector3.one * float.MinValue;
-                foreach (var f in parts) { var b = f.sharedMesh.bounds; novaLo = Vector3.Min(novaLo, b.min); novaHi = Vector3.Max(novaHi, b.max); }
-                float length = Mathf.Max(hi.z - lo.z, hi.x - lo.x);
-                float scale = length / Mathf.Max(1e-3f, novaHi.z - novaLo.z);
-
-                var holo = new GameObject("Nova Hologram");
-                holo.layer = first.gameObject.layer;
-                holo.transform.SetParent(space, false);
-                holo.transform.localPosition = (lo + hi) / 2f - (novaLo + novaHi) / 2f * scale;
-                holo.transform.localScale = Vector3.one * scale;
-                var material = new UnityEngine.Material(first.sharedMaterial) { name = "Nova Hologram" };
-                foreach (var f in parts)
-                {
-                    var go = new GameObject(f.name);
-                    go.layer = holo.layer;
-                    go.transform.SetParent(holo.transform, false);
-                    go.AddComponent<MeshFilter>().sharedMesh = f.sharedMesh;
-                    // The ship's own materials: the other ships on the table are their lit models too, not a wireframe.
-                    var own = f.GetComponent<MeshRenderer>()?.sharedMaterial;
-                    go.AddComponent<MeshRenderer>().sharedMaterial = own ?? material;
-                }
-                box.NovaHologram = holo;
-                box.HologramParts = parts.Length;
-                Plugin.Log.LogInfo($"Ship choice: Nova hologram under {tng.name} ({parts.Length} parts, scale {scale:0.###}, {box.TngHologram.Length} Enterprise-D parts)");
             }
-            if (box.NovaHologram.activeSelf != nova) box.NovaHologram.SetActive(nova);
-            foreach (var r in box.TngHologram) if (r != null && r.enabled == nova) r.enabled = !nova;
+            bool ours = false;
+            foreach (var kv in box.Holograms)
+            {
+                if (kv.Value == null) continue;
+                bool show = kv.Key == flown;
+                ours |= show;
+                if (kv.Value.activeSelf != show) kv.Value.SetActive(show);
+            }
+            foreach (var r in box.TngHologram) if (r != null && r.enabled == ours) r.enabled = !ours;
+        }
+
+        private static GameObject MakeHologram(Box box, GameObject tng, CustomShip ship)
+        {
+            var parts = ship.ModelParts;
+            if (parts.Length == 0) return null;
+            // The ship itself among the Enterprise-D hologram's parts (there are window layers and effects too): the hologram
+            // shader's (it has a noise texture), the most vertices.
+            var first = box.TngHologram.Where(r => r != null && r.GetComponent<MeshFilter>()?.sharedMesh != null)
+                .OrderByDescending(r => r.sharedMaterial != null && r.sharedMaterial.HasProperty("_Noise") ? 1 : 0)
+                .ThenByDescending(r => r.GetComponent<MeshFilter>().sharedMesh.vertexCount).FirstOrDefault();
+            if (first == null) return null;
+            var space = first.transform.parent ?? tng.transform;
+            // That ship's size, in the space its mesh hangs in (forward z, up y, as the ships' bodies).
+            Vector3 lo = Vector3.one * float.MaxValue, hi = Vector3.one * float.MinValue;
+            var bounds = first.GetComponent<MeshFilter>().sharedMesh.bounds;
+            for (int i = 0; i < 8; i++)
+            {
+                var c = new Vector3((i & 1) == 0 ? bounds.min.x : bounds.max.x, (i & 2) == 0 ? bounds.min.y : bounds.max.y, (i & 4) == 0 ? bounds.min.z : bounds.max.z);
+                var p = space.InverseTransformPoint(first.transform.TransformPoint(c));
+                lo = Vector3.Min(lo, p); hi = Vector3.Max(hi, p);
+            }
+            Vector3 shipLo = Vector3.one * float.MaxValue, shipHi = Vector3.one * float.MinValue;
+            foreach (var f in parts) { var b = f.sharedMesh.bounds; shipLo = Vector3.Min(shipLo, b.min); shipHi = Vector3.Max(shipHi, b.max); }
+            float length = Mathf.Max(hi.z - lo.z, hi.x - lo.x);
+            float scale = length / Mathf.Max(1e-3f, shipHi.z - shipLo.z);
+
+            var holo = new GameObject(ship.Name + " Hologram");
+            holo.layer = first.gameObject.layer;
+            holo.transform.SetParent(space, false);
+            holo.transform.localPosition = (lo + hi) / 2f - (shipLo + shipHi) / 2f * scale;
+            holo.transform.localScale = Vector3.one * scale;
+            var material = new UnityEngine.Material(first.sharedMaterial) { name = ship.Name + " Hologram" };
+            foreach (var f in parts)
+            {
+                var go = new GameObject(f.name);
+                go.layer = holo.layer;
+                go.transform.SetParent(holo.transform, false);
+                go.AddComponent<MeshFilter>().sharedMesh = f.sharedMesh;
+                // The ship's own materials: the other ships on the table are their lit models too, not a wireframe.
+                var own = f.GetComponent<MeshRenderer>()?.sharedMaterial;
+                go.AddComponent<MeshRenderer>().sharedMaterial = own ?? material;
+            }
+            Plugin.Log.LogInfo($"Ship choice: {ship.Name} hologram under {tng.name} ({parts.Length} parts, scale {scale:0.###}, {box.TngHologram.Length} Enterprise-D parts)");
+            return holo;
         }
 
         /// <summary>Each frame: NOVA's mark and whether it can be clicked follow the room; the TNG row hides its mark under it.</summary>
         internal static void Update()
         {
             if (boxes.Count == 0) return;
-            boxes.RemoveAll(b => b.Console == null || b.Nova == null);
-            bool nova = NovaShip.Active;
+            boxes.RemoveAll(b => b.Console == null || b.Custom.Count == 0 || b.Custom[0] == null);
+            var flown = CustomShip.Flown;
             foreach (var box in boxes)
             {
                 try
                 {
-                    Hologram(box, nova);
+                    Hologram(box, flown);
                     box.Applying = true;
-                    bool on = nova && box.Tng.isOn;
-                    if (box.Nova.isOn != on) box.Nova.isOn = on;
                     bool canChoose = box.Tng.interactable || (box.Tng.isOn && (box.Aegis.interactable || box.Tos.interactable));
-                    if (box.Nova.interactable != canChoose) box.Nova.interactable = canChoose;
-                    if (box.Tng.graphic != null) box.Tng.graphic.canvasRenderer.SetAlpha(on ? 0f : (box.Tng.isOn ? 1f : 0f));
+                    int ours = -1;
+                    for (int i = 0; i < box.Custom.Count; i++)
+                    {
+                        bool on = flown == box.Ships[i] && box.Tng.isOn;
+                        if (on) ours = i;
+                        if (box.Custom[i].isOn != on) box.Custom[i].isOn = on;
+                        if (box.Custom[i].interactable != canChoose) box.Custom[i].interactable = canChoose;
+                    }
+                    if (box.Tng.graphic != null) box.Tng.graphic.canvasRenderer.SetAlpha(ours >= 0 ? 0f : (box.Tng.isOn ? 1f : 0f));
                     box.Applying = false;
                     // Scrolled so the ship chosen is in sight, when the choice changes (scrolling away is free after that).
-                    int chosen = on ? 3 : box.Tng.isOn ? 2 : box.Tos.isOn ? 1 : 0;
+                    int chosen = ours >= 0 ? 3 + ours : box.Tng.isOn ? 2 : box.Tos.isOn ? 1 : 0;
                     if (chosen != box.LastChosen)
                     {
                         box.LastChosen = chosen;

@@ -25,7 +25,9 @@ namespace StbcRevival
         internal sealed class Material
         {
             public string Name, Diffuse, Emission;
+            public string Normal, Gloss;       // map_Bump: a normal map (packed for Unity: x in alpha, y in green); map_Ns: a metallic-gloss map
             public Color Colour = Color.white;
+            public Color Glow = Color.black;   // Ke: a glow of its own colour, without a texture
             public float Opacity = 1f;
         }
 
@@ -136,8 +138,13 @@ namespace StbcRevival
                     case "newmtl": m = new Material { Name = rest }; materials[rest] = m; break;
                     case "map_Kd": if (m != null) m.Diffuse = FileName(rest); break;
                     case "map_Ke": if (m != null) m.Emission = FileName(rest); break;
+                    case "map_Bump": case "bump": case "norm": if (m != null) m.Normal = FileName(rest); break;
+                    case "map_Ns": if (m != null) m.Gloss = FileName(rest); break;
                     case "Kd":
                         if (m != null) { var p = rest.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries); if (p.Length >= 3) m.Colour = new Color(float.Parse(p[0], inv), float.Parse(p[1], inv), float.Parse(p[2], inv)); }
+                        break;
+                    case "Ke":
+                        if (m != null) { var p = rest.Split(new[] { ' ', '	' }, StringSplitOptions.RemoveEmptyEntries); if (p.Length >= 3) m.Glow = new Color(float.Parse(p[0], inv), float.Parse(p[1], inv), float.Parse(p[2], inv)); }
                         break;
                     case "d": if (m != null && float.TryParse(rest, NumberStyles.Float, inv, out var d)) m.Opacity = d; break;
                 }
