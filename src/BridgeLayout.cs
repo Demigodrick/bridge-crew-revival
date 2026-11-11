@@ -135,8 +135,7 @@ namespace StbcRevival
         private static readonly List<Change> changes = new List<Change>();
         private static Scene scene;
         private static int boundRoot;          // the scene's first root object: changes when it's loaded again
-        private static string boundFile;
-        private static DateTime boundWrite;
+        private static string boundKey;   // which version of its layout is on (the file's time, or the host's version)
         private static float nextLook;
         private static bool lookedOnce;
 
@@ -146,6 +145,7 @@ namespace StbcRevival
         internal static void Update()
         {
             if (Plugin.BridgeLayouts == null || !Plugin.BridgeLayouts.Value) return;
+            BridgeShare.Update();
             if (boundRoot != 0)
             {
                 BridgeParts.Update();
@@ -154,40 +154,80 @@ namespace StbcRevival
             }
             if (Time.unscaledTime < nextLook) return;
             nextLook = Time.unscaledTime + 1f;
+            if (!lookedOnce) { lookedOnce = true; Plugin.Log.LogInfo($"Bridge layout: layouts are read from {Folder}{(Directory.Exists(Folder) ? "" : " (not there yet)")}"); }
 
             if (boundRoot != 0)
             {
-                // Still loaded, the same load of it, and the file unchanged: nothing to do.
+                // Still loaded, the same load of it, and the same layout (the file unchanged, or the host's the same):
+                // nothing to do.
                 int root = scene.IsValid() && scene.isLoaded ? RootId(scene) : 0;
                 if (root != boundRoot) { Forget(); }
                 else
                 {
-                    DateTime write = File.Exists(boundFile) ? File.GetLastWriteTimeUtc(boundFile) : DateTime.MinValue;
-                    if (write == boundWrite) { Followers(); return; }
-                    Plugin.Log.LogInfo($"Bridge layout: {Path.GetFileName(boundFile)} changed: put on again");
+                    var now = SourceFor(scene.name);
+                    if (now.Key == boundKey) { Followers(); return; }
+                    if (now.Wait) return;
+                    Plugin.Log.LogInfo($"Bridge layout: {scene.name}'s layout changed ({now.Label}): put on again");
                     foreach (var c in changes) Reset(c);
                     ResetFollowers();
                     BridgeParts.Clear();
                     Forget();
+                    // Gone altogether (the file deleted, or the host has none): the bridge stays as it is.
+                    if (now.Text == null) { boundRoot = RootId(scene); boundKey = now.Key; return; }
                 }
             }
-            if (!lookedOnce) { lookedOnce = true; Plugin.Log.LogInfo($"Bridge layout: layouts are read from {Folder}{(Directory.Exists(Folder) ? "" : " (not there yet)")}"); }
-            if (!Directory.Exists(Folder)) return;
             for (int i = 0; i < SceneManager.sceneCount; i++)
             {
                 var s = SceneManager.GetSceneAt(i);
                 if (!s.isLoaded) continue;
-                string file = Path.Combine(Folder, s.name + ".json");
-                if (!File.Exists(file)) continue;
+                var source = SourceFor(s.name);
+                if (source.Wait) return;           // asking the host for its layout: a moment
+                if (source.Text == null) continue;
                 int root = RootId(s);
                 if (root == 0) continue;
                 scene = s;
                 boundRoot = root;
-                boundFile = file;
-                boundWrite = File.GetLastWriteTimeUtc(file);
-                Load(file);
+                boundKey = source.Key;
+                Load(source.Text, source.Label);
+                if (source.Shared == false && BridgeShare.IsHost) BridgeShare.Push(s.name, source.Text);
                 return;
             }
+        }
+
+        private struct Source
+        {
+            public string Text, Key, Label;
+            public bool Wait;
+            public bool? Shared;  // true: the host's; false: your own file; null: none
+        }
+
+        /// <summary>
+        /// Where a scene's layout comes from: in a crew whose host has the mod, the host's (none if the host has none);
+        /// otherwise (hosting, alone, or a host without the mod) your own file.
+        /// </summary>
+        private static Source SourceFor(string sceneName)
+        {
+            switch (BridgeShare.HostLayout(sceneName, out var text, out int version))
+            {
+                case BridgeShare.State.Waiting: return new Source { Wait = true, Key = "waiting" };
+                case BridgeShare.State.Has: return new Source { Text = text, Key = "host:" + version, Label = "the host's", Shared = true };
+                case BridgeShare.State.None: return new Source { Key = "host:none:" + version, Label = "the host has none" };
+            }
+            string file = Path.Combine(Folder, sceneName + ".json");
+            if (!File.Exists(file)) return new Source { Key = "none" , Label = "no file" };
+            try
+            {
+                var write = File.GetLastWriteTimeUtc(file);
+                return new Source { Text = File.ReadAllText(file), Key = "file:" + write.Ticks, Label = Path.GetFileName(file), Shared = false };
+            }
+            catch (Exception e) { return new Source { Key = "unreadable", Label = e.Message }; }
+        }
+
+        /// <summary>This scene's layout as your own file has it (for the host to share), or null.</summary>
+        internal static string OwnLayout(string sceneName)
+        {
+            string file = Path.Combine(Folder, sceneName + ".json");
+            try { return File.Exists(file) ? File.ReadAllText(file) : null; } catch { return null; }
         }
 
         private static int RootId(Scene s)
@@ -197,13 +237,13 @@ namespace StbcRevival
         }
 
         // ------------------------------------------------------------------------------------------- the file
-        private static void Load(string file)
+        private static void Load(string text, string label)
         {
             List<LayoutPiece> layout;
             List<BridgeParts.Spec> added;
-            try { layout = ParseLayout(File.ReadAllText(file), out added); }
-            catch (Exception e) { Plugin.Log.LogWarning($"Bridge layout: {file} isn't a layout this version can read: {e.Message}"); return; }
-            Plugin.Log.LogInfo($"Bridge layout: {Path.GetFileName(file)} for {scene.name}: {layout.Count} change(s), {added.Count} added part(s)");
+            try { layout = ParseLayout(text, out added); }
+            catch (Exception e) { Plugin.Log.LogWarning($"Bridge layout: {label} for {scene.name} isn't a layout this version can read: {e.Message}"); return; }
+            Plugin.Log.LogInfo($"Bridge layout: {label} for {scene.name}: {layout.Count} change(s), {added.Count} added part(s)");
             BridgeParts.Start(added, scene);
             if (layout.Count == 0) return;
             var byPath = Index();
@@ -439,7 +479,7 @@ namespace StbcRevival
             foreach (var c in changes) foreach (var m in c.CopyMeshes) if (m != null) UnityEngine.Object.Destroy(m);
             changes.Clear();
             boundRoot = 0;
-            boundFile = null;
+            boundKey = null;
         }
     }
 
