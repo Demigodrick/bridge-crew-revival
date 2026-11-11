@@ -139,7 +139,7 @@ namespace StbcRevival
                 // going dark; screens and lamps glow fully.
                 if (glow != null) { m.SetTexture("_EmissionMap", glow); m.SetColor("_EmissionColor", Color.white); }
                 else if (om != null && om.Glow.maxColorComponent > 0.01f) m.SetColor("_EmissionColor", om.Glow);
-                else { if (albedo != null) m.SetTexture("_EmissionMap", albedo); m.SetColor("_EmissionColor", colour * 0.35f); }
+                else { if (albedo != null) m.SetTexture("_EmissionMap", albedo); m.SetColor("_EmissionColor", colour * 0.2f); }
                 m.EnableKeyword("_EMISSION");
                 return materials[key] = m;
             }
@@ -164,6 +164,14 @@ namespace StbcRevival
                 go.transform.SetParent(root.transform, false);
                 go.AddComponent<MeshFilter>().sharedMesh = mesh;
                 go.AddComponent<MeshRenderer>().sharedMaterial = material;
+                // Its back too: the model was made to be seen from both sides (many of its faces point away from the room).
+                var back = new Mesh { name = mesh.name + " back", vertices = mesh.vertices, normals = mesh.normals.Select(x => -x).ToArray(), triangles = part.Triangles };
+                if (mesh.uv.Length == mesh.vertexCount) back.uv = mesh.uv;
+                back.RecalculateBounds();
+                var goBack = new GameObject(go.name + "_back");
+                goBack.transform.SetParent(root.transform, false);
+                goBack.AddComponent<MeshFilter>().sharedMesh = back;
+                goBack.AddComponent<MeshRenderer>().sharedMaterial = material;
                 pieces++; tris += t.Length / 3;
             }
             Plugin.Log.LogInfo($"Bridge set {name}: {pieces} pieces, {tris} triangles, {materials.Count} materials, {textures.Count} textures, built in {(Time.realtimeSinceStartup - started) * 1000f:0} ms");
