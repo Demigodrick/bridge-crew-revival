@@ -366,7 +366,19 @@ namespace StbcRevival
                 uvArea += Mathf.Abs((ub.x - ua.x) * (uc2.y - ua.y) - (ub.y - ua.y) * (uc2.x - ua.x)) * 0.5;
             }
             if (uvArea < 1e-9) return;
-            float scale = (float)Math.Sqrt(area / uvArea);
+            // Metres per unit of picture coordinate, across and up, measured on the curved mesh's edges that run along
+            // each (the picture isn't square, so one scale for both would squash it).
+            double lu = 0, nu = 0, lv = 0, nv = 0;
+            for (int i = 0; i + 2 < tris.Length; i += 3)
+                for (int e = 0; e < 3; e++)
+                {
+                    int i0 = tris[i + e], i1 = tris[i + (e + 1) % 3];
+                    float du = Mathf.Abs(uv[i1].x - uv[i0].x), dv = Mathf.Abs(uv[i1].y - uv[i0].y), len = (world[i1] - world[i0]).magnitude;
+                    if (du > 1e-5f && du > 4f * dv) { lu += len; nu += du; }
+                    else if (dv > 1e-5f && dv > 4f * du) { lv += len; nv += dv; }
+                }
+            float fallback = (float)Math.Sqrt(area / uvArea);
+            float scaleU = nu > 0 ? (float)(lu / nu) : fallback, scaleV = nv > 0 ? (float)(lv / nv) : fallback;
             float u0 = uv.Min(x => x.x), u1 = uv.Max(x => x.x), v0 = uv.Min(x => x.y), v1 = uv.Max(x => x.y);
             Vector2 mid = new Vector2((u0 + u1) * 0.5f, (v0 + v1) * 0.5f);
             var right = Vector3.Cross(up, -n);
@@ -375,7 +387,7 @@ namespace StbcRevival
             float su = 0f, sv = 0f;
             for (int i = 0; i < world.Length; i++) { su += (uv[i].x - mid.x) * Vector3.Dot(world[i] - meanWorld, right); sv += (uv[i].y - mid.y) * Vector3.Dot(world[i] - meanWorld, up); }
             su = su < 0f ? -1f : 1f; sv = sv < 0f ? -1f : 1f;
-            Func<Vector2, Vector3> flat = t => centre + right * ((t.x - mid.x) * scale * su) + up * ((t.y - mid.y) * scale * sv);
+            Func<Vector2, Vector3> flat = t => centre + right * ((t.x - mid.x) * scaleU * su) + up * ((t.y - mid.y) * scaleV * sv);
             // Buttons first: where on the picture each one sits (nearest point of the curved mesh).
             var targets = part.GetComponentsInChildren<Transform>(true).Where(t => t.name.StartsWith("Hnd_", StringComparison.Ordinal)).ToList();
             var moves = new List<KeyValuePair<Transform, Vector3>>();
@@ -396,7 +408,7 @@ namespace StbcRevival
             foreach (var mc in face.GetComponents<MeshCollider>()) mc.sharedMesh = mesh;
             var facing = Quaternion.LookRotation(-n, up);
             foreach (var m in moves) { m.Key.position = m.Value; }
-            Plugin.Log.LogInfo($"Bridge set: {part.name} flattened ({(u1 - u0) * scale:0.00} x {(v1 - v0) * scale:0.00} m), {moves.Count} buttons moved");
+            Plugin.Log.LogInfo($"Bridge set: {part.name} flattened ({(u1 - u0) * scaleU:0.00} x {(v1 - v0) * scaleV:0.00} m), {moves.Count} buttons moved");
         }
 
         private static Vector3 ClosestOnTriangle(Vector3 p, Vector3 a, Vector3 b, Vector3 c, out float wa, out float wb, out float wc)
