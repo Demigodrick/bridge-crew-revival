@@ -341,8 +341,83 @@ namespace StbcRevival
                     t.rotation = turn * t.rotation;
                     t.localScale *= k;
                 }
+                if (face != null) Flatten(face, part, nT, upT, target);
                 Plugin.Log.LogInfo($"Bridge set {name}: tactical panel {place.Part} ({width:0.00} m wide) onto the console at {target}, at {k:0.##} its size");
             }
+        }
+
+        /// <summary>
+        /// A curved panel made flat on the console: each corner of its picture mesh laid on the screen's plane where its
+        /// picture coordinates put it (the picture keeps its proportions and area); the hand targets on it (its buttons)
+        /// moved to the same places of the picture.
+        /// </summary>
+        private static void Flatten(MeshFilter face, Transform part, Vector3 n, Vector3 up, Vector3 centre)
+        {
+            var mesh = face.mesh;
+            var local = mesh.vertices; var uv = mesh.uv; var tris = mesh.triangles;
+            if (uv == null || uv.Length != local.Length || tris.Length < 3) return;
+            var world = local.Select(v => face.transform.TransformPoint(v)).ToArray();
+            double area = 0, uvArea = 0;
+            for (int i = 0; i + 2 < tris.Length; i += 3)
+            {
+                Vector3 a = world[tris[i]], b = world[tris[i + 1]], c = world[tris[i + 2]];
+                area += Vector3.Cross(b - a, c - a).magnitude * 0.5;
+                Vector2 ua = uv[tris[i]], ub = uv[tris[i + 1]], uc2 = uv[tris[i + 2]];
+                uvArea += Mathf.Abs((ub.x - ua.x) * (uc2.y - ua.y) - (ub.y - ua.y) * (uc2.x - ua.x)) * 0.5;
+            }
+            if (uvArea < 1e-9) return;
+            float scale = (float)Math.Sqrt(area / uvArea);
+            float u0 = uv.Min(x => x.x), u1 = uv.Max(x => x.x), v0 = uv.Min(x => x.y), v1 = uv.Max(x => x.y);
+            Vector2 mid = new Vector2((u0 + u1) * 0.5f, (v0 + v1) * 0.5f);
+            var right = Vector3.Cross(up, -n);
+            var meanWorld = world.Aggregate(Vector3.zero, (x, y) => x + y) / world.Length;
+            // Which way the picture runs on the curved mesh, so the flat one isn't mirrored.
+            float su = 0f, sv = 0f;
+            for (int i = 0; i < world.Length; i++) { su += (uv[i].x - mid.x) * Vector3.Dot(world[i] - meanWorld, right); sv += (uv[i].y - mid.y) * Vector3.Dot(world[i] - meanWorld, up); }
+            su = su < 0f ? -1f : 1f; sv = sv < 0f ? -1f : 1f;
+            Func<Vector2, Vector3> flat = t => centre + right * ((t.x - mid.x) * scale * su) + up * ((t.y - mid.y) * scale * sv);
+            // Buttons first: where on the picture each one sits (nearest point of the curved mesh).
+            var targets = part.GetComponentsInChildren<Transform>(true).Where(t => t.name.StartsWith("Hnd_", StringComparison.Ordinal)).ToList();
+            var moves = new List<KeyValuePair<Transform, Vector3>>();
+            foreach (var t in targets)
+            {
+                var p = t.position; float best = float.MaxValue; Vector2 at = mid; float lift = 0f;
+                for (int i = 0; i + 2 < tris.Length; i += 3)
+                {
+                    Vector3 a = world[tris[i]], b = world[tris[i + 1]], c = world[tris[i + 2]];
+                    var q = ClosestOnTriangle(p, a, b, c, out float wa, out float wb, out float wc);
+                    float d = (p - q).sqrMagnitude;
+                    if (d < best) { best = d; at = uv[tris[i]] * wa + uv[tris[i + 1]] * wb + uv[tris[i + 2]] * wc; lift = Vector3.Dot(p - q, Vector3.Cross(b - a, c - a).normalized); }
+                }
+                moves.Add(new KeyValuePair<Transform, Vector3>(t, flat(at) + n * Mathf.Abs(lift)));
+            }
+            mesh.vertices = uv.Select(t => face.transform.InverseTransformPoint(flat(t))).ToArray();
+            mesh.RecalculateNormals(); mesh.RecalculateBounds();
+            foreach (var mc in face.GetComponents<MeshCollider>()) mc.sharedMesh = mesh;
+            var facing = Quaternion.LookRotation(-n, up);
+            foreach (var m in moves) { m.Key.position = m.Value; }
+            Plugin.Log.LogInfo($"Bridge set: {part.name} flattened ({(u1 - u0) * scale:0.00} x {(v1 - v0) * scale:0.00} m), {moves.Count} buttons moved");
+        }
+
+        private static Vector3 ClosestOnTriangle(Vector3 p, Vector3 a, Vector3 b, Vector3 c, out float wa, out float wb, out float wc)
+        {
+            // Ericson, Real-Time Collision Detection 5.1.5
+            Vector3 ab = b - a, ac = c - a, ap = p - a;
+            float d1 = Vector3.Dot(ab, ap), d2 = Vector3.Dot(ac, ap);
+            if (d1 <= 0f && d2 <= 0f) { wa = 1; wb = 0; wc = 0; return a; }
+            Vector3 bp = p - b; float d3 = Vector3.Dot(ab, bp), d4 = Vector3.Dot(ac, bp);
+            if (d3 >= 0f && d4 <= d3) { wa = 0; wb = 1; wc = 0; return b; }
+            float vc = d1 * d4 - d3 * d2;
+            if (vc <= 0f && d1 >= 0f && d3 <= 0f) { float v = d1 / (d1 - d3); wa = 1 - v; wb = v; wc = 0; return a + v * ab; }
+            Vector3 cp = p - c; float d5 = Vector3.Dot(ab, cp), d6 = Vector3.Dot(ac, cp);
+            if (d6 >= 0f && d5 <= d6) { wa = 0; wb = 0; wc = 1; return c; }
+            float vb = d5 * d2 - d1 * d6;
+            if (vb <= 0f && d2 >= 0f && d6 <= 0f) { float w = d2 / (d2 - d6); wa = 1 - w; wb = 0; wc = w; return a + w * ac; }
+            float va = d3 * d6 - d5 * d4;
+            if (va <= 0f && (d4 - d3) >= 0f && (d5 - d6) >= 0f) { float w = (d4 - d3) / ((d4 - d3) + (d5 - d6)); wa = 0; wb = 1 - w; wc = w; return b + w * (c - b); }
+            float denom = 1f / (va + vb + vc); float v2 = vb * denom, w2 = vc * denom;
+            wa = 1 - v2 - w2; wb = v2; wc = w2;
+            return a + ab * v2 + ac * w2;
         }
 
         private static void DumpTactical(Transform root)
