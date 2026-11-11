@@ -54,6 +54,14 @@ namespace StbcRevival
                 harmony.Patch(setOn, prefix: new HarmonyMethod(typeof(ShipChoice), nameof(SetOn_Prefix)));
             }
             else Plugin.Log.LogWarning("Ship choice: the toggles' sync wasn't found; pressing the Nova's own ship won't take it off");
+            // The console makes the chosen ship's row unpressable, every frame, through this helper (a chosen row needs
+            // no press). With NOVA chosen, the ship it borrows is chosen underneath, so that row went grey (the
+            // disabled tint) and ignored presses. It's given the value going in (as RevivalBriefing does: setting it
+            // afterwards restarts the fade each frame): pressable for whoever chooses, like any row not chosen.
+            var setInteractable = AccessTools.Method(AccessTools.TypeByName("KHDFGIINMKJ"), "SetInteractable", new[] { typeof(Selectable), typeof(bool) });
+            if (setInteractable != null)
+                harmony.Patch(setInteractable, prefix: new HarmonyMethod(typeof(ShipChoice), nameof(Interactable_Prefix)) { priority = Priority.Low });
+            else Plugin.Log.LogWarning("Ship choice: the console's SetInteractable wasn't found; the ship under NOVA shows greyed");
         }
 
         private static T Field<T>(ConsoleBriefingRoom console, string name) where T : class =>
@@ -125,6 +133,21 @@ namespace StbcRevival
 
         /// <summary>A briefing console's ship box is about (the briefing room is open).</summary>
         internal static bool InBriefing => boxes.Count > 0 && boxes.Exists(b => b.Console != null);
+
+        /// <summary>The row of the ship NOVA borrows: pressable (and so not greyed) for whoever chooses.</summary>
+        private static void Interactable_Prefix(Selectable __0, ref bool __1)
+        {
+            if (__1 || boxes.Count == 0 || !(__0 is Toggle t) || !t.isOn || !NovaShip.ActiveNow) return;
+            foreach (var box in boxes)
+                if (t == box.Aegis || t == box.Tng)
+                {
+                    if (box.Console != null && CanChoose(box)) __1 = true;
+                    return;
+                }
+        }
+
+        /// <summary>NOVA can be chosen on this console: by whoever chooses the ship (the captain), not for the campaign.</summary>
+        private static bool CanChoose(Box box) => !NovaShip.Campaign && Missions.RevivalBriefing.IsChooser(box.Console);
 
         private static bool syncing;
         private static void Sync_Prefix() => syncing = true;
@@ -346,7 +369,7 @@ namespace StbcRevival
                     // Choosable whenever the game's own choice is (the host's or captain's), greyed like the others when not,
                     // and not for the campaign (its missions are the Aegis's own).
                     bool campaign = NovaShip.Campaign;
-                    bool canChoose = !campaign && (box.Tng.interactable || box.Aegis.interactable);
+                    bool canChoose = !campaign && CanChoose(box);
                     // The game colours its rows' labels itself (a locked row's goes grey): NOVA's follows the same.
                     if (box.NovaLabels == null)
                     {
@@ -357,7 +380,7 @@ namespace StbcRevival
                     var grey = greyed != null && !box.Tos.interactable ? greyed.color : new Color(0.5f, 0.5f, 0.5f, 0.6f);
                     for (int k = 0; k < box.NovaLabels.Length; k++)
                         if (box.NovaLabels[k] != null) box.NovaLabels[k].color = canChoose ? box.NovaColours[k] : grey;
-                    if (campaign && nova && box.Aegis.interactable && !JustPressed) { NovaShip.SetForRoom(false); nova = false; }
+                    if (campaign && nova && Missions.RevivalBriefing.IsChooser(box.Console) && !JustPressed) { NovaShip.SetForRoom(false); nova = false; }
                     if (box.Nova.interactable != canChoose) box.Nova.interactable = canChoose;
                     // NOVA is a ship of its own as far as the box shows (the ship it borrows for now, the Next
                     // Generation's or the Aegis's, is to be replaced): that row looks unchosen while NOVA is, as when

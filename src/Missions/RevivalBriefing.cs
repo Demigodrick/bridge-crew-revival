@@ -167,7 +167,8 @@ namespace StbcRevival.Missions
 
         // Whoever can change the category: the console makes exactly the unselected categories interactable
         // for them (ConsoleBriefingRoom.KJCBOFBCMAN), so read it from there.
-        private static bool IsChooser(ConsoleBriefingRoom console)
+        /// <summary>This player chooses the mission and ship on this console (the captain, or alone as a spectator).</summary>
+        internal static bool IsChooser(ConsoleBriefingRoom console)
         {
             var procedural = Field<Toggle>(console, "_proceduralMissionToggle");
             var campaign = Field<Toggle>(console, "_campaignMissionToggle");
