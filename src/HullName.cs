@@ -93,7 +93,7 @@ namespace StbcRevival
         internal static void Update()
         {
             if (Time.unscaledTime < nextScan) return;
-            nextScan = Time.unscaledTime + 2f;
+            nextScan = Time.unscaledTime + 5f; // a scan of every material: not too often (it shows as a hitch)
             try
             {
                 string name = ShipName.Name, registry = ShipName.Registry;
