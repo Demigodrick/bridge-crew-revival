@@ -30,6 +30,17 @@ namespace StbcRevival
         };
         private static readonly Vector3 GameCaptain = new Vector3(0f, 49.81f, 0.49f); // the TNG bridge's captain's station
 
+        /// <summary>A box of the model file (between two points on a plane, so wide up the plane, from n0 to n1 off it) whose triangles are left out.</summary>
+        internal sealed class Carve
+        {
+            public Vector3 Centre, Along, Up, Normal; public float HalfLength, HalfUp, N0, N1;
+            public bool Holds(Vector3 v)
+            {
+                var d = v - Centre; float o = Vector3.Dot(d, Normal);
+                return Mathf.Abs(Vector3.Dot(d, Along)) <= HalfLength && Mathf.Abs(Vector3.Dot(d, Up)) <= HalfUp && o >= N0 && o <= N1;
+            }
+        }
+
         private sealed class PanelPlace { public string Part; public Vector3 Centre, Normal; public float Width; }
 
         private sealed class Loaded
@@ -38,6 +49,7 @@ namespace StbcRevival
             public Dictionary<string, ObjModel.Material> Materials;
             public Dictionary<string, byte[]> Images = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
             public Vector3 Captain = new Vector3(0f, 0.30f, -0.75f);
+            public List<Carve> Carves = new List<Carve>(); // parts of the model taken away (above a console's screens, for a panel across them)
             public Vector3? Screen;     // the set's viewscreen: the middle of its back plane (model file)
             public float ScreenHeight;  // and its height
             public Vector3? Tactical, TacticalNormal, TacticalStand; // its tactical console's screen (middle, facing) and where its officer stands
@@ -175,6 +187,18 @@ namespace StbcRevival
                             var inv = System.Globalization.CultureInfo.InvariantCulture;
                             result.TacticalStand = new Vector3(float.Parse(p[1], inv), float.Parse(p[2], inv), float.Parse(p[3], inv));
                         }
+                        if (p.Length >= 13 && p[0] == "carve")
+                        {
+                            var inv = System.Globalization.CultureInfo.InvariantCulture;
+                            Func<int, float> f = i => float.Parse(p[i], inv);
+                            Vector3 l = new Vector3(f(1), f(2), f(3)), r = new Vector3(f(4), f(5), f(6)), nn = new Vector3(f(7), f(8), f(9)).normalized;
+                            var along = (r - l).normalized;
+                            result.Carves.Add(new Carve
+                            {
+                                Centre = (l + r) * 0.5f, Along = along, Normal = nn, Up = Vector3.Cross(nn, along).normalized,
+                                HalfLength = (r - l).magnitude * 0.5f, HalfUp = f(10), N0 = f(11), N1 = f(12),
+                            });
+                        }
                         if (p.Length >= 4 && p[0] == "captain")
                             result.Captain = new Vector3(float.Parse(p[1], System.Globalization.CultureInfo.InvariantCulture), float.Parse(p[2], System.Globalization.CultureInfo.InvariantCulture), float.Parse(p[3], System.Globalization.CultureInfo.InvariantCulture));
                     }
@@ -234,14 +258,27 @@ namespace StbcRevival
             placedCaptain = c; screen = data.Screen; screenHeight = data.ScreenHeight;
             tactical = data.Tactical; tacticalNormal = data.TacticalNormal; tacticalStand = data.TacticalStand; panels = data.Panels; splits = data.Splits;
             Func<Vector3, Vector3> place = v => new Vector3(v.x - c.x, v.y - c.y, -(v.z - c.z)) + GameCaptain;
-            int pieces = 0, tris = 0;
+            int pieces = 0, tris = 0, carved = 0;
             for (int n = 0; n < data.Parts.Count; n++)
             {
                 var part = data.Parts[n];
                 var material = MaterialFor(part.Texture);
                 if (material == null) continue;
-                var t = new int[part.Triangles.Length];
-                for (int i = 0; i + 2 < t.Length; i += 3) { t[i] = part.Triangles[i]; t[i + 1] = part.Triangles[i + 2]; t[i + 2] = part.Triangles[i + 1]; }
+                var kept = part.Triangles;
+                if (data.Carves.Count > 0)
+                {
+                    var list = new List<int>(kept.Length);
+                    for (int i = 0; i + 2 < kept.Length; i += 3)
+                    {
+                        var mid = (part.Vertices[kept[i]] + part.Vertices[kept[i + 1]] + part.Vertices[kept[i + 2]]) / 3f;
+                        if (data.Carves.Any(cv => cv.Holds(mid))) { carved++; continue; }
+                        list.Add(kept[i]); list.Add(kept[i + 1]); list.Add(kept[i + 2]);
+                    }
+                    kept = list.ToArray();
+                    if (kept.Length == 0) continue;
+                }
+                var t = new int[kept.Length];
+                for (int i = 0; i + 2 < t.Length; i += 3) { t[i] = kept[i]; t[i + 1] = kept[i + 2]; t[i + 2] = kept[i + 1]; }
                 var mesh = new Mesh { name = "Bridge " + part.Name, vertices = part.Vertices.Select(place).ToArray(), triangles = t };
                 if (part.Uv != null && part.Uv.Length == part.Vertices.Length) mesh.uv = part.Uv;
                 if (part.Normals != null && part.Normals.Length == part.Vertices.Length && part.Normals.Any(x => x != Vector3.zero)) mesh.normals = part.Normals.Select(x => new Vector3(x.x, x.y, -x.z)).ToArray();
@@ -252,7 +289,7 @@ namespace StbcRevival
                 go.AddComponent<MeshFilter>().sharedMesh = mesh;
                 go.AddComponent<MeshRenderer>().sharedMaterial = material;
                 // Its back too: the model was made to be seen from both sides (many of its faces point away from the room).
-                var back = new Mesh { name = mesh.name + " back", vertices = mesh.vertices, normals = mesh.normals.Select(x => -x).ToArray(), triangles = part.Triangles };
+                var back = new Mesh { name = mesh.name + " back", vertices = mesh.vertices, normals = mesh.normals.Select(x => -x).ToArray(), triangles = kept };
                 if (mesh.uv.Length == mesh.vertexCount) back.uv = mesh.uv;
                 back.RecalculateBounds();
                 var goBack = new GameObject(go.name + "_back");
@@ -261,7 +298,7 @@ namespace StbcRevival
                 goBack.AddComponent<MeshRenderer>().sharedMaterial = material;
                 pieces++; tris += t.Length / 3;
             }
-            Plugin.Log.LogInfo($"Bridge set {name}: {pieces} pieces, {tris} triangles, {materials.Count} materials, {textures.Count} textures, built in {(Time.realtimeSinceStartup - started) * 1000f:0} ms");
+            Plugin.Log.LogInfo($"Bridge set {name}: {pieces} pieces, {tris} triangles ({carved} carved away), {materials.Count} materials, {textures.Count} textures, built in {(Time.realtimeSinceStartup - started) * 1000f:0} ms");
             return root;
         }
 

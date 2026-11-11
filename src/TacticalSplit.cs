@@ -81,10 +81,12 @@ namespace StbcRevival
                     if (r.name.StartsWith("Bridge_" + m + "_", StringComparison.Ordinal)) r.enabled = false;
             Screen sl, sc, sr, wall;
             screens.TryGetValue("L", out sl); screens.TryGetValue("C", out sc); screens.TryGetValue("R", out sr); screens.TryGetValue("wall", out wall);
-            // Left screen: the weapons; middle: target selection; right: the weapons info panel; the wall: the map part and the nav map.
-            if (centre != null && sl != null && sc != null && wall != null) SplitMain(centre, sl, sc, wall, place, placeDirection);
-            if (left != null && sr != null) Whole(left, sr, place, placeDirection, "info");
-            if (wall != null) Wall(nav, wall, place, placeDirection);
+            // The console's three screens as one surface (the frames between them carved away): the whole main panel across it,
+            // the nav map over its map part as on the game's console; the weapons info panel on the wall screen.
+            bool navPlaced = false;
+            if (centre != null && sl != null && sr != null) navPlaced = Continuous(centre, sl, sr, nav, place, placeDirection);
+            if (left != null && wall != null) Whole(left, wall, place, placeDirection, "info");
+            if (!navPlaced && wall != null) Wall(nav, wall, place, placeDirection);
             try { File.WriteAllText(Path.Combine(BepInEx.Paths.BepInExRootPath, "bridge-tactical-split.txt"), report.ToString()); } catch { }
         }
 
@@ -284,6 +286,116 @@ namespace StbcRevival
             }
             p.Face.GetComponent<MeshRenderer>().enabled = false;
             Note("main panel cut into its parts, its curved strip hidden");
+        }
+
+        /// <summary>
+        /// The main panel whole across the console: from the left screen's left edge to the right screen's right edge (the
+        /// screens lie in one plane), at one scale, its buttons on one stand-in anchor; the nav map laid over the panel's
+        /// map part where it lay on the game's console. Returns whether the nav map was placed.
+        /// </summary>
+        private static bool Continuous(Transform root, Screen sl, Screen sr, Transform nav, Func<Vector3, Vector3> place, Func<Vector3, Vector3> placeDirection)
+        {
+            var p = Read(root);
+            if (p == null || p.Picture == null) { Note("main panel: no picture found"); return false; }
+            int W = p.Picture.width, H = p.Picture.height;
+            Note($"main panel picture {W}x{H}, strip shows uv {p.UvMin}..{p.UvMax}, {Drawn(p.Picture) * 100f:0.#}% drawn");
+            pictureName = "main";
+            if (!Profile(p.Picture, out var cols, out var rows)) { Note("main panel: picture not readable"); return false; }
+            var buttons = ButtonsOnPicture(p);
+            float a, b, ru, c, d, rv;
+            Fit(buttons.Select(k => k.Key.localPosition.x).ToList(), buttons.Select(k => k.Value.x).ToList(), out a, out b, out ru);
+            Fit(buttons.Select(k => k.Key.localPosition.y).ToList(), buttons.Select(k => k.Value.y).ToList(), out c, out d, out rv);
+            Note($"buttons: {buttons.Count}; u = {a:0.#####} x + {b:0.####} (rms {ru * W:0.#} px), v = {c:0.#####} y + {d:0.####} (rms {rv * H:0.#} px); lift {buttonLift * 1000f:0.###} mm per anchor z");
+
+            // Where the nav map lies on the panel's picture (its corners' nearest points on the strip), before anything moves.
+            var navRect = nav as RectTransform;
+            Vector2 navMin = Vector2.zero, navMax = Vector2.zero; bool navOnPanel = false; float navLift = 0f;
+            if (navRect != null)
+            {
+                var corners = new Vector3[4]; navRect.GetWorldCorners(corners);
+                var uvs = corners.Select(q => OnStrip(p, q, out _)).ToArray();
+                navMin = new Vector2(uvs.Min(u => u.x), uvs.Min(u => u.y)); navMax = new Vector2(uvs.Max(u => u.x), uvs.Max(u => u.y));
+                OnStrip(p, navRect.TransformPoint(navRect.rect.center), out navLift);
+                navOnPanel = navMax.x - navMin.x > 0.02f && navMax.y - navMin.y > 0.02f;
+                Note($"nav map on the picture: px ({navMin.x * W:0}, {navMin.y * H:0})..({navMax.x * W:0}, {navMax.y * H:0}), {navLift * 1000f:0} mm in front of the strip");
+            }
+
+            var guard = new bool[W];
+            foreach (var k in buttons) { int bx = Mathf.RoundToInt(k.Value.x * W); for (int x = Math.Max(0, bx - 14); x < Math.Min(W, bx + 15); x++) guard[x] = true; }
+            int c0 = 0, c1 = W - 1, r0 = 0, r1 = H - 1;
+            while (c0 < W - 1 && cols[c0] <= 1f && !guard[c0]) c0++;
+            while (c1 > c0 && cols[c1] <= 1f && !guard[c1]) c1--;
+            while (r0 < H - 1 && rows[r0] <= 1f) r0++;
+            while (r1 > r0 && rows[r1] <= 1f) r1--;
+            foreach (var k in buttons) { int by = Mathf.RoundToInt(k.Value.y * H); r0 = Math.Min(r0, by - 10); r1 = Math.Max(r1, by + 10); }
+            if (navOnPanel) { c0 = Math.Min(c0, Mathf.FloorToInt(navMin.x * W)); c1 = Math.Max(c1, Mathf.CeilToInt(navMax.x * W)); r0 = Math.Min(r0, Mathf.FloorToInt(navMin.y * H)); r1 = Math.Max(r1, Mathf.CeilToInt(navMax.y * H)); }
+            c0 = Mathf.Clamp(c0 - 4, 0, W - 1); c1 = Mathf.Clamp(c1 + 4, 0, W - 1); r0 = Mathf.Clamp(r0 - 4, 0, H - 1); r1 = Mathf.Clamp(r1 + 4, 0, H - 1);
+
+            // The surface: the three screens' plane from the left edge of the left one to the right edge of the right one.
+            var along = (sr.Centre - sl.Centre).normalized;
+            var leftEnd = sl.Centre - along * (sl.Width * 0.5f);
+            var rightEnd = sr.Centre + along * (sr.Width * 0.5f);
+            const float margin = 0.006f;
+            var surface = new Screen { Name = "console", Centre = (leftEnd + rightEnd) * 0.5f, Normal = sl.Normal, Width = (rightEnd - leftEnd).magnitude - 2f * margin, Height = sl.Height - 2f * margin };
+            int colsShown = c1 - c0 + 1, rowsShown = r1 - r0 + 1;
+            float pxSize = Mathf.Min(surface.Width / colsShown, surface.Height / rowsShown);
+            Note($"drawn: columns {c0}..{c1}, rows {r0}..{r1}; across the console at {pxSize * 1000f:0.###} mm per picture pixel ({pxSize / 0.00089f * 100f:0}% of the game's size): {colsShown * pxSize:0.000} x {rowsShown * pxSize:0.000} m on {surface.Width:0.000} x {surface.Height:0.000} m");
+
+            var anchor = Piece(p, root, "whole", surface, place, placeDirection, Vector3.zero, c0, c1, r0, r1, pxSize, a, b, c, d);
+            foreach (var k in buttons)
+            {
+                var t = k.Key;
+                var local = t.localPosition; var lr = t.localRotation; var ls = t.localScale;
+                t.SetParent(anchor, false);
+                t.localPosition = local; t.localRotation = lr; t.localScale = ls;
+            }
+            p.Face.GetComponent<MeshRenderer>().enabled = false;
+
+            // The nav map over its part of the panel.
+            if (navOnPanel)
+            {
+                var n = placeDirection(surface.Normal);
+                var up = Vector3.ProjectOnPlane(Vector3.up, n).normalized;
+                var right = Vector3.Cross(up, -n);
+                var centreW = place(surface.Centre) + n * 0.004f;
+                float mPerU = pxSize * W, mPerV = pxSize * H;
+                Vector2 mid = new Vector2((c0 + c1 + 1) * 0.5f / W, (r0 + r1 + 1) * 0.5f / H);
+                Vector2 navMid = (navMin + navMax) * 0.5f;
+                var target = centreW + right * ((navMid.x - mid.x) * mPerU) + up * ((navMid.y - mid.y) * mPerV) + n * 0.008f;
+                float wantW = (navMax.x - navMin.x) * mPerU;
+                var face = navRect.TransformPoint(navRect.rect.center);
+                float haveW = navRect.rect.width * navRect.lossyScale.x;
+                float k = wantW / Mathf.Max(1e-4f, haveW);
+                var turn = Quaternion.LookRotation(-n, up) * Quaternion.Inverse(Quaternion.LookRotation(navRect.forward, navRect.up));
+                navRect.position = target + turn * (navRect.position - face) * k;
+                navRect.rotation = turn * navRect.rotation;
+                navRect.localScale *= k;
+                Note($"nav map over the panel's map part: {wantW:0.000} m wide (was {haveW:0.000})");
+            }
+            Note("main panel across the console, its curved strip hidden");
+            return navOnPanel;
+        }
+
+        /// <summary>A point's nearest place on a panel's strip, as picture coordinates; lift: its distance in front (toward the officer).</summary>
+        private static Vector2 OnStrip(Panel p, Vector3 point, out float lift)
+        {
+            var mesh = p.Face.sharedMesh; var uv = mesh.uv; var tris = mesh.triangles;
+            var officer = GameObject.Find("Bridge/Stations-1701D/Tactical_root/Tactical");
+            var eye = officer != null ? officer.transform.position + Vector3.up * 1.6f : p.Root.position + Vector3.up;
+            float best = float.MaxValue; Vector2 at = Vector2.zero; lift = 0f;
+            for (int i = 0; i + 2 < tris.Length; i += 3)
+            {
+                Vector3 ta = p.Face.transform.TransformPoint(mesh.vertices[tris[i]]), tb = p.Face.transform.TransformPoint(mesh.vertices[tris[i + 1]]), tc = p.Face.transform.TransformPoint(mesh.vertices[tris[i + 2]]);
+                var q = Closest(point, ta, tb, tc, out float wa, out float wb, out float wc);
+                float dd = (point - q).sqrMagnitude;
+                if (dd < best)
+                {
+                    best = dd; at = uv[tris[i]] * wa + uv[tris[i + 1]] * wb + uv[tris[i + 2]] * wc;
+                    var nrm = Vector3.Cross(tb - ta, tc - ta).normalized; if (Vector3.Dot(nrm, eye - q) < 0f) nrm = -nrm;
+                    lift = Vector3.Dot(point - q, nrm);
+                }
+            }
+            return at;
         }
 
         /// <summary>The column with least drawn between lo and hi (nearest to prefer on ties).</summary>
