@@ -26,6 +26,34 @@ internal static class GlbExport
         return 0;
     }
 
+    /// <summary>
+    /// One of a bridge's lightmaps (Lightmap-N_comp_light, in its sharedassetsL.assets) as a PNG, or null: Unity's RGBM
+    /// (colour times alpha times 5, in gamma space) stored as colour times alpha, so a viewer multiplies by 5 in gamma
+    /// space (about 34.5 in linear). Rows as stored, like the .glb's textures (v turned over in the UVs).
+    /// </summary>
+    public static byte[] Lightmap(string dataDir, int level, int index)
+    {
+        string file = Path.Combine(dataDir, $"sharedassets{level}.assets");
+        if (!File.Exists(file)) return null;
+        using var f = new AssetFile(file);
+        foreach (var e in f.Objects)
+        {
+            if (e.ClassId != 28 || f.NameOf(e) != $"Lightmap-{index}_comp_light") continue;
+            var t = TextureAsset.Read(f.At(e));
+            var data = t.Data.Length > 0 ? t.Data : Exporter.StreamOf(dataDir, t);
+            var rgba = Exporter.DecodeTexture(t, data, out int w, out int h);
+            if (rgba == null) return null;
+            for (int i = 0; i < w * h; i++)
+            {
+                int a = rgba[i * 4 + 3];
+                for (int c = 0; c < 3; c++) rgba[i * 4 + c] = (byte)(rgba[i * 4 + c] * a / 255);
+                rgba[i * 4 + 3] = 255;
+            }
+            return Exporter.PngOf(rgba, w, h);
+        }
+        return null;
+    }
+
     /// <summary>A scene as a .glb in memory, and what was and wasn't in it.</summary>
     public static (byte[] glb, string summary) Build(string dataDir, string sceneFile)
     {
@@ -129,6 +157,7 @@ internal static class GlbExport
                 foreach (var c in t.Components) { if (c.Key == 23) rendererRef = c.Value; if (c.Key == 33) filterRef = c.Value; }
                 if (rendererRef.IsNull || filterRef.IsNull) continue;
                 var mr = MeshRendererAsset.Read(scene.At(scene.Find(rendererRef.PathId)));
+                var (lightmap, lightmapST) = LightmapOf(rendererRef);
                 var mf = MeshFilterAsset.Read(scene.At(scene.Find(filterRef.PathId)));
                 if (!mr.Enabled || !ActiveInHierarchy(t)) { skippedInactive++; continue; }
                 if (mf.Mesh.IsNull) { skippedOther++; Problem("no mesh"); continue; }
@@ -144,12 +173,16 @@ internal static class GlbExport
                     // Batched: its sub-meshes of the combined mesh, already in the scene's space. Otherwise all of
                     // the mesh's sub-meshes, in the object's own space.
                     var subs = isBatched ? mr.SubsetIndices.Select(i => (int)i).ToList() : Enumerable.Range(0, mesh.SubMeshes.Count).ToList();
-                    int gm = GltfMesh(mname, mf.Mesh.PathId, mesh, subs, mr.Materials, path);
+                    // A batched piece's second UVs in the combined mesh already point into the lightmap (Unity applied
+                    // its scale and offset when it batched them).
+                    if (isBatched && lightmap >= 0) lightmapST = new[] { 1f, 1f, 0f, 0f };
+                    int gm = GltfMesh(mname, mf.Mesh.PathId, mesh, subs, mr.Materials, path, lightmap, lightmapST);
                     if (gm < 0) { skippedOther++; continue; }
                     var node = new JsonObject { ["name"] = path, ["mesh"] = gm };
                     var m = isBatched ? Matrix4x4.Identity : World(t);
                     if (!m.IsIdentity) node["matrix"] = Matrix(Flip(m));
                     node["extras"] = new JsonObject { ["path"] = path, ["batched"] = isBatched, ["mesh"] = mesh.Name, ["file"] = mname };
+                    if (lightmap >= 0) node["extras"]["lightmap"] = lightmap;
                     roots.Add(nodes.Count);
                     nodes.Add(node);
                     drawn++;
@@ -175,10 +208,24 @@ internal static class GlbExport
         }
 
         // ------------------------------------------------------------------------------------------- meshes
-        private int GltfMesh(string file, long id, MeshAsset mesh, List<int> subs, List<PPtr> mats, string path)
+        // A renderer's baked light: which of the scene's lightmaps (-1: none, it's lit by probes) and where in it
+        // (its second UVs scaled and offset). MeshRendererAsset skips these bytes.
+        private (int, float[]) LightmapOf(PPtr renderer)
+        {
+            var r = scene.At(scene.Find(renderer.PathId));
+            AssetFile.ReadPPtr(r); r.ReadBoolean(); r.ReadBytes(5); AssetFile.Align(r);
+            int index = r.ReadUInt16();
+            r.ReadUInt16(); // dynamic
+            var st = new[] { r.ReadSingle(), r.ReadSingle(), r.ReadSingle(), r.ReadSingle() };
+            return index >= 0xFFFE ? (-1, null) : (index, st);
+        }
+
+        private int GltfMesh(string file, long id, MeshAsset mesh, List<int> subs, List<PPtr> mats, string path, int lightmap = -1, float[] lightmapST = null)
         {
             // The same mesh drawn with the same materials is written once (sub-mesh and material sets hashed).
             int subKey = subs.Aggregate(17, (h, s) => h * 31 + s);
+            // Lightmapped pieces have UVs of their own into the lightmap.
+            if (lightmap >= 0) subKey = lightmapST.Aggregate(subKey * 31 + lightmap, (h, f) => h * 31 + f.GetHashCode());
             int matKey = mats.Aggregate(17, (h, p) => h * 31 + p.PathId.GetHashCode() + p.FileId);
             if (meshIndex.TryGetValue((file, id, subKey, matKey), out var done)) return done;
             var prims = new JsonArray();
@@ -192,7 +239,7 @@ internal static class GlbExport
                 var matRef = mats.Count == 0 ? default : mats[Math.Min(k, mats.Count - 1)];
                 var (scale, offset) = (new[] { 1f, 1f }, new[] { 0f, 0f });
                 int mat = matRef.IsNull ? -1 : Material(scene, matRef, ref scale, ref offset);
-                var prim = Primitive(mesh, sub, scale, offset);
+                var prim = Primitive(mesh, sub, scale, offset, lightmap >= 0 ? lightmapST : null);
                 if (prim == null) continue;
                 if (mat >= 0) prim["material"] = mat;
                 prims.Add(prim);
@@ -203,7 +250,7 @@ internal static class GlbExport
             return meshIndex[(file, id, subKey, matKey)] = index;
         }
 
-        private JsonObject Primitive(MeshAsset m, MeshAsset.SubMesh sub, float[] uvScale, float[] uvOffset)
+        private JsonObject Primitive(MeshAsset m, MeshAsset.SubMesh sub, float[] uvScale, float[] uvOffset, float[] lightmapST = null)
         {
             var map = new Dictionary<int, int>();
             var order = new List<int>();
@@ -251,6 +298,19 @@ internal static class GlbExport
                     uv[i * 2 + 1] = 1f - (q[1] * uvScale[1] + uvOffset[1]);
                 }
                 attrs["TEXCOORD_0"] = Accessor(uv, 2);
+            }
+            if (lightmapST != null && (m.Has(4) || m.Has(3)))
+            {
+                // Into the lightmap: the second UVs (or the first, without them), scaled and offset; v turned over.
+                int ch = m.Has(4) ? 4 : 3;
+                var uv2 = new float[order.Count * 2];
+                for (int i = 0; i < order.Count; i++)
+                {
+                    var q = m.Get(ch, order[i]);
+                    uv2[i * 2] = q[0] * lightmapST[0] + lightmapST[2];
+                    uv2[i * 2 + 1] = 1f - (q[1] * lightmapST[1] + lightmapST[3]);
+                }
+                attrs["TEXCOORD_1"] = Accessor(uv2, 2);
             }
             int idx = Indices(tris, order.Count);
             return new JsonObject { ["attributes"] = attrs, ["indices"] = idx, ["mode"] = 4 };
@@ -344,6 +404,17 @@ internal static class GlbExport
             catch (Exception ex) { textureFails++; Problem("texture: " + ex.Message); }
             return textureIndex[(fname, link.PathId)] = index;
         }
+
+        internal static byte[] StreamOf(string dataDir, TextureAsset t)
+        {
+            using var s = new FileStream(Path.Combine(dataDir, t.StreamPath), FileMode.Open, FileAccess.Read, FileShare.Read);
+            s.Position = t.StreamOffset;
+            var bytes = new byte[t.StreamSize];
+            s.ReadExactly(bytes);
+            return bytes;
+        }
+        internal static byte[] DecodeTexture(TextureAsset t, byte[] d, out int w, out int h) => Decode(t, d, out w, out h);
+        internal static byte[] PngOf(byte[] rgba, int w, int h) => Png(rgba, w, h);
 
         private byte[] Stream(TextureAsset t)
         {
