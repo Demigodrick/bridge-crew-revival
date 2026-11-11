@@ -4,8 +4,8 @@
 # Builds locally (the mod compiles against the game's own DLLs, which can't go in the repo or CI),
 # then uploads BridgeCrewRevival.zip and its .sha256. The installers fetch
 # releases/latest/download/BridgeCrewRevival.zip, so the asset names must stay fixed.
-# The two DLLs, rnnoise.dll and their SHA256SUMS go up too: the in-game updater (UpdateCheck.cs) fetches those,
-# as Unity 5.4's .NET can't open a zip.
+# The two DLLs, rnnoise.dll, the ship models' files and their SHA256SUMS go up too: the in-game updater
+# (UpdateCheck.cs) fetches those, as Unity 5.4's .NET can't open a zip.
 # It also updates docs/version.txt (the in-game update check reads it from the website), commits and
 # pushes that, so the site announces the new version once the release exists.
 set -euo pipefail
@@ -22,9 +22,23 @@ cp "$root/dist/BridgeCrewRevival-$version/plugins/StbcRevival.dll" "$root/dist/B
 # Noise suppression's native library too: the in-game updater puts it in BepInEx/native (on update, or when it's missing).
 cp "$root/dist/BridgeCrewRevival-$version/native/rnnoise.dll" "$out/"
 (cd "$out" && sha256sum StbcRevival.dll StbcCore.dll rnnoise.dll > SHA256SUMS)
+assets=("$out/BridgeCrewRevival.zip" "$out/BridgeCrewRevival.zip.sha256" "$out/StbcRevival.dll" "$out/StbcCore.dll" "$out/rnnoise.dll")
+# Our ship models (BepInEx/ships) too, each file an asset of its own named with dots for the slashes
+# ("ships.Nova.Nova.obj") and listed in SHA256SUMS by its path ("ships/Nova/Nova.obj"): the updater fetches the
+# missing ones at launch and the changed ones on an update.
+ships="$root/dist/BridgeCrewRevival-$version/ships"
+if [ -d "$ships" ]; then
+  while IFS= read -r -d '' f; do
+    rel="ships/${f#"$ships"/}"
+    name="${rel//\//.}"
+    cp "$f" "$out/$name"
+    printf '%s  %s\n' "$(sha256sum "$f" | cut -d' ' -f1)" "$rel" >> "$out/SHA256SUMS"
+    assets+=("$out/$name")
+  done < <(find "$ships" -type f -print0 | sort -z)
+fi
+assets+=("$out/SHA256SUMS")
 
-gh release create "v$version" "$out/BridgeCrewRevival.zip" "$out/BridgeCrewRevival.zip.sha256" \
-  "$out/StbcRevival.dll" "$out/StbcCore.dll" "$out/rnnoise.dll" "$out/SHA256SUMS" \
+gh release create "v$version" "${assets[@]}" \
   --title "Bridge Crew Revival $version" --notes "$notes"
 
 # Announce it to players' games only after the release (and its download) exists.

@@ -130,6 +130,12 @@ namespace StbcRevival
                     nativeTried = true;
                     Plugin.Instance.StartCoroutine(FetchNative(Plugin.Version));
                 }
+                // Our ship models (BepInEx/ships): any of this version's that's missing, once a launch.
+                if (!downloading && !shipsTried)
+                {
+                    shipsTried = true;
+                    Plugin.Instance.StartCoroutine(SyncShips(Plugin.Version, false));
+                }
             }
             finally
             {
@@ -181,6 +187,8 @@ namespace StbcRevival
             {
                 Plugin.Log.LogInfo($"Update: {version} not installed ({e.Message}); offering the website instead");
             }
+            // The ship models: those that are new or changed in this version (an older release has none listed).
+            if (installed == version) yield return SyncShips(version, true);
             downloading = false;
         }
 
@@ -241,6 +249,84 @@ namespace StbcRevival
         private static string Hash(byte[] data)
         {
             using (var sha = SHA256.Create()) return BitConverter.ToString(sha.ComputeHash(data)).Replace("-", "").ToLowerInvariant();
+        }
+
+        // ---- ship models ----
+        // Our ship classes' models live in BepInEx/ships (the installers copy them from the zip). A release lists them
+        // in SHA256SUMS as "ships/<ship>/<file>", each uploaded as an asset of its own named with dots for the slashes
+        // ("ships.Nova.Nova.obj"), as Unity 5.4's .NET can't open the zip. Missing ones are fetched at launch; on an
+        // update, changed ones too (their hashes worked out on a thread: the Nova's model is 46 MB).
+
+        private static bool shipsTried;
+        private const float ShipSeconds = 900f; // a large model on a slow line
+        private static string ShipsRoot => Path.Combine(Paths.BepInExRootPath, "ships");
+
+        // A path from SHA256SUMS that's one of ours and safe to write: ships/<ship>/<file>, plain names only.
+        private static bool IsShipPath(string path)
+        {
+            if (!path.StartsWith("ships/", StringComparison.Ordinal) || path.Contains("..") || path.Contains("\\")) return false;
+            var parts = path.Split('/');
+            if (parts.Length != 3) return false;
+            foreach (char c in path) if (!(char.IsLetterOrDigit(c) || c == '.' || c == '_' || c == '-' || c == '/')) return false;
+            return parts[1].Length > 0 && parts[2].Length > 0;
+        }
+
+        private static IEnumerator SyncShips(string version, bool checkChanged)
+        {
+            string sums = null;
+            {
+                var www = new WWW(Releases + version + "/SHA256SUMS");
+                float until = Time.realtimeSinceStartup + DownloadSeconds;
+                while (!www.isDone && Time.realtimeSinceStartup < until) yield return null;
+                if (www.isDone && string.IsNullOrEmpty(www.error)) sums = www.text;
+                www.Dispose();
+            }
+            if (sums == null) yield break; // offline or no such release: nothing to do this time
+            var wanted = new List<KeyValuePair<string, string>>();
+            foreach (var kv in ParseSums(sums)) if (IsShipPath(kv.Key)) wanted.Add(kv);
+            if (wanted.Count == 0) yield break;
+
+            var todo = new List<KeyValuePair<string, string>>();
+            foreach (var kv in wanted)
+            {
+                var local = Path.Combine(ShipsRoot, kv.Key.Substring("ships/".Length).Replace('/', Path.DirectorySeparatorChar));
+                if (!File.Exists(local)) { todo.Add(kv); continue; }
+                if (!checkChanged) continue;
+                string have = null; bool done = false;
+                var thread = new System.Threading.Thread(() =>
+                {
+                    try { using (var f = File.OpenRead(local)) using (var sha = SHA256.Create()) have = BitConverter.ToString(sha.ComputeHash(f)).Replace("-", "").ToLowerInvariant(); }
+                    catch { }
+                    done = true;
+                }) { IsBackground = true, Priority = System.Threading.ThreadPriority.BelowNormal };
+                thread.Start();
+                while (!done) yield return null;
+                if (have != kv.Value) todo.Add(kv);
+            }
+            if (todo.Count == 0) yield break;
+            Plugin.Log.LogInfo($"Update: fetching {todo.Count} ship file(s) of {version}: {string.Join(", ", todo.Select(t => t.Key).ToArray())}");
+            foreach (var kv in todo)
+            {
+                var www = new WWW(Releases + version + "/" + kv.Key.Replace('/', '.'));
+                float until = Time.realtimeSinceStartup + ShipSeconds;
+                while (!www.isDone && Time.realtimeSinceStartup < until) yield return null;
+                string problem = !www.isDone ? "no answer" : !string.IsNullOrEmpty(www.error) ? www.error : null;
+                byte[] data = problem == null ? www.bytes : null;
+                www.Dispose();
+                if (problem != null) { Plugin.Log.LogInfo($"Update: {kv.Key}: {problem}; tried again next launch"); continue; }
+                try
+                {
+                    if (data == null || data.Length == 0 || Hash(data) != kv.Value) throw new Exception("it doesn't match its checksum");
+                    var local = Path.Combine(ShipsRoot, kv.Key.Substring("ships/".Length).Replace('/', Path.DirectorySeparatorChar));
+                    Directory.CreateDirectory(Path.GetDirectoryName(local));
+                    File.WriteAllBytes(local + ".new", data);
+                    if (File.Exists(local)) File.Delete(local);
+                    File.Move(local + ".new", local);
+                    Plugin.Log.LogInfo($"Update: {kv.Key} put in place ({data.Length / 1024} KB); used from the next launch");
+                }
+                catch (Exception e) { Plugin.Log.LogInfo($"Update: {kv.Key} not installed ({e.Message})"); }
+                data = null;
+            }
         }
 
         // This version's noise suppression library, when it's missing: from this version's release, checked against
