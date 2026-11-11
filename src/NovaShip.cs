@@ -14,7 +14,7 @@ namespace StbcRevival
 {
     /// <summary>
     /// [Ships] PlayerShip = Nova: the crew flies a Nova-class ship of its own, built from a model on this PC in
-    /// BepInEx/ships/Nova (none of it ships with the mod): a Wavefront Nova.obj with its .mtl and textures (.png or .jpg
+    /// BepInEx/ships/Nova (comes with the mod, from assets/ships): a Wavefront Nova.obj with its .mtl and textures (.png or .jpg
     /// beside it). The ship and its bridge stay the game's own: the Aegis, or the Enterprise-D with the Next Generation chosen.
     ///
     /// A player ship is two prefabs: the ship (Ship - Aegis: its systems, console interfaces, crew, network) and its
