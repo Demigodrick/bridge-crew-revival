@@ -83,7 +83,7 @@ namespace StbcRevival
             foreach (var e in RoomBrowser.RoomList().Where(e => e.Name != current))
                 rows.Add(new Row
                 {
-                    Title = e.Code,
+                    Title = e.Code + (e.Ship.Length > 0 ? "  " + e.Ship : ""),
                     Detail = $"{e.Mode} - {e.Phase} - {e.Players}/{(e.MaxPlayers > 0 ? e.MaxPlayers.ToString() : Translation.T("any"))}{(e.Joinable ? "" : Translation.T(" - full"))}",
                     Room = e,
                 });

@@ -81,6 +81,11 @@ namespace StbcRevival
                 },
             },
             Switch("Name plates", () => Plugin.NamePlates),
+            new Entry
+            {
+                Text = () => Translation.T("Ship name") + ": " + (ShipName.Own.Length == 0 ? Translation.T("the game's") : ShipName.Own),
+                Press = ShipName.Ask,
+            },
             Switch("Public crews in VR", () => Plugin.VrRoomPanels),
             new Entry
             {
@@ -238,13 +243,14 @@ namespace StbcRevival
                 if (Field(menu, "_regionAcceptBtn") is Component back) back.transform.localPosition = BackAt;
 
                 int perColumn = (Entries.Length + 1) / 2;
+                float step = perColumn > 1 ? Mathf.Min(RowStep, (FirstRow - BackAt.y - 15f) / (perColumn - 1)) : RowStep; // more rows: closer together, clear of BACK
                 for (int i = 0; i < Entries.Length; i++)
                 {
                     var entry = Entries[i];
                     var go = (GameObject)UnityEngine.Object.Instantiate(template.gameObject, region.transform, false);
                     go.name = "Revival setting " + i;
                     go.SetActive(true);
-                    go.transform.localPosition = new Vector3(i < perColumn ? ColumnLeft : ColumnRight, FirstRow - (i % perColumn) * RowStep, template.transform.localPosition.z);
+                    go.transform.localPosition = new Vector3(i < perColumn ? ColumnLeft : ColumnRight, FirstRow - (i % perColumn) * step, template.transform.localPosition.z);
                     var toggle = go.GetComponent<Toggle>();
                     toggle.onValueChanged.RemoveAllListeners();
                     toggle.group = null;
