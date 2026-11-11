@@ -219,4 +219,4 @@ the game on Steam; this repository contains no game code or assets, only patches
 
 Credits: the Nova-class ship is Raul Mamoru's model "Nova class U.S.S. Equinox"
 ([TrekMeshes](https://trekmeshes.eu/download/dl225/NovaclassUSSEquinox)), included with his permission; see
-`assets/ships/Nova/CREDITS.txt`.
+`assets/ships/Nova/CREDITS.txt`. The Sovereign-class ship's model is by YannikB98, made for the mod.

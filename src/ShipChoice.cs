@@ -10,28 +10,31 @@ using UnityEngine.UI;
 namespace StbcRevival
 {
     /// <summary>
-    /// The briefing console's SHIP box with more ships than its three rows: NOVA under the Next Generation (and room
-    /// for more), and a slider on its left to scroll the list. The box still shows three rows; the game's own toggles
-    /// (Aegis, original Enterprise, Next Generation) move up and out of sight as the list scrolls, the added ones come
-    /// in below. NOVA is a copy of the Aegis's row (always choosable, never locked). NOVA flies on the Next Generation's ship when the crew can choose it (it's DLC), else on the Aegis's:
-    /// choosing it turns that toggle on and puts "Nova" on the room (NovaShip), so the bridge, consoles and crew are
-    /// that ship's and the hull the Nova's. That row then shows no mark; NOVA does. Choosing any of the game's ships
-    /// (a click on the one already on too) takes "Nova" off the room again. NOVA is there only with the Nova's model
-    /// on this PC, and can be chosen whenever the Aegis or the Next Generation can.
+    /// The briefing console's SHIP box with more ships than its three rows: a row for each ship class of ours whose model
+    /// is on this PC (NOVA, SOVEREIGN) under the Next Generation's, and buttons on its left to scroll the list. The box
+    /// still shows three rows; the game's own toggles (Aegis, original Enterprise, Next Generation) move up and out of
+    /// sight as the list scrolls, ours come in below. Each is a copy of the Aegis's row (always choosable, never locked).
+    /// A class of ours flies on the Next Generation's ship when the crew can choose it (it's DLC), else on the Aegis's:
+    /// choosing one turns that toggle on and puts the class's name on the room (CustomShip), so the bridge, consoles and
+    /// crew are that ship's and the hull the class's. It shows as a ship of its own: that row looks unchosen. Choosing
+    /// any of the game's ships (a press on the one underneath too) takes ours off the room again. Ours can be chosen by
+    /// whoever chooses the ship (the captain), not for the campaign.
     /// </summary>
     internal static class ShipChoice
     {
         private sealed class Box
         {
             public ConsoleBriefingRoom Console;
-            public Toggle Aegis, Tos, Tng, Nova;
+            public Toggle Aegis, Tos, Tng;
+            public readonly List<Toggle> Ours = new List<Toggle>();          // one row per class of ours
+            public readonly List<CustomShip> OursShips = new List<CustomShip>();
             public List<Transform> TngExtras = new List<Transform>(); // the TNG row's orange backgrounds, moved with it
             public Vector3[] Home;            // each row's place at the top of the list (row 0..n-1)
             public Vector3[] TngExtraHome;
             public Vector3 Step;              // from one row to the next
             public Toggle Up, Down;           // the scroll buttons on the box's left edge
             public int Offset = -1, LastChosen = -1;
-            public TMP_Text[] NovaLabels; public Color[] NovaColours;
+            public readonly Dictionary<Toggle, KeyValuePair<TMP_Text[], Color[]>> Labels = new Dictionary<Toggle, KeyValuePair<TMP_Text[], Color[]>>();
             public bool Applying;
         }
 
@@ -53,7 +56,7 @@ namespace StbcRevival
                 harmony.Patch(sync, prefix: new HarmonyMethod(typeof(ShipChoice), nameof(Sync_Prefix)), postfix: new HarmonyMethod(typeof(ShipChoice), nameof(Sync_Postfix)));
                 harmony.Patch(setOn, prefix: new HarmonyMethod(typeof(ShipChoice), nameof(SetOn_Prefix)));
             }
-            else Plugin.Log.LogWarning("Ship choice: the toggles' sync wasn't found; pressing the Nova's own ship won't take it off");
+            else Plugin.Log.LogWarning("Ship choice: the toggles' sync wasn't found; pressing the ship under one of ours won't take it off");
             // The console makes the chosen ship's row unpressable, every frame, through this helper (a chosen row needs
             // no press). With NOVA chosen, the ship it borrows is chosen underneath, so that row went grey (the
             // disabled tint) and ignored presses. It's given the value going in (as RevivalBriefing does: setting it
@@ -61,7 +64,7 @@ namespace StbcRevival
             var setInteractable = AccessTools.Method(AccessTools.TypeByName("KHDFGIINMKJ"), "SetInteractable", new[] { typeof(Selectable), typeof(bool) });
             if (setInteractable != null)
                 harmony.Patch(setInteractable, prefix: new HarmonyMethod(typeof(ShipChoice), nameof(Interactable_Prefix)) { priority = Priority.Low });
-            else Plugin.Log.LogWarning("Ship choice: the console's SetInteractable wasn't found; the ship under NOVA shows greyed");
+            else Plugin.Log.LogWarning("Ship choice: the console's SetInteractable wasn't found; the ship under ours shows greyed");
         }
 
         private static T Field<T>(ConsoleBriefingRoom console, string name) where T : class =>
@@ -71,7 +74,8 @@ namespace StbcRevival
         {
             try
             {
-                if (!NovaShip.Available) return; // nothing to add (more ships later: each with its own check)
+                var classes = CustomShip.All.Where(c => c.Available).ToList();
+                if (classes.Count == 0) return; // nothing to add
                 var console = __instance;
                 var aegis = Field<Toggle>(console, "_aegisToggle");
                 var tos = Field<Toggle>(console, "_enterpriseToggle");
@@ -81,18 +85,24 @@ namespace StbcRevival
                 var box = new Box { Console = console, Aegis = aegis, Tos = tos, Tng = tng };
                 box.Step = tng.transform.localPosition - tos.transform.localPosition;
 
-                // NOVA: a copy of the Aegis's row, the one ship every crew can choose (a copy of a row that's locked,
+                // Ours: copies of the Aegis's row, the one ship every crew can choose (a copy of a row that's locked,
                 // such as the original Enterprise or the Next Generation without the DLC, carries its lock and its
                 // look), under the Next Generation's.
-                var copy = (GameObject)UnityEngine.Object.Instantiate(aegis.gameObject, aegis.transform.parent, false);
-                copy.name = "Nova Toggle";
-                var nova = copy.GetComponent<Toggle>();
-                nova.group = null;
-                nova.onValueChanged = new Toggle.ToggleEvent(); // not the Aegis's own (persistent) handler
-                nova.isOn = false;
-                foreach (var label in copy.GetComponentsInChildren<TMP_Text>(true)) label.SetLocalizedText("NOVA");
-                nova.onValueChanged.AddListener(on => Chose(box, on));
-                box.Nova = nova;
+                GameObject copy = null;
+                foreach (var ship in classes)
+                {
+                    copy = (GameObject)UnityEngine.Object.Instantiate(aegis.gameObject, aegis.transform.parent, false);
+                    copy.name = ship.Name + " Toggle";
+                    var row = copy.GetComponent<Toggle>();
+                    row.group = null;
+                    row.onValueChanged = new Toggle.ToggleEvent(); // not the Aegis's own (persistent) handler
+                    row.isOn = false;
+                    foreach (var label in copy.GetComponentsInChildren<TMP_Text>(true)) label.SetLocalizedText(ship.Label);
+                    var chosen = ship;
+                    row.onValueChanged.AddListener(on => Chose(box, chosen, on));
+                    box.Ours.Add(row);
+                    box.OursShips.Add(ship);
+                }
 
                 foreach (var image in new[] { Field<Image>(console, "_tngToggleBackground1"), Field<Image>(console, "_tngToggleBackground2") })
                     if (image != null && !image.transform.IsChildOf(tng.transform)) box.TngExtras.Add(image.transform);
@@ -108,7 +118,7 @@ namespace StbcRevival
                 // alone isn't a choice: the Nova flies on the Aegis or the Next Generation, whichever is in use, so only
                 // the original Enterprise coming on (which it can't fly on) takes it off; a press on any ship's row
                 // does too (below).
-                tos.onValueChanged.AddListener(on => { if (on && !box.Applying && !JustPressed && NovaShip.ActiveNow) NovaShip.SetForRoom(false); });
+                tos.onValueChanged.AddListener(on => { if (on && !box.Applying && !JustPressed && CustomShip.FlownNow != null) CustomShip.Choose(null); });
 
                 // A press on a ship's row while the Nova is chosen: that ship instead (a press on the one the Nova flies
                 // on changes no toggle, so it's caught here).
@@ -117,7 +127,7 @@ namespace StbcRevival
                     var u = row;
                     var trigger = u.gameObject.GetComponent<EventTrigger>() ?? u.gameObject.AddComponent<EventTrigger>();
                     var click = new EventTrigger.Entry { eventID = EventTriggerType.PointerClick };
-                    click.callback.AddListener(_ => { if (!JustPressed && NovaShip.ActiveNow && u.interactable) NovaShip.SetForRoom(false); });
+                    click.callback.AddListener(_ => { if (!JustPressed && CustomShip.FlownNow != null && u.interactable) CustomShip.Choose(null); });
                     if (trigger.triggers == null) trigger.triggers = new List<EventTrigger.Entry>();
                     trigger.triggers.Add(click);
                 }
@@ -125,8 +135,7 @@ namespace StbcRevival
                 MakeArrows(box, rows.Length - Visible);
                 boxes.Add(box);
                 Apply(box, 0);
-                Plugin.Log.LogInfo($"Ship choice: NOVA added to the ship box ({rows.Length} ships, scroll buttons {(box.Up != null ? "on" : "off")}); the row's parts: "
-                    + string.Join(", ", copy.GetComponentsInChildren<Transform>(true).Select(t => t.name).ToArray()));
+                Plugin.Log.LogInfo($"Ship choice: {string.Join(", ", classes.Select(c => c.Label).ToArray())} added to the ship box ({rows.Length} ships, scroll buttons {(box.Up != null ? "on" : "off")})");
             }
             catch (Exception e) { Plugin.Log.LogWarning("Ship choice: " + e); }
         }
@@ -134,10 +143,10 @@ namespace StbcRevival
         /// <summary>A briefing console's ship box is about (the briefing room is open).</summary>
         internal static bool InBriefing => boxes.Count > 0 && boxes.Exists(b => b.Console != null);
 
-        /// <summary>The row of the ship NOVA borrows: pressable (and so not greyed) for whoever chooses.</summary>
+        /// <summary>The row of the ship one of ours borrows: pressable (and so not greyed) for whoever chooses.</summary>
         private static void Interactable_Prefix(Selectable __0, ref bool __1)
         {
-            if (__1 || boxes.Count == 0 || !(__0 is Toggle t) || !t.isOn || !NovaShip.ActiveNow) return;
+            if (__1 || boxes.Count == 0 || !(__0 is Toggle t) || !t.isOn || CustomShip.FlownNow == null) return;
             foreach (var box in boxes)
                 if (t == box.Aegis || t == box.Tng)
                 {
@@ -146,8 +155,8 @@ namespace StbcRevival
                 }
         }
 
-        /// <summary>NOVA can be chosen on this console: by whoever chooses the ship (the captain), not for the campaign.</summary>
-        private static bool CanChoose(Box box) => !NovaShip.Campaign && Missions.RevivalBriefing.IsChooser(box.Console);
+        /// <summary>Ours can be chosen on this console: by whoever chooses the ship (the captain), not for the campaign.</summary>
+        private static bool CanChoose(Box box) => !CustomShip.Campaign && Missions.RevivalBriefing.IsChooser(box.Console);
 
         private static bool syncing;
         private static void Sync_Prefix() => syncing = true;
@@ -155,31 +164,31 @@ namespace StbcRevival
 
         private static void SetOn_Prefix(Toggle __instance, bool value)
         {
-            if (value || syncing || boxes.Count == 0 || !__instance.isOn || !NovaShip.ActiveNow || JustPressed || !__instance.interactable) return;
+            if (value || syncing || boxes.Count == 0 || !__instance.isOn || CustomShip.FlownNow == null || JustPressed || !__instance.interactable) return;
             foreach (var box in boxes)
                 if (!box.Applying && (__instance == box.Aegis || __instance == box.Tos || __instance == box.Tng))
                 {
-                    Plugin.Log.LogInfo($"Ship choice: {__instance.name} pressed while the Nova is chosen: back to that ship");
-                    NovaShip.SetForRoom(false);
+                    Plugin.Log.LogInfo($"Ship choice: {__instance.name} pressed while the {CustomShip.FlownNow.Name} is chosen: back to that ship");
+                    CustomShip.Choose(null);
                     return;
                 }
         }
 
-        private static Toggle[] Rows(Box box) => new[] { box.Aegis, box.Tos, box.Tng, box.Nova };
+        private static Toggle[] Rows(Box box) => new[] { box.Aegis, box.Tos, box.Tng }.Concat(box.Ours).ToArray();
 
-        // When NOVA was last pressed (presses and toggles changing just after it are its own doing).
+        // When one of ours was last pressed (presses and toggles changing just after it are its own doing).
         private static float pressedAt = -10f;
         private static bool JustPressed => Time.unscaledTime - pressedAt < 1.5f;
 
-        private static void Chose(Box box, bool on)
+        private static void Chose(Box box, CustomShip ship, bool on)
         {
             if (box.Applying || !on) return;
-            Plugin.Log.LogInfo("Ship choice: NOVA pressed");
+            Plugin.Log.LogInfo($"Ship choice: {ship.Label} pressed");
             pressedAt = Time.unscaledTime;
             box.Applying = true;
             try
             {
-                NovaShip.SetForRoom(true);
+                CustomShip.Choose(ship);
                 // The game's own choice under it: the Next Generation's ship if the crew can have it, else the Aegis's.
                 var under = box.Tng.interactable || box.Tng.isOn ? box.Tng : box.Aegis;
                 if (!under.isOn) under.isOn = true;
@@ -350,46 +359,53 @@ namespace StbcRevival
             Enable(box.Down, offset < rows.Length - Visible);
         }
 
-        /// <summary>Each frame: NOVA's mark and whether it can be clicked follow the room; the TNG row hides its mark under it.</summary>
+        /// <summary>Five times a second: our rows' marks and whether they can be pressed follow the room; the row underneath hides its mark.</summary>
         private static float nextUpdate;
 
         internal static void Update()
         {
             if (boxes.Count == 0 || Time.unscaledTime < nextUpdate) return;
             nextUpdate = Time.unscaledTime + 0.2f; // five times a second is plenty for a mark and a hologram
-            boxes.RemoveAll(b => b.Console == null || b.Nova == null);
-            bool nova = NovaShip.ActiveNow;
+            boxes.RemoveAll(b => b.Console == null || b.Ours.Count == 0 || b.Ours[0] == null);
+            var flown = CustomShip.FlownNow;
             foreach (var box in boxes)
             {
                 try
                 {
                     box.Applying = true;
-                    bool on = nova && (box.Tng.isOn || box.Aegis.isOn);
-                    if (box.Nova.isOn != on) box.Nova.isOn = on;
+                    bool under = box.Tng.isOn || box.Aegis.isOn; // one of ours flies on one of these
+                    bool on = flown != null && under;
+                    int chosen = box.Tng.isOn ? 2 : box.Tos.isOn ? 1 : 0;
                     // Choosable whenever the game's own choice is (the host's or captain's), greyed like the others when not,
                     // and not for the campaign (its missions are the Aegis's own).
-                    bool campaign = NovaShip.Campaign;
+                    bool campaign = CustomShip.Campaign;
                     bool canChoose = !campaign && CanChoose(box);
-                    // The game colours its rows' labels itself (a locked row's goes grey): NOVA's follows the same.
-                    if (box.NovaLabels == null)
-                    {
-                        box.NovaLabels = box.Nova.GetComponentsInChildren<TMP_Text>(true);
-                        box.NovaColours = box.NovaLabels.Select(l => l.color).ToArray();
-                    }
                     var greyed = box.Tos.GetComponentsInChildren<TMP_Text>(true).FirstOrDefault();
                     var grey = greyed != null && !box.Tos.interactable ? greyed.color : new Color(0.5f, 0.5f, 0.5f, 0.6f);
-                    for (int k = 0; k < box.NovaLabels.Length; k++)
-                        if (box.NovaLabels[k] != null) box.NovaLabels[k].color = canChoose ? box.NovaColours[k] : grey;
-                    if (campaign && nova && Missions.RevivalBriefing.IsChooser(box.Console) && !JustPressed) { NovaShip.SetForRoom(false); nova = false; }
-                    if (box.Nova.interactable != canChoose) box.Nova.interactable = canChoose;
-                    // NOVA is a ship of its own as far as the box shows (the ship it borrows for now, the Next
-                    // Generation's or the Aegis's, is to be replaced): that row looks unchosen while NOVA is, as when
+                    for (int r = 0; r < box.Ours.Count; r++)
+                    {
+                        var row = box.Ours[r];
+                        bool rowOn = on && box.OursShips[r] == flown;
+                        if (rowOn) chosen = 3 + r;
+                        if (row.isOn != rowOn) row.isOn = rowOn;
+                        // The game colours its rows' labels itself (a locked row's goes grey): ours follow the same.
+                        if (!box.Labels.TryGetValue(row, out var labels))
+                        {
+                            var texts = row.GetComponentsInChildren<TMP_Text>(true);
+                            box.Labels[row] = labels = new KeyValuePair<TMP_Text[], Color[]>(texts, texts.Select(l => l.color).ToArray());
+                        }
+                        for (int k = 0; k < labels.Key.Length; k++)
+                            if (labels.Key[k] != null) labels.Key[k].color = canChoose ? labels.Value[k] : grey;
+                        if (row.interactable != canChoose) row.interactable = canChoose;
+                    }
+                    if (campaign && flown != null && Missions.RevivalBriefing.IsChooser(box.Console) && !JustPressed) { CustomShip.Choose(null); flown = null; on = false; }
+                    // Ours are ships of their own as far as the box shows (the ship they borrow for now, the Next
+                    // Generation's or the Aegis's, is to be replaced): that row looks unchosen while ours is, as when
                     // another ship is chosen.
-                    foreach (var under in new[] { box.Tng, box.Aegis })
-                        if (under.graphic != null) under.graphic.canvasRenderer.SetAlpha(on && under.isOn ? 0f : (under.isOn ? 1f : 0f));
+                    foreach (var row in new[] { box.Tng, box.Aegis })
+                        if (row.graphic != null) row.graphic.canvasRenderer.SetAlpha(on && row.isOn ? 0f : (row.isOn ? 1f : 0f));
                     box.Applying = false;
                     // Scrolled so the ship chosen is in sight, when the choice changes (scrolling away is free after that).
-                    int chosen = on ? 3 : box.Tng.isOn ? 2 : box.Tos.isOn ? 1 : 0;
                     if (chosen != box.LastChosen)
                     {
                         box.LastChosen = chosen;

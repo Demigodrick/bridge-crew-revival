@@ -22,10 +22,10 @@ namespace StbcRevival
         private static string name = "", registry = "";
 
         /// <summary>The ship name in use (the room's, or your own out of a room) and its registry; "" for the game's.</summary>
-        /// With none set and the crew flying the Nova (NovaShip), the Nova's own: USS Nova (NX-73515).
-        internal static string Name => name.Length > 0 ? name : NovaShip.InUse ? NovaName : "";
-        internal static string Registry => name.Length > 0 ? registry : NovaShip.InUse ? NovaRegistry : "";
-        internal const string NovaName = "USS Nova", NovaRegistry = "NX-73515";
+        /// With none set and the crew flying a ship class of ours (CustomShip), that class's own: USS Nova (NX-73515),
+        /// USS Sovereign (NX-73811).
+        internal static string Name => name.Length > 0 ? name : CustomShip.InUse?.DefaultName ?? "";
+        internal static string Registry => name.Length > 0 ? registry : CustomShip.InUse?.DefaultRegistry ?? "";
         /// <summary>"Name, REGISTRY" as in use, or "".</summary>
         internal static string Current => current;
 

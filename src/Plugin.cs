@@ -177,7 +177,7 @@ namespace StbcRevival
             ExcelsiorTest = Config.Bind("Ships", "Excelsior", false,
                 "Test: when you host, the crew flies an Excelsior-class ship, with the training holodeck as its bridge for now.");
             PlayerShip = Config.Bind("Ships", "PlayerShip", "Aegis",
-                "The crew's ship when you host and pick the Aegis: Aegis, or Nova (a ship of its own, built from a Nova-class model on this PC: put Nova.obj with its .mtl and textures into BepInEx/ships/Nova; the ship and bridge are the game's own: pick the Aegis or the Next Generation in the briefing room).");
+                "The crew's ship when you host: Aegis, Nova or Sovereign (beta). Nova and Sovereign are ship classes of their own (their models come with the mod, in BepInEx/ships); their bridge and systems are the game's own for now. The briefing room's ship box decides after that.");
             BlockedPlayers = Config.Bind("Players", "Blocked", "",
                 "Players kept out of crews you host (Steam IDs, as steamid=name;...). Added when you kick someone and choose to block them; players you've blocked or ignored in Steam are kept out too.");
             VoiceVolumes = Config.Bind("Players", "VoiceVolumes", "",
@@ -376,7 +376,7 @@ namespace StbcRevival
             Safely("player joined alert", StbcRevival.PlayerJoinedAlert.Update);
             Safely("ship name", StbcRevival.ShipName.Update);
             Safely("hull name", StbcRevival.HullName.Update);
-            Safely("nova name", StbcRevival.HullName.UpdateNova);
+            Safely("ship names", StbcRevival.HullName.UpdateShips);
             Safely("ship name box", StbcRevival.ShipNameBox.Update);
             Safely("bug report", BugReport.Update);
             Safely("crew logs", CrewLogs.Update);
@@ -396,7 +396,7 @@ namespace StbcRevival
             Safely("mission maps", StbcRevival.Missions.MissionMaps.Update);
             Safely("restock sync", StbcRevival.Missions.RestockSync.Update);
             Safely("excelsior", Excelsior.Update);
-            Safely("nova", NovaShip.Update);
+            Safely("ships", CustomShip.Update);
             Safely("ship choice", ShipChoice.Update);
             Safely("pvp prototype", PvpPrototype.Update);
             Safely("pvp space", PvpSpace.Update);

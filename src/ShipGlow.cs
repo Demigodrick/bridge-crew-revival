@@ -4,12 +4,13 @@ using UnityEngine;
 namespace StbcRevival
 {
     /// <summary>
-    /// The Nova's Bussard collectors (the red at the nacelles' fronts) alive: their faces are taken out of the hull pieces
-    /// (they're the ones mapped onto the red plasma square of the model's texture) and given a material of their own, a
-    /// glowing red plasma that swirls and pulses. The plasma is a loop of frames made once (two layers of noise flowing
+    /// The ships' Bussard collectors (the red at the nacelles' fronts) alive: their faces are taken out of the hull pieces
+    /// (the Nova's are the ones mapped onto the red plasma square of its texture; other classes' are pieces of their own)
+    /// and given a material of their own, a glowing red plasma that swirls and pulses. Their navigation lights likewise:
+    /// red to port, green to starboard, flashing together. The plasma is a loop of frames made once (two layers of noise flowing
     /// against each other), stepped through while the game runs: nothing is worked out per frame but which one shows.
     /// </summary>
-    internal static class NovaWarp
+    internal static class ShipGlow
     {
         // The red plasma square in the model's colour texture (the .obj's texture coordinates, v up).
         private const float U0 = 0.6035f, U1 = 0.6885f, V0 = 0.915f, V1 = 1.0f, Margin = 0.004f;
@@ -26,18 +27,30 @@ namespace StbcRevival
         /// </summary>
         internal static Mesh TakePlasma(Mesh piece, float minSide) =>
             Take(piece, (c, at) => Mathf.Abs(at.x) > minSide && c.x > U0 - Margin && c.x < U1 + Margin && c.y > V0 - Margin && c.y < V1 + Margin,
-                 uv => new Vector2((uv.x - U0) / (U1 - U0), (uv.y - V0) / (V1 - V0)), " plasma");
+                 (uv, at) => new Vector2((uv.x - U0) / (U1 - U0), (uv.y - V0) / (V1 - V0)), " plasma");
+
+        /// <summary>A whole piece (a class's own Bussard collector piece) as plasma: mapped from the side, so the plasma flows over it without a seam.</summary>
+        internal static Mesh TakeAllAsPlasma(Mesh piece)
+        {
+            var b = piece.bounds;
+            float span = Mathf.Max(1e-3f, Mathf.Max(b.size.y, b.size.z));
+            float side = 0f; foreach (var p in piece.vertices) side += Mathf.Abs(p.x); side /= Mathf.Max(1, piece.vertexCount);
+            return Take(piece, (c, at) => true, (uv, at) => new Vector2((at.y - b.min.y + Mathf.Abs(at.x) - side) / span, (at.z - b.min.z) / span), " plasma");
+        }
+
+        /// <summary>A whole piece (a class's own lamp piece) taken out as it is.</summary>
+        internal static Mesh TakeAll(Mesh piece) => Take(piece, (c, at) => true, (uv, at) => uv, " light");
 
         /// <summary>
         /// The faces of a hull piece chosen by where they're mapped on the texture and where they are (the centre of each),
         /// taken out of it into a mesh of their own, their mapping changed by <paramref name="remap"/>; null when none.
         /// </summary>
-        private static Mesh Take(Mesh piece, System.Func<Vector2, Vector3, bool> pick, System.Func<Vector2, Vector2> remap, string suffix)
+        private static Mesh Take(Mesh piece, System.Func<Vector2, Vector3, bool> pick, System.Func<Vector2, Vector3, Vector2> remap, string suffix)
         {
-            var uv = piece.uv;
-            if (uv == null || uv.Length == 0) return null;
-            var tris = piece.triangles;
             var pv = piece.vertices;
+            var uv = piece.uv;
+            if (uv == null || uv.Length != pv.Length) uv = new Vector2[pv.Length];
+            var tris = piece.triangles;
             var keep = new List<int>(tris.Length);
             var take = new List<int>();
             for (int i = 0; i + 2 < tris.Length; i += 3)
@@ -59,7 +72,7 @@ namespace StbcRevival
                     at = map[old] = v.Count;
                     v.Add(verts[old]);
                     if (normals != null && normals.Length == verts.Length) n.Add(normals[old]);
-                    u.Add(remap(uv[old]));
+                    u.Add(remap(uv[old], verts[old]));
                 }
                 t.Add(at);
             }
@@ -82,15 +95,15 @@ namespace StbcRevival
         /// <summary>The port (red) or starboard (green) navigation light bulbs in a hull piece, taken out of it; null when none.</summary>
         internal static Mesh TakeLight(Mesh piece, bool port) =>
             Take(piece, (c, at) => c.x > LightU0 && c.x < LightU1 && (port ? c.y > RedV0 && c.y < RedV1 : c.y >= RedV1),
-                 uv => uv, port ? " port light" : " starboard light");
+                 (uv, at) => uv, port ? " port light" : " starboard light");
 
-        /// <summary>The red or green light's material (one each for every Nova): the hull's shader, plain colour, glowing.</summary>
+        /// <summary>The red or green light's material (one each for every ship): the hull's shader, plain colour, glowing.</summary>
         internal static Material LightMaterial(Material like, bool port)
         {
             var m = port ? redLight : greenLight;
             if (m != null) return m;
             m = like != null ? new Material(like) : new Material(Shader.Find("Standard"));
-            m.name = port ? "Nova port light" : "Nova starboard light";
+            m.name = port ? "Ship port light" : "Ship starboard light";
             foreach (var keyword in new[] { "_NORMALMAP", "_METALLICGLOSSMAP", "_SPECGLOSSMAP", "_DETAIL_MULX2", "_PARALLAXMAP" }) m.DisableKeyword(keyword);
             foreach (var prop in new[] { "_MainTex", "_BumpMap", "_MetallicGlossMap", "_SpecGlossMap", "_DetailAlbedoMap", "_DetailNormalMap", "_OcclusionMap", "_ParallaxMap", "_EmissionMap" })
                 if (m.HasProperty(prop)) m.SetTexture(prop, null);
@@ -115,13 +128,13 @@ namespace StbcRevival
             return 0.12f + 3.2f * flash;
         }
 
-        /// <summary>The plasma material (one for every Nova): the hull's shader, the first frame, glowing.</summary>
+        /// <summary>The plasma material (one for every ship): the hull's shader, the first frame, glowing.</summary>
         internal static Material Material(Material like)
         {
             if (material != null) return material;
             MakeFrames();
             material = like != null ? new Material(like) : new Material(Shader.Find("Standard"));
-            material.name = "Nova Bussard plasma";
+            material.name = "Ship Bussard plasma";
             foreach (var keyword in new[] { "_NORMALMAP", "_METALLICGLOSSMAP", "_SPECGLOSSMAP", "_DETAIL_MULX2", "_PARALLAXMAP" }) material.DisableKeyword(keyword);
             foreach (var prop in new[] { "_BumpMap", "_MetallicGlossMap", "_SpecGlossMap", "_DetailAlbedoMap", "_DetailNormalMap", "_OcclusionMap", "_ParallaxMap" })
                 if (material.HasProperty(prop)) material.SetTexture(prop, null);
@@ -187,7 +200,7 @@ namespace StbcRevival
                         float bl = 0.02f + 0.35f * Mathf.Pow(v, 7f);
                         px[y * Size + x] = new Color(r, g, bl);
                     }
-                var tex = new Texture2D(Size, Size, TextureFormat.RGB24, true) { name = "Nova plasma " + f, wrapMode = TextureWrapMode.Repeat, filterMode = FilterMode.Bilinear, anisoLevel = 2 };
+                var tex = new Texture2D(Size, Size, TextureFormat.RGB24, true) { name = "Ship plasma " + f, wrapMode = TextureWrapMode.Repeat, filterMode = FilterMode.Bilinear, anisoLevel = 2 };
                 tex.SetPixels32(px);
                 tex.Apply(true, true);
                 Object.DontDestroyOnLoad(tex);
