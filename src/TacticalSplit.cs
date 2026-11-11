@@ -307,17 +307,19 @@ namespace StbcRevival
             Fit(buttons.Select(k => k.Key.localPosition.y).ToList(), buttons.Select(k => k.Value.y).ToList(), out c, out d, out rv);
             Note($"buttons: {buttons.Count}; u = {a:0.#####} x + {b:0.####} (rms {ru * W:0.#} px), v = {c:0.#####} y + {d:0.####} (rms {rv * H:0.#} px); lift {buttonLift * 1000f:0.###} mm per anchor z");
 
-            // Where the nav map lies on the panel's picture (its corners' nearest points on the strip), before anything moves.
+            // Where the radar lies on the panel's picture (its corners' nearest points on the strip), before anything moves.
+            // Measured on the radar itself, not its canvas: the canvas is wider than the whole panel.
             var navRect = nav as RectTransform;
+            var radar = navRect == null ? null : navRect.GetComponentsInChildren<RectTransform>(true).FirstOrDefault(r => r.name.StartsWith("NavMap_Tng")) ?? navRect;
             Vector2 navMin = Vector2.zero, navMax = Vector2.zero; bool navOnPanel = false; float navLift = 0f;
             if (navRect != null)
             {
-                var corners = new Vector3[4]; navRect.GetWorldCorners(corners);
+                var corners = new Vector3[4]; radar.GetWorldCorners(corners);
                 var uvs = corners.Select(q => OnStrip(p, q, out _)).ToArray();
                 navMin = new Vector2(uvs.Min(u => u.x), uvs.Min(u => u.y)); navMax = new Vector2(uvs.Max(u => u.x), uvs.Max(u => u.y));
-                OnStrip(p, navRect.TransformPoint(navRect.rect.center), out navLift);
+                OnStrip(p, radar.TransformPoint(radar.rect.center), out navLift);
                 navOnPanel = navMax.x - navMin.x > 0.02f && navMax.y - navMin.y > 0.02f;
-                Note($"nav map on the picture: px ({navMin.x * W:0}, {navMin.y * H:0})..({navMax.x * W:0}, {navMax.y * H:0}), {navLift * 1000f:0} mm in front of the strip");
+                Note($"radar ({radar.name}) on the picture: px ({navMin.x * W:0}, {navMin.y * H:0})..({navMax.x * W:0}, {navMax.y * H:0}), {navLift * 1000f:0} mm in front of the strip");
             }
 
             var guard = new bool[W];
@@ -363,14 +365,14 @@ namespace StbcRevival
                 Vector2 navMid = (navMin + navMax) * 0.5f;
                 var target = centreW + right * ((navMid.x - mid.x) * mPerU) + up * ((navMid.y - mid.y) * mPerV) + n * 0.008f;
                 float wantW = (navMax.x - navMin.x) * mPerU;
-                var face = navRect.TransformPoint(navRect.rect.center);
-                float haveW = navRect.rect.width * navRect.lossyScale.x;
+                var face = radar.TransformPoint(radar.rect.center);
+                float haveW = radar.rect.width * radar.lossyScale.x;
                 float k = wantW / Mathf.Max(1e-4f, haveW);
                 var turn = Quaternion.LookRotation(-n, up) * Quaternion.Inverse(Quaternion.LookRotation(navRect.forward, navRect.up));
                 navRect.position = target + turn * (navRect.position - face) * k;
                 navRect.rotation = turn * navRect.rotation;
                 navRect.localScale *= k;
-                Note($"nav map over the panel's map part: {wantW:0.000} m wide (was {haveW:0.000})");
+                Note($"radar over the panel's map part: {wantW:0.000} m wide (was {haveW:0.000})");
             }
             Note("main panel across the console, its curved strip hidden");
             return navOnPanel;

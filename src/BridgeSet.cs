@@ -349,13 +349,14 @@ namespace StbcRevival
                 r.enabled = false;
 
             // The station as one: its officer's place (the station object) onto the set's floor before the console, turned
-            // so the way from the officer to the panel's anchor points at the console's screen. The panel itself is made
-            // later, under that anchor, so it comes along.
+            // so the officer looks straight at the console (square to its screens), not at the angle the game's console
+            // stands to its officer. The panels are laid onto the set's screens later, so they don't depend on this turn.
             var officer = root.transform.Find("Tactical");
             var o = officer != null ? officer.position : root.transform.position;
-            var dirGame = Vector3.ProjectOnPlane(ui.position - o, Vector3.up);
+            var dirGame = Vector3.ProjectOnPlane(officer != null ? officer.forward : root.transform.forward, Vector3.up);
             var stand = Place(tacticalStand.Value);
-            var dirSet = Vector3.ProjectOnPlane(Place(tactical.Value) - stand, Vector3.up);
+            var dirSet = Vector3.ProjectOnPlane(Place(tactical.Value) - Place(tactical.Value + tacticalNormal.Value), Vector3.up);
+            Plugin.Log.LogInfo($"Bridge set {name}: the tactical officer's facing is {Vector3.Angle(dirGame, Vector3.ProjectOnPlane(ui.position - o, Vector3.up)):0} degrees off the game's panel anchor");
             if (dirGame.sqrMagnitude < 1e-6f || dirSet.sqrMagnitude < 1e-6f) return;
             var turn = Quaternion.FromToRotation(dirGame.normalized, dirSet.normalized);
             var t = root.transform;
