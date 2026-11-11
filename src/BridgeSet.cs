@@ -93,8 +93,8 @@ namespace StbcRevival
                 var tacticalUi = GameObject.Find("Bridge/Stations-1701D/Tactical_root/Tactical_UIParent");
                 if (tacticalUi != null && tacticalUi.transform.childCount > 0)
                 {
-                    if (panelSeen < 0f) panelSeen = Time.unscaledTime;
-                    else if (Time.unscaledTime - panelSeen > 3f)
+                    if (panelSeen < 0f) { panelSeen = Time.unscaledTime; TacticalSplit.KeepDrawing(tacticalUi.transform); }
+                    else if (Time.unscaledTime - panelSeen > 3f && (Time.unscaledTime - panelSeen > 60f || MainPanelDrawn(tacticalUi.transform)))
                     {
                         panelsPlaced = true; splitAt = Time.unscaledTime;
                         try { TacticalSplit.Build(tacticalUi.transform, Place, PlaceDirection, splits); }
@@ -464,6 +464,17 @@ namespace StbcRevival
             float denom = 1f / (va + vb + vc); float v2 = vb * denom, w2 = vc * denom;
             wa = 1 - v2 - w2; wb = v2; wc = w2;
             return a + ab * v2 + ac * w2;
+        }
+
+        // Whether the game has drawn the tactical main panel yet (its picture is black until then); checked once a second.
+        private static float drawnCheck;
+        private static bool MainPanelDrawn(Transform ui)
+        {
+            if (Time.unscaledTime < drawnCheck) return false;
+            drawnCheck = Time.unscaledTime + 1f;
+            var main = ui.GetComponentsInChildren<Transform>(true).FirstOrDefault(t => t.name == "TacticalGUICurvedCenter");
+            var cam = main != null ? main.GetComponentsInChildren<Camera>(true).FirstOrDefault() : null;
+            return cam != null && TacticalSplit.Drawn(cam.targetTexture) > 0.04f;
         }
 
         private static void DumpTactical(Transform root)
