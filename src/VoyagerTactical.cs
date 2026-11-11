@@ -76,7 +76,7 @@ namespace StbcRevival
             face.transform.localScale = Vector3.one;
             var lossy = face.transform.lossyScale;
             face.transform.localScale = new Vector3(width / Mathf.Max(1e-4f, lossy.x), height / Mathf.Max(1e-4f, lossy.y), 1f);
-            var material = BridgeMaterial();
+            var material = BridgeMaterial(face.GetComponent<MeshRenderer>().sharedMaterial);
             material.SetTexture("_MainTex", texture);
             material.SetTexture("_EmissionMap", texture);
             material.SetColor("_EmissionColor", Color.white);
@@ -105,9 +105,10 @@ namespace StbcRevival
             Plugin.Log.LogInfo($"Voyager tactical: panel on the console ({width:0.00} x {height:0.00} m), {Buttons.Length} game buttons moved onto it");
         }
 
-        private static Material BridgeMaterial()
+        private static Material BridgeMaterial(Material primitive)
         {
-            var m = new Material(Shader.Find("Standard"));
+            var shader = Shader.Find("Standard");
+            var m = shader != null ? new Material(shader) : new Material(primitive);
             foreach (var keyword in new[] { "_NORMALMAP", "_METALLICGLOSSMAP", "_SPECGLOSSMAP" }) m.DisableKeyword(keyword);
             if (m.HasProperty("_Glossiness")) m.SetFloat("_Glossiness", 0.6f);
             return m;
