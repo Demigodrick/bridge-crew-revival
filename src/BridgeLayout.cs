@@ -25,6 +25,11 @@ namespace StbcRevival
     /// hidden, and a copy of their shape read from the scene's file moves instead (BatchedPieces). Colliders move with
     /// the object. Bridge Walk's floors and walls are read again after a layout goes on; a hidden or moved batched
     /// piece still counts where it was for those (they come from the combined mesh).
+    ///
+    /// The background crew (RedShirtStation) are spawned by the game as children of their seat objects, each with a
+    /// chair of its own in its model, standing where one of the bridge's chairs is. Where it sits comes from its
+    /// animation, so it's only known once it's spawned: then, if its chair is where a moved piece was, its seat
+    /// object gets the same move, and the NPC (and any that later takes its place) goes along (Followers).
     /// </summary>
     internal static class BridgeLayout
     {
@@ -89,6 +94,8 @@ namespace StbcRevival
             public GameObject Copy;
             public readonly List<Mesh> CopyMeshes = new List<Mesh>();
             public string CopyProblem;
+            public Bounds BaseBounds;   // what's drawn, where the bridge had it
+            public bool HasBounds;
 
             public bool Moved => Move.sqrMagnitude > 1e-8f || Mathf.Abs(Turn) > 1e-3f;
         }
@@ -123,9 +130,10 @@ namespace StbcRevival
                 else
                 {
                     DateTime write = File.Exists(boundFile) ? File.GetLastWriteTimeUtc(boundFile) : DateTime.MinValue;
-                    if (write == boundWrite) return;
+                    if (write == boundWrite) { Followers(); return; }
                     Plugin.Log.LogInfo($"Bridge layout: {Path.GetFileName(boundFile)} changed: put on again");
                     foreach (var c in changes) Reset(c);
+                    ResetFollowers();
                     Forget();
                 }
             }
@@ -237,6 +245,11 @@ namespace StbcRevival
                 if (!r.enabled || r is ParticleSystemRenderer) continue;
                 c.Renderers.Add(r);
                 if (r.isPartOfStaticBatch && r is MeshRenderer) c.Batched.Add(r);
+                if (r is MeshRenderer)
+                {
+                    if (!c.HasBounds) { c.BaseBounds = r.bounds; c.HasBounds = true; }
+                    else c.BaseBounds.Encapsulate(r.bounds);
+                }
             }
             foreach (var col in t.GetComponentsInChildren<Collider>(false)) if (col.enabled) c.Colliders.Add(col);
             if (c.Batched.Count > 0 && c.Moved) BatchedPieces.Ready(scene.buildIndex);
@@ -328,9 +341,64 @@ namespace StbcRevival
             c.Copy = null;
         }
 
+        // ------------------------------------------------------------------------------------------- background crew
+        private sealed class Follower
+        {
+            public Transform Seat;
+            public Vector3 BasePos;
+            public Quaternion BaseRot;
+        }
+
+        private static readonly List<Follower> followers = new List<Follower>();
+        private static readonly HashSet<int> seatsDone = new HashSet<int>();
+
+        /// <summary>Every second: each background crew member spawned since, sitting in a chair that was moved, goes with it.</summary>
+        private static void Followers()
+        {
+            if (changes.Count == 0) return;
+            foreach (var seat in UnityEngine.Object.FindObjectsOfType<RedShirtStation>())
+            {
+                if (seat == null || seat.gameObject.scene != scene || seatsDone.Contains(seat.GetInstanceID())) continue;
+                // Its own chair (in the NPC's model): there once it's spawned.
+                Renderer chair = null;
+                foreach (var r in seat.GetComponentsInChildren<SkinnedMeshRenderer>(false))
+                    if (r.enabled && (r.name == "Chair" || r.name == "ChairRetro")) { chair = r; break; }
+                if (chair == null) continue;
+                seatsDone.Add(seat.GetInstanceID());
+                Vector3 at = chair.bounds.center;
+                Change by = null;
+                float best = 0.6f;
+                foreach (var c in changes)
+                {
+                    if (!c.HasBounds || !c.Moved || c.T == null) continue;
+                    // Where the piece was: the NPC's chair inside it, seen from above.
+                    Vector3 middle = c.BaseBounds.center, half = c.BaseBounds.extents;
+                    float dx = Mathf.Max(0f, Mathf.Abs(at.x - middle.x) - half.x), dz = Mathf.Max(0f, Mathf.Abs(at.z - middle.z) - half.z);
+                    float d = Mathf.Sqrt(dx * dx + dz * dz);
+                    if (d < best && Mathf.Abs(at.y - middle.y) < 1.5f) { best = d; by = c; }
+                }
+                if (by == null) continue;
+                var t = seat.transform;
+                followers.Add(new Follower { Seat = t, BasePos = t.position, BaseRot = t.rotation });
+                Quaternion turn = Quaternion.AngleAxis(by.Turn, Vector3.up);
+                t.position = by.Pivot + turn * (t.position - by.Pivot) + by.Move;
+                t.rotation = turn * t.rotation;
+                Plugin.Log.LogInfo($"Bridge layout: the crew member at {t.name} sits in {by.Path}: moved with it");
+            }
+        }
+
+        private static void ResetFollowers()
+        {
+            foreach (var f in followers) if (f.Seat != null) { f.Seat.position = f.BasePos; f.Seat.rotation = f.BaseRot; }
+            followers.Clear();
+            seatsDone.Clear();
+        }
+
         /// <summary>The scene's gone (its objects with it) or its layout is put on again: what we made goes.</summary>
         private static void Forget()
         {
+            followers.Clear();
+            seatsDone.Clear();
             foreach (var c in changes) foreach (var m in c.CopyMeshes) if (m != null) UnityEngine.Object.Destroy(m);
             changes.Clear();
             boundRoot = 0;
