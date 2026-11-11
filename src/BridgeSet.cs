@@ -38,6 +38,7 @@ namespace StbcRevival
             public Vector3 Captain = new Vector3(0f, 0.30f, -0.75f);
             public Vector3? Screen;     // the set's viewscreen: the middle of its back plane (model file)
             public float ScreenHeight;  // and its height
+            public Vector3? Tactical, TacticalNormal, TacticalStand; // its tactical console's screen (middle, facing) and where its officer stands
             public string Error;
         }
 
@@ -47,6 +48,7 @@ namespace StbcRevival
         private static GameObject template;
         private static Vector3 placedCaptain; // the set's captain's place in its model file (the last one built)
         private static Vector3? screen; private static float screenHeight;
+        private static Vector3? tactical, tacticalNormal, tacticalStand;
         private static int dressedScene = -1;
         private static float next;
 
@@ -99,6 +101,17 @@ namespace StbcRevival
                             var inv = System.Globalization.CultureInfo.InvariantCulture;
                             result.Screen = new Vector3(float.Parse(p[1], inv), float.Parse(p[2], inv), float.Parse(p[3], inv));
                             result.ScreenHeight = float.Parse(p[4], inv);
+                        }
+                        if (p.Length >= 7 && p[0] == "tactical")
+                        {
+                            var inv = System.Globalization.CultureInfo.InvariantCulture;
+                            result.Tactical = new Vector3(float.Parse(p[1], inv), float.Parse(p[2], inv), float.Parse(p[3], inv));
+                            result.TacticalNormal = new Vector3(float.Parse(p[4], inv), float.Parse(p[5], inv), float.Parse(p[6], inv));
+                        }
+                        if (p.Length >= 4 && p[0] == "tacticalstand")
+                        {
+                            var inv = System.Globalization.CultureInfo.InvariantCulture;
+                            result.TacticalStand = new Vector3(float.Parse(p[1], inv), float.Parse(p[2], inv), float.Parse(p[3], inv));
                         }
                         if (p.Length >= 4 && p[0] == "captain")
                             result.Captain = new Vector3(float.Parse(p[1], System.Globalization.CultureInfo.InvariantCulture), float.Parse(p[2], System.Globalization.CultureInfo.InvariantCulture), float.Parse(p[3], System.Globalization.CultureInfo.InvariantCulture));
@@ -157,6 +170,7 @@ namespace StbcRevival
             // game's. (x, y, z) -> (x, y, -z) mirrors, as right-handed to left-handed does, so the triangles turn too.
             var c = data.Captain;
             placedCaptain = c; screen = data.Screen; screenHeight = data.ScreenHeight;
+            tactical = data.Tactical; tacticalNormal = data.TacticalNormal; tacticalStand = data.TacticalStand;
             Func<Vector3, Vector3> place = v => new Vector3(v.x - c.x, v.y - c.y, -(v.z - c.z)) + GameCaptain;
             int pieces = 0, tris = 0;
             for (int n = 0; n < data.Parts.Count; n++)
@@ -217,6 +231,63 @@ namespace StbcRevival
             Plugin.Log.LogInfo($"Bridge set {name}: viewscreen moved to {target} at {k:0.###} its size (was {bounds.center}, {bounds.size})");
         }
 
+        private static Vector3 Place(Vector3 v) => new Vector3(v.x - placedCaptain.x, v.y - placedCaptain.y, -(v.z - placedCaptain.z)) + GameCaptain;
+        private static Vector3 PlaceDirection(Vector3 d) => new Vector3(d.x, d.y, -d.z).normalized;
+
+        /// <summary>
+        /// The tactical station moved to the set's tactical console: its officer's place (the station root) onto the
+        /// set's floor before the console, facing it; its panel laid onto the console's screen, at its own size. The
+        /// game's tactical rail (the horseshoe it stood at) goes. The panel's make-up is written out for splitting it later.
+        /// </summary>
+        private static void MoveTactical()
+        {
+            if (tactical == null || tacticalNormal == null || tacticalStand == null) return;
+            var root = GameObject.Find("Bridge/Stations-1701D/Tactical_root");
+            var ui = root != null ? root.transform.Find("Tactical_UIParent") : null;
+            if (root == null || ui == null) { Plugin.Log.LogWarning("Bridge set: the tactical station wasn't found"); return; }
+            DumpTactical(root.transform);
+            foreach (var r in UnityEngine.Object.FindObjectsOfType<MeshRenderer>().Where(r => r.name == "BridgeTNG_TacticalConsole" || r.transform.parent != null && r.transform.parent.name == "BridgeTNG_TacticalConsole"))
+                r.enabled = false;
+
+            var n = PlaceDirection(tacticalNormal.Value);           // the screen's facing: up and toward its officer
+            var centre = Place(tactical.Value) + n * 0.012f;
+            var view = Vector3.ProjectOnPlane(-n, Vector3.up).normalized; // the officer looks this way
+            var t = root.transform;
+            t.position = Place(tacticalStand.Value);
+            t.rotation = Quaternion.LookRotation(view, Vector3.up);
+
+            // The panel: the biggest drawn rectangle under it is its face.
+            var face = ui.GetComponentsInChildren<RectTransform>(true)
+                .OrderByDescending(r => r.rect.width * r.lossyScale.x * r.rect.height * r.lossyScale.y).FirstOrDefault();
+            if (face == null) { Plugin.Log.LogWarning("Bridge set: the tactical panel has no face"); return; }
+            var up = Vector3.ProjectOnPlane(Vector3.up, n).normalized;  // the screen's top: away from the officer, up the slope
+            var turn = Quaternion.LookRotation(-n, up) * Quaternion.Inverse(Quaternion.LookRotation(face.forward, face.up));
+            ui.rotation = turn * ui.rotation;
+            var faceCentre = face.TransformPoint(face.rect.center);
+            ui.position += centre - faceCentre;
+            Plugin.Log.LogInfo($"Bridge set {name}: tactical station at {t.position}, its panel ('{face.name}', {face.rect.width * face.lossyScale.x:0.00} x {face.rect.height * face.lossyScale.y:0.00} m) on the console at {centre}");
+        }
+
+        private static void DumpTactical(Transform root)
+        {
+            try
+            {
+                var sb = new System.Text.StringBuilder();
+                void Walk(Transform x, int depth)
+                {
+                    var rt = x as RectTransform;
+                    var comps = string.Join(",", x.GetComponents<Component>().Where(k => k != null && !(k is Transform)).Select(k => k.GetType().Name).ToArray());
+                    sb.Append(new string(' ', depth * 2)).Append(x.name).Append(x.gameObject.activeSelf ? "" : " [off]")
+                      .Append(rt != null ? $"  rect {rt.rect.width:0.#}x{rt.rect.height:0.#} at {rt.anchoredPosition} scale {rt.lossyScale.x:0.####}" : $"  pos {x.localPosition}")
+                      .Append("  {").Append(comps).Append("}\n");
+                    if (depth < 12) for (int i = 0; i < x.childCount; i++) Walk(x.GetChild(i), depth + 1);
+                }
+                Walk(root, 0);
+                File.WriteAllText(Path.Combine(BepInEx.Paths.BepInExRootPath, "bridge-tactical-dump.txt"), sb.ToString());
+            }
+            catch (Exception e) { Plugin.Log.LogWarning("Bridge set: tactical dump: " + e.Message); }
+        }
+
         private static Material BaseMaterial()
         {
             var ship = Resources.Load<GameObject>("Sector/Ships/Ship - Aegis");
@@ -240,6 +311,7 @@ namespace StbcRevival
             UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(set, scene);
             set.SetActive(true);
             MoveViewscreen();
+            MoveTactical();
             Plugin.Log.LogInfo($"Bridge set {name}: put into {scene.name}, {hidden} of the game's renderers hidden");
         }
     }
