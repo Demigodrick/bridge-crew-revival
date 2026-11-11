@@ -19,13 +19,26 @@ internal static class GlbExport
 
     public static int Run(string dataDir, string sceneFile, string outPath)
     {
-        var x = new Exporter(dataDir, sceneFile);
-        x.Export();
-        x.Write(outPath);
+        var (glb, summary) = Build(dataDir, sceneFile);
+        File.WriteAllBytes(outPath, glb);
+        Console.WriteLine($"{outPath}: {glb.Length / 1048576.0:0.0} MB");
+        Console.Write(summary);
         return 0;
     }
 
-    private sealed class Exporter
+    /// <summary>A scene as a .glb in memory, and what was and wasn't in it.</summary>
+    public static (byte[] glb, string summary) Build(string dataDir, string sceneFile)
+    {
+        var x = new Exporter(dataDir, sceneFile);
+        try
+        {
+            x.Export();
+            return x.Glb();
+        }
+        finally { x.Dispose(); }
+    }
+
+    private sealed class Exporter : IDisposable
     {
         private readonly string dataDir;
         private readonly AssetFile scene;
@@ -47,6 +60,8 @@ internal static class GlbExport
             scene = new AssetFile(Path.Combine(dataDir, sceneFile));
             files[sceneFile] = scene;
         }
+
+        public void Dispose() { foreach (var f in files.Values) f.Dispose(); }
 
         private void Problem(string what) => problems[what] = problems.TryGetValue(what, out var n) ? n + 1 : 1;
 
@@ -134,7 +149,7 @@ internal static class GlbExport
                     var node = new JsonObject { ["name"] = path, ["mesh"] = gm };
                     var m = isBatched ? Matrix4x4.Identity : World(t);
                     if (!m.IsIdentity) node["matrix"] = Matrix(Flip(m));
-                    node["extras"] = new JsonObject { ["batched"] = isBatched };
+                    node["extras"] = new JsonObject { ["path"] = path, ["batched"] = isBatched, ["mesh"] = mesh.Name, ["file"] = mname };
                     roots.Add(nodes.Count);
                     nodes.Add(node);
                     drawn++;
@@ -487,7 +502,7 @@ internal static class GlbExport
         }
 
         // ------------------------------------------------------------------------------------------- writing
-        public void Write(string outPath)
+        public (byte[], string) Glb()
         {
             while (bin.Length % 4 != 0) bin.WriteByte(0);
             var gltf = new JsonObject
@@ -507,18 +522,19 @@ internal static class GlbExport
             }
             var json = Encoding.UTF8.GetBytes(gltf.ToJsonString());
             int jsonLen = (json.Length + 3) & ~3;
-            using (var f = new FileStream(outPath, FileMode.Create))
-            using (var w = new BinaryWriter(f))
+            var ms = new MemoryStream();
+            using (var w = new BinaryWriter(ms, Encoding.UTF8, true))
             {
                 w.Write(0x46546C67u); w.Write(2u); w.Write((uint)(12 + 8 + jsonLen + 8 + bin.Length));
                 w.Write((uint)jsonLen); w.Write(0x4E4F534Au); w.Write(json); for (int i = json.Length; i < jsonLen; i++) w.Write((byte)' ');
                 w.Write((uint)bin.Length); w.Write(0x004E4942u); w.Write(bin.ToArray());
             }
-            Console.WriteLine($"{outPath}: {new FileInfo(outPath).Length / 1048576.0:0.0} MB");
-            Console.WriteLine($"  {drawn} drawn objects ({batched} cut out of batched meshes), {gmeshes.Count} meshes, {materials.Count} materials, {images.Count} textures");
-            Console.WriteLine($"  skipped: {skippedInactive} switched off, {skippedCompressed} compressed meshes, {skippedOther} other; {textureFails} textures not decoded");
-            Console.WriteLine($"  extent (glTF space): {sceneMin} to {sceneMax}");
-            foreach (var p in problems) Console.WriteLine($"  {p.Value} x {p.Key}");
+            var sb = new StringBuilder();
+            sb.AppendLine($"  {drawn} drawn objects ({batched} cut out of batched meshes), {gmeshes.Count} meshes, {materials.Count} materials, {images.Count} textures");
+            sb.AppendLine($"  skipped: {skippedInactive} switched off, {skippedCompressed} compressed meshes, {skippedOther} other; {textureFails} textures not decoded");
+            sb.AppendLine($"  extent (glTF space): {sceneMin} to {sceneMax}");
+            foreach (var p in problems) sb.AppendLine($"  {p.Value} x {p.Key}");
+            return (ms.ToArray(), sb.ToString());
         }
     }
 }

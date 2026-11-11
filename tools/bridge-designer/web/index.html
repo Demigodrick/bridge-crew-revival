@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bridge Designer</title>
+<link rel="stylesheet" href="style.css">
+<script type="importmap">
+{ "imports": {
+  "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<aside id="side">
+  <header>
+    <h1>Bridge Designer</h1>
+    <select id="bridge" aria-label="Bridge"></select>
+    <div id="stats" class="muted">Loading the bridge list…</div>
+  </header>
+  <div class="tools">
+    <input id="search" type="search" placeholder="Filter pieces…" aria-label="Filter pieces">
+    <div class="row">
+      <label><input id="backdrops" type="checkbox"> Backdrops</label>
+      <button id="showAll" type="button">Show all</button>
+      <button id="frame" type="button">Frame</button>
+    </div>
+  </div>
+  <ul id="list" role="listbox" aria-label="Pieces"></ul>
+</aside>
+<main id="view">
+  <canvas id="canvas"></canvas>
+  <div id="loading" hidden><div class="bar"><div></div></div><span>Reading the bridge from the game…</span></div>
+  <section id="info" hidden>
+    <h2 id="infoName"></h2>
+    <dl>
+      <dt>Path</dt><dd id="infoPath"></dd>
+      <dt>Mesh</dt><dd id="infoMesh"></dd>
+      <dt>Size</dt><dd id="infoSize"></dd>
+      <dt>Materials</dt><dd id="infoMats"></dd>
+      <dt>Batched</dt><dd id="infoBatched"></dd>
+    </dl>
+  </section>
+  <footer id="help">
+    Drag: orbit · Right-drag: pan · Wheel: zoom · WASD/QE: fly (Shift faster) · Click: pick · Double-click: orbit around that point · F: focus · H: hide/show · Esc: deselect
+  </footer>
+</main>
+<script type="module" src="app.js"></script>
+</body>
+</html>
