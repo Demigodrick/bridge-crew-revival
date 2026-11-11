@@ -249,6 +249,8 @@ namespace StbcRevival
             ControllerGrace.Patch(harmony);
             LoadingScreenLabel.Patch(harmony);
             Excelsior.Patch(harmony);
+            NovaShip.Patch(harmony);
+            ShipChoice.Patch(harmony);
             VoiceJitter.Patch(harmony);
             Walking.BridgeWalk.Patch(harmony);
             PerfLog.Patch(harmony);
