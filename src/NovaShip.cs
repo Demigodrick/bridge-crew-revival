@@ -144,11 +144,15 @@ namespace StbcRevival
 
         /// <summary><see cref="Active"/> as of the last check (twice a second): for what runs every frame.</summary>
         internal static bool ActiveNow { get; private set; }
-        private static float nextCheck;
+        private static float nextCheck, holdUntil;
+        private static bool wanted;
 
         /// <summary>The ship box's choice: the Nova (true) or the game's own ship, for the room (or your default out of one).</summary>
         internal static void SetForRoom(bool nova)
         {
+            // Shown at once, and held for a few seconds while the room's property comes back from the server: the
+            // ship box would otherwise untick NOVA straight after it's pressed, from the room as it was.
+            ActiveNow = nova; wanted = nova; holdUntil = Time.unscaledTime + 4f;
             var room = Room;
             if (room == null) { Plugin.PlayerShip.Value = nova ? Name : "Aegis"; return; }
             if (PhotonProps.Set(room, Excelsior.Key, nova ? Name : ""))
@@ -173,7 +177,8 @@ namespace StbcRevival
                 if (props != null && !props.Contains(Excelsior.Key) && Chosen && PhotonProps.Set(room, Excelsior.Key, Name))
                     Plugin.Log.LogInfo("Nova: the crew flies the Nova (the host's default)");
             }
-            ActiveNow = Active;
+            bool now = Active;
+            if (Time.unscaledTime >= holdUntil || now == wanted) { ActiveNow = now; holdUntil = 0f; }
             // The model is read ahead of time (in the briefing room), not while the mission loads.
             if (!started && ActiveNow && Available)
             {

@@ -13,7 +13,7 @@ namespace StbcRevival
     /// The briefing console's SHIP box with more ships than its three rows: NOVA under the Next Generation (and room
     /// for more), and a slider on its left to scroll the list. The box still shows three rows; the game's own toggles
     /// (Aegis, original Enterprise, Next Generation) move up and out of sight as the list scrolls, the added ones come
-    /// in below. NOVA flies on the Next Generation's ship when the crew can choose it (it's DLC), else on the Aegis's:
+    /// in below. NOVA is a copy of the Aegis's row (always choosable, never locked). NOVA flies on the Next Generation's ship when the crew can choose it (it's DLC), else on the Aegis's:
     /// choosing it turns that toggle on and puts "Nova" on the room (NovaShip), so the bridge, consoles and crew are
     /// that ship's and the hull the Nova's. That row then shows no mark; NOVA does. Choosing any of the game's ships
     /// (a click on the one already on too) takes "Nova" off the room again. NOVA is there only with the Nova's model
@@ -64,12 +64,14 @@ namespace StbcRevival
                 var box = new Box { Console = console, Aegis = aegis, Tos = tos, Tng = tng };
                 box.Step = tng.transform.localPosition - tos.transform.localPosition;
 
-                // NOVA: a plain row (the original Enterprise's look) under the Next Generation's.
-                var copy = (GameObject)UnityEngine.Object.Instantiate(tos.gameObject, tos.transform.parent, false);
+                // NOVA: a copy of the Aegis's row, the one ship every crew can choose (a copy of a row that's locked,
+                // such as the original Enterprise or the Next Generation without the DLC, carries its lock and its
+                // look), under the Next Generation's.
+                var copy = (GameObject)UnityEngine.Object.Instantiate(aegis.gameObject, aegis.transform.parent, false);
                 copy.name = "Nova Toggle";
                 var nova = copy.GetComponent<Toggle>();
                 nova.group = null;
-                nova.onValueChanged = new Toggle.ToggleEvent(); // not the original Enterprise's own (persistent) handler
+                nova.onValueChanged = new Toggle.ToggleEvent(); // not the Aegis's own (persistent) handler
                 nova.isOn = false;
                 foreach (var label in copy.GetComponentsInChildren<TMP_Text>(true)) label.SetLocalizedText("NOVA");
                 nova.onValueChanged.AddListener(on => Chose(box, on));
@@ -106,7 +108,8 @@ namespace StbcRevival
                 MakeArrows(box, rows.Length - Visible);
                 boxes.Add(box);
                 Apply(box, 0);
-                Plugin.Log.LogInfo($"Ship choice: NOVA added to the ship box ({rows.Length} ships, scroll buttons {(box.Up != null ? "on" : "off")})");
+                Plugin.Log.LogInfo($"Ship choice: NOVA added to the ship box ({rows.Length} ships, scroll buttons {(box.Up != null ? "on" : "off")}); the row's parts: "
+                    + string.Join(", ", copy.GetComponentsInChildren<Transform>(true).Select(t => t.name).ToArray()));
             }
             catch (Exception e) { Plugin.Log.LogWarning("Ship choice: " + e); }
         }
@@ -116,6 +119,7 @@ namespace StbcRevival
         private static void Chose(Box box, bool on)
         {
             if (box.Applying || !on) return;
+            Plugin.Log.LogInfo("Ship choice: NOVA pressed");
             box.Applying = true;
             try
             {
@@ -350,7 +354,8 @@ namespace StbcRevival
                     box.Applying = true;
                     bool on = nova && (box.Tng.isOn || box.Aegis.isOn);
                     if (box.Nova.isOn != on) box.Nova.isOn = on;
-                    bool canChoose = box.Tng.interactable || box.Aegis.interactable || box.Tng.isOn || box.Aegis.isOn;
+                    // Choosable whenever the game's own choice is (the host's or captain's), greyed like the others when not.
+                    bool canChoose = box.Tng.interactable || box.Aegis.interactable;
                     if (box.Nova.interactable != canChoose) box.Nova.interactable = canChoose;
                     // The row the Nova flies on shows no mark of its own while NOVA's shows.
                     foreach (var under in new[] { box.Tng, box.Aegis })
