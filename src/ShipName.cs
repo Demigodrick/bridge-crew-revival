@@ -22,8 +22,10 @@ namespace StbcRevival
         private static string name = "", registry = "";
 
         /// <summary>The ship name in use (the room's, or your own out of a room) and its registry; "" for the game's.</summary>
-        internal static string Name => name;
-        internal static string Registry => registry;
+        /// With none set and the crew flying the Nova (NovaShip), the Nova's own: USS Nova (NX-73515).
+        internal static string Name => name.Length > 0 ? name : NovaShip.InUse ? NovaName : "";
+        internal static string Registry => name.Length > 0 ? registry : NovaShip.InUse ? NovaRegistry : "";
+        internal const string NovaName = "USS Nova", NovaRegistry = "NX-73515";
         /// <summary>"Name, REGISTRY" as in use, or "".</summary>
         internal static string Current => current;
 
@@ -107,7 +109,7 @@ namespace StbcRevival
         }
 
         /// <summary>"NCC-91234 · USS Cosmo", or "" for the game's.</summary>
-        internal static string Display => name.Length == 0 ? "" : registry.Length > 0 ? registry + " · " + name : name;
+        internal static string Display => Name.Length == 0 ? "" : Registry.Length > 0 ? Registry + " · " + Name : Name;
 
         internal static void Patch(Harmony harmony)
         {
@@ -157,6 +159,7 @@ namespace StbcRevival
         // The game's ship names in any text it looks up: the crew's name instead.
         private static void Lookup_Postfix(ref string __result)
         {
+            string name = Name, registry = Registry;
             if (name.Length == 0 || string.IsNullOrEmpty(__result) || __result.IndexOf("USS", StringComparison.Ordinal) < 0) return;
             try
             {

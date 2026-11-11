@@ -142,6 +142,9 @@ namespace StbcRevival
             }
         }
 
+        /// <summary>The crew flies the Nova on this PC: chosen, not a campaign mission, and its model here.</summary>
+        internal static bool InUse => ActiveNow && Available && !Campaign;
+
         /// <summary>Campaign missions are chosen: those are flown on the game's own ship, never the Nova.</summary>
         internal static bool Campaign
         {
@@ -168,7 +171,17 @@ namespace StbcRevival
         private static bool Chosen => string.Equals((Plugin.PlayerShip.Value ?? "").Trim(), Name, StringComparison.OrdinalIgnoreCase);
 
         /// <summary>The Nova's model is on this PC.</summary>
-        internal static bool Available => File.Exists(ObjFile);
+        internal static bool Available
+        {
+            get
+            {
+                // Looked up once a minute: it's asked for in every text the game looks up (the ship's name).
+                if (Time.unscaledTime >= availableAt) { available = File.Exists(ObjFile); availableAt = Time.unscaledTime + 60f; }
+                return available;
+            }
+        }
+        private static bool available;
+        private static float availableAt = -1f;
 
         internal static void Update()
         {
