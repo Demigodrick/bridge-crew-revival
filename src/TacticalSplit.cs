@@ -129,6 +129,10 @@ namespace StbcRevival
                     float d = ((Vector2)sp - (Vector2)Input.mousePosition).sqrMagnitude; if (d < best) { best = d; nearest = q; }
                 }
                 var phys = Physics.RaycastAll(ray, 5f).OrderBy(h => h.distance).Take(3).Select(h => $"{h.collider.name} at {h.distance:0.00} m");
+                var hand = nearest != null ? nearest.transform.parent.GetComponents<MonoBehaviour>().FirstOrDefault(m => m != null && m.GetType().Name.StartsWith("HandInteraction")) : null;
+                var areaField = hand != null ? hand.GetType().GetField("cameraFocusArea") : null;
+                var area = areaField != null ? areaField.GetValue(hand) as MonoBehaviour : null;
+                Plugin.Log.LogInfo($"Tactical probe: button {(hand != null ? hand.name + (hand.enabled ? " on" : " off") : "?")}, collider {(nearest != null && nearest.enabled ? "on" : "off")}, focus area {(area != null ? area.name + " " + FocusArea(area) : "none")}");
                 Plugin.Log.LogInfo($"Tactical probe: click; pointer on [{string.Join(", ", hits.ToArray())}]; nearest button {(nearest != null ? nearest.name : "none")} ({Mathf.Sqrt(best):0} px); first physics hits: {string.Join(", ", phys.ToArray())}");
                 probeClicks++;
                 if (nearest != null) { probeTarget = nearest; probeUntil = Time.unscaledTime + 2f; probeBest = float.MaxValue; probeBone = "-"; }
@@ -386,6 +390,10 @@ namespace StbcRevival
             float pxSize = Mathf.Min(surface.Width / colsShown, surface.Height / rowsShown);
             Note($"drawn: columns {c0}..{c1}, rows {r0}..{r1}; across the console at {pxSize * 1000f:0.###} mm per picture pixel ({pxSize / 0.00089f * 100f:0}% of the game's size): {colsShown * pxSize:0.000} x {rowsShown * pxSize:0.000} m on {surface.Width:0.000} x {surface.Height:0.000} m");
 
+            var buttonSet = new HashSet<Transform>(buttons.Select(k => k.Key));
+            var station = root; while (station.parent != null && station.name != "Tactical_root") station = station.parent;
+            var areas = station.GetComponentsInChildren<MonoBehaviour>(true).Where(m => m != null && m.GetType().Name == "CameraFocusArea").ToList();
+            var mainAreas = areas.Where(ar => ar.GetComponentsInChildren<Transform>(true).Any(buttonSet.Contains)).ToList();
             var anchor = Piece(p, root, "whole", surface, place, placeDirection, Vector3.zero, c0, c1, r0, r1, pxSize, a, b, c, d);
             foreach (var k in buttons)
             {
@@ -423,8 +431,40 @@ namespace StbcRevival
                 navRect.localScale *= k;
                 Note($"radar over the panel's map part: {wantW:0.000} m wide (was {haveW:0.000})");
             }
+            // The game frees a console's buttons only while the camera looks at its focus area (a rectangle on the old curved
+            // console): each area onto the place its things went.
+            {
+                var n = placeDirection(surface.Normal);
+                var up = Vector3.ProjectOnPlane(Vector3.up, n).normalized;
+                foreach (var ar in areas)
+                {
+                    bool main = mainAreas.Contains(ar), onRadar = navOnPanel && ar.transform.IsChildOf(navRect);
+                    string was = FocusArea(ar);
+                    if (main) SetFocusArea(ar, place(surface.Centre) + n * 0.004f, Quaternion.LookRotation(-n, up), new Vector2(surface.Width, surface.Height));
+                    else if (onRadar) SetFocusArea(ar, radar.TransformPoint(radar.rect.center), Quaternion.LookRotation(-n, up), new Vector2(radar.rect.width * radar.lossyScale.x, radar.rect.height * radar.lossyScale.y));
+                    Note($"focus area {ar.name}: {was}{(main ? " -> the panel" : onRadar ? " -> the radar" : " (left)")}");
+                }
+            }
             Note("main panel across the console, its curved strip hidden");
             return navOnPanel;
+        }
+
+        private static System.Reflection.FieldInfo AreaField(MonoBehaviour ar, string name) =>
+            ar.GetType().GetField(name, System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public);
+
+        private static string FocusArea(MonoBehaviour ar)
+        {
+            var size = (Vector2)AreaField(ar, "_size").GetValue(ar); var off = (Vector3)AreaField(ar, "_offset").GetValue(ar);
+            return $"size {size.x:0.000} x {size.y:0.000}, at {ar.transform.position + ar.transform.rotation * off}";
+        }
+
+        /// <summary>A focus area's rectangle put at a world centre and turn, so large (its own place unchanged).</summary>
+        private static void SetFocusArea(MonoBehaviour ar, Vector3 centre, Quaternion rotation, Vector2 size)
+        {
+            var inv = Quaternion.Inverse(ar.transform.rotation);
+            AreaField(ar, "_offset").SetValue(ar, inv * (centre - ar.transform.position));
+            AreaField(ar, "_rotation").SetValue(ar, (inv * rotation).eulerAngles);
+            AreaField(ar, "_size").SetValue(ar, size);
         }
 
         /// <summary>A point's nearest place on a panel's strip, as picture coordinates; lift: its distance in front (toward the officer).</summary>
