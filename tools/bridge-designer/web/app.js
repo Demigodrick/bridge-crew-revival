@@ -6,6 +6,9 @@
 // everything under it, as the game's transforms would. Pieces inside a changed group follow it and can't be changed
 // on their own (and the other way round), so the game and this page always agree on what moved.
 //
+// Moving: drag a picked piece itself across the floor (Shift: up and down), or the gizmo's arrows, or its ring to
+// turn; arrows and Page Up/Down nudge, [ and ] turn; or type the values. Shift+click picks several to move together.
+//
 // Coordinates: this page works in glTF's (right-handed); the file has the game's (Unity's, left-handed: z flipped,
 // turns the other way).
 import * as THREE from 'three';
@@ -33,7 +36,6 @@ let bridge = null;        // { level, scene, name }
 let root = null;          // the loaded bridge
 let pieces = [];          // { obj, path, name, backdrop, box (as the game has it), base (its matrix), row }
 let edits = new Map();    // path -> { pivot, move (Vector3), turn (radians about up), hidden }
-let selPath = null;
 let dirty = false;
 const undo = [], redo = [];
 
@@ -41,24 +43,11 @@ const outline = new THREE.Box3Helper(new THREE.Box3(), 0xf2c14e);
 outline.visible = false;
 scene.add(outline);
 
-// The handle the move/turn gizmo drags: sits at the selection's middle, plus its change.
+// The handle the gizmo drags: sits at the middle of what's picked.
 const handle = new THREE.Object3D();
 scene.add(handle);
-const gizmo = new TransformControls(camera, canvas);
-gizmo.setSize(0.8);
-scene.add(gizmo);
-let gizmoPivot = null;
 
 // ------------------------------------------------------------------------------------------- bridges
-const bridges = await (await fetch('/api/bridges')).json();
-for (const b of bridges) $('bridge').add(new Option(b.name, b.level));
-$('bridge').addEventListener('change', () => {
-  if (dirty && !confirm('This bridge has unsaved changes. Switch anyway?')) { $('bridge').value = bridge.level; return; }
-  load(bridges.find(b => b.level === +$('bridge').value));
-});
-const first = bridges.find(b => b.scene === 'Bridge_scene_02') ?? bridges[0];
-if (first) { $('bridge').value = first.level; load(first); }
-else $('stats').textContent = 'No bridges found in the game\'s files.';
 
 function load(b) {
   bridge = b;
@@ -164,7 +153,7 @@ function applyPiece(p) {
   }
 }
 const applyAll = () => { for (const p of pieces) applyPiece(p); refreshSelection(); };
-const applyUnder = path => { for (const p of members(path)) applyPiece(p); refreshSelection(); };
+const applyUnder = (path, refresh = true) => { for (const p of members(path)) applyPiece(p); if (refresh) refreshSelection(); };
 
 function editFor(path) {
   let e = edits.get(path);
@@ -268,7 +257,7 @@ function buildList() {
     tag.className = 'tag';
     li.append(box, name, tag);
     box.addEventListener('click', e => { e.stopPropagation(); e.preventDefault(); toggleHidden(ownerOf(p.path)?.e.hidden ? ownerOf(p.path).k : p.path); });
-    li.addEventListener('click', () => select(p.path, false));
+    li.addEventListener('click', e => select(p.path, false, e.shiftKey));
     li.addEventListener('dblclick', () => focus(p.path));
     p.row = li;
     frag.append(li);
@@ -277,11 +266,16 @@ function buildList() {
   filter();
 }
 
+// Effects and helpers (debris, sparks, viewscreen reference points, UI): drawn in the game, but rarely what you're
+// after; listed only with Helpers ticked.
+const helper = /\/FX\/|Particle|Debris|Spark|Burst|HACK|ReferencePoint|Canvas|GUI|WaveForm|Hologram|Highlight/i;
 function filter() {
   const q = $('search').value.trim().toLowerCase();
-  for (const p of pieces) p.row.hidden = q !== '' && !p.path.toLowerCase().includes(q);
+  const helpers = $('helpers').checked;
+  for (const p of pieces) p.row.hidden = (q !== '' && !p.path.toLowerCase().includes(q)) || (!helpers && helper.test(p.path) && !edits.has(p.path));
 }
 $('search').addEventListener('input', filter);
+$('helpers').addEventListener('change', filter);
 $('backdrops').addEventListener('change', applyAll);
 $('frame').addEventListener('click', () => frame(pieces.filter(p => p.obj.visible)));
 $('resetAll').addEventListener('click', () => {
@@ -293,84 +287,209 @@ $('resetAll').addEventListener('click', () => {
 });
 
 // ------------------------------------------------------------------------------------------- selection
-function select(path, scroll = true) {
-  for (const p of pieces) p.row?.classList.remove('sel');
+// What's picked: one or more paths (Shift+click adds or takes away), the last one picked first.
+let sel = [];
+
+function select(path, scroll = true, add = false) {
   // Inside a changed group: the group.
   if (path) { const o = ownerOf(path); if (o && o.k !== path && under(path, o.k)) path = o.k; }
-  selPath = path;
-  $('info').hidden = !path;
-  if (!path) { gizmo.detach(); outline.visible = false; return; }
-  const list = members(path);
-  for (const p of list) p.row?.classList.add('sel');
-  if (scroll && list[0]?.row) list[0].row.scrollIntoView({ block: 'nearest' });
+  if (add && path) sel = sel.includes(path) ? sel.filter(x => x !== path) : [path, ...sel.filter(x => !under(x, path) && !under(path, x))];
+  else sel = path ? [path] : [];
+  for (const p of pieces) p.row?.classList.toggle('sel', sel.some(s => under(p.path, s)));
+  $('info').hidden = sel.length === 0;
+  if (!sel.length) { attach(false); outline.visible = false; return; }
+  const first = members(sel[0])[0];
+  if (scroll && first?.row) first.row.scrollIntoView({ block: 'nearest' });
   refreshSelection();
+}
+const selPath = () => sel[0] ?? null;
+const selMembers = () => pieces.filter(p => sel.some(s => under(p.path, s)));
+
+function selBox() {
+  const box = new THREE.Box3();
+  for (const p of selMembers()) box.union(new THREE.Box3().setFromObject(p.obj));
+  return box;
 }
 
 function refreshSelection() {
-  if (!selPath) return;
-  const list = members(selPath);
-  const box = new THREE.Box3();
-  for (const p of list) box.union(new THREE.Box3().setFromObject(p.obj));
+  if (!sel.length) return;
+  const list = selMembers();
+  const box = selBox();
   outline.box.copy(box);
   outline.visible = !box.isEmpty();
   const size = box.getSize(new THREE.Vector3());
   const mats = new Set();
   for (const p of list) p.obj.traverse(m => { if (m.isMesh) for (const mat of [m.material].flat()) mats.add(mat.name || '(unnamed)'); });
-  const one = list.length === 1 && list[0].path === selPath ? list[0] : null;
-  $('infoName').textContent = short(selPath) + (one ? '' : ` (group of ${list.length})`);
-  $('infoPath').textContent = selPath;
+  const path = sel[0];
+  const one = sel.length === 1 && list.length === 1 && list[0].path === path ? list[0] : null;
+  $('infoName').textContent = sel.length > 1 ? `${sel.length} picked` : short(path) + (one ? '' : ` (group of ${list.length})`);
+  $('infoPath').textContent = sel.length > 1 ? sel.map(x => x.split('/').slice(-2).join('/')).join(', ') : path;
   $('infoMesh').textContent = one ? `${one.obj.userData.mesh ?? '?'} (${one.obj.userData.file ?? '?'})` : '—';
   $('infoSize').textContent = `${size.x.toFixed(2)} × ${size.y.toFixed(2)} × ${size.z.toFixed(2)} m`;
   $('infoMats').textContent = [...mats].slice(0, 8).join(', ') + (mats.size > 8 ? ` +${mats.size - 8}` : '');
   $('infoBatched').textContent = list.some(p => p.obj.userData.batched) ? 'yes: the game copies it to move it' : 'no';
-  const e = edits.get(selPath);
-  const why = blocked(selPath);
-  $('infoChange').textContent = why ?? (!e ? 'none' : e.hidden ? 'hidden' :
-    `moved ${e.move.x.toFixed(2)}, ${e.move.y.toFixed(2)}, ${e.move.z.toFixed(2)} m · turned ${(e.turn * 180 / Math.PI).toFixed(0)}°`);
-  // The gizmo: on what can be changed and isn't hidden.
-  if (why || e?.hidden) { gizmo.detach(); return; }
-  if (gizmo.dragging) return;
-  gizmoPivot = e ? e.pivot.clone() : middle(selPath);
-  handle.position.copy(gizmoPivot).add(e ? e.move : new THREE.Vector3());
-  handle.rotation.set(0, e ? e.turn : 0, 0);
+  const why = sel.map(blocked).find(x => x);
+  const hidden = sel.some(s => edits.get(s)?.hidden);
+  $('infoChange').textContent = why ?? (hidden ? 'hidden' : '');
+  // Typed values: for one pick, its move (metres) and turn (degrees).
+  const e = edits.get(path);
+  const typing = sel.length === 1 && !why && !hidden;
+  $('fields').hidden = !typing;
+  if (typing && document.activeElement?.closest('#fields') == null) {
+    const m = e?.move ?? new THREE.Vector3();
+    $('fx').value = m.x.toFixed(2); $('fy').value = m.y.toFixed(2); $('fz').value = m.z.toFixed(2);
+    $('fturn').value = (e ? e.turn * 180 / Math.PI : 0).toFixed(0);
+  }
+  // The gizmo: on what can be changed and isn't hidden, at its middle as it is now.
+  if (why || hidden) { attach(false); return; }
+  if (dragging) return;
+  handle.position.copy(box.getCenter(new THREE.Vector3()));
+  handle.rotation.set(0, sel.length === 1 ? (e?.turn ?? 0) : 0, 0);
   handle.updateMatrixWorld();
-  if (gizmo.object !== handle) gizmo.attach(handle);
+  attach(true);
 }
 
-gizmo.addEventListener('mouseDown', () => remember());
-gizmo.addEventListener('dragging-changed', e => { controls.enabled = !e.value; if (!e.value) { lastDrag = performance.now(); if (selPath) { tidy(selPath); refreshSelection(); } } });
-gizmo.addEventListener('objectChange', () => {
-  if (!selPath || !gizmoPivot) return;
-  const e = editFor(selPath);
-  e.move.copy(handle.position).sub(e.pivot);
-  e.turn = handle.rotation.y;
-  applyUnder(selPath);
-  changed();
-});
-let lastDrag = 0;
+// ------------------------------------------------------------------------------------------- moving
+// One gizmo for both: arrows to move along an axis (the squares: in a plane), the ring around it to turn.
+const gizmoMove = new TransformControls(camera, canvas);
+gizmoMove.setMode('translate');
+gizmoMove.setSize(0.75);
+scene.add(gizmoMove);
+const gizmoTurn = new TransformControls(camera, canvas);
+gizmoTurn.setMode('rotate');
+gizmoTurn.showX = gizmoTurn.showZ = gizmoTurn.showE = false; // turning only about up: bridges stay level
+gizmoTurn.setSize(1.5);
+scene.add(gizmoTurn);
+const gizmos = [gizmoMove, gizmoTurn];
+function attach(on) { for (const g of gizmos) { if (on && g.object !== handle) g.attach(handle); if (!on) g.detach(); } }
 
-function setMode(mode) {
-  gizmo.setMode(mode);
-  // Turning is only about up: bridges stay level.
-  gizmo.showX = gizmo.showZ = mode === 'translate';
-  $('modeMove').classList.toggle('on', mode === 'translate');
-  $('modeTurn').classList.toggle('on', mode === 'rotate');
-}
 function setSnap(on) {
-  gizmo.setTranslationSnap(on ? 0.05 : null);
-  gizmo.setRotationSnap(on ? THREE.MathUtils.degToRad(15) : null);
+  gizmoMove.setTranslationSnap(on ? 0.05 : null);
+  gizmoTurn.setRotationSnap(on ? THREE.MathUtils.degToRad(15) : null);
 }
-$('modeMove').addEventListener('click', () => setMode('translate'));
-$('modeTurn').addEventListener('click', () => setMode('rotate'));
 $('snap').addEventListener('change', () => setSnap($('snap').checked));
-$('undo').addEventListener('click', doUndo);
-$('group').addEventListener('click', group);
-setMode('translate');
 setSnap($('snap').checked);
 
+// A move or turn of everything picked starts from how it was (start) and puts the change on top: each change keeps
+// its own pivot (its middle, which the game uses to find it), so turning several together around their common
+// middle C becomes, for each, move' = C + R(θ)(pivot + move - C) - pivot + d, turn' = turn + θ.
+let start = null, dragging = false;
+function begin() {
+  if (!sel.length || sel.some(blocked)) return false;
+  remember();
+  const center = selBox().getCenter(new THREE.Vector3());
+  start = { center, handle: handle.position.clone(), turn: handle.rotation.y,
+    items: sel.map(path => { const e = editFor(path); return { path, e, move: e.move.clone(), turn: e.turn }; }) };
+  return true;
+}
+const rot = new THREE.Matrix4();
+function shift(d, theta) {
+  if (!start) return;
+  rot.makeRotationY(theta);
+  for (const it of start.items) {
+    const v = it.e.pivot.clone().add(it.move).sub(start.center).applyMatrix4(rot).add(start.center).sub(it.e.pivot).add(d);
+    it.e.move.copy(v);
+    it.e.turn = it.turn + theta;
+  }
+  for (const it of start.items) applyUnder(it.path, false);
+  refreshSelection();
+  changed();
+}
+function end() {
+  if (!start) return;
+  for (const it of start.items) tidy(it.path);
+  start = null;
+  refreshSelection();
+}
+
+for (const g of gizmos) {
+  g.addEventListener('mouseDown', () => { if (!begin()) g.detach(); });
+  g.addEventListener('dragging-changed', e => {
+    dragging = e.value;
+    controls.enabled = !e.value;
+    if (!e.value) { lastDrag = performance.now(); end(); }
+  });
+  g.addEventListener('objectChange', () => {
+    if (!start) return;
+    shift(handle.position.clone().sub(start.handle), handle.rotation.y - start.turn);
+  });
+}
+let lastDrag = 0;
+
+// Dragging a picked piece itself: across the floor (with Shift: up and down), from where it was grabbed.
+let grab = null;
+const floorPlane = new THREE.Plane(), hitPoint = new THREE.Vector3();
+function pointerRay(e) {
+  const r = canvas.getBoundingClientRect();
+  ray.setFromCamera(new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1), camera);
+}
+function startGrab(e, hit) {
+  if (!begin()) return false;
+  const vertical = e.shiftKey;
+  if (vertical) {
+    // A plane through the grab point facing the camera, upright.
+    const n = camera.getWorldDirection(new THREE.Vector3()).setY(0).normalize().negate();
+    floorPlane.setFromNormalAndCoplanarPoint(n, hit.point);
+  } else floorPlane.setFromNormalAndCoplanarPoint(new THREE.Vector3(0, 1, 0), hit.point);
+  grab = { from: hit.point.clone(), vertical, id: e.pointerId };
+  dragging = true;
+  controls.enabled = false;
+  canvas.setPointerCapture(e.pointerId);
+  return true;
+}
+function moveGrab(e) {
+  pointerRay(e);
+  if (!ray.ray.intersectPlane(floorPlane, hitPoint)) return;
+  const d = hitPoint.clone().sub(grab.from);
+  if (grab.vertical) d.set(0, d.y, 0); else d.y = 0;
+  if ($('snap').checked) d.set(Math.round(d.x / 0.05) * 0.05, Math.round(d.y / 0.05) * 0.05, Math.round(d.z / 0.05) * 0.05);
+  shift(d, 0);
+}
+function endGrab(e) {
+  canvas.releasePointerCapture(grab.id);
+  grab = null;
+  dragging = false;
+  controls.enabled = true;
+  lastDrag = performance.now();
+  end();
+}
+
+// Nudging with the keyboard: arrows move it (5 cm, Shift 1 cm; Page Up/Down up and down) the way you look,
+// [ and ] turn it (15°, Shift 1°).
+function nudge(d, theta) {
+  if (!sel.length || !begin()) return;
+  shift(d, theta);
+  end();
+}
+function viewAxes() {
+  const f = camera.getWorldDirection(new THREE.Vector3()).setY(0).normalize();
+  // The nearest of the floor's axes, so arrows go straight along the bridge's lines.
+  const fwd = Math.abs(f.x) > Math.abs(f.z) ? new THREE.Vector3(Math.sign(f.x), 0, 0) : new THREE.Vector3(0, 0, Math.sign(f.z));
+  return { fwd, right: new THREE.Vector3(-fwd.z, 0, fwd.x) };
+}
+
+// Typed values (one pick): its move from where the game has it, and its turn.
+for (const id of ['fx', 'fy', 'fz', 'fturn'])
+  $(id).addEventListener('change', () => {
+    const path = selPath();
+    if (!path || blocked(path)) return;
+    remember();
+    const e = editFor(path);
+    const n = id => { const v = parseFloat($(id).value); return isFinite(v) ? v : 0; };
+    e.move.set(n('fx'), n('fy'), n('fz'));
+    e.turn = n('fturn') * Math.PI / 180;
+    tidy(path);
+    applyUnder(path);
+    changed();
+  });
+
+$('undo').addEventListener('click', doUndo);
+$('group').addEventListener('click', group);
+
 function group() {
-  if (!selPath) return;
-  const parts = selPath.split('/');
+  const path = selPath();
+  if (!path) return;
+  const parts = path.split('/');
   // Not the whole bridge (its top object, or the scene's roots).
   if (parts.length <= 3) { say('That would be the whole bridge.'); return; }
   select(parts.slice(0, -1).join('/'));
@@ -379,19 +498,35 @@ function group() {
 const pieceOf = o => { for (; o; o = o.parent) { const p = pieces.find(x => x.obj === o); if (p) return p; } return null; };
 const ray = new THREE.Raycaster();
 function hitAt(e) {
-  const r = canvas.getBoundingClientRect();
-  ray.setFromCamera(new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1), camera);
+  pointerRay(e);
   return root ? ray.intersectObject(root, true).find(h => visibleUp(h.object)) : null;
 }
 const visibleUp = o => { for (; o; o = o.parent) if (!o.visible) return false; return true; };
+const onGizmo = () => gizmos.some(g => g.object && g.axis !== null);
 
-// A click (not a drag, and not on the gizmo) picks; a double-click turns the view around that point.
+// Pressing on a picked piece and dragging moves it; a click (no drag) picks (Shift: adds); a drag elsewhere turns
+// the view; a double-click turns the view around that point.
 let down = null;
-canvas.addEventListener('pointerdown', e => { down = { x: e.clientX, y: e.clientY, onGizmo: gizmo.axis !== null }; });
-canvas.addEventListener('pointerup', e => {
-  if (!down || down.onGizmo || e.button !== 0 || performance.now() - lastDrag < 150 || Math.hypot(e.clientX - down.x, e.clientY - down.y) > 4) return;
+canvas.addEventListener('pointerdown', e => {
+  down = { x: e.clientX, y: e.clientY, gizmo: onGizmo() };
+  if (e.button !== 0 || down.gizmo || !sel.length) return;
   const hit = hitAt(e);
-  select(hit ? pieceOf(hit.object)?.path ?? null : null);
+  const p = hit && pieceOf(hit.object);
+  if (p && sel.some(s => under(p.path, s))) { down.armed = { e, hit }; controls.enabled = false; }
+});
+canvas.addEventListener('pointermove', e => {
+  if (grab) { moveGrab(e); return; }
+  if (down?.armed && Math.hypot(e.clientX - down.x, e.clientY - down.y) > 4) {
+    if (!startGrab(down.armed.e, down.armed.hit)) { down.armed = null; controls.enabled = true; }
+  }
+});
+canvas.addEventListener('pointerup', e => {
+  if (grab) { endGrab(e); down = null; return; }
+  if (down?.armed) controls.enabled = true;
+  if (!down || down.gizmo || e.button !== 0 || performance.now() - lastDrag < 150 || Math.hypot(e.clientX - down.x, e.clientY - down.y) > 4) { down = null; return; }
+  down = null;
+  const hit = hitAt(e);
+  select(hit ? pieceOf(hit.object)?.path ?? null : null, true, e.shiftKey);
 });
 canvas.addEventListener('dblclick', e => {
   const hit = hitAt(e);
@@ -434,19 +569,28 @@ function focus(path) {
 // Flying with the keyboard moves the view and the point it turns around together.
 const keys = new Set();
 addEventListener('keydown', e => {
-  if (e.target.matches('input[type=search], select')) return;
+  if (e.target.matches('input[type=search], input[type=number], select')) return;
   const k = e.key.toLowerCase();
   if ((e.ctrlKey || e.metaKey) && k === 's') { e.preventDefault(); if (dirty) save(); return; }
   if ((e.ctrlKey || e.metaKey) && k === 'z') { e.preventDefault(); e.shiftKey ? doRedo() : doUndo(); return; }
   if ((e.ctrlKey || e.metaKey) && k === 'y') { e.preventDefault(); doRedo(); return; }
   if (e.ctrlKey || e.metaKey || e.altKey) return;
-  if (k === 'f' && selPath) focus(selPath);
-  else if (k === 'h' && selPath) toggleHidden(selPath);
+  const path = selPath();
+  const step = e.shiftKey ? 0.01 : 0.05, turn = (e.shiftKey ? 1 : 15) * Math.PI / 180;
+  if (e.target.closest?.('#fields')) return; // typing a value
+  if (k === 'f' && path) focus(path);
+  else if (k === 'h' && path) { for (const s of sel) toggleHidden(s); }
   else if (k === 'u') group();
-  else if (k === 't') setMode('translate');
-  else if (k === 'r') setMode('rotate');
-  else if ((k === 'backspace' || k === 'delete') && selPath) putBack(selPath);
+  else if ((k === 'backspace' || k === 'delete') && path) { e.preventDefault(); for (const s of [...sel]) putBack(s); }
   else if (k === 'escape') select(null);
+  else if (path && k.startsWith('arrow')) {
+    e.preventDefault();
+    const { fwd, right } = viewAxes();
+    const d = k === 'arrowup' ? fwd : k === 'arrowdown' ? fwd.clone().negate() : k === 'arrowright' ? right : right.clone().negate();
+    nudge(d.multiplyScalar(step), 0);
+  }
+  else if (path && (k === 'pageup' || k === 'pagedown')) { e.preventDefault(); nudge(new THREE.Vector3(0, k === 'pageup' ? step : -step, 0), 0); }
+  else if (path && (k === '[' || k === ']' || k === '{' || k === '}')) nudge(new THREE.Vector3(), (k === '[' || k === '{') ? turn : -turn);
   else keys.add(k);
   if (e.shiftKey) keys.add('shift');
 });
@@ -486,5 +630,16 @@ renderer.setAnimationLoop(() => {
   renderer.render(scene, camera);
 });
 
+// ------------------------------------------------------------------------------------------- start
+const bridges = await (await fetch('/api/bridges')).json();
+for (const b of bridges) $('bridge').add(new Option(b.name, b.level));
+$('bridge').addEventListener('change', () => {
+  if (dirty && !confirm('This bridge has unsaved changes. Switch anyway?')) { $('bridge').value = bridge.level; return; }
+  load(bridges.find(b => b.level === +$('bridge').value));
+});
+const first = bridges.find(b => b.scene === 'Bridge_scene_02') ?? bridges[0];
+if (first) { $('bridge').value = first.level; load(first); }
+else $('stats').textContent = 'No bridges found in the game\'s files.';
+
 // For looking into the page from the browser's console.
-window.bridgeDesigner = { get edits() { return edits; }, get pieces() { return pieces; }, outline, members, get selPath() { return selPath; } };
+window.bridgeDesigner = { get edits() { return edits; }, get pieces() { return pieces; }, outline, members, get sel() { return sel; } };

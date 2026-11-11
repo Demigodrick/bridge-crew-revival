@@ -57,3 +57,6 @@ button:disabled { opacity: .45; cursor: default; }
 #list li .tag.edit { color: var(--accent); }
 #toast { position: absolute; left: 50%; bottom: 48px; transform: translateX(-50%); max-width: 70%; padding: 8px 12px;
   background: #161b22f0; border: 1px solid var(--line); border-radius: 8px; }
+#fields { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 8px; }
+#fields label { display: grid; gap: 2px; color: var(--muted); font-size: 11px; }
+#fields input { width: 100%; font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px; }
