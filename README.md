@@ -216,3 +216,7 @@ The log is `BepInEx/LogOutput.log`.
 Bridge Crew Revival is an unofficial fan project, not affiliated with or endorsed by Ubisoft, Red Storm
 Entertainment, CBS Studios or Paramount. Star Trek is a trademark of CBS Studios. You need your own copy of
 the game on Steam; this repository contains no game code or assets, only patches applied at runtime.
+
+Credits: the Nova-class ship is Raul Mamoru's model "Nova class U.S.S. Equinox"
+([TrekMeshes](https://trekmeshes.eu/download/dl225/NovaclassUSSEquinox)), included with his permission; see
+`assets/ships/Nova/CREDITS.txt`.
