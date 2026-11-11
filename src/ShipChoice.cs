@@ -25,16 +25,19 @@ namespace StbcRevival
         {
             public ConsoleBriefingRoom Console;
             public Toggle Aegis, Tos, Tng, Nova;
-            public List<Transform> TngExtras = new List<Transform>();  // the TNG row's orange backgrounds (not its children)
-            public List<Graphic> NovaExtras = new List<Graphic>();     // NOVA's copies of them
-            public Vector3 Step;              // from one row to the next, as the game lays out its three
+            public List<Transform> TngExtras = new List<Transform>(); // the TNG row's orange backgrounds, moved with it
+            public Vector3[] Home;            // each row's place at the top of the list (row 0..n-1)
+            public Vector3[] TngExtraHome;
+            public Vector3 Step;              // from one row to the next
+            public Toggle Up, Down;           // the scroll buttons on the box's left edge
             public GameObject NovaHologram;   // on the holotable, under the Next Generation's hologram
             public Renderer[] TngHologram;    // that hologram's own parts (hidden while the Nova shows)
             public int HologramParts;         // how many of the Nova's pieces it was made of (more later: made again)
-            public int HologramVersion = -1;
+            public int Offset = -1, LastChosen = -1, HologramVersion = -1;
             public bool Applying;
         }
 
+        private const int Visible = 3;
         private static readonly List<Box> boxes = new List<Box>();
 
         internal static void Patch(Harmony harmony)
@@ -61,29 +64,25 @@ namespace StbcRevival
                 var box = new Box { Console = console, Aegis = aegis, Tos = tos, Tng = tng };
                 box.Step = tng.transform.localPosition - tos.transform.localPosition;
 
-                // NOVA: a copy of the Next Generation's row, its orange look included (the extra ships' colour),
-                // under it.
-                var copy = (GameObject)UnityEngine.Object.Instantiate(tng.gameObject, tng.transform.parent, false);
+                // NOVA: a plain row (the original Enterprise's look) under the Next Generation's.
+                var copy = (GameObject)UnityEngine.Object.Instantiate(tos.gameObject, tos.transform.parent, false);
                 copy.name = "Nova Toggle";
                 var nova = copy.GetComponent<Toggle>();
                 nova.group = null;
-                nova.onValueChanged = new Toggle.ToggleEvent(); // not the Next Generation's own (persistent) handler
+                nova.onValueChanged = new Toggle.ToggleEvent(); // not the original Enterprise's own (persistent) handler
                 nova.isOn = false;
                 foreach (var label in copy.GetComponentsInChildren<TMP_Text>(true)) label.SetLocalizedText("NOVA");
-                foreach (var t in copy.GetComponents<EventTrigger>()) UnityEngine.Object.Destroy(t);
                 nova.onValueChanged.AddListener(on => Chose(box, on));
                 box.Nova = nova;
 
                 foreach (var image in new[] { Field<Image>(console, "_tngToggleBackground1"), Field<Image>(console, "_tngToggleBackground2") })
-                    if (image != null && !image.transform.IsChildOf(tng.transform))
-                    {
-                        box.TngExtras.Add(image.transform);
-                        var extra = (GameObject)UnityEngine.Object.Instantiate(image.gameObject, image.transform.parent, false);
-                        extra.name = image.name + " (Nova)";
-                        box.NovaExtras.Add(extra.GetComponent<Graphic>());
-                    }
+                    if (image != null && !image.transform.IsChildOf(tng.transform)) box.TngExtras.Add(image.transform);
+                box.TngExtraHome = box.TngExtras.Select(t => t.localPosition).ToArray();
 
                 var rows = Rows(box);
+                box.Home = new Vector3[rows.Length];
+                box.Home[0] = aegis.transform.localPosition;
+                for (int i = 1; i < rows.Length; i++) box.Home[i] = box.Home[0] + box.Step * i;
 
                 // Choosing one of the game's ships takes the Nova off the room.
                 foreach (var own in new[] { aegis, tos, tng })
@@ -104,10 +103,10 @@ namespace StbcRevival
                     trigger.triggers.Add(click);
                 }
 
+                MakeArrows(box, rows.Length - Visible);
                 boxes.Add(box);
-                Layout(box);
-                Plugin.Log.LogInfo($"Ship choice: NOVA added to the ship box ({rows.Length} ships in its three rows' room); the row's parts: "
-                    + string.Join(", ", copy.GetComponentsInChildren<Transform>(true).Select(t => t.name + (t.gameObject.activeSelf ? "" : " (off)")).ToArray()));
+                Apply(box, 0);
+                Plugin.Log.LogInfo($"Ship choice: NOVA added to the ship box ({rows.Length} ships, scroll buttons {(box.Up != null ? "on" : "off")})");
             }
             catch (Exception e) { Plugin.Log.LogWarning("Ship choice: " + e); }
         }
@@ -129,42 +128,134 @@ namespace StbcRevival
         }
 
         /// <summary>
-        /// All four rows in the room the game's three take, no scrolling: the rows a little smaller and closer together.
-        /// The space from the top of the first row to the bottom of the third is shared by four; a row is scaled down
-        /// only as far as it must be to keep a gap. The Next Generation's orange backgrounds move with its row, NOVA's
-        /// copies with NOVA's.
+        /// Two round buttons right of the box's heading, up and down: copies of the Aegis's toggle (so the console's hands
+        /// and mouse press them as any of its buttons), the check mark hidden, an arrow in the circle.
         /// </summary>
-        private static void Layout(Box box)
+        private static void MakeArrows(Box box, int maxOffset)
+        {
+            if (maxOffset <= 0) return;
+            box.Up = Arrow(box, true);
+            box.Down = Arrow(box, false);
+        }
+
+        private static Sprite pill, triangle;
+
+        /// <summary>A white shape on a clear square, smoothed at its edge: a rounded bar or a triangle pointing up.</summary>
+        private static Sprite Shape(bool bar)
+        {
+            const int w = 32, h = 64;
+            int width = bar ? w : 48, height = bar ? h : 48;
+            var tex = new Texture2D(width, height, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp, name = bar ? "Ship list bar" : "Ship list arrow" };
+            var px = new Color32[width * height];
+            for (int y = 0; y < height; y++)
+                for (int x = 0; x < width; x++)
+                {
+                    float fx = x + 0.5f, fy = y + 0.5f, inside;
+                    if (bar)
+                    {
+                        // A capsule: half a width round at both ends.
+                        float r = width / 2f, cy = Mathf.Clamp(fy, r, height - r);
+                        inside = r - Mathf.Sqrt((fx - r) * (fx - r) + (fy - cy) * (fy - cy));
+                    }
+                    else
+                    {
+                        // A triangle, point up: inside all three edges.
+                        Vector2 p0 = new Vector2(width * 0.5f, height * 0.85f), p1 = new Vector2(width * 0.1f, height * 0.2f), p2 = new Vector2(width * 0.9f, height * 0.2f);
+                        float Edge(Vector2 a2, Vector2 b2) { var d = (b2 - a2).normalized; return (fx - a2.x) * -d.y + (fy - a2.y) * d.x; }
+                        inside = Mathf.Min(Edge(p0, p1), Mathf.Min(Edge(p1, p2), Edge(p2, p0)));
+                    }
+                    byte alpha = (byte)Mathf.RoundToInt(Mathf.Clamp01(inside + 0.5f) * 255f);
+                    px[y * width + x] = new Color32(255, 255, 255, alpha);
+                }
+            tex.SetPixels32(px); tex.Apply(false, true);
+            return Sprite.Create(tex, new Rect(0, 0, width, height), new Vector2(0.5f, 0.5f), 100f);
+        }
+
+        /// <summary>
+        /// A scroll button on the box's left edge: a copy of the Aegis's toggle (so the console's hands and mouse press it
+        /// as any of its buttons), drawn as a rounded bar in the frame's colour with a dark triangle, up or down.
+        /// </summary>
+        private static Toggle Arrow(Box box, bool up)
+        {
+            if (pill == null) { pill = Shape(true); triangle = Shape(false); }
+            var source = box.Aegis;
+            var go = (GameObject)UnityEngine.Object.Instantiate(source.gameObject, source.transform.parent, false);
+            go.name = up ? "Ship List Up" : "Ship List Down";
+            var toggle = go.GetComponent<Toggle>();
+            toggle.group = null;
+            toggle.onValueChanged = new Toggle.ToggleEvent(); // not the Aegis's own (persistent) handler
+            toggle.isOn = false;
+            if (toggle.graphic != null) toggle.graphic.gameObject.SetActive(false);
+            toggle.graphic = null;
+            foreach (var label in go.GetComponentsInChildren<TMP_Text>(true)) label.gameObject.SetActive(false);
+
+            // The bar: the toggle's own image, a capsule a row and a half tall; the frame's light blue.
+            var frame = new Color(0.45f, 0.82f, 1f, 1f);
+            var bar = toggle.targetGraphic as Image ?? go.GetComponent<Image>();
+            if (bar != null)
+            {
+                bar.sprite = pill; bar.type = Image.Type.Simple; bar.preserveAspect = false; bar.color = frame;
+                var rt = bar.rectTransform;
+                rt.sizeDelta = new Vector2(9f, Mathf.Abs(box.Step.y) * 1.25f);
+            }
+            var arrow = new GameObject("Arrow", typeof(RectTransform));
+            arrow.layer = go.layer;
+            arrow.transform.SetParent(go.transform, false);
+            var art = (RectTransform)arrow.transform;
+            art.anchorMin = art.anchorMax = art.pivot = new Vector2(0.5f, 0.5f);
+            art.sizeDelta = new Vector2(7f, 7f);
+            art.localPosition = Vector3.zero;
+            art.localRotation = Quaternion.Euler(0f, 0f, up ? 0f : 180f);
+            var arrowImage = arrow.AddComponent<Image>();
+            arrowImage.sprite = triangle; arrowImage.color = new Color(0.03f, 0.08f, 0.13f, 1f); arrowImage.raycastTarget = false;
+
+            // On the box's left edge, level with its top row (up) and its bottom row (down).
+            var at = up ? box.Home[0] : box.Home[Visible - 1];
+            var sourceRect = (RectTransform)source.transform;
+            go.transform.localPosition = new Vector3(at.x + sourceRect.rect.xMin * sourceRect.localScale.x - 10f, at.y, at.z);
+            go.transform.localScale = source.transform.localScale;
+
+            toggle.onValueChanged.AddListener(on =>
+            {
+                if (!on || box.Applying) return;
+                box.Applying = true;
+                try { toggle.isOn = false; } finally { box.Applying = false; }
+                Apply(box, box.Offset + (up ? -1 : 1));
+            });
+            return toggle;
+        }
+
+        // A scroll button at the end of the list: faint and not pressable.
+        private static void Enable(Toggle button, bool on)
+        {
+            if (button == null) return;
+            button.interactable = on;
+            foreach (var image in button.GetComponentsInChildren<Image>(true)) image.canvasRenderer.SetAlpha(on ? 1f : 0.3f);
+        }
+
+        /// <summary>Shows rows offset..offset+2 in the box's three places; the others are out of sight.</summary>
+        private static void Apply(Box box, int offset)
         {
             var rows = Rows(box);
-            var top = box.Aegis.transform.localPosition;
-            float step = box.Step.magnitude;
-            if (step < 1e-4f) return;
-            var down = box.Step / step;
-            var rect = (RectTransform)box.Aegis.transform;
-            float rowHeight = Mathf.Max(1e-3f, rect.rect.height * rect.localScale.y);
-            float span = 2f * step + rowHeight;                      // the game's three rows, top to bottom
-            float scale = Mathf.Min(1f, span / (4f * rowHeight * 1.12f)); // a little gap between rows
-            float h = rowHeight * scale, newStep = (span - h) / 3f;
-            var tngHome = box.Tng.transform.localPosition;
-            var extraOffsets = box.TngExtras.Select(t => t.localPosition - tngHome).ToArray();
-            var extraScales = box.TngExtras.Select(t => t.localScale).ToArray();
-            var baseScale = box.Aegis.transform.localScale;
+            offset = Mathf.Clamp(offset, 0, Mathf.Max(0, rows.Length - Visible));
+            if (offset == box.Offset) return;
+            box.Offset = offset;
             for (int i = 0; i < rows.Length; i++)
             {
-                var row = rows[i].transform;
-                row.localPosition = top + down * ((rowHeight - h) / 2f + i * newStep);
-                row.localScale = baseScale * scale;
+                if (rows[i] == null) continue;
+                int place = i - offset;
+                bool shown = place >= 0 && place < Visible;
+                rows[i].gameObject.SetActive(shown);
+                if (shown) rows[i].transform.localPosition = box.Home[0] + box.Step * place;
+                if (rows[i] == box.Tng)
+                    for (int k = 0; k < box.TngExtras.Count; k++)
+                    {
+                        box.TngExtras[k].gameObject.SetActive(shown);
+                        box.TngExtras[k].localPosition = box.TngExtraHome[k] + box.Step * (place - 2);
+                    }
             }
-            for (int k = 0; k < box.TngExtras.Count; k++)
-            {
-                box.TngExtras[k].localPosition = box.Tng.transform.localPosition + extraOffsets[k] * scale;
-                box.TngExtras[k].localScale = extraScales[k] * scale;
-                var n = box.NovaExtras[k].transform;
-                n.localPosition = box.Nova.transform.localPosition + extraOffsets[k] * scale;
-                n.localScale = extraScales[k] * scale;
-            }
-            Plugin.Log.LogInfo($"Ship choice: rows {rowHeight:0.##} high every {step:0.##}; four at {scale:0.00} size every {newStep:0.##}");
+            Enable(box.Up, offset > 0);
+            Enable(box.Down, offset < rows.Length - Visible);
         }
 
         private static readonly System.Reflection.FieldInfo TngHologramField = AccessTools.Field(typeof(ConsoleBriefingRoom), "IMHCKEMPKJA");
@@ -259,14 +350,19 @@ namespace StbcRevival
                     box.Applying = true;
                     bool on = nova && (box.Tng.isOn || box.Aegis.isOn);
                     if (box.Nova.isOn != on) box.Nova.isOn = on;
-                    // Choosable when the game's own choice is (the host's or captain's; not while it's locked).
-                    bool canChoose = box.Tng.interactable || box.Aegis.interactable;
+                    bool canChoose = box.Tng.interactable || box.Aegis.interactable || box.Tng.isOn || box.Aegis.isOn;
                     if (box.Nova.interactable != canChoose) box.Nova.interactable = canChoose;
-                    foreach (var g in box.NovaExtras) if (g != null) g.canvasRenderer.SetAlpha(canChoose ? 1f : 0.35f);
                     // The row the Nova flies on shows no mark of its own while NOVA's shows.
                     foreach (var under in new[] { box.Tng, box.Aegis })
                         if (under.graphic != null) under.graphic.canvasRenderer.SetAlpha(on && under.isOn ? 0f : (under.isOn ? 1f : 0f));
                     box.Applying = false;
+                    // Scrolled so the ship chosen is in sight, when the choice changes (scrolling away is free after that).
+                    int chosen = on ? 3 : box.Tng.isOn ? 2 : box.Tos.isOn ? 1 : 0;
+                    if (chosen != box.LastChosen)
+                    {
+                        box.LastChosen = chosen;
+                        if (chosen < box.Offset || chosen >= box.Offset + Visible) Apply(box, chosen - Visible + 1);
+                    }
                 }
                 catch (Exception e) { box.Applying = false; Plugin.Log.LogDebug("Ship choice: " + e.Message); }
             }
