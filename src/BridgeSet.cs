@@ -30,6 +30,8 @@ namespace StbcRevival
         };
         private static readonly Vector3 GameCaptain = new Vector3(0f, 49.81f, 0.49f); // the TNG bridge's captain's station
 
+        private sealed class PanelPlace { public string Part; public Vector3 Centre, Normal; public float Width; }
+
         private sealed class Loaded
         {
             public List<ObjModel.Part> Parts;
@@ -39,6 +41,7 @@ namespace StbcRevival
             public Vector3? Screen;     // the set's viewscreen: the middle of its back plane (model file)
             public float ScreenHeight;  // and its height
             public Vector3? Tactical, TacticalNormal, TacticalStand; // its tactical console's screen (middle, facing) and where its officer stands
+            public List<PanelPlace> Panels = new List<PanelPlace>();  // which of the game's tactical panels goes on which of its screens
             public string Error;
         }
 
@@ -49,6 +52,8 @@ namespace StbcRevival
         private static Vector3 placedCaptain; // the set's captain's place in its model file (the last one built)
         private static Vector3? screen; private static float screenHeight;
         private static Vector3? tactical, tacticalNormal, tacticalStand;
+        private static List<PanelPlace> panels = new List<PanelPlace>();
+        private static bool panelsPlaced;
         private static int dressedScene = -1;
         private static bool panelDumped;
         private static float next;
@@ -77,6 +82,11 @@ namespace StbcRevival
             {
                 var tacticalUi = GameObject.Find("Bridge/Stations-1701D/Tactical_root/Tactical_UIParent");
                 if (tacticalUi != null && tacticalUi.transform.childCount > 0) { panelDumped = true; DumpTactical(tacticalUi.transform.parent); Plugin.Log.LogInfo("Bridge set: tactical panel written out"); }
+            }
+            if (!panelsPlaced && dressedScene != -1 && panels.Count > 0)
+            {
+                var tacticalUi = GameObject.Find("Bridge/Stations-1701D/Tactical_root/Tactical_UIParent");
+                if (tacticalUi != null && tacticalUi.transform.childCount > 0) { panelsPlaced = true; PlacePanels(tacticalUi.transform); }
             }
             next = Time.unscaledTime + 1f;
             var marker = GameObject.Find(Marker);
@@ -114,6 +124,17 @@ namespace StbcRevival
                             var inv = System.Globalization.CultureInfo.InvariantCulture;
                             result.Tactical = new Vector3(float.Parse(p[1], inv), float.Parse(p[2], inv), float.Parse(p[3], inv));
                             result.TacticalNormal = new Vector3(float.Parse(p[4], inv), float.Parse(p[5], inv), float.Parse(p[6], inv));
+                        }
+                        if (p.Length >= 9 && p[0] == "panel")
+                        {
+                            var inv = System.Globalization.CultureInfo.InvariantCulture;
+                            result.Panels.Add(new PanelPlace
+                            {
+                                Part = p[1].Replace('_', ' '),
+                                Centre = new Vector3(float.Parse(p[2], inv), float.Parse(p[3], inv), float.Parse(p[4], inv)),
+                                Normal = new Vector3(float.Parse(p[5], inv), float.Parse(p[6], inv), float.Parse(p[7], inv)),
+                                Width = float.Parse(p[8], inv),
+                            });
                         }
                         if (p.Length >= 4 && p[0] == "tacticalstand")
                         {
@@ -177,7 +198,7 @@ namespace StbcRevival
             // game's. (x, y, z) -> (x, y, -z) mirrors, as right-handed to left-handed does, so the triangles turn too.
             var c = data.Captain;
             placedCaptain = c; screen = data.Screen; screenHeight = data.ScreenHeight;
-            tactical = data.Tactical; tacticalNormal = data.TacticalNormal; tacticalStand = data.TacticalStand;
+            tactical = data.Tactical; tacticalNormal = data.TacticalNormal; tacticalStand = data.TacticalStand; panels = data.Panels;
             Func<Vector3, Vector3> place = v => new Vector3(v.x - c.x, v.y - c.y, -(v.z - c.z)) + GameCaptain;
             int pieces = 0, tris = 0;
             for (int n = 0; n < data.Parts.Count; n++)
@@ -270,6 +291,58 @@ namespace StbcRevival
             t.position = stand + turn * (t.position - o);
             t.rotation = turn * t.rotation;
             Plugin.Log.LogInfo($"Bridge set {name}: tactical officer at {stand}, facing the console ({turn.eulerAngles.y:0} degrees turned)");
+        }
+
+        /// <summary>
+        /// The game's tactical panels (each a whole: its picture and the hand targets on it) laid onto the set's console
+        /// screens: turned flat onto each, as wide as it, a hair above it. The 3D target view goes with the middle panel.
+        /// </summary>
+        private static void PlacePanels(Transform ui)
+        {
+            var iface = ui.GetComponentsInChildren<Transform>(true).FirstOrDefault(t => t.name == "Interface-Tactical");
+            if (iface == null) { Plugin.Log.LogWarning("Bridge set: the tactical interface wasn't found"); return; }
+            var officer = GameObject.Find("Bridge/Stations-1701D/Tactical_root/Tactical");
+            foreach (var place in panels)
+            {
+                var part = iface.Find(place.Part);
+                if (part == null) { Plugin.Log.LogWarning($"Bridge set: no tactical panel '{place.Part}'"); continue; }
+                Vector3 centre, n, up; float width;
+                var rect = part as RectTransform;
+                var face = part.GetComponentsInChildren<MeshFilter>(true).FirstOrDefault(f => f.name.EndsWith("PresentationMesh") && f.sharedMesh != null);
+                if (face != null)
+                {
+                    var verts = face.sharedMesh.vertices.Select(v => face.transform.TransformPoint(v)).ToArray();
+                    var normals = face.sharedMesh.normals;
+                    n = normals.Length > 0 ? normals.Aggregate(Vector3.zero, (a, b) => a + face.transform.TransformDirection(b)).normalized : -face.transform.forward;
+                    centre = verts.Aggregate(Vector3.zero, (a, b) => a + b) / Mathf.Max(1, verts.Length);
+                    if (officer != null && Vector3.Dot(n, officer.transform.position + Vector3.up * 1.6f - centre) < 0f) n = -n;
+                    up = Vector3.ProjectOnPlane(Vector3.up, n).normalized;
+                    var right = Vector3.Cross(up, n);
+                    width = verts.Max(v => Vector3.Dot(v - centre, right)) - verts.Min(v => Vector3.Dot(v - centre, right));
+                }
+                else if (rect != null)
+                {
+                    n = -rect.forward; up = rect.up;
+                    centre = rect.TransformPoint(rect.rect.center);
+                    width = rect.rect.width * rect.lossyScale.x;
+                }
+                else continue;
+                if (width < 1e-3f) continue;
+                var nT = PlaceDirection(place.Normal);
+                var upT = Vector3.ProjectOnPlane(Vector3.up, nT).normalized;
+                var target = Place(place.Centre) + nT * 0.015f;
+                var turn = Quaternion.LookRotation(-nT, upT) * Quaternion.Inverse(Quaternion.LookRotation(-n, up));
+                float k = place.Width / width;
+                var moved = new List<Transform> { part };
+                if (place.Part == "TacticalGUICurvedCenter") { var t3d = iface.Find("SubsystemTargeting"); if (t3d != null) moved.Add(t3d); }
+                foreach (var t in moved)
+                {
+                    t.position = target + turn * (t.position - centre) * k;
+                    t.rotation = turn * t.rotation;
+                    t.localScale *= k;
+                }
+                Plugin.Log.LogInfo($"Bridge set {name}: tactical panel {place.Part} ({width:0.00} m wide) onto the console at {target}, at {k:0.##} its size");
+            }
         }
 
         private static void DumpTactical(Transform root)
