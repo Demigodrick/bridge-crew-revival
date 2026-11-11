@@ -98,6 +98,7 @@ namespace StbcRevival
         internal static ConfigEntry<string> BlockedPlayers;
         internal static ConfigEntry<string> VoiceVolumes;
         internal static ConfigEntry<bool> ExcelsiorTest;
+        internal static ConfigEntry<string> PlayerShip;
         internal static ConfigEntry<float> ShuttleSpeed;
         internal static ConfigEntry<float> ShuttleTurnSpeed;
         internal static ConfigEntry<bool> BridgeWalkEnabled;
@@ -175,6 +176,8 @@ namespace StbcRevival
                 "Skip the microphone check the game shows when you start. Your mic still works; set it up in the game's options.");
             ExcelsiorTest = Config.Bind("Ships", "Excelsior", false,
                 "Test: when you host, the crew flies an Excelsior-class ship, with the training holodeck as its bridge for now.");
+            PlayerShip = Config.Bind("Ships", "PlayerShip", "Aegis",
+                "The crew's ship when you host and pick the Aegis: Aegis, or Nova (a ship of its own, built from a Nova-class model on this PC: put Nova.obj with its .mtl and textures into BepInEx/ships/Nova; the ship and bridge are the game's own: pick the Aegis or the Next Generation in the briefing room).");
             BlockedPlayers = Config.Bind("Players", "Blocked", "",
                 "Players kept out of crews you host (Steam IDs, as steamid=name;...). Added when you kick someone and choose to block them; players you've blocked or ignored in Steam are kept out too.");
             VoiceVolumes = Config.Bind("Players", "VoiceVolumes", "",
@@ -373,6 +376,7 @@ namespace StbcRevival
             Safely("player joined alert", StbcRevival.PlayerJoinedAlert.Update);
             Safely("ship name", StbcRevival.ShipName.Update);
             Safely("hull name", StbcRevival.HullName.Update);
+            Safely("nova name", StbcRevival.HullName.UpdateNova);
             Safely("ship name box", StbcRevival.ShipNameBox.Update);
             Safely("bug report", BugReport.Update);
             Safely("crew logs", CrewLogs.Update);
@@ -392,6 +396,8 @@ namespace StbcRevival
             Safely("mission maps", StbcRevival.Missions.MissionMaps.Update);
             Safely("restock sync", StbcRevival.Missions.RestockSync.Update);
             Safely("excelsior", Excelsior.Update);
+            Safely("nova", NovaShip.Update);
+            Safely("ship choice", ShipChoice.Update);
             Safely("pvp prototype", PvpPrototype.Update);
             Safely("pvp space", PvpSpace.Update);
             Safely("mod version check", ModVersionCheck.Update);
