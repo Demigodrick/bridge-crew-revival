@@ -10,6 +10,7 @@
 //   prefab <file> <renderer path ID>  the renderer's prefab: its root's name and children (local position, rotation)
 //   fit <file> <renderer path ID>     where each bind pose puts the head mesh's middle, against the eyes in Head space
 //   mesh <file> <name or path ID>              a mesh's counts: vertices, channels, bind poses, blend shapes, sub-meshes
+//   glb <scene file> [out.glb]       a scene's drawn objects, textured, as binary glTF (Export.cs), e.g. glb level6 aegis.glb
 using StbcRevival;
 
 var gameDir = Environment.GetEnvironmentVariable("GAME_DIR")
@@ -270,6 +271,8 @@ switch (args[0])
         }
         break;
     }
+    case "glb":
+        return GlbExport.Run(Path.GetDirectoryName(file)!, Path.GetFileName(file), args.Length > 2 ? args[2] : Path.GetFileName(file) + ".glb");
     default:
         Console.Error.WriteLine("unknown command " + args[0]);
         return 1;
