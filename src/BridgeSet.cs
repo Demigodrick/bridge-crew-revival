@@ -42,6 +42,7 @@ namespace StbcRevival
             public float ScreenHeight;  // and its height
             public Vector3? Tactical, TacticalNormal, TacticalStand; // its tactical console's screen (middle, facing) and where its officer stands
             public List<PanelPlace> Panels = new List<PanelPlace>();  // which of the game's tactical panels goes on which of its screens
+            public Dictionary<string, TacticalSplit.Screen> Splits = new Dictionary<string, TacticalSplit.Screen>(); // its console screens for the split tactical panel
             public string Error;
         }
 
@@ -54,6 +55,8 @@ namespace StbcRevival
         private static Vector3? tactical, tacticalNormal, tacticalStand;
         private static List<PanelPlace> panels = new List<PanelPlace>();
         private static bool panelsPlaced;
+        private static Dictionary<string, TacticalSplit.Screen> splits = new Dictionary<string, TacticalSplit.Screen>();
+        private static float panelSeen = -1f, splitAt = -1f;
         private static int dressedScene = -1;
         private static bool panelDumped;
         private static float next;
@@ -76,7 +79,6 @@ namespace StbcRevival
                 template = Build(loaded);
                 loaded = null;
             }
-            VoyagerTactical.Update();
             if (template == null || Time.unscaledTime < next) return;
             // The tactical panel is made once a mission runs: its make-up written out then (for splitting it onto the set's screens).
             if (!panelDumped && dressedScene != -1)
@@ -84,15 +86,29 @@ namespace StbcRevival
                 var tacticalUi = GameObject.Find("Bridge/Stations-1701D/Tactical_root/Tactical_UIParent");
                 if (tacticalUi != null && tacticalUi.transform.childCount > 0) { panelDumped = true; DumpTactical(tacticalUi.transform.parent); Plugin.Log.LogInfo("Bridge set: tactical panel written out"); }
             }
-            if (!panelsPlaced && dressedScene != -1 && panels.Count > 0)
+            if (splitAt > 0f && Time.unscaledTime - splitAt > 30f) { splitAt = -1f; try { TacticalSplit.Recheck(); } catch (Exception e) { Plugin.Log.LogWarning("Bridge set: recheck: " + e.Message); } }
+            if (!panelsPlaced && dressedScene != -1 && splits.Count > 0)
+            {
+                // The split needs the panel's picture drawn: a few seconds after the game made it.
+                var tacticalUi = GameObject.Find("Bridge/Stations-1701D/Tactical_root/Tactical_UIParent");
+                if (tacticalUi != null && tacticalUi.transform.childCount > 0)
+                {
+                    if (panelSeen < 0f) panelSeen = Time.unscaledTime;
+                    else if (Time.unscaledTime - panelSeen > 3f)
+                    {
+                        panelsPlaced = true; splitAt = Time.unscaledTime;
+                        try { TacticalSplit.Build(tacticalUi.transform, Place, PlaceDirection, splits); }
+                        catch (Exception e) { Plugin.Log.LogWarning("Bridge set: tactical split: " + e); }
+                    }
+                }
+            }
+            if (!panelsPlaced && dressedScene != -1 && panels.Count > 0 && splits.Count == 0)
             {
                 var tacticalUi = GameObject.Find("Bridge/Stations-1701D/Tactical_root/Tactical_UIParent");
                 if (tacticalUi != null && tacticalUi.transform.childCount > 0)
                 {
                     panelsPlaced = true;
-                    var own = panels.FirstOrDefault(p => p.Part == "custom");
-                    if (own != null) VoyagerTactical.Build(tacticalUi.transform, Place(own.Centre), PlaceDirection(own.Normal), own.Width);
-                    else PlacePanels(tacticalUi.transform);
+                    PlacePanels(tacticalUi.transform);
                 }
             }
             next = Time.unscaledTime + 1f;
@@ -131,6 +147,17 @@ namespace StbcRevival
                             var inv = System.Globalization.CultureInfo.InvariantCulture;
                             result.Tactical = new Vector3(float.Parse(p[1], inv), float.Parse(p[2], inv), float.Parse(p[3], inv));
                             result.TacticalNormal = new Vector3(float.Parse(p[4], inv), float.Parse(p[5], inv), float.Parse(p[6], inv));
+                        }
+                        if (p.Length >= 10 && p[0] == "split")
+                        {
+                            var inv = System.Globalization.CultureInfo.InvariantCulture;
+                            result.Splits[p[1]] = new TacticalSplit.Screen
+                            {
+                                Name = p[1],
+                                Centre = new Vector3(float.Parse(p[2], inv), float.Parse(p[3], inv), float.Parse(p[4], inv)),
+                                Normal = new Vector3(float.Parse(p[5], inv), float.Parse(p[6], inv), float.Parse(p[7], inv)),
+                                Width = float.Parse(p[8], inv), Height = float.Parse(p[9], inv),
+                            };
                         }
                         if (p.Length >= 9 && p[0] == "panel")
                         {
@@ -205,7 +232,7 @@ namespace StbcRevival
             // game's. (x, y, z) -> (x, y, -z) mirrors, as right-handed to left-handed does, so the triangles turn too.
             var c = data.Captain;
             placedCaptain = c; screen = data.Screen; screenHeight = data.ScreenHeight;
-            tactical = data.Tactical; tacticalNormal = data.TacticalNormal; tacticalStand = data.TacticalStand; panels = data.Panels;
+            tactical = data.Tactical; tacticalNormal = data.TacticalNormal; tacticalStand = data.TacticalStand; panels = data.Panels; splits = data.Splits;
             Func<Vector3, Vector3> place = v => new Vector3(v.x - c.x, v.y - c.y, -(v.z - c.z)) + GameCaptain;
             int pieces = 0, tris = 0;
             for (int n = 0; n < data.Parts.Count; n++)
