@@ -156,6 +156,7 @@ namespace StbcRevival
             }
         }
 
+        private const float ButtonDrop = 0.008f;
         private static Vector3 panelCentreW, panelNormalW; 
         /// <summary>The camera (the officer's head) where it stands to the panel: across it (+ right) and before it, level.</summary>
         private static void EyeToPanel(Vector3 eye, out float across, out float before, out Vector3 right, out Vector3 toward)
@@ -573,7 +574,8 @@ namespace StbcRevival
             Vector2 uvA = new Vector2((float)x0 / W, (float)r0 / H), uvB = new Vector2((float)(x1 + 1) / W, (float)(r1 + 1) / H);
             Quad(root.parent, root.name + " piece " + name, centreW, right, up, wPiece, hPiece, uvA, uvB, p.Material, 0);
             float mPerU = pxSize * W, mPerV = pxSize * H;
-            var origin = centreW + right * ((b - (uvA.x + uvB.x) * 0.5f) * mPerU) + up * ((d - (uvA.y + uvB.y) * 0.5f) * mPerV) + n * 0.002f;
+            var origin = centreW + right * ((b - (uvA.x + uvB.x) * 0.5f) * mPerU) + up * ((d - (uvA.y + uvB.y) * 0.5f) * mPerV) + n * 0.002f
+                - up * ButtonDrop; // the hit zones came out a little above the drawn buttons (found by hand in the game)
             var go = new GameObject(root.name + " anchor " + name);
             go.transform.SetParent(root.parent, false);
             go.transform.position = origin;
