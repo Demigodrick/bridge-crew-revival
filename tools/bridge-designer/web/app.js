@@ -9,12 +9,18 @@
 // Moving: drag a picked piece itself across the floor (Shift: up and down), or the gizmo's arrows, or its ring to
 // turn; arrows and Page Up/Down nudge, [ and ] turn; or type the values. Shift+click picks several to move together.
 //
+// Adding parts: a piece (or group) of any bridge, or a model (.obj) from BepInEx/bridges/models, placed where the
+// view is looking. An added part is a piece with the path "+id": moved, turned and scaled like any other (Delete
+// takes it away); the layout lists it under "added", and the mod builds it in the game.
+//
 // Coordinates: this page works in glTF's (right-handed); the file has the game's (Unity's, left-handed: z flipped,
 // turns the other way).
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
+import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
+import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
 
 const $ = id => document.getElementById(id);
 const canvas = $('canvas');
@@ -36,6 +42,10 @@ let bridge = null;        // { level, scene, name }
 let root = null;          // the loaded bridge
 let pieces = [];          // { obj, path, name, backdrop, box (as the game has it), base (its matrix), row }
 let edits = new Map();    // path -> { pivot, move (Vector3), turn (radians about up), hidden }
+let added = new Map();    // id -> { id, from: { scene, level, path } | { model }, scale, piece }
+let nextId = 1;
+const extras = new THREE.Group(); // the added parts
+scene.add(extras);
 let dirty = false;
 const undo = [], redo = [];
 
@@ -55,6 +65,9 @@ function load(b) {
   select(null);
   pieces = [];
   edits = new Map();
+  for (const a of added.values()) extras.remove(a.piece.obj);
+  added = new Map();
+  nextId = 1;
   undo.length = redo.length = 0;
   setDirty(false);
   $('list').replaceChildren();
@@ -123,6 +136,7 @@ function blocked(path) {
   return null;
 }
 const short = path => path.split('/').pop();
+const pieceAt = path => pieces.find(p => p.path === path);
 
 function middle(path) {
   const box = new THREE.Box3();
@@ -137,7 +151,9 @@ function applyPiece(p) {
     const { pivot, move, turn } = o.e;
     // Turned about up around the middle, then moved.
     tmp.a.makeTranslation(-pivot.x, -pivot.y, -pivot.z);
-    tmp.b.makeRotationY(turn).multiply(tmp.a);
+    tmp.b.makeRotationY(turn);
+    if (p.added) tmp.b.multiply(new THREE.Matrix4().makeScale(p.added.scale, p.added.scale, p.added.scale));
+    tmp.b.multiply(tmp.a);
     tmp.c.makeTranslation(pivot.x + move.x, pivot.y + move.y, pivot.z + move.z).multiply(tmp.b);
     p.obj.matrix.multiplyMatrices(tmp.c, p.base);
   } else p.obj.matrix.copy(p.base);
@@ -148,7 +164,7 @@ function applyPiece(p) {
     p.row.querySelector('input').checked = !hidden;
     p.row.classList.toggle('off', hidden);
     const tag = p.row.querySelector('.tag');
-    tag.textContent = hidden ? 'hidden' : o ? (o.k === p.path ? 'changed' : 'in ' + short(o.k)) : p.backdrop ? 'backdrop' : '';
+    tag.textContent = p.added ? 'added' : hidden ? 'hidden' : o ? (o.k === p.path ? 'changed' : 'in ' + short(o.k)) : p.backdrop ? 'backdrop' : '';
     tag.classList.toggle('edit', !!o);
   }
 }
@@ -162,6 +178,7 @@ function editFor(path) {
 }
 
 function tidy(path) {
+  if (path.startsWith('+')) return; // an added part's change is where it is: it stays
   const e = edits.get(path);
   if (e && !e.hidden && e.move.lengthSq() < 1e-10 && Math.abs(e.turn) < 1e-6) edits.delete(path);
 }
@@ -180,9 +197,21 @@ function showStats() {
 }
 
 // Undo and redo: the whole set of changes, before each one.
-const snapshot = () => JSON.stringify([...edits].map(([k, e]) => [k, e.pivot.toArray(), e.move.toArray(), e.turn, e.hidden]));
-function restore(s) {
-  edits = new Map(JSON.parse(s).map(([k, p, m, t, h]) => [k, { pivot: new THREE.Vector3(...p), move: new THREE.Vector3(...m), turn: t, hidden: h }]));
+const snapshot = () => JSON.stringify({
+  edits: [...edits].map(([k, e]) => [k, e.pivot.toArray(), e.move.toArray(), e.turn, e.hidden]),
+  added: [...added.values()].map(a => [a.id, a.from, a.scale]),
+});
+async function restore(s) {
+  const snap = JSON.parse(s);
+  edits = new Map(snap.edits.map(([k, p, m, t, h]) => [k, { pivot: new THREE.Vector3(...p), move: new THREE.Vector3(...m), turn: t, hidden: h }]));
+  // Added parts: the ones gone go, the ones back are made again.
+  const want = new Map(snap.added.map(([id, from, scale]) => [id, { from, scale }]));
+  for (const id of [...added.keys()]) if (!want.has(id)) dropAdded(id);
+  for (const [id, w] of want) {
+    if (added.has(id)) added.get(id).scale = w.scale;
+    else await makeAdded(id, w.from, w.scale);
+  }
+  select(null);
   applyAll();
   changed();
 }
@@ -191,6 +220,7 @@ function doUndo() { if (undo.length) { redo.push(snapshot()); restore(undo.pop()
 function doRedo() { if (redo.length) { undo.push(snapshot()); restore(redo.pop()); } }
 
 function toggleHidden(path) {
+  if (path.startsWith('+')) { say('An added part is taken away with Delete, not hidden.'); return; }
   const why = blocked(path);
   if (why) { say(why); return; }
   remember();
@@ -202,6 +232,7 @@ function toggleHidden(path) {
 }
 
 function putBack(path) {
+  if (path.startsWith('+')) { remember(); dropAdded(path.slice(1)); edits.delete(path); applyAll(); changed(); say('Taken away.'); return; }
   if (!edits.has(path)) return;
   remember();
   edits.delete(path);
@@ -222,7 +253,13 @@ async function loadLayout() {
   const layout = await res.json();
   for (const c of layout.pieces ?? [])
     edits.set(c.path, { pivot: fromGame(c.pivot), move: fromGame(c.move), turn: -c.turn * Math.PI / 180, hidden: !!c.hidden });
-  say(`Layout loaded: ${edits.size} change${edits.size === 1 ? '' : 's'}.`);
+  for (const a of layout.added ?? []) {
+    const from = a.model ? { model: a.model } : { scene: a.scene, level: a.level, path: a.path };
+    try { await makeAdded(a.id, from, a.scale ?? 1); } catch (err) { say(`Couldn't add ${a.model ?? a.path}: ${err.message}`); continue; }
+    edits.set('+' + a.id, { pivot: fromGame(a.pivot), move: fromGame(a.move), turn: -a.turn * Math.PI / 180, hidden: false });
+    nextId = Math.max(nextId, (parseInt(a.id) || 0) + 1);
+  }
+  say(`Layout loaded: ${edits.size} change${edits.size === 1 ? '' : 's'}${added.size ? `, ${added.size} added` : ''}.`);
 }
 
 async function save() {
@@ -230,7 +267,12 @@ async function save() {
   const layout = {
     format: 1,
     scene: bridge.scene,
-    pieces: [...edits].map(([path, e]) => ({ path, pivot: toGame(e.pivot), move: toGame(e.move), turn: r4(-e.turn * 180 / Math.PI), hidden: e.hidden })),
+    pieces: [...edits].filter(([path]) => !path.startsWith('+'))
+      .map(([path, e]) => ({ path, pivot: toGame(e.pivot), move: toGame(e.move), turn: r4(-e.turn * 180 / Math.PI), hidden: e.hidden })),
+    added: [...added.values()].map(a => {
+      const e = edits.get('+' + a.id);
+      return { id: a.id, ...a.from, pivot: toGame(e.pivot), move: toGame(e.move), turn: r4(-e.turn * 180 / Math.PI), scale: r4(a.scale) };
+    }),
   };
   const res = await fetch(`/api/layout/${bridge.scene}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(layout, null, 2) });
   const text = await res.text();
@@ -244,7 +286,13 @@ addEventListener('beforeunload', e => { if (dirty) { e.preventDefault(); e.retur
 // ------------------------------------------------------------------------------------------- the list
 function buildList() {
   const frag = document.createDocumentFragment();
-  for (const p of pieces) {
+  for (const p of pieces) frag.append(makeRow(p));
+  $('list').append(frag);
+  filter();
+}
+function addRow(p) { $('list').prepend(makeRow(p)); }
+function makeRow(p) {
+  {
     const li = document.createElement('li');
     li.title = p.path;
     const box = document.createElement('input');
@@ -260,10 +308,8 @@ function buildList() {
     li.addEventListener('click', e => select(p.path, false, e.shiftKey));
     li.addEventListener('dblclick', () => focus(p.path));
     p.row = li;
-    frag.append(li);
+    return li;
   }
-  $('list').append(frag);
-  filter();
 }
 
 // Effects and helpers (debris, sparks, viewscreen reference points, UI): drawn in the game, but rarely what you're
@@ -324,7 +370,8 @@ function refreshSelection() {
   const one = sel.length === 1 && list.length === 1 && list[0].path === path ? list[0] : null;
   $('infoName').textContent = sel.length > 1 ? `${sel.length} picked` : short(path) + (one ? '' : ` (group of ${list.length})`);
   $('infoPath').textContent = sel.length > 1 ? sel.map(x => x.split('/').slice(-2).join('/')).join(', ') : path;
-  $('infoMesh').textContent = one ? `${one.obj.userData.mesh ?? '?'} (${one.obj.userData.file ?? '?'})` : '—';
+  $('infoMesh').textContent = one?.added ? (one.added.from.model ? `model ${one.added.from.model}` : `${short(one.added.from.path)} from ${bridges.find(b => b.level === one.added.from.level)?.name ?? one.added.from.scene}`)
+    : one ? `${one.obj.userData.mesh ?? '?'} (${one.obj.userData.file ?? '?'})` : '—';
   $('infoSize').textContent = `${size.x.toFixed(2)} × ${size.y.toFixed(2)} × ${size.z.toFixed(2)} m`;
   $('infoMats').textContent = [...mats].slice(0, 8).join(', ') + (mats.size > 8 ? ` +${mats.size - 8}` : '');
   $('infoBatched').textContent = list.some(p => p.obj.userData.batched) ? 'yes: the game copies it to move it' : 'no';
@@ -339,7 +386,9 @@ function refreshSelection() {
     const m = e?.move ?? new THREE.Vector3();
     $('fx').value = m.x.toFixed(2); $('fy').value = m.y.toFixed(2); $('fz').value = m.z.toFixed(2);
     $('fturn').value = (e ? e.turn * 180 / Math.PI : 0).toFixed(0);
+    if (one?.added) $('fscale').value = one.added.scale.toFixed(2);
   }
+  $('fscaleWrap').hidden = !one?.added;
   // The gizmo: on what can be changed and isn't hidden, at its middle as it is now.
   if (why || hidden) { attach(false); return; }
   if (dragging) return;
@@ -469,7 +518,7 @@ function viewAxes() {
 }
 
 // Typed values (one pick): its move from where the game has it, and its turn.
-for (const id of ['fx', 'fy', 'fz', 'fturn'])
+for (const id of ['fx', 'fy', 'fz', 'fturn', 'fscale'])
   $(id).addEventListener('change', () => {
     const path = selPath();
     if (!path || blocked(path)) return;
@@ -478,6 +527,8 @@ for (const id of ['fx', 'fy', 'fz', 'fturn'])
     const n = id => { const v = parseFloat($(id).value); return isFinite(v) ? v : 0; };
     e.move.set(n('fx'), n('fy'), n('fz'));
     e.turn = n('fturn') * Math.PI / 180;
+    const a = pieceAt(path)?.added;
+    if (a && id === 'fscale') a.scale = Math.min(20, Math.max(0.05, n('fscale') || 1));
     tidy(path);
     applyUnder(path);
     changed();
@@ -499,7 +550,7 @@ const pieceOf = o => { for (; o; o = o.parent) { const p = pieces.find(x => x.ob
 const ray = new THREE.Raycaster();
 function hitAt(e) {
   pointerRay(e);
-  return root ? ray.intersectObject(root, true).find(h => visibleUp(h.object)) : null;
+  return root ? ray.intersectObjects([root, extras], true).find(h => visibleUp(h.object)) : null;
 }
 const visibleUp = o => { for (; o; o = o.parent) if (!o.visible) return false; return true; };
 const onGizmo = () => gizmos.some(g => g.object && g.axis !== null);
@@ -541,6 +592,140 @@ function say(text) {
   sayTimer = setTimeout(() => { $('toast').hidden = true; }, 4000);
 }
 
+// ------------------------------------------------------------------------------------------- adding parts
+// Sources: the bridges (each read once, kept) and the models folder.
+const sourceCache = new Map(); // level -> Promise of its scene
+function sourceScene(level) {
+  if (!sourceCache.has(level))
+    sourceCache.set(level, new Promise((ok, fail) => new GLTFLoader().load(`/api/bridge/level${level}.glb`, g => { g.scene.updateMatrixWorld(true); ok(g.scene); }, undefined, fail)));
+  return sourceCache.get(level);
+}
+let partPick = null; // { from, label }
+
+async function fillParts() {
+  const src = $('source').value;
+  $('parts').replaceChildren();
+  partPick = null;
+  $('addPart').disabled = $('addGroup').disabled = true;
+  const rows = [];
+  if (src === 'models') {
+    const models = await (await fetch('/api/models')).json();
+    if (!models.length) { const li = document.createElement('li'); li.className = 'muted'; li.textContent = 'No models yet: put .obj files (with their .mtl and textures) in BepInEx/bridges/models.'; $('parts').append(li); return; }
+    for (const m of models) rows.push({ label: m, from: { model: m } });
+  } else {
+    const b = bridges.find(x => x.level === +src);
+    const sc = await sourceScene(b.level);
+    sc.traverse(o => { if (o.userData.path && !helper.test(o.userData.path)) rows.push({ label: o.userData.path.split('/').slice(-2).join(' / '), from: { scene: b.scene, level: b.level, path: o.userData.path } }); });
+    rows.sort((a, c) => a.label.localeCompare(c.label));
+  }
+  if (src !== $('source').value) return; // changed while reading
+  const frag = document.createDocumentFragment();
+  for (const r of rows) {
+    const li = document.createElement('li');
+    li.textContent = r.label;
+    li.title = r.from.path ?? r.from.model;
+    li.addEventListener('click', () => {
+      for (const x of $('parts').children) x.classList.remove('sel');
+      li.classList.add('sel');
+      partPick = r;
+      $('addPart').disabled = false;
+      $('addGroup').disabled = !r.from.path || r.from.path.split('/').length <= 3;
+    });
+    li.addEventListener('dblclick', () => addPart(r.from));
+    frag.append(li);
+  }
+  $('parts').append(frag);
+  filterParts();
+}
+function filterParts() {
+  const q = $('partSearch').value.trim().toLowerCase();
+  for (const li of $('parts').children) li.hidden = q !== '' && !li.textContent.toLowerCase().includes(q) && !(li.title ?? '').toLowerCase().includes(q);
+}
+
+/** Makes an added part's objects (from its bridge's copy, or its model file) and its piece; resolves when it's there. */
+async function makeAdded(id, from, scale) {
+  const group = new THREE.Group();
+  if (from.model) {
+    const base = '/api/models/' + from.model.split('/').slice(0, -1).map(encodeURIComponent).join('/');
+    const file = from.model.split('/').pop();
+    const objText = await (await fetch('/api/models/' + from.model.split('/').map(encodeURIComponent).join('/'))).text();
+    const mtlName = /^mtllib\s+(.+)$/m.exec(objText)?.[1]?.trim() ?? file.replace(/\.obj$/i, '.mtl');
+    const loader = new OBJLoader();
+    try {
+      const mtl = await new MTLLoader().setPath(base + (base.endsWith('/') ? '' : '/')).loadAsync(encodeURIComponent(mtlName));
+      mtl.preload();
+      loader.setMaterials(mtl);
+    } catch { /* no .mtl: plain grey */ }
+    group.add(loader.parse(objText));
+  } else {
+    const sc = await sourceScene(from.level);
+    sc.traverse(o => {
+      if (!o.userData.path || !under(o.userData.path, from.path)) return;
+      const c = o.clone();
+      c.matrixAutoUpdate = false;
+      c.matrix.copy(o.matrixWorld); // where its own bridge has it
+      group.add(c);
+    });
+    if (!group.children.length) throw new Error(`${from.path} isn't in that bridge`);
+  }
+  group.matrixAutoUpdate = false;
+  group.updateMatrixWorld(true);
+  extras.add(group);
+  const box = new THREE.Box3().setFromObject(group);
+  const label = from.model ?? from.path.split('/').slice(-2).join(' / ');
+  const piece = { obj: group, path: '+' + id, name: '+ ' + label, backdrop: false, box, base: new THREE.Matrix4(), added: null };
+  const a = { id: String(id), from, scale, piece };
+  piece.added = a;
+  added.set(a.id, a);
+  pieces.unshift(piece);
+  addRow(piece);
+  return a;
+}
+
+function dropAdded(id) {
+  const a = added.get(String(id));
+  if (!a) return;
+  extras.remove(a.piece.obj);
+  a.piece.row?.remove();
+  pieces = pieces.filter(p => p !== a.piece);
+  added.delete(String(id));
+  edits.delete('+' + id);
+  if (sel.includes('+' + id)) select(null);
+}
+
+/** Adds a part where the view is looking (its middle there, at its own height), and picks it. */
+async function addPart(from) {
+  remember();
+  const id = String(nextId++);
+  let a;
+  try { a = await makeAdded(id, from, 1); }
+  catch (err) { undo.pop(); say(`Couldn't add it: ${err.message}`); return; }
+  const pivot = a.piece.box.getCenter(new THREE.Vector3());
+  const at = controls.target.clone();
+  // A model stands on the floor under where the view is looking; a bridge's part keeps its own height (the bridges'
+  // floors are at about the same height).
+  let dy = 0;
+  if (from.model) {
+    const down = new THREE.Raycaster(at.clone().add(new THREE.Vector3(0, 2, 0)), new THREE.Vector3(0, -1, 0), 0, 10);
+    const floor = root && down.intersectObject(root, true).find(h => visibleUp(h.object) && h.face && h.face.normal.y > 0.5);
+    dy = (floor ? floor.point.y : at.y) - a.piece.box.min.y;
+  }
+  edits.set('+' + id, { pivot, move: new THREE.Vector3(at.x - pivot.x, dy, at.z - pivot.z), turn: 0, hidden: false });
+  applyPiece(a.piece);
+  changed();
+  select('+' + id);
+  say(`Added ${from.model ?? short(from.path)}: drag it where you want it.`);
+}
+
+$('source').addEventListener('change', fillParts);
+$('partSearch').addEventListener('input', filterParts);
+$('addPart').addEventListener('click', () => partPick && addPart(partPick.from));
+$('addGroup').addEventListener('click', () => {
+  if (!partPick?.from.path) return;
+  addPart({ ...partPick.from, path: partPick.from.path.split('/').slice(0, -1).join('/') });
+});
+$('addParts').addEventListener('toggle', () => { if ($('addParts').open && !$('parts').children.length) fillParts(); });
+
 // ------------------------------------------------------------------------------------------- camera
 function frame(list) {
   const box = new THREE.Box3();
@@ -569,7 +754,7 @@ function focus(path) {
 // Flying with the keyboard moves the view and the point it turns around together.
 const keys = new Set();
 addEventListener('keydown', e => {
-  if (e.target.matches('input[type=search], input[type=number], select')) return;
+  if (e.target.matches?.('input[type=search], input[type=number], select')) return;
   const k = e.key.toLowerCase();
   if ((e.ctrlKey || e.metaKey) && k === 's') { e.preventDefault(); if (dirty) save(); return; }
   if ((e.ctrlKey || e.metaKey) && k === 'z') { e.preventDefault(); e.shiftKey ? doRedo() : doUndo(); return; }
@@ -637,9 +822,11 @@ $('bridge').addEventListener('change', () => {
   if (dirty && !confirm('This bridge has unsaved changes. Switch anyway?')) { $('bridge').value = bridge.level; return; }
   load(bridges.find(b => b.level === +$('bridge').value));
 });
+for (const b of bridges) $('source').add(new Option(b.name, b.level));
+$('source').add(new Option('Models (BepInEx/bridges/models)', 'models'));
 const first = bridges.find(b => b.scene === 'Bridge_scene_02') ?? bridges[0];
 if (first) { $('bridge').value = first.level; load(first); }
 else $('stats').textContent = 'No bridges found in the game\'s files.';
 
 // For looking into the page from the browser's console.
-window.bridgeDesigner = { get edits() { return edits; }, get pieces() { return pieces; }, outline, members, get sel() { return sel; } };
+window.bridgeDesigner = { get edits() { return edits; }, get pieces() { return pieces; }, outline, members, get sel() { return sel; }, get added() { return added; }, addPart };
