@@ -158,7 +158,10 @@ namespace StbcRevival
                 // Sizes in metres, whatever scale the mount has in the scene.
                 float mount = root.transform.lossyScale.x;
                 if (mount > 0.0001f) hologram.transform.localScale = Vector3.one / mount;
-                Fit(ship, HologramSize);
+                // As long as the game's own hologram on the table now (it's switched off below), so ours matches it.
+                float size = ShownSize(root);
+                Fit(ship, size > 0.05f ? size : HologramSize);
+                Plugin.Log.LogInfo($"Briefing room: the table's hologram is {size:0.00} m long; ours sized to match");
                 ship.transform.SetParent(hologram.transform, false);
 
                 // The game's own hologram off (renderers and its blinking lights), to put back later.
@@ -213,6 +216,32 @@ namespace StbcRevival
         }
 
         // Scale a model so its largest dimension is the given size, centred on its own origin.
+        /// <summary>
+        /// The length of the game's hologram showing on the table, in metres: its pieces' own sizes (not their world boxes,
+        /// which grow as it spins), the largest across them, over the whole of it.
+        /// </summary>
+        private static float ShownSize(GameObject root)
+        {
+            float largest = 0f;
+            foreach (Transform child in root.transform)
+            {
+                if (hologram != null && child.gameObject == hologram) continue;
+                var filters = child.GetComponentsInChildren<MeshFilter>(false).Where(f => f.sharedMesh != null && f.GetComponent<Renderer>() is Renderer r && r.enabled).ToList();
+                if (filters.Count == 0) continue;
+                // The pieces' corners in this child's space, then its extent scaled to the world.
+                var bounds = new Bounds(); bool first = true;
+                foreach (var f in filters)
+                    foreach (var corner in Corners(f.sharedMesh.bounds))
+                    {
+                        var p = child.InverseTransformPoint(f.transform.TransformPoint(corner));
+                        if (first) { bounds = new Bounds(p, Vector3.zero); first = false; } else bounds.Encapsulate(p);
+                    }
+                var world = Vector3.Scale(bounds.size, child.lossyScale);
+                largest = Mathf.Max(largest, Mathf.Max(world.x, Mathf.Max(world.y, world.z)));
+            }
+            return largest;
+        }
+
         private static void Fit(GameObject model, float size)
         {
             var renderers = model.GetComponentsInChildren<MeshFilter>();
