@@ -221,6 +221,8 @@ namespace StbcRevival
             go.transform.localPosition = new Vector3(at.x + sourceRect.rect.xMin * sourceRect.localScale.x - 10f, at.y, at.z);
             go.transform.localScale = source.transform.localScale;
 
+            FitHitAreas(go, bar != null ? bar.rectTransform : (RectTransform)go.transform, up ? "up" : "down");
+
             toggle.onValueChanged.AddListener(on =>
             {
                 if (!on || box.Applying) return;
@@ -229,6 +231,30 @@ namespace StbcRevival
                 Apply(box, box.Offset + (up ? -1 : 1));
             });
             return toggle;
+        }
+
+        /// <summary>
+        /// A scroll button is a copy of a whole row, so its hit areas (the console's hand and mouse triggers, box
+        /// colliders under it) are as wide as a row and lay over the rows beside it, taking their presses. They're cut
+        /// to the button's own size here.
+        /// </summary>
+        private static void FitHitAreas(GameObject go, RectTransform visual, string what)
+        {
+            var corners = new Vector3[4];
+            visual.GetWorldCorners(corners); // bottom left, top left, top right, bottom right
+            var fitted = new List<string>();
+            foreach (var c in go.GetComponentsInChildren<BoxCollider>(true))
+            {
+                var t = c.transform;
+                Vector3 a = t.InverseTransformPoint(corners[0]), b = t.InverseTransformPoint(corners[2]);
+                string was = $"{c.size.x:0.##}x{c.size.y:0.##}";
+                c.center = new Vector3((a.x + b.x) / 2f, (a.y + b.y) / 2f, c.center.z);
+                c.size = new Vector3(Mathf.Max(1e-3f, Mathf.Abs(b.x - a.x)), Mathf.Max(1e-3f, Mathf.Abs(b.y - a.y)), c.size.z);
+                fitted.Add($"{t.name} {was} -> {c.size.x:0.##}x{c.size.y:0.##}");
+            }
+            foreach (var g in go.GetComponentsInChildren<Graphic>(true))
+                if (g.rectTransform != visual && !g.transform.IsChildOf(visual)) g.raycastTarget = false; // only the button itself takes the mouse
+            Plugin.Log.LogInfo($"Ship choice: scroll button {what}: hit areas {(fitted.Count == 0 ? "none found" : string.Join("; ", fitted.ToArray()))}");
         }
 
         // A scroll button at the end of the list: faint and not pressable.
@@ -367,8 +393,11 @@ namespace StbcRevival
                     box.Applying = true;
                     bool on = nova && (box.Tng.isOn || box.Aegis.isOn);
                     if (box.Nova.isOn != on) box.Nova.isOn = on;
-                    // Choosable whenever the game's own choice is (the host's or captain's), greyed like the others when not.
-                    bool canChoose = box.Tng.interactable || box.Aegis.interactable;
+                    // Choosable whenever the game's own choice is (the host's or captain's), greyed like the others when not,
+                    // and not for the campaign (its missions are the Aegis's own).
+                    bool campaign = NovaShip.Campaign;
+                    bool canChoose = !campaign && (box.Tng.interactable || box.Aegis.interactable);
+                    if (campaign && nova && box.Aegis.interactable && !JustPressed) { NovaShip.SetForRoom(false); nova = false; }
                     if (box.Nova.interactable != canChoose) box.Nova.interactable = canChoose;
                     // The row the Nova flies on shows no mark of its own while NOVA's shows.
                     foreach (var under in new[] { box.Tng, box.Aegis })

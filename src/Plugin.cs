@@ -112,6 +112,7 @@ namespace StbcRevival
         internal static ConfigEntry<bool> BridgeWalkWalls;
         internal static ConfigEntry<bool> BridgeWalkAnimate;
         internal static ConfigEntry<bool> BridgeWalkTestCorridor;
+        internal static ConfigEntry<UnityEngine.KeyCode> BridgeEditorKey;
         internal static Plugin Instance { get; private set; }
 
         /// <summary>Revival voice runs: Steam mode, and [Voice] Engine = Revival.</summary>
@@ -302,6 +303,9 @@ namespace StbcRevival
             BridgeWalkTestCorridor = Config.Bind("Bridge Walk", "TestCorridor", false,
                 "Test: on the Aegis bridge, one of the doors opens onto a corridor to walk down (its side doors are scenery). "
                 + "While on, you can walk up to 40 m from your seat. Takes effect on reaching the bridge.");
+            BridgeEditorKey = Config.Bind("Bridge Walk", "EditorKey", UnityEngine.KeyCode.F8,
+                "Prototype: on the bridge in 2D mode, stands you up and opens the bridge editor: pick things with the mouse, move, turn or hide them. "
+                + "Changes are saved per bridge to BepInEx/config/stbc.revival.bridges and only you see them.");
             PlayerName = Config.Bind("Login", "PlayerName", "",
                 "Name shown to other players. Empty = your Steam persona name (falls back to the OS user name).");
 
@@ -434,6 +438,7 @@ namespace StbcRevival
             Safely("room browser window", RoomBrowser.OnGUI);
             Safely("text prompt", TextPrompt.OnGUI);
             Safely("ship name prompt", ShipNamePrompt.OnGUI);
+            Safely("bridge editor", Walking.BridgeEditor.OnGUI);
         }
     }
 

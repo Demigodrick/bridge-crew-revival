@@ -142,6 +142,12 @@ namespace StbcRevival
             }
         }
 
+        /// <summary>Campaign missions are chosen: those are flown on the game's own ship, never the Nova.</summary>
+        internal static bool Campaign
+        {
+            get { try { return Loader.GetMissionType() == Loader.DAPMGBKPDNM.Campaign; } catch { return false; } }
+        }
+
         /// <summary><see cref="Active"/> as of the last check (twice a second): for what runs every frame.</summary>
         internal static bool ActiveNow { get; private set; }
         private static float nextCheck, holdUntil;
@@ -247,6 +253,7 @@ namespace StbcRevival
             try
             {
                 if (!(__instance is PlayerSpacecraft) || !Active || Loader.JCEFNOJHCKO) return; // not on the original Enterprise
+                if (Campaign) { Plugin.Log.LogInfo("Nova: a campaign mission; the ship keeps its own body"); return; }
                 var template = Loader.IOMGCNMDDCK ? tngTemplate : aegisTemplate;
                 // Never waited for here (that would hold up the mission's loading, a frozen headset in VR): a Nova
                 // that isn't ready yet means the game's own ship this time.
