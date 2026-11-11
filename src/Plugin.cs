@@ -65,6 +65,7 @@ namespace StbcRevival
         internal static ConfigEntry<string> ShipName;
         internal static ConfigEntry<string> HullFont;
         internal static ConfigEntry<bool> HullPreview;
+        internal static ConfigEntry<string> BridgeSet;
         internal static ConfigEntry<UnityEngine.KeyCode> BugReportKey;
         internal static ConfigEntry<UnityEngine.KeyCode> CrewLogsKey;
         internal static ConfigEntry<UnityEngine.KeyCode> GameDumpKey;
@@ -194,6 +195,8 @@ namespace StbcRevival
                 "Your crew's ship when you host: name and registry, e.g. \"USS Cosmo, NCC-91234\". It replaces USS Aegis (NX-1787) and USS Enterprise (NCC 1701-D) in the game's texts (console headers, briefings) for everyone in your room with the mod. Empty: the game's names.");
             HullFont = Config.Bind("Rooms", "HullFont", "Starfleet Bold Extended",
                 "The font for the ship's name on the hull, if it's installed in Windows (the mod doesn't ship one). Not installed or empty: the game's own United Sans.");
+            BridgeSet = Config.Bind("Debug", "BridgeSet", "",
+                "Test: dress the Next Generation bridge as another bridge from a model on this PC (BepInEx/bridges/<Name>/<Name>.obj), e.g. Voyager. Empty: the game's own bridge.");
             HullPreview = Config.Bind("Debug", "HullNamePreview", false,
                 "Saves each ship name decal the mod draws as a PNG in the BepInEx folder (hull-name-<ship>.png).");
             BugReportKey = Config.Bind("Debug", "BugReportKey", UnityEngine.KeyCode.F10,
@@ -397,6 +400,7 @@ namespace StbcRevival
             Safely("restock sync", StbcRevival.Missions.RestockSync.Update);
             Safely("excelsior", Excelsior.Update);
             Safely("ships", CustomShip.Update);
+            Safely("bridge set", StbcRevival.BridgeSet.Update);
             Safely("ship choice", ShipChoice.Update);
             Safely("pvp prototype", PvpPrototype.Update);
             Safely("pvp space", PvpSpace.Update);
