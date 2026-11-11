@@ -122,12 +122,13 @@ namespace StbcRevival
         private static Color32 Scaled(Color32 c, float k) =>
             new Color32((byte)Mathf.Clamp(c.r * k, 0f, 255f), (byte)Mathf.Clamp(c.g * k, 0f, 255f), (byte)Mathf.Clamp(c.b * k, 0f, 255f), c.a);
 
+        private static readonly Dictionary<string, string> plaqueFonts = new Dictionary<string, string>();
+
         private static Face PlaqueFace(Plaque plaque, string text)
         {
             if (plaque.Font != null)
             {
-                string installed = null;
-                try { installed = Font.GetOSInstalledFontNames().FirstOrDefault(f => string.Equals(f, plaque.Font, StringComparison.OrdinalIgnoreCase)); } catch { }
+                if (!plaqueFonts.TryGetValue(plaque.Font, out var installed)) plaqueFonts[plaque.Font] = installed = InstalledFont(plaque.Font);
                 if (installed != null) { var face = OsFace(installed, text, FontStyle.Bold); if (face != null) return face; }
             }
             return LoadFace(text);

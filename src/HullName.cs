@@ -324,24 +324,49 @@ namespace StbcRevival
             public Func<char, Glyph> Get;
         }
 
+        // Fonts read back once and kept: reading the game's glyph texture is a 20 MB copy each time, and every drawing
+        // (the decals, plaques, hull numbers, our ships' lettering) wants one, all at once when the name changes.
+        private static Face tmpFace;
+        private static readonly Dictionary<string, Face> osFaces = new Dictionary<string, Face>();
+        private static string installedFor, installedFont; // [Rooms] HullFont as last looked up, and what's installed of it
+
         private static Face LoadFace(string text)
         {
             string wanted = (Plugin.HullFont.Value ?? "").Trim();
             if (wanted.Length > 0)
             {
-                string installed = null;
-                try { installed = Font.GetOSInstalledFontNames().FirstOrDefault(f => string.Equals(f, wanted, StringComparison.OrdinalIgnoreCase)); } catch { }
-                if (installed != null)
+                if (installedFor != wanted)
                 {
-                    var face = OsFace(installed, text);
+                    installedFor = wanted;
+                    installedFont = InstalledFont(wanted);
+                    if (installedFont == null) Plugin.Log.LogInfo($"Hull name: the font \"{wanted}\" isn't installed in Windows; the game's United Sans instead");
+                }
+                if (installedFont != null)
+                {
+                    var face = OsFace(installedFont, text);
                     if (face != null) return face;
                 }
-                else Plugin.Log.LogInfo($"Hull name: the font \"{wanted}\" isn't installed in Windows; the game's United Sans instead");
             }
             return TmpFace();
         }
 
+        private static string InstalledFont(string name)
+        {
+            try { return Font.GetOSInstalledFontNames().FirstOrDefault(f => string.Equals(f, name, StringComparison.OrdinalIgnoreCase)); }
+            catch { return null; }
+        }
+
         private static Face OsFace(string fontName, string text, FontStyle style = FontStyle.Normal)
+        {
+            string key = fontName + "|" + style + "|" + new string((text + "H").Distinct().OrderBy(c => c).ToArray());
+            if (osFaces.TryGetValue(key, out var kept)) return kept;
+            if (osFaces.Count > 16) osFaces.Clear(); // a few names' worth
+            var made = OsFaceRead(fontName, text, style);
+            if (made != null) osFaces[key] = made;
+            return made;
+        }
+
+        private static Face OsFaceRead(string fontName, string text, FontStyle style)
         {
             const int px = 128;
             var font = Font.CreateDynamicFontFromOSFont(fontName, px);
@@ -362,7 +387,9 @@ namespace StbcRevival
             return face;
         }
 
-        private static Face TmpFace()
+        private static Face TmpFace() => tmpFace ?? (tmpFace = TmpFaceRead());
+
+        private static Face TmpFaceRead()
         {
             var fonts = Resources.FindObjectsOfTypeAll<TMP_FontAsset>();
             var asset = fonts.FirstOrDefault(f => f.name == "UnitedSansSmCdBd SDF") ?? fonts.FirstOrDefault(f => f.name.StartsWith("UnitedSansSmCdBd SDF", StringComparison.Ordinal) && f.atlas != null);

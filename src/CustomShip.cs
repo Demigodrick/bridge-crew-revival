@@ -258,8 +258,106 @@ namespace StbcRevival
             foreach (var ship in ships) ship.Tick();
         }
 
+        // ---- the hologram: a lighter copy for the briefing room's table ----
+        // The full model is far too much for a table ornament in VR (the Nova 430,000 triangles, the Sovereign 545,000).
+        // Each piece's vertices are merged on a grid (about 200 cells along the ship), on a thread, once.
+
+        private List<KeyValuePair<Mesh, UnityEngine.Material>> hologram;
+        private volatile List<KeyValuePair<KeyValuePair<Vector3[], KeyValuePair<Vector3[], Vector2[]>>, KeyValuePair<int[], UnityEngine.Material>>> hologramMade;
+        private bool hologramStarted;
+
+        /// <summary>The class's hologram pieces (mesh and material, in its model space), or null while it's being made.</summary>
+        internal List<KeyValuePair<Mesh, UnityEngine.Material>> Hologram
+        {
+            get
+            {
+                if (hologram == null && !hologramStarted && built && !building && meshes.Count > 0) StartHologram();
+                return hologram;
+            }
+        }
+
+        private void StartHologram()
+        {
+            hologramStarted = true;
+            var parts = meshes.Values.Where(p => p.Material != null).ToList();
+            float cell = length / 200f;
+            var thread = new Thread(() =>
+            {
+                var made = new List<KeyValuePair<KeyValuePair<Vector3[], KeyValuePair<Vector3[], Vector2[]>>, KeyValuePair<int[], UnityEngine.Material>>>();
+                int before = 0, after = 0;
+                try
+                {
+                    foreach (var p in parts)
+                    {
+                        var light = Simplify(p.Verts, p.Normals, p.Uv, p.Tris, cell, out var v, out var n, out var uv);
+                        before += p.Tris.Length / 3; after += light.Length / 3;
+                        if (light.Length > 0) made.Add(new KeyValuePair<KeyValuePair<Vector3[], KeyValuePair<Vector3[], Vector2[]>>, KeyValuePair<int[], UnityEngine.Material>>(
+                            new KeyValuePair<Vector3[], KeyValuePair<Vector3[], Vector2[]>>(v, new KeyValuePair<Vector3[], Vector2[]>(n, uv)), new KeyValuePair<int[], UnityEngine.Material>(light, p.Material)));
+                    }
+                }
+                catch { made.Clear(); }
+                hologramCounts = $"{before} triangles to {after}";
+                hologramMade = made;
+            }) { IsBackground = true, Name = Name + " hologram", Priority = System.Threading.ThreadPriority.BelowNormal };
+            thread.Start();
+        }
+        private string hologramCounts;
+
+        private void FinishHologram()
+        {
+            var made = hologramMade;
+            if (made == null || hologram != null) return;
+            hologramMade = null;
+            var pieces = new List<KeyValuePair<Mesh, UnityEngine.Material>>();
+            foreach (var p in made)
+            {
+                var mesh = new Mesh { name = Name + " hologram", vertices = p.Key.Key, triangles = p.Value.Key };
+                if (p.Key.Value.Key != null) mesh.normals = p.Key.Value.Key; else mesh.RecalculateNormals();
+                if (p.Key.Value.Value != null) mesh.uv = p.Key.Value.Value;
+                mesh.RecalculateBounds();
+                UnityEngine.Object.DontDestroyOnLoad(mesh);
+                pieces.Add(new KeyValuePair<Mesh, UnityEngine.Material>(mesh, p.Value.Value));
+            }
+            hologram = pieces;
+            Plugin.Log.LogInfo($"{Name}: hologram made, {hologramCounts}");
+        }
+
+        /// <summary>Vertices merged on a grid (positions averaged; a corner's normal and mapping kept), collapsed triangles dropped.</summary>
+        private static int[] Simplify(Vector3[] verts, Vector3[] normals, Vector2[] uv, int[] tris, float cell, out Vector3[] outV, out Vector3[] outN, out Vector2[] outUv)
+        {
+            var map = new Dictionary<long, int>();
+            var remap = new int[verts.Length];
+            var sum = new List<Vector3>(); var count = new List<int>(); var n = new List<Vector3>(); var u = new List<Vector2>();
+            for (int i = 0; i < verts.Length; i++)
+            {
+                var p = verts[i];
+                long key = ((long)Mathf.RoundToInt(p.x / cell) & 0xFFFFF) << 40 | ((long)Mathf.RoundToInt(p.y / cell) & 0xFFFFF) << 20 | ((long)Mathf.RoundToInt(p.z / cell) & 0xFFFFF);
+                if (!map.TryGetValue(key, out var at))
+                {
+                    at = map[key] = sum.Count;
+                    sum.Add(Vector3.zero); count.Add(0);
+                    n.Add(normals != null ? normals[i] : Vector3.up);
+                    u.Add(uv != null ? uv[i] : Vector2.zero);
+                }
+                sum[at] += p; count[at]++;
+                remap[i] = at;
+            }
+            var t = new List<int>(tris.Length / 4);
+            for (int i = 0; i + 2 < tris.Length; i += 3)
+            {
+                int a = remap[tris[i]], b = remap[tris[i + 1]], c = remap[tris[i + 2]];
+                if (a != b && b != c && a != c) { t.Add(a); t.Add(b); t.Add(c); }
+            }
+            outV = new Vector3[sum.Count];
+            for (int i = 0; i < outV.Length; i++) outV[i] = sum[i] / count[i];
+            outN = normals != null ? n.ToArray() : null;
+            outUv = uv != null ? u.ToArray() : null;
+            return t.ToArray();
+        }
+
         private void Tick()
         {
+            if (hologramMade != null) FinishHologram();
             // Read and built as the briefing room opens (with the model here), so the hologram and the ship are ready
             // when it's pressed rather than seconds after; one class at a time (each holds a lot while it's read).
             if (!started && (FlownNow == this || ShipChoice.InBriefing) && Available && !ships.Any(s => s != this && s.Busy))
@@ -401,7 +499,10 @@ namespace StbcRevival
             renderers.Add(renderer);
         }
 
-        private sealed class PartMeshes { public Mesh Hull, Plasma, Port, Starboard; public Vector3[] Verts; public int[] Tris; }
+        private sealed class PartMeshes { public Mesh Hull, Plasma, Port, Starboard; public Vector3[] Verts, Normals; public Vector2[] Uv; public int[] Tris; public UnityEngine.Material Material; }
+
+        /// <summary>The hull's shapes (each piece's vertices and triangles, in its model space), for cutting decals from; empty before it's built.</summary>
+        internal List<KeyValuePair<Vector3[], int[]>> HullShapes => meshes.Values.Select(m => new KeyValuePair<Vector3[], int[]>(m.Verts, m.Tris)).ToList();
         private readonly Dictionary<int, PartMeshes> meshes = new Dictionary<int, PartMeshes>(); // made once, shared by both bodies
 
         /// <summary>The class's body made from a player ship's own (its cameras, warp effects, damage spots, hardpoints), a piece per frame.</summary>
@@ -465,10 +566,11 @@ namespace StbcRevival
                     if (part.Uv != null && part.Uv.Length == verts.Length) m.uv = part.Uv;
                     if (part.Normals != null && part.Normals.Length == verts.Length && part.Normals.Any(x => x != Vector3.zero)) m.normals = part.Normals.Select(x => orient(x).normalized).ToArray();
                     else m.RecalculateNormals();
+                    var keptNormals = m.normals;
                     if (material.IsKeywordEnabled("_NORMALMAP")) Tangents(m);
                     m.RecalculateBounds();
                     UnityEngine.Object.DontDestroyOnLoad(m);
-                    shared = new PartMeshes { Hull = m, Verts = verts, Tris = tris };
+                    shared = new PartMeshes { Hull = m, Verts = verts, Tris = tris, Normals = keptNormals, Uv = part.Uv != null && part.Uv.Length == verts.Length ? part.Uv : null, Material = material };
                     // Its Bussard collectors' faces (the red plasma) apart, alive, and its navigation lights (red to port,
                     // green to starboard) blinking together: taken out of the piece.
                     shared.Plasma = takePlasma?.Invoke(part, m, scale);

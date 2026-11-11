@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using StbcRevival.Missions;
 using UnityEngine;
 
 namespace StbcRevival
@@ -11,12 +10,10 @@ namespace StbcRevival
     ///   - Props the room ships with but keeps switched off: the Saurian brandy and glasses and the platter, on
     ///     the side table.
     ///   - The table hologram (Mdl_AegisBriefingRoom: a slowly spinning Aegis, or the Enterprise / Enterprise-D,
-    ///     chosen by ConsoleBriefingRoomShipHolograms) shows the chosen Revival mission's enemy ship instead.
-    ///     It's a copy of the ship prefab's visible meshes only (no AI, physics or network parts), in the
-    ///     Aegis hologram's material, under the same spinning mount. The game's own hologram is hidden by
-    ///     switching its renderers off and back on, so its own ship choice is left alone.
-    ///     With a ship class of ours chosen (CustomShip) and no Revival mission's enemy to show, it shows there the same way,
-    ///     in its own materials (as the game's ships are their own lit models).
+    ///     chosen by ConsoleBriefingRoomShipHolograms) shows the chosen ship: the game's own for its ships, and for a
+    ///     class of ours (CustomShip) a lighter copy of it (CustomShip.Hologram) in its own materials, under the same
+    ///     spinning mount. The game's own hologram is hidden meanwhile by switching its renderers off and back on, so
+    ///     its own ship choice is left alone.
     /// </summary>
     internal static class BriefingRoomDecor
     {
@@ -28,18 +25,8 @@ namespace StbcRevival
             "SaurianBrandyBottleNotGlass", "Glasses", "Platter001", // not the StarFleetLogo: unfinished (no material)
         };
 
-        // The ship each Revival mission sends at you.
-        private static readonly Dictionary<string, string> Enemies = new Dictionary<string, string>
-        {
-            [RevivalMissions.LastStand] = "Sector/Ships/Ship - D5 Cruiser",
-            [RevivalMissions.FleetBattle] = "Sector/Ships/Ship - Klingon Flagship",
-            [RevivalMissions.Patrol] = "Sector/Ships/Ship - Pirate A",
-            [RevivalMissions.Evacuation] = "Sector/Ships/Ship - Bird Of Prey",
-            [RevivalMissions.KobayashiMaru] = "Sector/Ships/Ship - Kobayashi Maru", // the freighter itself
-        };
-
         private static float nextCheck;
-        private static string shown;          // the mission whose ship is on the table ("Ship:<class>:<version>" for a class of ours), or null
+        private static string shown;          // the class of ours on the table ("Ship:<class>"), or null for the game's own
         private const string ShipKey = "Ship:";
         private static GameObject hologram;   // our ship
         private static readonly List<Renderer> hidden = new List<Renderer>(); // the game's hologram, switched off
@@ -61,16 +48,15 @@ namespace StbcRevival
             }
             bool wereOut = ShowProps();
             if (wereOut && !placed) PlaceProps(); // a tick after switching them on, when their bounds are known
-            var mission = RevivalBriefing.RoomSelection();
-            if (mission == null || !Enemies.ContainsKey(mission)) mission = null;
-            // The table shows one ship: the Revival mission's enemy, else the class of ours the crew flies.
+            // The table shows the chosen ship: the game's own hologram, or ours (once its lighter copy is made).
             var flown = CustomShip.FlownNow;
-            string want = mission ?? (flown != null && !CustomShip.Campaign && flown.ModelParts.Length > 0 ? ShipKey + flown.Name + ":" + CustomShip.Version : null);
+            if (flown != null && CustomShip.Campaign) flown = null;
+            var pieces = flown?.Hologram;
+            string want = flown != null && pieces != null ? ShipKey + flown.Name : null;
             if (want == shown && (want == null || hologram != null)) return;
             Restore();
             shown = want;
-            if (mission != null) Show(root, mission);
-            else if (want != null) Show(root, null);
+            if (want != null) Show(root, flown, pieces);
         }
 
         // True when every prop was already out (nothing switched on this time).
@@ -157,21 +143,15 @@ namespace StbcRevival
             return scene.GetRootGameObjects().FirstOrDefault(g => g.name == name);
         }
 
-        private static void Show(GameObject root, string mission)
+        private static void Show(GameObject root, CustomShip flown, List<KeyValuePair<Mesh, Material>> pieces)
         {
             try
             {
-                // The hologram's look: the Aegis hologram's own material, and its layer.
+                // The layer the game's hologram is drawn on.
                 var aegis = root.GetComponentsInChildren<MeshRenderer>(true).FirstOrDefault(r => r.name == "Aegis_Body");
-                var material = aegis != null ? aegis.sharedMaterial : null;
                 int layer = aegis != null ? aegis.gameObject.layer : root.layer;
 
-                var ship = mission != null ? Copy(Enemies[mission], material, layer) : CopyShip(layer);
-                if (ship == null)
-                {
-                    Plugin.Log.LogWarning($"Briefing room: no ship model for {mission ?? CustomShip.FlownNow?.Name}; the table keeps its own hologram");
-                    return;
-                }
+                var ship = CopyShip(flown, pieces, layer);
 
                 hologram = new GameObject("Revival hologram") { layer = layer };
                 hologram.transform.SetParent(root.transform, false);
@@ -196,7 +176,7 @@ namespace StbcRevival
                         dimmed.Add(l);
                     }
                 }
-                Plugin.Log.LogInfo(mission != null ? $"Briefing room: hologram shows {mission}'s {ship.name}" : "Briefing room: hologram shows the " + CustomShip.FlownNow?.Name);
+                Plugin.Log.LogInfo($"Briefing room: hologram shows the {flown.Name}");
             }
             catch (Exception e)
             {
@@ -215,66 +195,19 @@ namespace StbcRevival
             dimmed.Clear();
         }
 
-        // A class of ours: its body's meshes (hull, lights, plasma, name decals; in its body's space: forward z, up y, as
-        // the ships' prefabs) in their own materials.
-        private static GameObject CopyShip(int layer)
+        // A class of ours: its hologram's pieces (in its model space: forward z, up y, as the ships' prefabs) in their own materials.
+        private static GameObject CopyShip(CustomShip flown, List<KeyValuePair<Mesh, Material>> pieces, int layer)
         {
-            var parts = CustomShip.FlownNow?.ModelParts ?? new MeshFilter[0];
-            if (parts.Length == 0) return null;
-            var model = new GameObject(CustomShip.FlownNow?.Name ?? "Ship") { layer = layer };
-            foreach (var f in parts)
+            var model = new GameObject(flown.Name) { layer = layer };
+            foreach (var p in pieces)
             {
-                var part = new GameObject(f.name) { layer = layer };
+                var part = new GameObject(p.Key.name) { layer = layer };
                 part.transform.SetParent(model.transform, false);
-                part.transform.localPosition = f.transform.localPosition;
-                part.transform.localRotation = f.transform.localRotation;
-                part.transform.localScale = f.transform.localScale;
-                part.AddComponent<MeshFilter>().sharedMesh = f.sharedMesh;
+                part.AddComponent<MeshFilter>().sharedMesh = p.Key;
                 var copy = part.AddComponent<MeshRenderer>();
-                copy.sharedMaterials = f.GetComponent<MeshRenderer>().sharedMaterials;
+                copy.sharedMaterial = p.Value;
                 copy.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
                 copy.receiveShadows = false;
-            }
-            return model;
-        }
-
-        // A ship's look, without the ship: its visible meshes (the most detailed level, where it has levels of
-        // detail; no shield bubbles or effects), placed as in the prefab, in the hologram material.
-        private static GameObject Copy(string path, Material material, int layer)
-        {
-            var prefab = Resources.Load(path) as GameObject;
-            if (prefab == null)
-            {
-                Plugin.Log.LogWarning("Briefing room: no prefab " + path);
-                return null;
-            }
-            var lods = prefab.GetComponentsInChildren<LODGroup>(true);
-            var lower = new HashSet<Renderer>(lods.SelectMany(g => g.GetLODs().Skip(1).SelectMany(l => l.renderers)).Where(r => r != null));
-            var model = new GameObject(prefab.name) { layer = layer };
-            var toRoot = prefab.transform.worldToLocalMatrix;
-            foreach (var filter in prefab.GetComponentsInChildren<MeshFilter>(true))
-            {
-                var renderer = filter.GetComponent<MeshRenderer>();
-                if (renderer == null || filter.sharedMesh == null || lower.Contains(renderer)) continue;
-                var name = filter.name.ToLowerInvariant();
-                if (new[] { "shield", "collider", "warp", "glow", "flare", "hit", "bubble", "trail" }.Any(name.Contains)) continue;
-                var part = new GameObject(filter.name) { layer = layer };
-                part.transform.SetParent(model.transform, false);
-                var m = toRoot * filter.transform.localToWorldMatrix;
-                part.transform.localPosition = m.MultiplyPoint3x4(Vector3.zero);
-                part.transform.localRotation = Quaternion.LookRotation(m.GetColumn(2), m.GetColumn(1));
-                part.transform.localScale = new Vector3(m.GetColumn(0).magnitude, m.GetColumn(1).magnitude, m.GetColumn(2).magnitude);
-                part.AddComponent<MeshFilter>().sharedMesh = filter.sharedMesh;
-                var copy = part.AddComponent<MeshRenderer>();
-                copy.sharedMaterials = material != null ? Enumerable.Repeat(material, Math.Max(1, renderer.sharedMaterials.Length)).ToArray() : renderer.sharedMaterials;
-                copy.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-                copy.receiveShadows = false;
-            }
-            if (model.transform.childCount == 0)
-            {
-                UnityEngine.Object.Destroy(model);
-                Plugin.Log.LogWarning("Briefing room: no visible meshes in " + path);
-                return null;
             }
             return model;
         }

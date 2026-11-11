@@ -45,6 +45,8 @@ namespace StbcRevival
             public List<ShipPlace> Places;
             public readonly Dictionary<string, ShipText> Texts = new Dictionary<string, ShipText>();
             public string DrawnFor;
+            public bool Pending, CuttingDecals;          // a drawing, or the decals' cutting, on the worker thread
+            public List<KeyValuePair<string, Mesh>> Decals; // per place: its text's key and the mesh cut from the hull (shared by both bodies)
         }
 
         private static readonly Dictionary<string, ShipLettering> shipLettering = new Dictionary<string, ShipLettering>();
@@ -109,13 +111,16 @@ namespace StbcRevival
                 shipLettering[ship.Name] = lettering = new ShipLettering { Places = places };
             }
             if (lettering.Places.Count == 0) return;
+            // Only the class flown is lettered (the name is the crew's, and the others aren't seen); drawn and cut on the
+            // worker thread, so pressing a ship in the briefing room doesn't stop the game.
             string name = ShipName.Name, registry = ShipName.Registry;
-            bool show = name.Length > 0;
+            bool show = name.Length > 0 && CustomShip.InUse == ship;
             if (show)
             {
                 string want = name + "|" + registry + "|" + Plugin.HullFont.Value;
-                if (lettering.DrawnFor != want && DrawShipTexts(ship, lettering, name, registry)) lettering.DrawnFor = want;
+                if (lettering.DrawnFor != want && !lettering.Pending) DrawShipTexts(ship, lettering, name, registry, want);
                 if (lettering.Texts.Count == 0) return;
+                if (lettering.Decals == null) { if (!lettering.CuttingDecals) CutShipDecals(ship, lettering); return; }
                 foreach (var body in bodies)
                     if (body != null && shipsDecorated.Add(body.GetInstanceID())) { AddShipDecals(ship, lettering, body); CustomShip.Changed(); }
             }
@@ -141,7 +146,7 @@ namespace StbcRevival
         }
 
         /// <summary>One texture per kind of place, as wide as its places are long (relative to their height).</summary>
-        private static bool DrawShipTexts(CustomShip ship, ShipLettering lettering, string name, string registry)
+        private static void DrawShipTexts(CustomShip ship, ShipLettering lettering, string name, string registry, string want)
         {
             string hull = HullText(name), reg = registry.Trim().ToUpperInvariant();
             if (reg.Length == 0) reg = hull; // no registry: the name where it would be
@@ -149,10 +154,16 @@ namespace StbcRevival
             string bare = hull.StartsWith("U.S.S. ", StringComparison.Ordinal) ? hull.Substring(7) : hull;
             var face = LoadFace(hull + reg);
             var baseMaterial = ShipDecalBaseMaterial();
-            if (face == null || baseMaterial == null) return false;
-            foreach (var key in lettering.Places.Select(p => p.Key).Distinct())
+            if (face == null || baseMaterial == null) return;
+            bool preview = Plugin.HullPreview.Value;
+            var places = lettering.Places.ToList();
+            lettering.Pending = true;
+            Run($"the {ship.Name}'s lettering", () =>
             {
-                var place = lettering.Places.First(p => p.Key == key);
+            var drawn = new List<KeyValuePair<string, KeyValuePair<int, int>>>(); var pixels = new List<Color32[]>();
+            foreach (var key in places.Select(p => p.Key).Distinct())
+            {
+                var place = places.First(p => p.Key == key);
                 var kind = place.Kind;
                 float aspect = place.Height / Mathf.Max(0.01f, place.Length);
                 int w = 1024, h = Mathf.RoundToInt(w * aspect);
@@ -202,25 +213,35 @@ namespace StbcRevival
                 var px = new Color32[w * h];
                 for (int i = 0; i < px.Length; i++) px[i] = new Color32(0x16, 0x16, 0x1A, 0);
                 foreach (var kv in lines) DrawShipLine(face, kv.Key, kv.Value, px, w, h);
-                if (!lettering.Texts.TryGetValue(key, out var t))
-                {
-                    t = new ShipText { W = w, H = h };
-                    t.Material = new Material(baseMaterial) { name = ship.Name + " Name Decal (" + key + ")" };
-                    UnityEngine.Object.DontDestroyOnLoad(t.Material);
-                    lettering.Texts[key] = t;
-                }
-                // Made anew each time and not readable (no copy kept in memory); the old one freed.
-                var old = t.Texture;
-                t.Texture = new Texture2D(w, h, TextureFormat.RGBA32, true) { name = ship.Name + " " + key, wrapMode = TextureWrapMode.Clamp, anisoLevel = 4 };
-                t.Texture.SetPixels32(px);
-                t.Texture.Apply(true, true);
-                UnityEngine.Object.DontDestroyOnLoad(t.Texture);
-                t.Material.SetTexture("_MainTex", t.Texture);
-                if (old != null) UnityEngine.Object.Destroy(old);
-                if (Plugin.HullPreview.Value) SavePreview(px, w, h, "hull-name-" + ship.Name + "-" + key.Replace('|', '_') + ".png");
+                drawn.Add(new KeyValuePair<string, KeyValuePair<int, int>>(key, new KeyValuePair<int, int>(w, h)));
+                pixels.Add(px);
             }
-            Plugin.Log.LogInfo($"Hull name: the {ship.Name}'s: \"{reg}\" / \"{hull}\" in {face.Name}, {lettering.Texts.Count} kinds of place");
-            return true;
+            return () =>
+            {
+                for (int k = 0; k < drawn.Count; k++)
+                {
+                    string key = drawn[k].Key; int w = drawn[k].Value.Key, h = drawn[k].Value.Value; var px = pixels[k];
+                    if (!lettering.Texts.TryGetValue(key, out var t))
+                    {
+                        t = new ShipText { W = w, H = h };
+                        t.Material = new Material(baseMaterial) { name = ship.Name + " Name Decal (" + key + ")" };
+                        UnityEngine.Object.DontDestroyOnLoad(t.Material);
+                        lettering.Texts[key] = t;
+                    }
+                    // Made anew each time and not readable (no copy kept in memory); the old one freed.
+                    var old = t.Texture;
+                    t.Texture = new Texture2D(w, h, TextureFormat.RGBA32, true) { name = ship.Name + " " + key, wrapMode = TextureWrapMode.Clamp, anisoLevel = 4 };
+                    t.Texture.SetPixels32(px);
+                    t.Texture.Apply(true, true);
+                    UnityEngine.Object.DontDestroyOnLoad(t.Texture);
+                    t.Material.SetTexture("_MainTex", t.Texture);
+                    if (old != null) UnityEngine.Object.Destroy(old);
+                    if (preview) SavePreview(px, w, h, "hull-name-" + ship.Name + "-" + key.Replace('|', '_') + ".png");
+                }
+                lettering.DrawnFor = want;
+                Plugin.Log.LogInfo($"Hull name: the {ship.Name}'s: \"{reg}\" / \"{hull}\" in {face.Name}, {lettering.Texts.Count} kinds of place (off the main thread)");
+            };
+            }, () => lettering.Pending = false);
         }
 
         private static void DrawShipLine(Face face, Line line, string text, Color32[] px, int w, int h)
@@ -248,70 +269,104 @@ namespace StbcRevival
         }
 
         /// <summary>
-        /// The decals on one body of a class, one per place: the hull's triangles there facing the same way, copied a hair
-        /// above it, the text laid on them.
+        /// The decals of a class, one per place, cut once on the worker thread from its hull's shapes (CustomShip keeps
+        /// them): the triangles there facing the same way, copied a hair above it, the text laid on them; the letters'
+        /// tops point as given, or else to the ship's middle. Both bodies share the meshes.
         /// </summary>
+        private static void CutShipDecals(CustomShip ship, ShipLettering lettering)
+        {
+            var hull = ship.HullShapes;
+            if (hull.Count == 0) return;
+            var places = lettering.Places.ToList();
+            // Everything in the class's model space, worked out here (CustomShip's mapping is plain arithmetic).
+            var centres = places.Select(p => ship.FileToModel(p.Centre).Value).ToList();
+            var normals = places.Select(p => ship.FileDirectionToModel(p.Normal)).ToList();
+            var axes = places.Select(p => ship.FileDirectionToModel(p.Axis)).ToList();
+            var ups = places.Select(p => p.Up.HasValue ? (Vector3?)ship.FileDirectionToModel(p.Up.Value) : null).ToList();
+            float scale = ship.FileScale;
+            lettering.CuttingDecals = true;
+            Run($"the {ship.Name}'s name decals", () =>
+            {
+                var cut = new List<KeyValuePair<string, KeyValuePair<Vector3[], KeyValuePair<Vector2[], int[]>>>>();
+                for (int k = 0; k < places.Count; k++)
+                {
+                    var place = places[k];
+                    Vector3 c = centres[k], n = normals[k], axis = axes[k];
+                    // Letters' tops: across the reading axis, in the surface; as the old lettering's, or else toward the ship's middle.
+                    var up = Vector3.ProjectOnPlane(Vector3.Cross(n, axis), n).normalized;
+                    var towards = ups[k] ?? -c;
+                    if (Vector3.Dot(up, towards) < 0f) up = -up;
+                    var read = Vector3.Cross(n, up).normalized; // left to right, seen from outside
+                    float length = place.Length * scale, height = place.Height * scale, depth = Mathf.Max(0.25f, height);
+                    const float lift = 0.012f;
+                    var verts = new List<Vector3>(); var uvs = new List<Vector2>(); var tris = new List<int>();
+                    foreach (var m in hull)
+                    {
+                        var v = m.Key; var t = m.Value;
+                        for (int i = 0; i + 2 < t.Length && verts.Count < 64000; i += 3)
+                        {
+                            Vector3 a = v[t[i]], b2 = v[t[i + 1]], cc = v[t[i + 2]];
+                            // Quick out: nowhere near the place.
+                            var mid = (a + b2 + cc) / 3f - c;
+                            if (mid.sqrMagnitude > (length + height + depth) * (length + height + depth)) continue;
+                            var tn = Vector3.Cross(b2 - a, cc - a);
+                            if (tn.sqrMagnitude < 1e-14f) continue;
+                            tn.Normalize();
+                            if (Vector3.Dot(tn, n) < 0.5f) continue;
+                            bool near = false, inside = false;
+                            foreach (var p in new[] { a, b2, cc })
+                            {
+                                var d = p - c;
+                                float along = Vector3.Dot(d, read), across = Vector3.Dot(d, up), off = Vector3.Dot(d, n);
+                                if (Mathf.Abs(off) < depth) near = true;
+                                if (Mathf.Abs(along) < length * 0.5f + 0.05f && Mathf.Abs(across) < height * 0.5f + 0.05f) inside = true;
+                            }
+                            if (!near || !inside) continue;
+                            int at = verts.Count;
+                            foreach (var p in new[] { a, b2, cc })
+                            {
+                                var d = p - c;
+                                verts.Add(p + tn * lift);
+                                uvs.Add(new Vector2(Vector3.Dot(d, read) / length + 0.5f, Vector3.Dot(d, up) / height + 0.5f));
+                            }
+                            tris.Add(at); tris.Add(at + 1); tris.Add(at + 2);
+                        }
+                    }
+                    cut.Add(new KeyValuePair<string, KeyValuePair<Vector3[], KeyValuePair<Vector2[], int[]>>>(place.Key + "\n" + place.Kind + " " + place.Centre,
+                        new KeyValuePair<Vector3[], KeyValuePair<Vector2[], int[]>>(verts.ToArray(), new KeyValuePair<Vector2[], int[]>(uvs.ToArray(), tris.ToArray()))));
+                }
+                return () =>
+                {
+                    var decals = new List<KeyValuePair<string, Mesh>>();
+                    foreach (var kv in cut)
+                    {
+                        var parts = kv.Key.Split('\n');
+                        if (kv.Value.Value.Value.Length == 0) { Plugin.Log.LogWarning($"Hull name: no hull at the {ship.Name}'s {parts[1]}"); continue; }
+                        var mesh = new Mesh { name = ship.Name + ShipDecalSuffix, vertices = kv.Value.Key, uv = kv.Value.Value.Key, triangles = kv.Value.Value.Value };
+                        mesh.RecalculateNormals();
+                        mesh.RecalculateBounds();
+                        UnityEngine.Object.DontDestroyOnLoad(mesh);
+                        decals.Add(new KeyValuePair<string, Mesh>(parts[0], mesh));
+                    }
+                    lettering.Decals = decals;
+                    Plugin.Log.LogInfo($"Hull name: the {ship.Name}'s {decals.Count} name decals cut (off the main thread)");
+                };
+            }, () => lettering.CuttingDecals = false);
+        }
+
+        /// <summary>The class's decals on one of its bodies.</summary>
         private static void AddShipDecals(CustomShip ship, ShipLettering lettering, SpacecraftBody body)
         {
             var model = body.transform.Cast<Transform>().FirstOrDefault(t => t.name.StartsWith("Mdl_", StringComparison.Ordinal));
             if (model == null) return;
-            var parts = model.GetComponentsInChildren<MeshFilter>(true).Where(f => f.name.StartsWith(ship.Name + "_", StringComparison.Ordinal) && f.sharedMesh != null).ToList();
-            if (parts.Count == 0) return;
-            var meshes = parts.Select(f => new KeyValuePair<Vector3[], int[]>(f.sharedMesh.vertices, f.sharedMesh.triangles)).ToList();
-            float scale = ship.FileScale;
             int made = 0;
-            foreach (var place in lettering.Places)
+            foreach (var decal in lettering.Decals)
             {
-                if (!lettering.Texts.TryGetValue(place.Key, out var text)) continue;
-                var c = ship.FileToModel(place.Centre).Value;
-                var n = ship.FileDirectionToModel(place.Normal);
-                var axis = ship.FileDirectionToModel(place.Axis);
-                // Letters' tops: across the reading axis, in the surface; as the old lettering's, or else toward the ship's middle.
-                var up = Vector3.ProjectOnPlane(Vector3.Cross(n, axis), n).normalized;
-                var towards = place.Up.HasValue ? ship.FileDirectionToModel(place.Up.Value) : -c;
-                if (Vector3.Dot(up, towards) < 0f) up = -up;
-                var read = Vector3.Cross(n, up).normalized; // left to right, seen from outside
-                float length = place.Length * scale, height = place.Height * scale, depth = Mathf.Max(0.25f, height);
-                const float lift = 0.012f;
-
-                var verts = new List<Vector3>(); var uvs = new List<Vector2>(); var tris = new List<int>();
-                foreach (var m in meshes)
-                {
-                    var v = m.Key; var t = m.Value;
-                    for (int i = 0; i + 2 < t.Length && verts.Count < 64000; i += 3)
-                    {
-                        Vector3 a = v[t[i]], b = v[t[i + 1]], cc = v[t[i + 2]];
-                        var tn = Vector3.Cross(b - a, cc - a);
-                        if (tn.sqrMagnitude < 1e-14f) continue;
-                        tn.Normalize();
-                        if (Vector3.Dot(tn, n) < 0.5f) continue;
-                        bool near = false, inside = false;
-                        foreach (var p in new[] { a, b, cc })
-                        {
-                            var d = p - c;
-                            float along = Vector3.Dot(d, read), across = Vector3.Dot(d, up), off = Vector3.Dot(d, n);
-                            if (Mathf.Abs(off) < depth) near = true;
-                            if (Mathf.Abs(along) < length * 0.5f + 0.05f && Mathf.Abs(across) < height * 0.5f + 0.05f) inside = true;
-                        }
-                        if (!near || !inside) continue;
-                        int at = verts.Count;
-                        foreach (var p in new[] { a, b, cc })
-                        {
-                            var d = p - c;
-                            verts.Add(p + tn * lift);
-                            uvs.Add(new Vector2(Vector3.Dot(d, read) / length + 0.5f, Vector3.Dot(d, up) / height + 0.5f));
-                        }
-                        tris.Add(at); tris.Add(at + 1); tris.Add(at + 2);
-                    }
-                }
-                if (tris.Count == 0) { Plugin.Log.LogWarning($"Hull name: no hull at the {ship.Name}'s {place.Kind} place {place.Centre}"); continue; }
-                var decal = new Mesh { name = ship.Name + ShipDecalSuffix, vertices = verts.ToArray(), uv = uvs.ToArray(), triangles = tris.ToArray() };
-                decal.RecalculateNormals();
-                decal.RecalculateBounds();
+                if (!lettering.Texts.TryGetValue(decal.Key, out var text)) continue;
                 var go = new GameObject(ship.Name + ShipDecalSuffix);
                 go.layer = model.gameObject.layer;
                 go.transform.SetParent(model, false);
-                go.AddComponent<MeshFilter>().sharedMesh = decal;
+                go.AddComponent<MeshFilter>().sharedMesh = decal.Value;
                 var renderer = go.AddComponent<MeshRenderer>();
                 renderer.sharedMaterial = text.Material;
                 renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
