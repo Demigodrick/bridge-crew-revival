@@ -30,22 +30,47 @@ namespace StbcRevival
     {
         internal const string CopyName = "RevivalLayoutCopy";
 
-        [Serializable]
-        internal sealed class LayoutFile
-        {
-            public int format;
-            public string scene;
-            public LayoutPiece[] pieces;
-        }
-
-        [Serializable]
+        /// <summary>One change from the file.</summary>
         internal sealed class LayoutPiece
         {
-            public string path;
-            public float[] pivot;
-            public float[] move;
-            public float turn;
-            public bool hidden;
+            public string Path;
+            public Vector3 Pivot, Move;
+            public float Turn;
+            public bool Hidden;
+        }
+
+        /// <summary>A layout file's changes (format 1); throws, saying what's wrong, if it isn't one.</summary>
+        internal static List<LayoutPiece> ParseLayout(string text)
+        {
+            var root = MiniJson.Parse(text) as Dictionary<string, object>;
+            if (root == null) throw new FormatException("not a JSON object");
+            if (!root.TryGetValue("format", out var format) || !(format is double f) || f != 1) throw new FormatException($"format {format ?? "missing"}, not 1");
+            var list = new List<LayoutPiece>();
+            if (!root.TryGetValue("pieces", out var pieces) || pieces == null) return list;
+            if (!(pieces is List<object> array)) throw new FormatException("pieces isn't a list");
+            int n = 0;
+            foreach (var item in array)
+            {
+                n++;
+                var o = item as Dictionary<string, object>;
+                if (o == null) throw new FormatException($"change {n} isn't an object");
+                Vector3 Vec(string name)
+                {
+                    if (!o.TryGetValue(name, out var v) || !(v is List<object> a) || a.Count != 3 || !(a[0] is double) || !(a[1] is double) || !(a[2] is double))
+                        throw new FormatException($"change {n}: {name} isn't [x, y, z]");
+                    return new Vector3((float)(double)a[0], (float)(double)a[1], (float)(double)a[2]);
+                }
+                if (!o.TryGetValue("path", out var path) || !(path is string ps) || ps.Length == 0) throw new FormatException($"change {n} has no path");
+                list.Add(new LayoutPiece
+                {
+                    Path = ps,
+                    Pivot = Vec("pivot"),
+                    Move = Vec("move"),
+                    Turn = o.TryGetValue("turn", out var t) && t is double td ? (float)td : 0f,
+                    Hidden = o.TryGetValue("hidden", out var h) && h is bool hb && hb,
+                });
+            }
+            return list;
         }
 
         private sealed class Change
@@ -74,6 +99,7 @@ namespace StbcRevival
         private static string boundFile;
         private static DateTime boundWrite;
         private static float nextLook;
+        private static bool lookedOnce;
 
         private static string Folder => Path.Combine(Paths.BepInExRootPath, "bridges");
 
@@ -103,6 +129,7 @@ namespace StbcRevival
                     Forget();
                 }
             }
+            if (!lookedOnce) { lookedOnce = true; Plugin.Log.LogInfo($"Bridge layout: layouts are read from {Folder}{(Directory.Exists(Folder) ? "" : " (not there yet)")}"); }
             if (!Directory.Exists(Folder)) return;
             for (int i = 0; i < SceneManager.sceneCount; i++)
             {
@@ -130,17 +157,16 @@ namespace StbcRevival
         // ------------------------------------------------------------------------------------------- the file
         private static void Load(string file)
         {
-            LayoutFile layout;
-            try { layout = JsonUtility.FromJson<LayoutFile>(File.ReadAllText(file)); }
-            catch (Exception e) { Plugin.Log.LogWarning($"Bridge layout: reading {file}: {e.Message}"); return; }
-            if (layout == null || layout.format != 1) { Plugin.Log.LogWarning($"Bridge layout: {file}: not a layout this version knows (format {layout?.format})"); return; }
-            if (layout.pieces == null || layout.pieces.Length == 0) return;
+            List<LayoutPiece> layout;
+            try { layout = ParseLayout(File.ReadAllText(file)); }
+            catch (Exception e) { Plugin.Log.LogWarning($"Bridge layout: {file} isn't a layout this version can read: {e.Message}"); return; }
+            Plugin.Log.LogInfo($"Bridge layout: {Path.GetFileName(file)} for {scene.name}: {layout.Count} change(s)");
+            if (layout.Count == 0) return;
             var byPath = Index();
             int on = 0, missing = 0, refused = 0;
-            foreach (var p in layout.pieces)
+            foreach (var p in layout)
             {
-                if (string.IsNullOrEmpty(p.path) || p.pivot == null || p.pivot.Length != 3 || p.move == null || p.move.Length != 3) continue;
-                var c = new Change { Path = p.path, Pivot = V(p.pivot), Move = V(p.move), Turn = p.turn, Hidden = p.hidden };
+                var c = new Change { Path = p.Path, Pivot = p.Pivot, Move = p.Move, Turn = p.Turn, Hidden = p.Hidden };
                 var t = Resolve(byPath, c.Path, c.Pivot);
                 if (t == null) { missing++; Plugin.Log.LogInfo($"Bridge layout: {c.Path} isn't in this bridge"); continue; }
                 if (IsStation(t)) { refused++; Plugin.Log.LogInfo($"Bridge layout: {c.Path} is or holds a station: stations stay put"); continue; }
@@ -154,8 +180,6 @@ namespace StbcRevival
                                + (missing > 0 ? $", {missing} not found" : "") + (refused > 0 ? $", {refused} left out" : ""));
             try { WalkMesh.Clear(); } catch { }
         }
-
-        private static Vector3 V(float[] a) => new Vector3(a[0], a[1], a[2]);
 
         // Every object of the scene by its path (our own copies left out).
         private static Dictionary<string, List<Transform>> Index()
