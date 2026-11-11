@@ -1,0 +1,230 @@
+newmtl Cargo_bay_1
+Kd 0.490 0.460 0.360
+d 1.00
+
+newmtl Cargo_bay_2
+Kd 0.600 0.600 0.530
+d 1.00
+
+newmtl D_WIN_LIT
+Kd 0.880 0.960 0.960
+Ke 0.850 0.930 0.930
+d 1.00
+
+newmtl D_WIN_LIT_2
+Kd 0.880 0.960 0.960
+Ke 0.850 0.930 0.930
+d 1.00
+
+newmtl D_WIN_LIT_big
+Kd 1.000 1.000 1.000
+Ke 1.000 1.000 1.000
+d 1.00
+
+newmtl D_WIN_sechull1
+Kd 0.880 0.960 0.960
+d 1.00
+
+newmtl D_esc_pods_hull
+Kd 0.810 0.810 0.810
+d 1.00
+
+newmtl D_escape_pods_under
+Kd 0.190 0.190 0.180
+d 1.00
+
+newmtl D_escpods_base
+Kd 0.290 0.290 0.270
+d 1.00
+
+newmtl D_markings_hull
+Kd 0.950 0.950 0.950
+d 1.00
+
+newmtl D_markings_orange
+Kd 0.950 0.670 0.190
+d 1.00
+
+newmtl D_markings_red
+Kd 1.000 0.000 0.000
+d 1.00
+
+newmtl D_markins_black
+Kd 0.050 0.050 0.050
+d 1.00
+
+newmtl HULL_1__darker__h
+Kd 0.650 0.650 0.650
+d 1.00
+
+newmtl HULL_BLACK
+Kd 0.160 0.160 0.160
+d 1.00
+
+newmtl HULL_black_2_lighter
+Kd 0.360 0.360 0.360
+d 1.00
+
+newmtl HULL_black_3_lighter
+Kd 0.190 0.180 0.180
+d 1.00
+
+newmtl HULL_brown_dark
+Kd 0.380 0.290 0.180
+d 1.00
+
+newmtl HULL_brown_darker
+Kd 0.740 0.690 0.630
+d 1.00
+
+newmtl HULL_dark_3
+Kd 0.190 0.190 0.190
+d 1.00
+
+newmtl HULL_grey_darker
+Kd 0.520 0.520 0.520
+d 1.00
+
+newmtl LIGHT_green
+Kd 0.000 1.000 0.000
+Ke 0.000 0.500 0.000
+d 1.00
+
+newmtl LIGHT_red
+Kd 1.000 0.000 0.000
+Ke 0.500 0.000 0.000
+d 1.00
+
+newmtl LIGHT_white
+Kd 0.940 0.960 0.960
+Ke 0.930 0.970 0.970
+d 1.00
+
+newmtl LIGHT_white_flash
+Kd 0.940 0.960 0.960
+Ke 0.930 0.970 0.970
+d 1.00
+
+newmtl LIGHT_white_nacelle
+Kd 0.760 0.780 0.780
+Ke 0.240 0.260 0.370
+d 1.00
+
+newmtl PHASER_base
+Kd 0.190 0.180 0.190
+d 1.00
+
+newmtl _hull_s_top_big_black
+Kd 0.250 0.250 0.250
+d 1.00
+
+newmtl _hull_shuttlebay_bro
+Kd 0.780 0.730 0.670
+d 1.00
+
+newmtl _phaser_st_lev1_A
+Kd 0.560 0.580 0.610
+d 1.00
+
+newmtl blue_glow
+Kd 0.640 0.760 0.850
+Ke 0.200 0.250 0.300
+d 1.00
+
+newmtl bussard
+Kd 1.000 1.000 1.000
+Ke 0.500 0.000 0.000
+d 1.00
+
+newmtl deflector_2
+Kd 0.980 0.760 0.460
+Ke 0.510 0.390 0.020
+d 1.00
+
+newmtl deflector_3
+Kd 0.980 0.760 0.460
+Ke 0.510 0.390 0.020
+d 1.00
+
+newmtl deflectororange
+Kd 0.980 0.760 0.460
+Ke 0.510 0.390 0.020
+d 1.00
+
+newmtl impulse_2
+Kd 0.680 0.210 0.020
+Ke 0.500 0.250 0.000
+d 1.00
+
+newmtl lightbrown
+Kd 0.810 0.730 0.560
+d 1.00
+
+newmtl shuttle_bay2_wall
+Kd 1.000 1.000 1.000
+d 1.00
+
+newmtl shuttle_bay_1_door
+Kd 0.650 0.650 0.610
+d 1.00
+
+newmtl thrusters_A
+Kd 1.000 0.720 0.250
+d 1.00
+
+newmtl thrusters_B
+Kd 0.790 0.580 0.200
+d 1.00
+
+newmtl thrusters_C
+Kd 0.240 0.240 0.240
+d 1.00
+
+newmtl torpedo_tubes_blue
+Kd 0.000 0.400 0.780
+Ke 0.000 0.250 0.500
+d 1.00
+
+newmtl torpedo_tubes_red
+Kd 1.000 0.000 0.000
+Ke 0.250 0.000 0.000
+d 1.00
+
+newmtl warp_blue
+Kd 1.000 1.000 1.000
+Ke 0.450 0.720 1.000
+d 1.00
+
+newmtl wire_061134006
+Kd 0.720 0.720 0.720
+d 1.00
+
+newmtl wire_088088225
+Kd 0.180 0.180 0.180
+d 1.00
+
+newmtl wire_145028177
+Kd 0.870 0.870 0.870
+d 1.00
+
+newmtl wire_148177026
+Kd 0.890 0.890 0.890
+d 1.00
+
+newmtl wire_198224087
+Kd 0.640 0.640 0.640
+d 1.00
+
+newmtl wire_225088199
+Kd 1.000 0.270 0.190
+Ke 0.950 0.170 0.040
+d 1.00
+
+newmtl wire_227152152
+Kd 0.750 0.750 0.750
+d 1.00
+
+newmtl wire_228184153
+Kd 0.890 0.720 0.600
+d 1.00
+

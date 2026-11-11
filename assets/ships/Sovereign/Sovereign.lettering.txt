@@ -1,0 +1,11 @@
+# Where Sovereign.obj had its own name and registry (measured on the original model, in its raw .obj coordinates).
+# kind     centre x y z               normal x y z           reading axis x y z   length  height   letters' tops x y z      arc: radius  letter height  centre across
+# kinds: both, nameover ("U.S.S. NAME" small over the registry), registry, name, barename (no "U.S.S."), line.
+name      -0.0001  0.2879  1.0144     0.003  0.994  0.109     1 0 0                0.1687  0.0152   0.000  0.109 -0.994
+registry  -0.0009  0.2794  1.0693    -0.007  0.990  0.141     1 0 0                0.2247  0.0810  -0.001  0.141 -0.990     0.1140  0.0240   0.0869
+registry   0.0029  0.1817  1.1388    -0.003 -1.000  0.001     1 0 0                0.2371  0.0598   0.000  0.001  1.000     0.1700  0.0230  -0.1504
+nameover   0.3782  0.2674 -1.3101     0.873  0.484 -0.059     0 0 1                0.0860  0.0164   0 1 0
+nameover   0.3339  0.2679 -1.3102    -0.872  0.487 -0.058     0 0 1                0.0856  0.0159   0 1 0
+nameover  -0.3779  0.2679 -1.3102    -0.872  0.487 -0.058     0 0 1                0.0856  0.0159   0 1 0
+nameover  -0.3336  0.2674 -1.3101     0.873  0.484 -0.059     0 0 1                0.0860  0.0164   0 1 0
+barename  -0.0016  0.1140 -0.6390    -0.012  0.383 -0.924     1 0 0                0.0660  0.0080   0 1 0
