@@ -38,7 +38,10 @@ if [ -d "$ships" ]; then
 fi
 assets+=("$out/SHA256SUMS")
 
-gh release create "v$version" "${assets[@]}" \
+# The tag goes on the commit released: pushed first (docs/version.txt isn't changed yet, so players aren't told
+# before the release exists), and named as the target. Without that GitHub tagged whatever main was before the push.
+git -C "$root" push -q
+gh release create "v$version" "${assets[@]}" --target "$(git -C "$root" rev-parse HEAD)" \
   --title "Bridge Crew Revival $version" --notes "$notes"
 
 # Announce it to players' games only after the release (and its download) exists.
