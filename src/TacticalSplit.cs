@@ -406,6 +406,16 @@ namespace StbcRevival
             var station = root; while (station.parent != null && station.name != "Tactical_root") station = station.parent;
             var areas = station.GetComponentsInChildren<MonoBehaviour>(true).Where(m => m != null && m.GetType().Name == "CameraFocusArea").ToList();
             var mainAreas = areas.Where(ar => ar.GetComponentsInChildren<Transform>(true).Any(buttonSet.Contains)).ToList();
+            // The points each button guides the hands to (wrists before it, finger points on it): where they stood to the
+            // button on the game's console, in its frame there (the strip's facing and up), at their real size: hands don't
+            // shrink with the picture, and the stand-in anchor is scaled very unevenly.
+            var handPoints = new List<KeyValuePair<Transform, KeyValuePair<Transform, Pose>>>();
+            foreach (var k in buttons)
+            {
+                var q0 = Quaternion.Inverse(StripFrame(p, k.Key.position));
+                foreach (var hp in k.Key.GetComponentsInChildren<Transform>(true).Where(q => q.name.Contains("Wrist") || q.name.Contains("CharacterTrigger")))
+                    handPoints.Add(new KeyValuePair<Transform, KeyValuePair<Transform, Pose>>(k.Key, new KeyValuePair<Transform, Pose>(hp, new Pose(q0 * (hp.position - k.Key.position), q0 * hp.rotation))));
+            }
             var anchor = Piece(p, root, "whole", surface, place, placeDirection, Vector3.zero, c0, c1, r0, r1, pxSize, a, b, c, d);
             foreach (var k in buttons)
             {
@@ -413,6 +423,18 @@ namespace StbcRevival
                 var local = t.localPosition; var lr = t.localRotation; var ls = t.localScale;
                 t.SetParent(anchor, false);
                 t.localPosition = local; t.localRotation = lr; t.localScale = ls;
+            }
+            {
+                var n1 = placeDirection(surface.Normal);
+                var q1 = Quaternion.LookRotation(-n1, Vector3.ProjectOnPlane(Vector3.up, n1).normalized);
+                foreach (var e in handPoints)
+                {
+                    var hp = e.Value.Key; var pose = e.Value.Value;
+                    hp.position = e.Key.position + q1 * pose.position;
+                    hp.rotation = q1 * pose.rotation;
+                }
+                var w = handPoints.FirstOrDefault(e => e.Value.Key.name.Contains("ActionLeftWrist"));
+                if (w.Key != null) Note($"hand points: {handPoints.Count} kept at their real offsets, e.g. {w.Value.Key.name} {w.Value.Value.position * 100f} cm (across, up, into the console)");
             }
             p.Face.GetComponent<MeshRenderer>().enabled = false;
             probeColliders.Clear();
@@ -479,6 +501,25 @@ namespace StbcRevival
             AreaField(ar, "_rotation").SetValue(ar, (inv * rotation).eulerAngles);
             AreaField(ar, "_size").SetValue(ar, size);
         }
+
+        /// <summary>The strip's frame at the place nearest a point: forward into the screen (away from the officer), up as level allows.</summary>
+        private static Quaternion StripFrame(Panel p, Vector3 point)
+        {
+            var mesh = p.Face.sharedMesh; var verts = mesh.vertices; var tris = mesh.triangles;
+            var officer = GameObject.Find("Bridge/Stations-1701D/Tactical_root/Tactical");
+            var eye = officer != null ? officer.transform.position + Vector3.up * 1.6f : p.Root.position + Vector3.up;
+            float best = float.MaxValue; var n = -p.Face.transform.forward;
+            for (int i = 0; i + 2 < tris.Length; i += 3)
+            {
+                Vector3 ta = p.Face.transform.TransformPoint(verts[tris[i]]), tb = p.Face.transform.TransformPoint(verts[tris[i + 1]]), tc = p.Face.transform.TransformPoint(verts[tris[i + 2]]);
+                var q = Closest(point, ta, tb, tc, out _, out _, out _);
+                float dd = (point - q).sqrMagnitude;
+                if (dd < best) { best = dd; n = Vector3.Cross(tb - ta, tc - ta).normalized; if (Vector3.Dot(n, eye - q) < 0f) n = -n; }
+            }
+            return Quaternion.LookRotation(-n, Vector3.ProjectOnPlane(Vector3.up, n).normalized);
+        }
+
+        private struct Pose { public Vector3 position; public Quaternion rotation; public Pose(Vector3 p, Quaternion r) { position = p; rotation = r; } }
 
         /// <summary>A point's nearest place on a panel's strip, as picture coordinates; lift: its distance in front (toward the officer).</summary>
         private static Vector2 OnStrip(Panel p, Vector3 point, out float lift)
