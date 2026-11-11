@@ -116,8 +116,10 @@ namespace StbcRevival
         /// </summary>
         internal static void Probe()
         {
-            if (probeColliders.Count == 0 || probeClicks > 12) return;
+            if (probeColliders.Count == 0) return;
             var cam = Camera.main; if (cam == null) return;
+            Centre(cam);
+            if (probeClicks > 12) return;
             if (Input.GetMouseButtonDown(0) && probeTarget == null)
             {
                 var ray = cam.ScreenPointToRay(Input.mousePosition);
@@ -150,6 +152,43 @@ namespace StbcRevival
             {
                 Plugin.Log.LogInfo($"Tactical probe: nearest hand point to {probeTarget.name} came within {probeBest * 1000f:0} mm ({probeBone}); the trigger is {probePlane.GetDistanceToPoint(probeTarget.bounds.center) * 1000f:0} mm in front of the console");
                 probeTarget = null;
+            }
+        }
+
+        private static Vector3 panelCentreW, panelNormalW; private static int eyeState; private static float builtAt, eyeCheckAt;
+        private const float EyeDistance = 0.42f; // the officer's eye this far (level) before the panel's middle, so both its ends are in reach
+
+        /// <summary>The camera (the officer's head) where it stands to the panel: across it (+ right) and before it, level.</summary>
+        private static void EyeToPanel(Vector3 eye, out float across, out float before, out Vector3 right, out Vector3 toward)
+        {
+            toward = Vector3.ProjectOnPlane(panelNormalW, Vector3.up).normalized;
+            right = Vector3.Cross(Vector3.up, toward);
+            var e = eye - panelCentreW; across = Vector3.Dot(e, right); before = Vector3.Dot(e, toward);
+        }
+
+        /// <summary>
+        /// Once the officer is in place: his station moved (level) so the camera stands in the middle before the panel, near
+        /// enough to reach it, wherever the game's figure stands to its station point. Checked a second later.
+        /// </summary>
+        private static void Centre(Camera cam)
+        {
+            if (eyeState >= 2 || Time.unscaledTime - builtAt < 2f) return;
+            var eye = cam.transform.position;
+            if ((eye - panelCentreW).magnitude > 3f) return; // not at the station (yet)
+            EyeToPanel(eye, out float across, out float before, out var right, out var toward);
+            if (eyeState == 0)
+            {
+                var officer = GameObject.Find("Bridge/Stations-1701D/Tactical_root/Tactical");
+                if (officer == null) { eyeState = 2; return; }
+                var delta = -right * across + toward * (EyeDistance - before);
+                officer.transform.position += delta;
+                Plugin.Log.LogInfo($"Tactical eye: {across * 100f:0} cm across, {before * 100f:0} cm before the panel, {(eye.y - panelCentreW.y) * 100f:0} cm above it; officer moved {delta.magnitude * 100f:0} cm");
+                eyeState = 1; eyeCheckAt = Time.unscaledTime + 1f;
+            }
+            else if (Time.unscaledTime > eyeCheckAt)
+            {
+                Plugin.Log.LogInfo($"Tactical eye now: {across * 100f:0} cm across, {before * 100f:0} cm before the panel");
+                eyeState = 2;
             }
         }
 
@@ -406,6 +445,7 @@ namespace StbcRevival
             probeColliders.Clear();
             probeColliders.AddRange(buttons.SelectMany(k => k.Key.GetComponentsInChildren<Collider>(true)));
             probePlane = new Plane(placeDirection(surface.Normal), place(surface.Centre));
+            panelCentreW = place(surface.Centre); panelNormalW = placeDirection(surface.Normal); eyeState = 0; builtAt = Time.unscaledTime;
             foreach (var col in probeColliders.Where(q => q.name.EndsWith("_Trigger") && !q.name.EndsWith("_MouseTrigger")).Take(6))
                 Note($"  {col.name}: {probePlane.GetDistanceToPoint(col.bounds.center) * 1000f:0} mm in front of the console, {col.bounds.size.x * 1000f:0}x{col.bounds.size.y * 1000f:0}x{col.bounds.size.z * 1000f:0} mm");
 
