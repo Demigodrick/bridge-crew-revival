@@ -359,7 +359,9 @@ namespace StbcRevival
                         if (box.NovaLabels[k] != null) box.NovaLabels[k].color = canChoose ? box.NovaColours[k] : grey;
                     if (campaign && nova && box.Aegis.interactable && !JustPressed) { NovaShip.SetForRoom(false); nova = false; }
                     if (box.Nova.interactable != canChoose) box.Nova.interactable = canChoose;
-                    // The row the Nova flies on shows no mark of its own while NOVA's shows.
+                    // NOVA is a ship of its own as far as the box shows (the ship it borrows for now, the Next
+                    // Generation's or the Aegis's, is to be replaced): that row looks unchosen while NOVA is, as when
+                    // another ship is chosen.
                     foreach (var under in new[] { box.Tng, box.Aegis })
                         if (under.graphic != null) under.graphic.canvasRenderer.SetAlpha(on && under.isOn ? 0f : (under.isOn ? 1f : 0f));
                     box.Applying = false;
