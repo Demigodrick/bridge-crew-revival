@@ -46,7 +46,12 @@ let edits = new Map();    // path -> { pivot, move (Vector3), turn (radians abou
 let added = new Map();    // id -> { id, from: { scene, level, path } | { model }, scale, piece }
 let nextId = 1;
 const extras = new THREE.Group(); // the added parts
+// Stations (where players sit): { unit (the station's own group: moves only as a whole), seat (Vector3), chair (the
+// path of a chair standing apart from it at its seat, the captain's: moving it moves the station), marker }.
+let stations = [];
+const seats = new THREE.Group(); // a marker at each station a chair takes with it
 scene.add(extras);
+scene.add(seats);
 let dirty = false;
 const undo = [], redo = [];
 
@@ -67,6 +72,8 @@ function load(b) {
   pieces = [];
   edits = new Map();
   for (const a of added.values()) extras.remove(a.piece.obj);
+  for (const s of stations) { seats.remove(s.marker); s.marker?.geometry.dispose(); }
+  stations = [];
   for (const t of lightmapTextures.values()) t.dispose();
   for (const m of bakedMaterials.values()) m.dispose();
   lightmapTextures.clear();
@@ -91,8 +98,9 @@ function load(b) {
       const box = new THREE.Box3().setFromObject(o);
       const path = o.userData.path;
       o.matrixAutoUpdate = false;
-      pieces.push({ obj: o, path, name: path.split('/').slice(-2).join(' / '), backdrop: box.getSize(new THREE.Vector3()).length() > 50, box, base: o.matrix.clone() });
+      pieces.push({ obj: o, path, name: path.split('/').slice(-2).join(' / '), backdrop: box.getSize(new THREE.Vector3()).length() > 50, box, base: o.matrix.clone(), station: o.userData.station });
     });
+    findStations(gltf.scene.userData.stations ?? []);
     pieces.sort((a, b) => a.path.localeCompare(b.path));
     buildList();
     await loadLayout();
@@ -119,6 +127,44 @@ function countTriangles(o) {
   let n = 0;
   o.traverse(m => { if (m.isMesh) n += (m.geometry.index ? m.geometry.index.count : m.geometry.attributes.position.count) / 3; });
   return n;
+}
+
+// ------------------------------------------------------------------------------------------- stations
+// The chair at a station's seat that isn't part of the station (the captain's stands apart from its station, which
+// holds the captain's consoles and where the captain sits): a piece named as a chair, within 30 cm of the seat.
+function findStations(list) {
+  for (const s of list) {
+    const seat = new THREE.Vector3(...s.seat);
+    let chair = null, best = 0.3;
+    for (const p of pieces) {
+      if (p.station || !/chair/i.test(p.path) || p.box.min.y > seat.y + 0.5 || p.box.max.y < seat.y - 1.2) continue;
+      const dx = Math.max(0, p.box.min.x - seat.x, seat.x - p.box.max.x), dz = Math.max(0, p.box.min.z - seat.z, seat.z - p.box.max.z);
+      const d = Math.hypot(dx, dz);
+      if (d < best || (d === best && chair && p.path.length < chair.length)) { best = d; chair = p.path; }
+    }
+    const st = { unit: s.unit, seat, chair };
+    if (chair) {
+      // A ring on the floor where the station's player sits (and its consoles are): it goes where the chair goes.
+      st.marker = new THREE.Mesh(new THREE.RingGeometry(0.28, 0.34, 40).rotateX(-Math.PI / 2),
+        new THREE.MeshBasicMaterial({ color: 0x4fc3f7, transparent: true, opacity: 0.8, depthTest: false }));
+      st.marker.renderOrder = 10;
+      seats.add(st.marker);
+    }
+    stations.push(st);
+  }
+}
+const stationOf = path => stations.find(s => s.unit === path);
+const chairStation = path => stations.find(s => s.chair && under(s.chair, path));
+
+// Where each chair's station is now: moved with the change its chair is in.
+function placeSeats() {
+  for (const s of stations) {
+    if (!s.marker) continue;
+    const o = ownerOf(s.chair);
+    const at = s.seat.clone();
+    if (o) at.sub(o.e.pivot).applyAxisAngle(new THREE.Vector3(0, 1, 0), o.e.turn).add(o.e.pivot).add(o.e.move);
+    s.marker.position.set(at.x, s.seat.y - 0.45, at.z);
+  }
 }
 
 // ------------------------------------------------------------------------------------------- changes
@@ -174,8 +220,8 @@ function applyPiece(p) {
     tag.classList.toggle('edit', !!o);
   }
 }
-const applyAll = () => { for (const p of pieces) applyPiece(p); refreshSelection(); };
-const applyUnder = (path, refresh = true) => { for (const p of members(path)) applyPiece(p); if (refresh) refreshSelection(); };
+const applyAll = () => { for (const p of pieces) applyPiece(p); placeSeats(); refreshSelection(); };
+const applyUnder = (path, refresh = true) => { for (const p of members(path)) applyPiece(p); placeSeats(); if (refresh) refreshSelection(); };
 
 function editFor(path) {
   let e = edits.get(path);
@@ -227,6 +273,7 @@ function doRedo() { if (redo.length) { undo.push(snapshot()); restore(redo.pop()
 
 function toggleHidden(path) {
   if (path.startsWith('+')) { say('An added part is taken away with Delete, not hidden.'); return; }
+  if (stationOf(path)) { say('A station can be moved, not hidden: players sit there.'); return; }
   const why = blocked(path);
   if (why) { say(why); return; }
   remember();
@@ -257,8 +304,11 @@ async function loadLayout() {
   const res = await fetch(`/api/layout/${bridge.scene}`);
   if (!res.ok) return;
   const layout = await res.json();
-  for (const c of layout.pieces ?? [])
+  for (const c of layout.pieces ?? []) {
+    // A chair's station: written from its chair's change, not one of its own.
+    if (stations.some(s => s.chair && s.unit === c.path)) continue;
     edits.set(c.path, { pivot: fromGame(c.pivot), move: fromGame(c.move), turn: -c.turn * Math.PI / 180, hidden: !!c.hidden });
+  }
   for (const a of layout.added ?? []) {
     const from = a.model ? { model: a.model } : { scene: a.scene, level: a.level, path: a.path };
     try { await makeAdded(a.id, from, a.scale ?? 1); } catch (err) { say(`Couldn't add ${a.model ?? a.path}: ${err.message}`); continue; }
@@ -274,7 +324,10 @@ async function save() {
     format: 1,
     scene: bridge.scene,
     pieces: [...edits].filter(([path]) => !path.startsWith('+'))
-      .map(([path, e]) => ({ path, pivot: toGame(e.pivot), move: toGame(e.move), turn: r4(-e.turn * 180 / Math.PI), hidden: e.hidden })),
+      .map(([path, e]) => ({ path, pivot: toGame(e.pivot), move: toGame(e.move), turn: r4(-e.turn * 180 / Math.PI), hidden: e.hidden }))
+      // A chair's station goes with it, moved the same (where its player sits and its consoles stand).
+      .concat(stations.filter(s => s.chair).map(s => [s, ownerOf(s.chair)]).filter(([, o]) => o && (o.e.move.lengthSq() > 1e-10 || Math.abs(o.e.turn) > 1e-6))
+        .map(([s, { e }]) => ({ path: s.unit, pivot: toGame(e.pivot), move: toGame(e.move), turn: r4(-e.turn * 180 / Math.PI), hidden: false }))),
     added: [...added.values()].map(a => {
       const e = edits.get('+' + a.id);
       return { id: a.id, ...a.from, pivot: toGame(e.pivot), move: toGame(e.move), turn: r4(-e.turn * 180 / Math.PI), scale: r4(a.scale) };
@@ -345,6 +398,8 @@ let sel = [];
 function select(path, scroll = true, add = false) {
   // Inside a changed group: the group.
   if (path) { const o = ownerOf(path); if (o && o.k !== path && under(path, o.k)) path = o.k; }
+  // A part of a station: the station (it moves only as a whole).
+  if (path) { const unit = pieceAt(path)?.station; if (unit && path !== unit && under(path, unit)) path = unit; }
   if (add && path) sel = sel.includes(path) ? sel.filter(x => x !== path) : [path, ...sel.filter(x => !under(x, path) && !under(path, x))];
   else sel = path ? [path] : [];
   for (const p of pieces) p.row?.classList.toggle('sel', sel.some(s => under(p.path, s)));
@@ -383,7 +438,9 @@ function refreshSelection() {
   $('infoBatched').textContent = list.some(p => p.obj.userData.batched) ? 'yes: the game copies it to move it' : 'no';
   const why = sel.map(blocked).find(x => x);
   const hidden = sel.some(s => edits.get(s)?.hidden);
-  $('infoChange').textContent = why ?? (hidden ? 'hidden' : '');
+  const takes = sel.map(chairStation).find(x => x);
+  $('infoChange').textContent = why ?? (hidden ? 'hidden' : stationOf(path) ? 'a station: its console and its player go with it'
+    : takes ? `the ${short(takes.unit).replace(/_?root$/i, '').toLowerCase()} station (its console and seat, the blue ring) goes with it` : '');
   // Typed values: for one pick, its move (metres) and turn (degrees).
   const e = edits.get(path);
   const typing = sel.length === 1 && !why && !hidden;
@@ -549,7 +606,9 @@ function group() {
   const parts = path.split('/');
   // Not the whole bridge (its top object, or the scene's roots).
   if (parts.length <= 3) { say('That would be the whole bridge.'); return; }
-  select(parts.slice(0, -1).join('/'));
+  const up = parts.slice(0, -1).join('/');
+  if (members(up).some(p => p.station)) { say('A station moves only on its own, as a whole.'); return; }
+  select(up);
 }
 
 const pieceOf = o => { for (; o; o = o.parent) { const p = pieces.find(x => x.obj === o); if (p) return p; } return null; };

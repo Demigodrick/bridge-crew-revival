@@ -78,6 +78,7 @@ internal static class GlbExport
         private readonly MemoryStream bin = new();
         private readonly JsonArray nodes = new(), gmeshes = new(), accessors = new(), views = new(), materials = new(), textures = new(), images = new();
         private readonly JsonArray roots = new();
+        private readonly JsonArray stations = new();
         private int drawn, skippedInactive, skippedCompressed, skippedOther, batched, textureFails;
         private readonly SortedDictionary<string, int> problems = new();
         private Vector3 sceneMin = new(float.MaxValue), sceneMax = new(float.MinValue);
@@ -151,6 +152,25 @@ internal static class GlbExport
                 return sb.ToString();
             }
 
+            // Stations (NovaStation): each one's unit is the highest object holding it and no other station (the
+            // station with its console holder and anything else only it has), below the scene's root. The players sit
+            // at the station's own position; its console scene is put under its console holder in the game.
+            var stationCount = new Dictionary<long, int>();
+            var stationTrs = trs.Values.Where(t => t.Components.Any(c => c.Key == 114 && ScriptName(c.Value) == "NovaStation")).ToList();
+            foreach (var st in stationTrs)
+                for (var a = st; a != null; a = a.Father != 0 && trs.TryGetValue(a.Father, out var f) ? f : null)
+                    stationCount[a.Id] = stationCount.TryGetValue(a.Id, out var n) ? n + 1 : 1;
+            var unitPaths = new List<string>();
+            foreach (var st in stationTrs)
+            {
+                var unit = st;
+                while (unit.Father != 0 && trs.TryGetValue(unit.Father, out var up) && up.Father != 0 && stationCount[up.Id] == 1) unit = up;
+                var seat = Vector3.Transform(Vector3.Zero, Flip(World(st)));
+                unitPaths.Add(PathOf(unit));
+                stations.Add((JsonNode)new JsonObject { ["unit"] = PathOf(unit), ["station"] = PathOf(st), ["seat"] = new JsonArray(seat.X, seat.Y, seat.Z) });
+            }
+            string UnitOf(string path) => unitPaths.FirstOrDefault(u => path == u || path.StartsWith(u + "/"));
+
             foreach (var t in trs.Values)
             {
                 PPtr rendererRef = default, filterRef = default;
@@ -183,6 +203,7 @@ internal static class GlbExport
                     if (!m.IsIdentity) node["matrix"] = Matrix(Flip(m));
                     node["extras"] = new JsonObject { ["path"] = path, ["batched"] = isBatched, ["mesh"] = mesh.Name, ["file"] = mname };
                     if (lightmap >= 0) node["extras"]["lightmap"] = lightmap;
+                    if (UnitOf(path) is string unitPath) node["extras"]["station"] = unitPath;
                     roots.Add((JsonNode)(nodes.Count));
                     nodes.Add((JsonNode)(node));
                     drawn++;
@@ -190,6 +211,31 @@ internal static class GlbExport
                 }
                 catch (Exception ex) { skippedOther++; Problem(ex.GetType().Name + ": " + ex.Message); }
             }
+        }
+
+        // A MonoBehaviour's script's name (its class), or null: the behaviour's game object, enabled, then its script,
+        // whose MonoScript (in another file) starts with its name.
+        private readonly Dictionary<(string, long), string> scriptNames = new();
+        private string ScriptName(PPtr behaviour)
+        {
+            try
+            {
+                var (bfile, bname) = Open(scene, behaviour);
+                var be = bfile.Find(behaviour.PathId);
+                if (be == null) return null;
+                var r = bfile.At(be);
+                AssetFile.ReadPPtr(r);   // game object
+                r.ReadByte();            // enabled
+                AssetFile.Align(r);
+                var script = AssetFile.ReadPPtr(r);
+                if (script.IsNull) return null;
+                var (sfile, sname) = Open(bfile, script);
+                if (scriptNames.TryGetValue((sname, script.PathId), out var known)) return known;
+                var se = sfile.Find(script.PathId);
+                string name = se == null ? null : AssetFile.ReadString(sfile.At(se));
+                return scriptNames[(sname, script.PathId)] = name;
+            }
+            catch { return null; }
         }
 
         private static readonly Matrix4x4 FlipZ = Matrix4x4.CreateScale(1, 1, -1);
@@ -586,7 +632,7 @@ internal static class GlbExport
             {
                 ["asset"] = new JsonObject { ["version"] = "2.0", ["generator"] = "Bridge Crew Revival tools/assets glb" },
                 ["scene"] = 0,
-                ["scenes"] = new JsonArray(new JsonObject { ["name"] = Path.GetFileName(scene.Path), ["nodes"] = roots }),
+                ["scenes"] = new JsonArray(new JsonObject { ["name"] = Path.GetFileName(scene.Path), ["nodes"] = roots, ["extras"] = new JsonObject { ["stations"] = stations } }),
                 ["nodes"] = nodes, ["meshes"] = gmeshes, ["accessors"] = accessors, ["bufferViews"] = views,
                 ["buffers"] = new JsonArray(new JsonObject { ["byteLength"] = bin.Length }),
             };
