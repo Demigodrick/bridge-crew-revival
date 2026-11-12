@@ -61,6 +61,9 @@ any station** in REVIVAL SETTINGS (experimental).
   shuttle when a new version is out.
 - **Romulan and Klingon options** in the character creator: ROMULAN for female characters, KLINGON for male
   ones (a Klingon captain's head).
+- **Bridge designer** (optional): move, turn and hide the pieces of a bridge, or add parts from other bridges
+  and your own models, in your browser. Run `bridge-designer` in the game's `BepInEx/bridges` folder (`Bridge
+  Designer.exe` on Windows); the mod puts your layout on, and in a crew everyone sees the host's.
 - **F10** saves a bug report in one keypress, and if the game crashes, a crash report is saved for you on the next launch.
 - Most of it can be switched on and off from **REVIVAL SETTINGS** on the shuttle console.
 
