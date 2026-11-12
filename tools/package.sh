@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Build the mod and pack the release zip: dist/BridgeCrewRevival-<version>.zip
-#   install.sh / install.cmd / install.ps1, plugins/StbcRevival.dll + StbcCore.dll, native/rnnoise.dll, README.txt
+#   install.sh / install.cmd / install.ps1, plugins/StbcRevival.dll + StbcCore.dll, native/rnnoise.dll, README.txt,
+#   designer/ (the bridge designer, a program of its own for Windows and Linux; the installers put it in the game's folder)
 set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 version="$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' "$root/src/StbcRevival.csproj")"
@@ -17,6 +18,17 @@ mkdir -p "$out/native"
 cp "$root/tools/rnnoise/out/rnnoise.dll" "$out/native/"
 # The models of our own ship classes and bridge sets (BepInEx/ships, BepInEx/bridges), beside plugins/ in the zip.
 for d in ships bridges; do [ -d "$root/assets/$d" ] && mkdir -p "$out/$d" && cp -r "$root/assets/$d/." "$out/$d/"; done
+# The bridge designer: one program each for Windows and Linux with .NET inside (nothing to install first), trimmed
+# to what it uses.
+mkdir -p "$out/designer"
+for rid in win-x64 linux-x64; do
+  dotnet publish "$root/tools/bridge-designer" -c Release -r "$rid" --self-contained --nologo -v quiet \
+    -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -p:PublishTrimmed=true -p:DebugType=none \
+    -o "$root/tools/bridge-designer/bin/publish/$rid"
+done
+cp "$root/tools/bridge-designer/bin/publish/win-x64/bridge-designer.exe" "$out/designer/Bridge Designer.exe"
+cp "$root/tools/bridge-designer/bin/publish/linux-x64/bridge-designer" "$out/designer/bridge-designer"
+chmod +x "$out/designer/bridge-designer"
 cp "$root/docs/install.sh" "$out/"
 chmod +x "$out/install.sh"
 # Windows files with CRLF line endings.
@@ -45,6 +57,10 @@ copied and the game closes by itself. Run it later with --import-save (Linux) / 
 Both find the game in your Steam libraries (or pass the game folder as an argument), install
 BepInEx 5.4.23.5 from its GitHub release, and copy the mod. Run again to update or remove it (it
 asks); --uninstall (Linux), -Uninstall or uninstall.cmd (Windows) removes it straight away.
+
+Bridge designer: move, turn and hide the pieces of a bridge, or add parts, in your browser. The installer puts it
+in the game's folder (BridgeDesigner) with a shortcut: Start menu > Bridge Designer (Windows), or your
+applications menu (Linux). It saves to BepInEx/bridges; in a crew, everyone sees the host's bridge.
 
 Voice commands: the installer asks whether the orders are in English or German (-VoiceLanguage German on
 Windows, --voice-language=german on Linux answers it).

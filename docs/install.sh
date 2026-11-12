@@ -112,6 +112,25 @@ set_pvp_test() { # game, true|false
   fi
 }
 
+designer_shortcut() { printf '%s\n' "${XDG_DATA_HOME:-$HOME/.local/share}/applications/bridge-crew-revival-designer.desktop"; }
+
+install_designer() { # game from: the bridge designer (designer/ in the zip; older releases don't have it) into the
+  # game's folder, BridgeDesigner, with an entry in the applications menu. It finds the game from where it is.
+  [ -f "$2/designer/bridge-designer" ] || return 0
+  mkdir -p "$1/BridgeDesigner"
+  # Replaced, not overwritten: a designer still open keeps running its old copy.
+  { cp "$2/designer/bridge-designer" "$1/BridgeDesigner/.bridge-designer.new" &&
+    chmod +x "$1/BridgeDesigner/.bridge-designer.new" &&
+    mv -f "$1/BridgeDesigner/.bridge-designer.new" "$1/BridgeDesigner/bridge-designer"; } ||
+    { warn "Couldn't install the bridge designer."; return 0; }
+  local desktop; desktop="$(designer_shortcut)"
+  mkdir -p "$(dirname "$desktop")"
+  printf '%s\n' "[Desktop Entry]" "Type=Application" "Name=Bridge Designer" \
+    "Comment=Design Star Trek: Bridge Crew's bridges (Bridge Crew Revival)" \
+    "Exec=\"$1/BridgeDesigner/bridge-designer\"" "Path=$1/BridgeDesigner" "Terminal=true" "Categories=Game;" > "$desktop"
+  ok "Bridge designer: Bridge Designer in your applications menu (or $1/BridgeDesigner/bridge-designer)"
+}
+
 ask() { # question -> 0 for yes; reads the terminal even when the script is piped into bash
   local answer=""
   { : < /dev/tty; } 2>/dev/null || return 1   # no terminal (automated run): don't ask
@@ -361,6 +380,8 @@ main() {
           "$game/BepInEx/plugins/StbcCore.dll" "$game/BepInEx/plugins/StbcCore.pdb"
     rm -f "$game/BepInEx/native/rnnoise.dll"
     rmdir "$game/BepInEx/native" 2>/dev/null || true
+    rm -rf "$game/BridgeDesigner"
+    rm -f "$(designer_shortcut)"
     # Without winhttp.dll BepInEx doesn't load at all; the BepInEx folder is left for you to delete.
     rm -f "$game/winhttp.dll" "$game/doorstop_config.ini" "$game/.doorstop_version" "$game/changelog.txt"
     set_prefix_override "$game" off || true
@@ -455,6 +476,7 @@ main() {
   for d in ships bridges; do
     if [ -d "$plugins/../$d" ]; then mkdir -p "$game/BepInEx/$d" && cp -r "$plugins/../$d/." "$game/BepInEx/$d/"; fi
   done
+  install_designer "$game" "$plugins/.."
   ok "Bridge Crew Revival${version:+ $version} installed"
   if [ -n "$beta" ]; then
     set_pvp_test "$game" "$beta"

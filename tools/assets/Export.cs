@@ -183,8 +183,8 @@ internal static class GlbExport
                     if (!m.IsIdentity) node["matrix"] = Matrix(Flip(m));
                     node["extras"] = new JsonObject { ["path"] = path, ["batched"] = isBatched, ["mesh"] = mesh.Name, ["file"] = mname };
                     if (lightmap >= 0) node["extras"]["lightmap"] = lightmap;
-                    roots.Add(nodes.Count);
-                    nodes.Add(node);
+                    roots.Add((JsonNode)(nodes.Count));
+                    nodes.Add((JsonNode)(node));
                     drawn++;
                     if (isBatched) batched++;
                 }
@@ -242,11 +242,11 @@ internal static class GlbExport
                 var prim = Primitive(mesh, sub, scale, offset, lightmap >= 0 ? lightmapST : null);
                 if (prim == null) continue;
                 if (mat >= 0) prim["material"] = mat;
-                prims.Add(prim);
+                prims.Add((JsonNode)(prim));
             }
             if (prims.Count == 0) return meshIndex[(file, id, subKey, matKey)] = -1;
             int index = gmeshes.Count;
-            gmeshes.Add(new JsonObject { ["name"] = mesh.Name, ["primitives"] = prims });
+            gmeshes.Add((JsonNode)(new JsonObject { ["name"] = mesh.Name, ["primitives"] = prims }));
             return meshIndex[(file, id, subKey, matKey)] = index;
         }
 
@@ -351,7 +351,7 @@ internal static class GlbExport
             else if (kw.Contains("_ALPHABLEND_ON") || kw.Contains("_ALPHAPREMULTIPLY_ON") || m.RenderQueue >= 3000) mat["alphaMode"] = "BLEND";
             mat["extras"] = new JsonObject { ["shader"] = ShaderName(file, m.Shader), ["keywords"] = kw, ["queue"] = m.RenderQueue };
             int index = materials.Count;
-            materials.Add(mat);
+            materials.Add((JsonNode)(mat));
             return materialIndex[(fname, link.PathId)] = index;
         }
 
@@ -395,9 +395,9 @@ internal static class GlbExport
                         while (w > MaxTexture || h > MaxTexture) (rgba, w, h) = Half(rgba, w, h);
                         var png = Png(rgba, w, h);
                         int view = View(png, null);
-                        images.Add(new JsonObject { ["name"] = t.Name, ["bufferView"] = view, ["mimeType"] = "image/png" });
+                        images.Add((JsonNode)(new JsonObject { ["name"] = t.Name, ["bufferView"] = view, ["mimeType"] = "image/png" }));
                         index = textures.Count;
-                        textures.Add(new JsonObject { ["source"] = images.Count - 1, ["sampler"] = 0 });
+                        textures.Add((JsonNode)(new JsonObject { ["source"] = images.Count - 1, ["sampler"] = 0 }));
                     }
                 }
             }
@@ -554,7 +554,7 @@ internal static class GlbExport
             var v = new JsonObject { ["buffer"] = 0, ["byteOffset"] = bin.Length, ["byteLength"] = data.Length };
             if (target != null) v["target"] = target.Value;
             bin.Write(data);
-            views.Add(v);
+            views.Add((JsonNode)(v));
             return views.Count - 1;
         }
 
@@ -564,7 +564,7 @@ internal static class GlbExport
             Buffer.BlockCopy(values, 0, bytes, 0, bytes.Length);
             var a = new JsonObject { ["bufferView"] = View(bytes, 34962), ["componentType"] = 5126, ["count"] = values.Length / dim, ["type"] = dim == 2 ? "VEC2" : "VEC3" };
             if (min != null) { a["min"] = new JsonArray(min.Value.X, min.Value.Y, min.Value.Z); a["max"] = new JsonArray(max.Value.X, max.Value.Y, max.Value.Z); }
-            accessors.Add(a);
+            accessors.Add((JsonNode)a);
             return accessors.Count - 1;
         }
 
@@ -574,7 +574,7 @@ internal static class GlbExport
             int type;
             if (vertexCount <= 65535) { bytes = new byte[tris.Length * 2]; for (int i = 0; i < tris.Length; i++) BinaryPrimitives.WriteUInt16LittleEndian(bytes.AsSpan(i * 2), (ushort)tris[i]); type = 5123; }
             else { bytes = new byte[tris.Length * 4]; Buffer.BlockCopy(tris, 0, bytes, 0, bytes.Length); type = 5125; }
-            accessors.Add(new JsonObject { ["bufferView"] = View(bytes, 34963), ["componentType"] = type, ["count"] = tris.Length, ["type"] = "SCALAR" });
+            accessors.Add((JsonNode)new JsonObject { ["bufferView"] = View(bytes, 34963), ["componentType"] = type, ["count"] = tris.Length, ["type"] = "SCALAR" });
             return accessors.Count - 1;
         }
 

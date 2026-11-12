@@ -71,6 +71,37 @@ function Find-Game {
     return $null
 }
 
+# The bridge designer (designer\ in the zip; older releases don't have it): into the game's folder, BridgeDesigner,
+# with a Start menu shortcut. It finds the game from where it is.
+function Get-DesignerShortcut { Join-Path ([Environment]::GetFolderPath("Programs")) "Bridge Designer.lnk" }
+
+function Install-Designer([string]$GameDir, [string]$From) {
+    $exe = Join-Path $From "designer\Bridge Designer.exe"
+    if (-not (Test-Path -LiteralPath $exe)) { return }
+    $target = Join-Path $GameDir "BridgeDesigner"
+    New-Item -ItemType Directory -Force -Path $target | Out-Null
+    $installed = Join-Path $target "Bridge Designer.exe"
+    try {
+        Copy-Item -LiteralPath $exe -Destination $installed -Force -ErrorAction Stop
+    } catch {
+        Warn "Couldn't update the bridge designer (is it open? Close it and run the installer again)."
+        return
+    }
+    # A zip opened in Explorer marks its files as from the internet; Windows would then warn before starting it.
+    Unblock-File -LiteralPath $installed -ErrorAction SilentlyContinue
+    try {
+        $shell = New-Object -ComObject WScript.Shell
+        $link = $shell.CreateShortcut((Get-DesignerShortcut))
+        $link.TargetPath = $installed
+        $link.WorkingDirectory = $target
+        $link.Description = "Design Star Trek: Bridge Crew's bridges (Bridge Crew Revival)"
+        $link.Save()
+        Ok "Bridge designer: Start menu > Bridge Designer (or $installed)"
+    } catch {
+        Ok "Bridge designer: $installed"
+    }
+}
+
 function Get-Download([string]$Url, [string]$File) {
     $ProgressPreference = "SilentlyContinue" # Invoke-WebRequest is very slow with the progress bar
     Invoke-WebRequest -Uri $Url -OutFile $File -UseBasicParsing
@@ -305,6 +336,8 @@ function Install-BridgeCrewRevival([string]$GameDir, [bool]$Uninstall, [string]$
         }
         $native = Join-Path $GameDir "BepInEx\native"
         Remove-Item -LiteralPath (Join-Path $native "rnnoise.dll") -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath (Join-Path $GameDir "BridgeDesigner") -Recurse -Force -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath (Get-DesignerShortcut) -ErrorAction SilentlyContinue
         if ((Test-Path $native) -and -not (Get-ChildItem -LiteralPath $native -Force)) { Remove-Item -LiteralPath $native -ErrorAction SilentlyContinue }
         # Without winhttp.dll BepInEx doesn't load at all; the BepInEx folder is left for you to delete.
         foreach ($name in "winhttp.dll", "doorstop_config.ini", ".doorstop_version", "changelog.txt") {
@@ -410,6 +443,7 @@ function Install-BridgeCrewRevival([string]$GameDir, [bool]$Uninstall, [string]$
                 Copy-Item -Path (Join-Path $assetSource "*") -Destination $assetTarget -Recurse -Force
             }
         }
+        Install-Designer $GameDir (Split-Path -Parent $source)
         Install-Vosk $GameDir $tmp
         Install-VoiceLanguage $GameDir $tmp $Voice
     } finally {
