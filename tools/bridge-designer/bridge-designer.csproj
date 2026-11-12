@@ -6,12 +6,15 @@
     <Nullable>disable</Nullable>
     <AssemblyName>bridge-designer</AssemblyName>
     <RootNamespace>BridgeDesigner</RootNamespace>
+    <Product>Bridge Designer</Product>
+    <!-- Released as one program with .NET inside (tools/package.sh): nothing to install first. -->
+    <InvariantGlobalization>true</InvariantGlobalization>
   </PropertyGroup>
   <ItemGroup>
     <!-- The mod's own reader and the glb exporter (tools/assets), so the designer sees what the game has. -->
     <Compile Include="../../src/AssetFile.cs" />
     <Compile Include="../assets/Export.cs" />
-    <!-- The page, served from beside the program. -->
-    <None Include="web/**" CopyToOutputDirectory="PreserveNewest" />
+    <!-- The page, built into the program (one file to hand out) (the web option serves it from a folder instead). -->
+    <EmbeddedResource Include="web/**" LogicalName="web/%(RecursiveDir)%(Filename)%(Extension)" />
   </ItemGroup>
 </Project>

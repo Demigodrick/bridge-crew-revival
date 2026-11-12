@@ -1,46 +1,57 @@
 // bridge-designer: a standalone bridge viewer (the designer to come) for Star Trek: Bridge Crew, outside the game.
 //
 // It reads the bridges straight out of the game's own files on this PC (with the mod's reader, src/AssetFile.cs,
-// and the glb exporter, tools/assets/Export.cs) and serves them, with the page in web/, to your browser on this PC
+// and the glb exporter, tools/assets/Export.cs) and serves them, with the page in web/ (built into the program), to your browser on this PC
 // only (127.0.0.1). Nothing from the game is copied anywhere else or kept on disk.
 //
 // Layouts (what was moved, turned or hidden) are saved to BepInEx/bridges/<scene>.json in the game folder, the
 // previous one kept as .json.bak; the mod puts a bridge's layout on whenever that bridge loads.
 //
 // Usage: dotnet run -- [--game <game folder>] [--port 8770] [--no-open] [--web <folder>] [--layouts <folder>] [--models <folder>]
-//        (the game folder also from $GAME_DIR; default: Steam's usual place. --web serves the page from a folder,
+//        (the game folder also from $GAME_DIR; otherwise the folder this program is in, if it's in the game's folder
+//        as the installers put it, or the game in your Steam libraries. --web serves the page from a folder,
 //        e.g. web/ in the source, to try changes to it without a rebuild.)
 using System.Diagnostics;
 using System.Net;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 string gameDir = Environment.GetEnvironmentVariable("GAME_DIR");
 int port = 8770;
+int? portArg = null;
 bool open = true;
 string webArg = null, layoutsArg = null, modelsArg = null;
 for (int i = 0; i < args.Length; i++)
 {
     if (args[i] == "--game" && i + 1 < args.Length) gameDir = args[++i];
-    else if (args[i] == "--port" && i + 1 < args.Length) port = int.Parse(args[++i]);
+    else if (args[i] == "--port" && i + 1 < args.Length) port = (portArg = int.Parse(args[++i])).Value;
     else if (args[i] == "--no-open") open = false;
     else if (args[i] == "--web" && i + 1 < args.Length) webArg = Path.GetFullPath(args[++i]);
     else if (args[i] == "--layouts" && i + 1 < args.Length) layoutsArg = Path.GetFullPath(args[++i]);
     else if (args[i] == "--models" && i + 1 < args.Length) modelsArg = Path.GetFullPath(args[++i]);
-    else { Console.Error.WriteLine("usage: bridge-designer [--game <folder>] [--port 8770] [--no-open] [--web <folder>] [--layouts <folder>] [--models <folder>]"); return 1; }
+    else return Fail("usage: bridge-designer [--game <folder>] [--port 8770] [--no-open] [--web <folder>] [--layouts <folder>] [--models <folder>]");
 }
-gameDir ??= DefaultGameDir();
-string dataDir = Path.Combine(gameDir, "stbc_Data");
-if (!File.Exists(Path.Combine(dataDir, "globalgamemanagers")))
+// The game: given, beside this program (installed in the game's folder), or in one of Steam's libraries.
+gameDir ??= GameFinder.Find();
+while (gameDir == null || !GameFinder.IsGame(gameDir))
 {
-    Console.Error.WriteLine($"The game wasn't found in {gameDir}. Give its folder with --game (the one with stbc.exe in it).");
-    return 1;
+    Console.Error.WriteLine(gameDir == null
+        ? "Couldn't find Star Trek: Bridge Crew in your Steam libraries."
+        : $"The game isn't in {gameDir} (there's no stbc_Data folder in it).");
+    if (Console.IsInputRedirected) return Fail("Give the game's folder with --game.");
+    Console.Write("Type or paste the game's folder (the one with stbc.exe in it), then press Enter: ");
+    string typed = Console.ReadLine()?.Trim().Trim('"');
+    if (string.IsNullOrEmpty(typed)) return Fail(null);
+    gameDir = typed;
 }
+string dataDir = Path.Combine(gameDir, "stbc_Data");
 var bridges = Bridges(dataDir);
 Console.WriteLine($"Game: {gameDir}");
 Console.WriteLine($"Bridges: {string.Join(", ", bridges.Select(b => $"{b.Name} (level{b.Level})"))}");
 
-string web = webArg ?? Path.Combine(AppContext.BaseDirectory, "web");
+// The page: inside this program, or from a folder with --web (to try changes to it without a rebuild).
+var page = new Page(webArg);
 string layouts = layoutsArg ?? Path.Combine(gameDir, "BepInEx", "bridges");
 // Models to add to a bridge (.obj with their .mtl and textures): the mod reads them from the game's folder.
 string models = modelsArg ?? Path.Combine(gameDir, "BepInEx", "bridges", "models");
@@ -48,12 +59,31 @@ Console.WriteLine($"Layouts: {layouts}");
 Console.WriteLine($"Models: {models}{(Directory.Exists(models) ? "" : " (not there yet: put .obj models in it to add them to bridges)")}");
 var cache = new Dictionary<int, byte[]>();
 var lightmaps = new Dictionary<(int, int), byte[]>();
-var listener = new HttpListener();
-string url = $"http://127.0.0.1:{port}/";
-listener.Prefixes.Add(url);
-try { listener.Start(); }
-catch (HttpListenerException e) { Console.Error.WriteLine($"Can't listen on {url}: {e.Message} (try --port)"); return 1; }
-Console.WriteLine($"Open {url} (Ctrl+C to stop)");
+HttpListener listener = null;
+string url = null;
+for (int p = port; p < port + 10 && listener == null; p++)
+{
+    string tryUrl = $"http://127.0.0.1:{p}/";
+    // The designer already open (started twice): its page again, and this one goes.
+    if (portArg == null && await AlreadyRunning(tryUrl))
+    {
+        Console.WriteLine($"The bridge designer is already running: {tryUrl}");
+        if (open) OpenBrowser(tryUrl);
+        return 0;
+    }
+    var l = new HttpListener();
+    l.Prefixes.Add(tryUrl);
+    try { l.Start(); listener = l; url = tryUrl; }
+    catch (HttpListenerException e)
+    {
+        l.Close();
+        if (portArg != null) return Fail($"Can't listen on {tryUrl}: {e.Message} (try another --port)");
+    }
+}
+if (listener == null) return Fail($"Can't listen on ports {port} to {port + 9}: they're all in use (try --port)");
+Console.WriteLine();
+Console.WriteLine($"The bridge designer is open in your browser: {url}");
+Console.WriteLine("Keep this window open while you design; close it when you're done.");
 if (open) OpenBrowser(url);
 
 while (true)
@@ -70,7 +100,7 @@ void Serve(HttpListenerContext ctx)
     {
         if (path == "/api/bridges")
         {
-            Send(res, "application/json", JsonSerializer.SerializeToUtf8Bytes(bridges.Select(b => new { level = b.Level, scene = b.Scene, name = b.Name })));
+            Send(res, "application/json", Encoding.UTF8.GetBytes(new JsonArray(bridges.Select(b => (JsonNode)new JsonObject { ["level"] = b.Level, ["scene"] = b.Scene, ["name"] = b.Name }).ToArray()).ToJsonString()));
             return;
         }
         if (path.StartsWith("/api/bridge/") && path.EndsWith(".glb") && int.TryParse(path["/api/bridge/level".Length..^4], out int level))
@@ -108,7 +138,7 @@ void Serve(HttpListenerContext ctx)
             var list = Directory.Exists(models)
                 ? Directory.GetFiles(models, "*.obj", SearchOption.AllDirectories).Select(f => Path.GetRelativePath(models, f).Replace('\\', '/')).OrderBy(f => f).ToArray()
                 : Array.Empty<string>();
-            Send(res, "application/json", JsonSerializer.SerializeToUtf8Bytes(list));
+            Send(res, "application/json", Encoding.UTF8.GetBytes(new JsonArray(list.Select(f => (JsonNode)f).ToArray()).ToJsonString()));
             return;
         }
         if (path.StartsWith("/api/models/"))
@@ -150,11 +180,9 @@ void Serve(HttpListenerContext ctx)
             res.StatusCode = 405; res.Close(); return;
         }
         // The page's own files.
-        string rel = path == "/" ? "index.html" : path.TrimStart('/');
-        string file = Path.GetFullPath(Path.Combine(web, rel));
-        if (!file.StartsWith(Path.GetFullPath(web) + Path.DirectorySeparatorChar) || !File.Exists(file)) { res.StatusCode = 404; res.Close(); return; }
-        string type = Path.GetExtension(file) switch { ".html" => "text/html; charset=utf-8", ".js" => "text/javascript", ".css" => "text/css", _ => "application/octet-stream" };
-        Send(res, type, File.ReadAllBytes(file));
+        var (type, bytes) = page.Get(path == "/" ? "index.html" : path.TrimStart('/'));
+        if (bytes == null) { res.StatusCode = 404; res.Close(); return; }
+        Send(res, type, bytes);
     }
     catch (Exception e)
     {
@@ -198,6 +226,7 @@ static void Send(HttpListenerResponse res, string type, byte[] body)
     res.ContentType = type;
     res.ContentLength64 = body.Length;
     res.Headers["Cache-Control"] = "no-store";
+    res.Headers["X-Bridge-Designer"] = "1";
     res.OutputStream.Write(body);
     res.Close();
 }
@@ -236,13 +265,28 @@ static List<(int Level, string Scene, string Name)> Bridges(string dataDir)
     return found;
 }
 
-static string DefaultGameDir()
+// Ours, answering on that address? (The bridge list is only ours.)
+static async Task<bool> AlreadyRunning(string url)
 {
-    string home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-    var candidates = OperatingSystem.IsWindows()
-        ? new[] { @"C:\Program Files (x86)\Steam\steamapps\common\Star Trek Bridge Crew" }
-        : new[] { Path.Combine(home, ".local/share/Steam/steamapps/common/Star Trek Bridge Crew"), Path.Combine(home, ".steam/steam/steamapps/common/Star Trek Bridge Crew") };
-    return candidates.FirstOrDefault(Directory.Exists) ?? candidates[0];
+    try
+    {
+        using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(1) };
+        using var r = await http.GetAsync(url + "api/bridges");
+        return r.IsSuccessStatusCode && r.Headers.TryGetValues("X-Bridge-Designer", out _);
+    }
+    catch { return false; }
+}
+
+// A problem said, and (started from a double-click) the window kept open to read it.
+static int Fail(string message)
+{
+    if (message != null) Console.Error.WriteLine(message);
+    if (!Console.IsInputRedirected && OperatingSystem.IsWindows())
+    {
+        Console.Error.WriteLine("Press Enter to close.");
+        Console.ReadLine();
+    }
+    return 1;
 }
 
 static void OpenBrowser(string url)
