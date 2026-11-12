@@ -58,9 +58,9 @@ Both find the game in your Steam libraries (or pass the game folder as an argume
 BepInEx 5.4.23.5 from its GitHub release, and copy the mod. Run again to update or remove it (it
 asks); --uninstall (Linux), -Uninstall or uninstall.cmd (Windows) removes it straight away.
 
-Bridge designer (optional): move, turn and hide the pieces of a bridge, or add parts, in your browser. Run
-"Bridge Designer.exe" (Windows) or bridge-designer (Linux) from designer/ here or from the game's BepInEx/bridges
-folder. Layouts are saved in BepInEx/bridges; in a crew, everyone sees the host's bridge.
+Bridge designer (optional): move, turn and hide the pieces of a bridge, or add parts, in your browser. The
+installer puts it in the game's BepInEx/bridges folder: run "Bridge Designer.exe" (Windows) or bridge-designer
+(Linux) there. Layouts are saved beside it; in a crew, everyone sees the host's bridge.
 
 Voice commands: the installer asks whether the orders are in English or German (-VoiceLanguage German on
 Windows, --voice-language=german on Linux answers it).
