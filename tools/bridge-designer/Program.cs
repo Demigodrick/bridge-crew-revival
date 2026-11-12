@@ -17,6 +17,10 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
+// "0.7.38+73872a7": the mod's version and the commit this was built from.
+string version = typeof(GameFinder).Assembly.GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
+    .OfType<System.Reflection.AssemblyInformationalVersionAttribute>().FirstOrDefault()?.InformationalVersion ?? "?";
+Console.WriteLine($"Bridge designer {version}");
 string gameDir = Environment.GetEnvironmentVariable("GAME_DIR");
 int port = 8770;
 int? portArg = null;
@@ -67,7 +71,7 @@ for (int p = port; p < port + 10 && listener == null; p++)
     // The designer already open (started twice): its page again, and this one goes.
     if (portArg == null && await AlreadyRunning(tryUrl))
     {
-        Console.WriteLine($"The bridge designer is already running: {tryUrl}");
+        Console.WriteLine($"The bridge designer is already running: {tryUrl} (close it first to run this one, {version})");
         if (open) OpenBrowser(tryUrl);
         return 0;
     }
@@ -98,6 +102,11 @@ void Serve(HttpListenerContext ctx)
     string path = ctx.Request.Url!.AbsolutePath;
     try
     {
+        if (path == "/api/version")
+        {
+            Send(res, "text/plain; charset=utf-8", Encoding.UTF8.GetBytes(version));
+            return;
+        }
         if (path == "/api/bridges")
         {
             Send(res, "application/json", Encoding.UTF8.GetBytes(new JsonArray(bridges.Select(b => (JsonNode)new JsonObject { ["level"] = b.Level, ["scene"] = b.Scene, ["name"] = b.Name }).ToArray()).ToJsonString()));

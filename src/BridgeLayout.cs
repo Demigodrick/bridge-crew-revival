@@ -132,6 +132,7 @@ namespace StbcRevival
             public string CopyProblem;
             public Bounds BaseBounds;   // what's drawn, where the bridge had it
             public bool HasBounds;
+            public readonly List<Bounds> Chairs = new List<Bounds>(); // its chairs (not a station's), where the bridge had them
 
             public bool Moved => Move.sqrMagnitude > 1e-8f || Mathf.Abs(Turn) > 1e-3f;
         }
@@ -274,9 +275,48 @@ namespace StbcRevival
                 Refresh(c);
                 on++;
             }
+            on += ChairStations(byPath);
             Plugin.Log.LogInfo($"Bridge layout: {scene.name}: {on} change(s) put on"
                                + (missing > 0 ? $", {missing} not found" : "") + (refused > 0 ? $", {refused} left out" : ""));
             try { WalkMesh.Clear(); } catch { }
+        }
+
+        /// <summary>
+        /// A moved chair standing at a station's seat apart from the station (the captain's) takes the station with it,
+        /// moved the same: its console and its player go there too. The designer writes the station's change itself;
+        /// this is for a layout without it (one saved by an older designer).
+        /// </summary>
+        private static int ChairStations(Dictionary<string, List<Transform>> byPath)
+        {
+            int linked = 0;
+            foreach (var station in UnityEngine.Object.FindObjectsOfType<NovaStation>())
+            {
+                if (station == null || station.gameObject.scene != scene) continue;
+                // Its unit: the highest object holding it and no other station, below the scene's root.
+                var unit = station.transform;
+                while (unit.parent != null && unit.parent.parent != null && unit.parent.GetComponentsInChildren<NovaStation>(true).Length == 1) unit = unit.parent;
+                if (changes.Exists(o => o.T != null && (o.T == unit || unit.IsChildOf(o.T) || o.T.IsChildOf(unit)))) continue;
+                Vector3 seat = station.transform.position;
+                Change by = null;
+                foreach (var c in changes)
+                {
+                    if (!c.Moved || c.T == null) continue;
+                    foreach (var b in c.Chairs)
+                    {
+                        float dx = Mathf.Max(0f, Mathf.Abs(seat.x - b.center.x) - b.extents.x), dz = Mathf.Max(0f, Mathf.Abs(seat.z - b.center.z) - b.extents.z);
+                        if (Mathf.Sqrt(dx * dx + dz * dz) < 0.3f && b.min.y < seat.y + 0.5f && b.max.y > seat.y - 1.2f) { by = c; break; }
+                    }
+                    if (by != null) break;
+                }
+                if (by == null) continue;
+                var s = new Change { Path = Walking.Bridge.Path(unit), Pivot = by.Pivot, Move = by.Move, Turn = by.Turn };
+                Bind(s, unit);
+                changes.Add(s);
+                Refresh(s);
+                linked++;
+                Plugin.Log.LogInfo($"Bridge layout: {s.Path} (a station) goes with {by.Path}, the chair at its seat");
+            }
+            return linked;
         }
 
         // Every object of the scene by its path (our own copies left out).
@@ -362,6 +402,8 @@ namespace StbcRevival
                 {
                     if (!c.HasBounds) { c.BaseBounds = r.bounds; c.HasBounds = true; }
                     else c.BaseBounds.Encapsulate(r.bounds);
+                    if (Walking.Bridge.Path(r.transform).IndexOf("chair", StringComparison.OrdinalIgnoreCase) >= 0 && r.GetComponentInParent<NovaStation>() == null)
+                        c.Chairs.Add(r.bounds);
                 }
             }
             foreach (var col in t.GetComponentsInChildren<Collider>(false)) if (col.enabled) c.Colliders.Add(col);
