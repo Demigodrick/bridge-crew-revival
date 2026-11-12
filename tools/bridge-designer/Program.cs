@@ -7,7 +7,8 @@
 // Layouts (what was moved, turned or hidden) are saved to BepInEx/bridges/<scene>.json in the game folder, the
 // previous one kept as .json.bak; the mod puts a bridge's layout on whenever that bridge loads.
 //
-// Usage: dotnet run -- [--game <game folder>] [--port 8770] [--no-open] [--web <folder>] [--layouts <folder>] [--models <folder>]
+// Usage: dotnet run -- [--game <game folder>] [--port 8770] [--no-open] [--stay] [--web <folder>] [--layouts <folder>] [--models <folder>]
+//        (it stops by itself once its page is closed; --stay keeps it running until Ctrl+C)
 //        (the game folder also from $GAME_DIR; otherwise the folder this program is in, if it's in the game's folder
 //        as the installers put it, or the game in your Steam libraries. --web serves the page from a folder,
 //        e.g. web/ in the source, to try changes to it without a rebuild.)
@@ -24,17 +25,18 @@ Console.WriteLine($"Bridge designer {version}");
 string gameDir = Environment.GetEnvironmentVariable("GAME_DIR");
 int port = 8770;
 int? portArg = null;
-bool open = true;
+bool open = true, stay = false;
 string webArg = null, layoutsArg = null, modelsArg = null;
 for (int i = 0; i < args.Length; i++)
 {
     if (args[i] == "--game" && i + 1 < args.Length) gameDir = args[++i];
     else if (args[i] == "--port" && i + 1 < args.Length) port = (portArg = int.Parse(args[++i])).Value;
     else if (args[i] == "--no-open") open = false;
+    else if (args[i] == "--stay") stay = true;
     else if (args[i] == "--web" && i + 1 < args.Length) webArg = Path.GetFullPath(args[++i]);
     else if (args[i] == "--layouts" && i + 1 < args.Length) layoutsArg = Path.GetFullPath(args[++i]);
     else if (args[i] == "--models" && i + 1 < args.Length) modelsArg = Path.GetFullPath(args[++i]);
-    else return Fail("usage: bridge-designer [--game <folder>] [--port 8770] [--no-open] [--web <folder>] [--layouts <folder>] [--models <folder>]");
+    else return Fail("usage: bridge-designer [--game <folder>] [--port 8770] [--no-open] [--stay] [--web <folder>] [--layouts <folder>] [--models <folder>]");
 }
 // The game: given, beside this program (installed in the game's folder), or in one of Steam's libraries.
 gameDir ??= GameFinder.Find();
@@ -87,8 +89,27 @@ for (int p = port; p < port + 10 && listener == null; p++)
 if (listener == null) return Fail($"Can't listen on ports {port} to {port + 9}: they're all in use (try --port)");
 Console.WriteLine();
 Console.WriteLine($"The bridge designer is open in your browser: {url}");
-Console.WriteLine("Keep this window open while you design; close it when you're done.");
+Console.WriteLine(stay ? "Ctrl+C to stop." : "It stops by itself when you close its page in the browser.");
 if (open) OpenBrowser(url);
+
+// Ends once its pages are all closed (none back within 10 s, a reload's time): started from a double-click it may
+// have no window to close. Each page holds /api/alive open while it's there.
+int pages = 0;
+bool hadPage = false;
+if (!stay)
+    _ = Task.Run(async () =>
+    {
+        DateTime? none = null;
+        while (true)
+        {
+            await Task.Delay(1000);
+            if (Volatile.Read(ref pages) > 0 || !hadPage) { none = null; continue; }
+            none ??= DateTime.UtcNow;
+            if (DateTime.UtcNow - none.Value < TimeSpan.FromSeconds(10)) continue;
+            Console.WriteLine("Its page is closed: the bridge designer has stopped.");
+            Environment.Exit(0);
+        }
+    });
 
 while (true)
 {
@@ -102,6 +123,32 @@ void Serve(HttpListenerContext ctx)
     string path = ctx.Request.Url!.AbsolutePath;
     try
     {
+        if (path == "/api/alive")
+        {
+            // Held open while the page is there (server-sent events, a comment every 5 s to notice it's gone).
+            Interlocked.Increment(ref pages);
+            hadPage = true;
+            try
+            {
+                res.ContentType = "text/event-stream";
+                res.Headers["Cache-Control"] = "no-store";
+                res.SendChunked = true;
+                var ping = Encoding.UTF8.GetBytes(": here\n\n");
+                while (true)
+                {
+                    res.OutputStream.Write(ping);
+                    res.OutputStream.Flush();
+                    Thread.Sleep(5000);
+                }
+            }
+            catch { }
+            finally
+            {
+                Interlocked.Decrement(ref pages);
+                try { res.Abort(); } catch { }
+            }
+            return;
+        }
         if (path == "/api/version")
         {
             Send(res, "text/plain; charset=utf-8", Encoding.UTF8.GetBytes(version));

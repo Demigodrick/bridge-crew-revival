@@ -927,6 +927,8 @@ renderer.setAnimationLoop(() => {
 });
 
 // ------------------------------------------------------------------------------------------- start
+// While this page is open the designer keeps running; it stops by itself once it's closed.
+new EventSource('/api/alive');
 fetch('/api/version').then(r => r.ok ? r.text() : '').then(v => { $('version').textContent = v ? 'v' + v : ''; document.title = `Bridge Designer ${v}`; });
 const bridges = await (await fetch('/api/bridges')).json();
 for (const b of bridges) $('bridge').add(new Option(b.name, b.level));
