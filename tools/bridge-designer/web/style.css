@@ -72,3 +72,5 @@ button:disabled { opacity: .45; cursor: default; }
 .tools { grid-template-columns: minmax(0, 1fr); }
 .tools > * { min-width: 0; }
 .tools .row > * { min-width: 0; }
+
+h1 .version { font-weight: 400; letter-spacing: 0; text-transform: none; opacity: 0.6; font-size: 0.85em; margin-left: 0.4em; }

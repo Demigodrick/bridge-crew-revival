@@ -9,7 +9,14 @@
     <Product>Bridge Designer</Product>
     <!-- Released as one program with .NET inside (tools/package.sh): nothing to install first. -->
     <InvariantGlobalization>true</InvariantGlobalization>
+    <!-- The mod's version, and (below) the commit it's built from: shown on the page and at the start. -->
+    <Version>$([System.Text.RegularExpressions.Regex]::Match($([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)../../src/StbcRevival.csproj')), '&lt;Version&gt;(.*?)&lt;/Version&gt;').Groups[1].Value)</Version>
   </PropertyGroup>
+  <Target Name="CommitInVersion" BeforeTargets="GetAssemblyVersion;GenerateAssemblyInfo" Condition="'$(SourceRevisionId)' == ''">
+    <Exec Command="git rev-parse --short HEAD" ConsoleToMSBuild="true" StandardOutputImportance="low" ContinueOnError="true" WorkingDirectory="$(MSBuildThisFileDirectory)">
+      <Output TaskParameter="ConsoleOutput" PropertyName="SourceRevisionId" />
+    </Exec>
+  </Target>
   <ItemGroup>
     <!-- The mod's own reader and the glb exporter (tools/assets), so the designer sees what the game has. -->
     <Compile Include="../../src/AssetFile.cs" />
