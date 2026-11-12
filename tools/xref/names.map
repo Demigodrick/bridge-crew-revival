@@ -14706,3 +14706,13 @@ SVR.Network.JIBGJOLEDDA = PS4SignedOutEvent?             # UplayEvent_maybe subc
 BPKBKGDNICF = AkPositionSourceType                       # Wwise: AkUserDef, AkGameDef (AkPositioningInfo.posSourceType)
 FNLOEMFHOIG = HeaderAttribute?                           # PropertyAttribute with header/subtitle strings
 AI.OAJGLMPBCFB = ToggleOrder                             # Enable, Disable, NoChange (CommandManager _armTorpedoes / _raiseShields)
+
+# PvP mixed-bridge sweep (2026-11-12)
+GamePhase::MELLPODPEPG = TrackPhaseStats  # empty StatTracker hook called from FinishEnterPhase
+RedShirtManager::OJJACDLOIND = _lastSpiceIdleTime  # TNG spice-idle timer
+RedShirtManager::MJAFOGOHKMJ = _spiceIdleDelay  # Random.Range(_timeBetweenSpiceIdle ± variance)
+RedShirtManager::CBEBCPNDEEC = _crewStations  # Dictionary<CrewMember, RedShirtStation>; synced as (crew, station index)
+RedShirtManager::JKCAFFGNCFO = _alertState?  # synced bool; red alert or impact alert
+ConsoleBriefingRoom::BBIIGMGKLOE = _beginMusicPlayed
+NovaSpawnManager::EDHNBFPKFHF = _npcsSpawned  # set after SpawnNPCs; serialized last; ProcessPendingSpawns' third flag
+DistributedSystems::IAEABKMLNJH = _tasks  # List<DSTask>; the master serializes it in NetworkSerialize
