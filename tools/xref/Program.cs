@@ -133,7 +133,7 @@ switch (args[0])
         var t = T(args[1]);
         if (t == null) { Console.WriteLine("no such type"); break; }
         Console.WriteLine($"type {t.FullName} : {t.BaseType?.FullName}");
-        foreach (var f in t.Fields) Console.WriteLine($"  field {(f.IsStatic ? "static " : "")}{f.FieldType.FullName} {f.Name}");
+        foreach (var f in t.Fields) Console.WriteLine($"  field {(f.IsStatic ? "static " : "")}{f.FieldType.FullName} {f.Name}{(f.HasConstant ? " = " + f.Constant : "")}");
         foreach (var p in t.Properties) Console.WriteLine($"  property {p.PropertyType.FullName} {p.Name}");
         foreach (var m in t.Methods.Where(m => live.Contains(m) || args.Length > 2)) Console.WriteLine("  " + L(m));
         break;

@@ -291,6 +291,11 @@ foreach (var ty in new[] { "Sector.Spacecraft.Subsystems.HullServer", "Sector.Sp
 Check("  NetworkStatus.SetError(error, popup, ...) (hand-off: no popup for failed regroup joins)",
     game.GetType("SVR.Network.NetworkStatus")?.GetMethods(BindingFlags.Public | BindingFlags.Static).FirstOrDefault(m => m.Name == "SetError" && m.GetParameters().Length == 4));
 Check("  PAFNPDODDCM/OHDEDPBGFFE.None (popup mode)", game.GetType("SVR.Network.PAFNPDODDCM+OHDEDPBGFFE")?.GetField("None"));
+Check("GPMTransitionManager.HOOLAEHPPKI(Error) (FailWithError: host hand-off)", game.GetType("GPMTransitionManager")?.GetMethods(Inst).FirstOrDefault(m => m.Name == "HOOLAEHPPKI" && m.GetParameters().Length == 1));
+Check("  Error.KBNGALKDCHL(string) (set_Message)", game.GetType("SVR.Network.PAFNPDODDCM")?.GetMethods(Inst).FirstOrDefault(m => m.Name == "KBNGALKDCHL" && m.GetParameters().Length == 1));
+Check("  Error.get_ErrorId", game.GetType("SVR.Network.PAFNPDODDCM")?.GetMethod("get_ErrorId", Inst));
+Check("  NetErrorIntroElement.CCPDMKAHEDO (_currentError)", game.GetType("NetErrorIntroElement")?.GetField("CCPDMKAHEDO", Inst));
+Check("  NetErrorIntroElement.Update / OnReconnect", game.GetType("NetErrorIntroElement")?.GetMethod("Update", Inst) != null ? game.GetType("NetErrorIntroElement")?.GetMethod("OnReconnect", Inst) : null);
 Check("PhotonNetwork.get_playerList (host hand-off)", photon?.GetMethod("get_playerList", PS));
 var roomType = photon?.GetMethod("get_room", PS)?.ReturnType;
 foreach (var m in new[] { "get_maxPlayers", "get_open", "get_visible", "get_propertiesListedInLobby", "get_customProperties", "get_name" })
