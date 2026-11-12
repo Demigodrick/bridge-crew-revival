@@ -71,4 +71,15 @@ public class VoiceWireTests
         buf[0] = (byte)'R';
         Assert.False(VoiceWire.TryReadReport(buf, len, out _, out _, out _));
     }
+
+    [Fact]
+    public void PingRoundTrips()
+    {
+        var b = new byte[16];
+        int n = VoiceWire.WritePing(b, VoiceWire.PingType, 123456789u);
+        Assert.True(VoiceWire.TryReadPing(b, n, VoiceWire.PingType, out uint t));
+        Assert.Equal(123456789u, t);
+        Assert.False(VoiceWire.TryReadPing(b, n, VoiceWire.PongType, out _));
+        Assert.False(VoiceWire.TryReadPing(b, n - 1, VoiceWire.PingType, out _));
+    }
 }

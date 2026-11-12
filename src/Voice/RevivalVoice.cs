@@ -38,6 +38,7 @@ namespace StbcRevival
             public float ReportedAt = -100f;
             public NetSim Sim;
             public string SimSpec;
+            public int Pings, Pongs, RttSum, RttMax;   // since the last 30 s report
         }
 
         private static readonly Dictionary<ulong, Peer> peers = new Dictionary<ulong, Peer>();
@@ -45,6 +46,7 @@ namespace StbcRevival
         private static volatile HashSet<ulong> sendsTo = new HashSet<ulong>(); // replaced whole; read by the send hook
         private static readonly byte[] receiveBuffer = new byte[64 * 1024];
         private static readonly byte[] reportBuffer = new byte[16];
+        private static readonly byte[] pingBuffer = new byte[VoiceWire.PingLength];
         private static readonly VoicePacketIn packetIn = new VoicePacketIn();
         private static float nextRefresh, nextReport, nextLog;
         private static bool running;
@@ -101,6 +103,7 @@ namespace StbcRevival
             {
                 nextReport = time + ReportEvery;
                 SendReports();
+                SendPings(nowMs);
                 TuneEncoder(time);
             }
             if (time >= nextLog)
@@ -201,6 +204,20 @@ namespace StbcRevival
                 peer.ReportedJitter = jitter;
                 peer.ReportedAt = Time.realtimeSinceStartup;
             }
+            else if (data[0] == VoiceWire.PingType && VoiceWire.TryReadPing(data, length, VoiceWire.PingType, out uint pinged))
+            {
+                // Answered at once, on the channel voice uses, so the round trip is what voice sees.
+                Send(peer.SteamId, pingBuffer, VoiceWire.WritePing(pingBuffer, VoiceWire.PongType, pinged));
+            }
+            else if (data[0] == VoiceWire.PongType && VoiceWire.TryReadPing(data, length, VoiceWire.PongType, out uint sent))
+            {
+                // (A simulated bad connection delays these too: they're on the same channel.)
+                int rtt = (int)((uint)nowMs - sent);
+                if (rtt < 0 || rtt > 10000) return; // not one of ours this run
+                peer.Pongs++;
+                peer.RttSum += rtt;
+                peer.RttMax = Math.Max(peer.RttMax, rtt);
+            }
         }
 
         // Each crewmate we hear: what we lose of them and their jitter, for their encoder.
@@ -213,6 +230,31 @@ namespace StbcRevival
                 int length = VoiceWire.WriteReport(reportBuffer, peer.Stream, (byte)Mathf.Clamp(stats.LossPercent, 0, 100),
                                                    (ushort)Mathf.Clamp(stats.JitterMs, 0, ushort.MaxValue));
                 Send(peer.SteamId, reportBuffer, length);
+            }
+        }
+
+        // A ping a second to each crewmate on Revival voice, for the round trip in the 30 s report.
+        private static void SendPings(double nowMs)
+        {
+            foreach (var peer in peers.Values)
+            {
+                if (!peer.On) continue;
+                Send(peer.SteamId, pingBuffer, VoiceWire.WritePing(pingBuffer, VoiceWire.PingType, (uint)nowMs));
+                peer.Pings++;
+            }
+        }
+
+        // Whether Steam carries our connection to them through its relay servers (a longer way round) or directly.
+        private static string Route(ulong steamId)
+        {
+            try
+            {
+                if (!SteamNetworking.GetP2PSessionState(new CSteamID(steamId), out var state)) return "Steam has no session with them";
+                return state.m_bUsingRelay != 0 ? "through Steam's relay" : "direct";
+            }
+            catch (Exception e)
+            {
+                return "route unknown (" + e.Message + ")";
             }
         }
 
@@ -242,10 +284,21 @@ namespace StbcRevival
                 string reported = peer.ReportedLoss >= 0 && time - peer.ReportedAt < LogEvery
                     ? $"they lose {peer.ReportedLoss}% of yours, jitter {peer.ReportedJitter} ms"
                     : "no loss report from them";
-                Plugin.Log.LogInfo($"Revival voice: {peer.Name}: {mode}; last 30 s, {peer.Sent} packets sent, {peer.Received} received; {reported}");
+                string trip = peer.Pongs > 0 ? $"round trip {peer.RttSum / peer.Pongs} ms (worst {peer.RttMax} ms, {peer.Pongs} of {peer.Pings} pings answered)"
+                            : peer.Pings > 0 ? $"none of {peer.Pings} pings answered (an older mod, or nothing gets through)" : "not pinged";
+                Plugin.Log.LogInfo($"Revival voice: {peer.Name}: {mode}; last 30 s, {peer.Sent} packets sent, {peer.Received} received; {reported}; "
+                                   + $"{trip}, {Route(peer.SteamId)}");
+                var heard = RevivalPlayback.Describe(peer.Actor, out int delayMs);
+                if (heard != null)
+                {
+                    // Their mouth to your ear: a frame recorded, half the round trip, then everything buffered here.
+                    // The game's own audio output adds its own on top, not known here.
+                    if (delayMs > 0 && peer.Pongs > 0)
+                        heard += $"; about {VoiceFormat.FrameMs + peer.RttSum / peer.Pongs / 2 + delayMs} ms from their mouth to the game's audio output";
+                    Plugin.Log.LogInfo($"Revival voice from {peer.Name}: {heard}");
+                }
                 peer.Sent = peer.Received = 0;
-                var heard = RevivalPlayback.Describe(peer.Actor);
-                if (heard != null) Plugin.Log.LogInfo($"Revival voice from {peer.Name}: {heard}");
+                peer.Pings = peer.Pongs = peer.RttSum = peer.RttMax = 0;
             }
             foreach (var name in without) Plugin.Log.LogInfo($"Revival voice: {name}: game voice (no mod)");
         }

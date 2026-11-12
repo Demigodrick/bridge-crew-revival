@@ -221,9 +221,11 @@ namespace StbcRevival
             return now;
         }
 
-        /// <summary>Main thread: the 30 s report for this player (null if nothing heard from them); starts a new window.</summary>
-        internal static string Describe(int actor)
+        /// <summary>Main thread: the 30 s report for this player (null if nothing heard from them); starts a new window.
+        /// delayMs: the average delay their voice had here (0 if none was played).</summary>
+        internal static string Describe(int actor, out int delayMs)
         {
+            delayMs = 0;
             Speaker s;
             lock (sync) speakers.TryGetValue(actor, out s);
             if (s == null) return null;
@@ -233,6 +235,7 @@ namespace StbcRevival
             lock (s.Output) { overflow = s.Overflow; s.Overflow = 0; }
             s.Playout.TakeStretched(out int spedUp, out int slowedDown);
             if (w.Received == 0 && w.Late == 0 && w.Lost == 0 && s.Played == 0) return null;
+            if (s.DelaySamples > 0) delayMs = (int)(s.DelaySumMs / s.DelaySamples);
             string line = $"last 30 s, received {w.Received}, lost {w.Lost} (redundancy {w.Redundant}, FEC {w.Fec}), concealed {w.Concealed}, "
                           + $"late {w.Late}, duplicates {w.Duplicates}, underruns {w.Underruns}, jitter {w.JitterMs} ms, buffer {w.TargetMs} ms"
                           + (s.DelaySamples > 0 ? $", actual delay {s.DelaySumMs / s.DelaySamples} ms" : "")

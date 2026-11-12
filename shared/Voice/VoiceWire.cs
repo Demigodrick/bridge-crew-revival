@@ -23,6 +23,10 @@ namespace StbcRevival.Voice
     public static class VoiceWire
     {
         public const byte VoiceType = (byte)'R', ReportType = (byte)'Q', Version = 1;
+        // A ping and its answer (the ping's time sent back as it came), for the round trip in the 30 s report.
+        // Older mods ignore both.
+        public const byte PingType = (byte)'P', PongType = (byte)'O';
+        public const int PingLength = 6;
         const int Header = 13;
 
         static void PutU32(byte[] d, int o, uint v)
@@ -71,6 +75,23 @@ namespace StbcRevival.Voice
             if (into.Prev == null || into.Prev.Length < prevLen) into.Prev = new byte[System.Math.Max(prevLen, 256)];
             if (prevLen > 0) System.Buffer.BlockCopy(src, o + 2, into.Prev, 0, prevLen);
             into.PrevLength = prevLen;
+            return true;
+        }
+
+        public static int WritePing(byte[] dest, byte type, uint timeMs)
+        {
+            dest[0] = type;
+            dest[1] = Version;
+            PutU32(dest, 2, timeMs);
+            return PingLength;
+        }
+
+        public static bool TryReadPing(byte[] src, int length, byte type, out uint timeMs)
+        {
+            timeMs = 0;
+            if (src == null || length < PingLength || length > src.Length) return false;
+            if (src[0] != type || src[1] != Version) return false;
+            timeMs = GetU32(src, 2);
             return true;
         }
 
