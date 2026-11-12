@@ -19,7 +19,11 @@ namespace StbcRevival
     /// A change is for an object by its path in the scene (a piece, or a group: everything under it moves with it);
     /// if more than one object has that path, the one whose middle is nearest the change's pivot. Moves and pivots are
     /// in the scene's space (the game's world: bridges don't move), turns in degrees about up, around the pivot.
-    /// Stations stay put: a change to anything that is or holds a console or station is left out.
+    /// A station (where a player sits, NovaStation) moves only as a whole: a change to an object holding exactly one
+    /// station and inside none (the designer's station unit: the station with its console holder and chair) moves the
+    /// station, so the console the game later puts in its holder, and the player who sits there, go with it. A change
+    /// to a part of a station, or to anything holding more than one, is left out. (The designer writes the captain's
+    /// station's change itself when the captain's chair, which stands apart from it, is moved.)
     ///
     /// Most bridge pieces are statically batched (drawn as part of one combined mesh), so they can't move: those are
     /// hidden, and a copy of their shape read from the scene's file moves instead (BatchedPieces). Colliders move with
@@ -261,7 +265,9 @@ namespace StbcRevival
                 var c = new Change { Path = p.Path, Pivot = p.Pivot, Move = p.Move, Turn = p.Turn, Hidden = p.Hidden };
                 var t = Resolve(byPath, c.Path, c.Pivot);
                 if (t == null) { missing++; Plugin.Log.LogInfo($"Bridge layout: {c.Path} isn't in this bridge"); continue; }
-                if (IsStation(t)) { refused++; Plugin.Log.LogInfo($"Bridge layout: {c.Path} is or holds a station: stations stay put"); continue; }
+                string why = StationProblem(t);
+                if (why != null) { refused++; Plugin.Log.LogInfo($"Bridge layout: {c.Path} {why}: left out"); continue; }
+                if (c.Hidden && t.GetComponentInChildren<NovaStation>(true) != null) { c.Hidden = false; Plugin.Log.LogInfo($"Bridge layout: {c.Path} is a station: it can move, not hide"); }
                 if (changes.Exists(o => o.T != null && (t.IsChildOf(o.T) || o.T.IsChildOf(t)))) { refused++; Plugin.Log.LogInfo($"Bridge layout: {c.Path} overlaps another change: left out"); continue; }
                 Bind(c, t);
                 changes.Add(c);
@@ -314,9 +320,32 @@ namespace StbcRevival
             return all?.center ?? t.position;
         }
 
-        private static bool IsStation(Transform t) =>
-            t.GetComponentInParent<ConsoleBase>() != null || t.GetComponentInParent<NovaStation>() != null
-            || t.GetComponentInChildren<ConsoleBase>(true) != null || t.GetComponentInChildren<NovaStation>(true) != null;
+        // Why this object can't be changed as far as stations go, or null: a part of a station or console, or holding
+        // more than one station, or a console that isn't in a station.
+        private static string StationProblem(Transform t)
+        {
+            for (var a = t.parent; a != null; a = a.parent)
+                if (a.GetComponent<NovaStation>() != null || a.GetComponent<ConsoleBase>() != null) return "is part of a station (a station moves only as a whole)";
+            int stations = t.GetComponentsInChildren<NovaStation>(true).Length;
+            if (stations > 1) return "holds more than one station";
+            if (stations == 0 && t.GetComponentInChildren<ConsoleBase>(true) != null) return "holds a console";
+            return null;
+        }
+
+        // The players sitting at a station in this change: put where their station now is (the game puts them there
+        // only when they sit down, which is before a layout saved during play goes on).
+        private static void SeatPlayers(Change c)
+        {
+            if (c.T == null || c.T.GetComponentInChildren<NovaStation>(true) == null) return;
+            foreach (var player in UnityEngine.Object.FindObjectsOfType<NovaPlayerInfo>())
+            {
+                var station = player == null ? null : player.Station;
+                if (station == null || player.PawnObject == null || !station.transform.IsChildOf(c.T)) continue;
+                if (player.PawnObject.transform.IsChildOf(c.T)) continue;
+                player.PawnObject.transform.position = station.transform.position;
+                player.PawnObject.transform.rotation = station.transform.rotation;
+            }
+        }
 
         // ------------------------------------------------------------------------------------------- applying
         private static void Bind(Change c, Transform t)
@@ -355,6 +384,7 @@ namespace StbcRevival
             }
             if (copied) foreach (var r in c.Copy.GetComponentsInChildren<Renderer>(true)) r.enabled = !c.Hidden;
             foreach (var col in c.Colliders) if (col != null) col.enabled = !c.Hidden;
+            SeatPlayers(c);
         }
 
         private static void MakeCopy(Change c)
@@ -419,6 +449,7 @@ namespace StbcRevival
         private static void Reset(Change c)
         {
             if (c.T != null) { c.T.position = c.BasePos; c.T.rotation = c.BaseRot; }
+            SeatPlayers(c);
             foreach (var r in c.Renderers) if (r != null) r.enabled = true;
             foreach (var col in c.Colliders) if (col != null) col.enabled = true;
             if (c.Copy != null) UnityEngine.Object.Destroy(c.Copy);
