@@ -1,0 +1,496 @@
+newmtl wire_196088225
+Kd 0.550 0.560 0.580
+d 1.00
+
+newmtl Voygray
+Kd 0.588 0.604 0.600
+d 1.00
+map_Kd Voygray.jpg
+
+newmtl DimGray
+Kd 0.294 0.294 0.294
+d 1.00
+
+newmtl wire_225088199
+Kd 0.550 0.560 0.580
+d 1.00
+
+newmtl Material__53
+Kd 0.090 0.090 0.090
+d 1.00
+
+newmtl Chairgray
+Kd 0.373 0.404 0.447
+d 1.00
+map_Kd n011.jpg
+
+newmtl Color_00
+Kd 0.227 0.227 0.227
+d 1.00
+
+newmtl Color_H1
+Kd 0.498 0.600 0.600
+d 1.00
+
+newmtl scrn4_2
+Kd 0.000 0.000 0.000
+d 1.00
+map_Kd scn4.2.png
+map_Ke scn4.2.png
+
+newmtl scrn4_1
+Kd 0.000 0.000 0.000
+d 1.00
+map_Kd scn4.1.png
+map_Ke scn4.1.png
+
+newmtl scrn2_7
+Kd 0.000 0.000 0.000
+d 1.00
+map_Kd scn2.7.png
+map_Ke scn2.7.png
+
+newmtl scrn10_3
+Kd 0.000 0.000 0.000
+d 1.00
+map_Kd scn10.3.png
+map_Ke scn10.3.png
+
+newmtl scrn10_4
+Kd 0.000 0.000 0.000
+d 1.00
+map_Kd scn10.4.png
+map_Ke scn10.4.png
+
+newmtl scrn10_5
+Kd 0.000 0.000 0.000
+d 1.00
+map_Kd scn10.5.png
+map_Ke scn10.5.png
+
+newmtl scrn3_3
+Kd 0.000 0.000 0.000
+d 1.00
+map_Kd scn3.3.png
+map_Ke scn3.3.png
+
+newmtl scrn3_1
+Kd 0.000 0.000 0.000
+d 1.00
+map_Kd scn3.1.png
+map_Ke scn3.1.png
+
+newmtl scrn5_1
+Kd 0.000 0.000 0.000
+d 1.00
+map_Kd scn5.1.png
+map_Ke scn5.1.png
+
+newmtl scrn3_2
+Kd 0.000 0.000 0.000
+d 1.00
+map_Kd scn3.2.png
+map_Ke scn3.2.png
+
+newmtl scrn3_4
+Kd 0.000 0.000 0.000
+d 1.00
+map_Kd scn3.4.png
+map_Ke scn3.4.png
+
+newmtl scrn6_1
+Kd 0.000 0.000 0.000
+d 1.00
+map_Kd scn6.1.png
+map_Ke scn6.1.png
+
+newmtl scrn1_5
+Kd 0.000 0.000 0.000
+d 1.00
+map_Kd scn1.5.png
+map_Ke scn1.5.png
+
+newmtl Materi04
+Kd 0.627 0.561 0.498
+d 1.00
+
+newmtl LightGr
+Kd 0.663 0.663 0.663
+d 1.00
+
+newmtl Color_03
+Kd 0.667 0.667 0.667
+d 1.00
+
+newmtl wire_088177026
+Kd 0.550 0.560 0.580
+d 1.00
+
+newmtl Charcoal
+Kd 0.137 0.137 0.137
+d 1.00
+
+newmtl Light_TL
+Kd 0.604 0.282 0.000
+d 1.00
+Ke 0.55 0.55 0.50
+
+newmtl Window
+Kd 0.000 0.000 0.000
+d 0.20
+
+newmtl Color_A0
+Kd 0.000 0.000 0.000
+d 1.00
+
+newmtl black2
+Kd 0.000 0.000 0.000
+d 1.00
+
+newmtl Mainscreen
+Kd 0.255 0.275 0.365
+d 0.00
+
+newmtl wire_224198087
+Kd 0.550 0.560 0.580
+d 1.00
+
+newmtl scrn12red
+Kd 0.000 0.000 0.000
+d 1.00
+
+newmtl Doorpanel01
+Kd 0.000 0.000 0.000
+d 1.00
+map_Kd DP_01.png
+
+newmtl wire_085028177
+Kd 0.550 0.560 0.580
+d 1.00
+
+newmtl Plaque
+Kd 0.376 0.275 0.169
+d 1.00
+map_Kd VP_col.png
+
+newmtl wire_229166215
+Kd 0.550 0.560 0.580
+d 1.00
+
+newmtl Burnt
+Kd 0.027 0.012 0.008
+d 1.00
+
+newmtl Color_C2
+Kd 0.200 0.157 0.118
+d 1.00
+
+newmtl wire_008008136
+Kd 0.550 0.560 0.580
+d 1.00
+
+newmtl Black1
+Kd 0.000 0.000 0.000
+d 1.00
+
+newmtl White
+Kd 1.000 1.000 1.000
+d 1.00
+
+newmtl light_white_on_to_off
+Kd 0.588 0.588 0.588
+d 1.00
+Ke 0.55 0.55 0.50
+
+newmtl wire_177088026
+Kd 0.550 0.560 0.580
+d 1.00
+
+newmtl Lights
+Kd 1.000 0.973 0.914
+d 1.00
+Ke 0.55 0.55 0.50
+
+newmtl wire_087224087
+Kd 0.550 0.560 0.580
+d 1.00
+
+newmtl wire_057008136
+Kd 0.550 0.560 0.580
+d 1.00
+
+newmtl Metal_Co
+Kd 0.933 0.933 0.933
+d 1.00
+map_Kd Metal_Co.jpg
+
+newmtl wire_224143087
+Kd 0.550 0.560 0.580
+d 1.00
+
+newmtl wire_006134113
+Kd 0.550 0.560 0.580
+d 1.00
+
+newmtl wire_184228153
+Kd 0.550 0.560 0.580
+d 1.00
+
+newmtl Metal_Steelplate
+Kd 0.459 0.478 0.490
+d 1.00
+
+newmtl Material
+Kd 0.800 0.694 0.553
+d 1.00
+
+newmtl Leather
+Kd 0.624 0.408 0.329
+d 1.00
+map_Kd LEATH01.JPG
+
+newmtl wire_153228184
+Kd 0.550 0.560 0.580
+d 1.00
+
+newmtl wire_154185229
+Kd 0.550 0.560 0.580
+d 1.00
+
+newmtl wire_184155229
+Kd 0.550 0.560 0.580
+d 1.00
+
+newmtl wire_228153184
+Kd 0.550 0.560 0.580
+d 1.00
+
+newmtl Color_01
+Kd 1.000 1.000 1.000
+d 1.00
+
+newmtl Color_A1
+Kd 0.400 0.239 0.239
+d 1.00
+
+newmtl Color_04
+Kd 0.118 0.118 0.118
+d 1.00
+
+newmtl Color_06
+Kd 0.337 0.337 0.337
+d 1.00
+
+newmtl Color_05
+Kd 0.557 0.557 0.557
+d 1.00
+
+newmtl Color_07
+Kd 0.776 0.776 0.776
+d 1.00
+
+newmtl Leather2
+Kd 0.624 0.408 0.329
+d 1.00
+map_Kd LEATH01.JPG
+
+newmtl fabric_brown
+Kd 0.071 0.043 0.004
+d 1.00
+map_Kd BURLAP01.JPG
+
+newmtl wire_061134006
+Kd 0.550 0.560 0.580
+d 1.00
+
+newmtl wire_141007058
+Kd 0.550 0.560 0.580
+d 1.00
+
+newmtl wire_138008110
+Kd 0.550 0.560 0.580
+d 1.00
+
+newmtl scrn6_9
+Kd 0.000 0.000 0.000
+d 1.00
+map_Kd scn6.9.png
+map_Ke scn6.9.png
+
+newmtl scrn7_4
+Kd 0.000 0.000 0.000
+d 1.00
+map_Kd scn7.4.png
+map_Ke scn7.4.png
+
+newmtl scrn7_1
+Kd 0.000 0.000 0.000
+d 1.00
+map_Kd scn7.1.png
+map_Ke scn7.1.png
+
+newmtl scrn1_1
+Kd 0.000 0.000 0.000
+d 1.00
+map_Kd scn1.1.png
+map_Ke scn1.1.png
+
+newmtl scrn1_4
+Kd 0.000 0.000 0.000
+d 1.00
+map_Kd scn1.4.png
+map_Ke scn1.4.png
+
+newmtl scrn2_5
+Kd 0.000 0.000 0.000
+d 1.00
+map_Kd scn2.5.png
+map_Ke scn2.5.png
+
+newmtl scrn2_1
+Kd 0.000 0.000 0.000
+d 1.00
+map_Kd scn2.1.png
+map_Ke scn2.1.png
+
+newmtl scrn9
+Kd 0.000 0.000 0.000
+d 1.00
+
+newmtl scrn2_8
+Kd 0.000 0.000 0.000
+d 1.00
+map_Kd scn2.8.png
+map_Ke scn2.8.png
+
+newmtl scrn6_2
+Kd 0.000 0.000 0.000
+d 1.00
+map_Kd scn6.2.png
+map_Ke scn6.2.png
+
+newmtl scrn1_2
+Kd 0.000 0.000 0.000
+d 1.00
+map_Kd scn1.2.png
+map_Ke scn1.2.png
+
+newmtl scrn1_6
+Kd 0.000 0.000 0.000
+d 1.00
+map_Kd scn1.6.png
+map_Ke scn1.6.png
+
+newmtl scrn7_2
+Kd 0.000 0.000 0.000
+d 1.00
+map_Kd scn7.2.png
+map_Ke scn7.2.png
+
+newmtl scrn7_3
+Kd 0.000 0.000 0.000
+d 1.00
+
+newmtl scrn7_5
+Kd 0.000 0.000 0.000
+d 1.00
+map_Kd scn7.5.png
+map_Ke scn7.5.png
+
+newmtl scrn8
+Kd 0.000 0.000 0.000
+d 1.00
+
+newmtl scrn7_6
+Kd 0.000 0.000 0.000
+d 1.00
+map_Kd scn7.6.png
+map_Ke scn7.6.png
+
+newmtl scrn7_7
+Kd 0.000 0.000 0.000
+d 1.00
+map_Kd scn7.7.png
+map_Ke scn7.7.png
+
+newmtl scrn6_7
+Kd 0.000 0.000 0.000
+d 1.00
+map_Kd scn6.7.png
+map_Ke scn6.7.png
+
+newmtl scrn6_8
+Kd 0.000 0.000 0.000
+d 1.00
+map_Kd scn6.8.png
+map_Ke scn6.8.png
+
+newmtl scrn6_6
+Kd 0.000 0.000 0.000
+d 1.00
+map_Kd scn6.6.png
+map_Ke scn6.6.png
+
+newmtl scrn6_4
+Kd 0.000 0.000 0.000
+d 1.00
+map_Kd scn6.4.png
+map_Ke scn6.4.png
+
+newmtl scrn6_5
+Kd 0.000 0.000 0.000
+d 1.00
+map_Kd scn6.5.png
+map_Ke scn6.5.png
+
+newmtl scrn2_2
+Kd 0.000 0.000 0.000
+d 1.00
+
+newmtl scrn2_3
+Kd 0.000 0.000 0.000
+d 1.00
+map_Kd scn2.3.png
+map_Ke scn2.3.png
+
+newmtl scrn2_4
+Kd 0.000 0.000 0.000
+d 1.00
+
+newmtl scrn2_6
+Kd 0.000 0.000 0.000
+d 1.00
+
+newmtl scrn1_7
+Kd 0.000 0.000 0.000
+d 1.00
+map_Kd scn1.7.png
+map_Ke scn1.7.png
+
+newmtl scrn1_3
+Kd 0.000 0.000 0.000
+d 1.00
+map_Kd scn1.3.png
+map_Ke scn1.3.png
+
+newmtl scrn6_3
+Kd 0.004 0.004 0.004
+d 1.00
+
+newmtl scrn10_1
+Kd 0.000 0.000 0.000
+d 1.00
+map_Kd scn10.1.png
+map_Ke scn10.1.png
+
+newmtl scrn10_2
+Kd 0.000 0.000 0.000
+d 1.00
+map_Kd scn10.2.png
+map_Ke scn10.2.png
+
+newmtl scrn10_6
+Kd 0.000 0.000 0.000
+d 1.00
+map_Kd scn10.6.png
+map_Ke scn10.6.png

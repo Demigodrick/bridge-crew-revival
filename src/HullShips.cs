@@ -244,6 +244,39 @@ namespace StbcRevival
             }, () => lettering.Pending = false);
         }
 
+        /// <summary>
+        /// A line of text in the hull lettering's font, plain (no rim), blended over what's drawn: at (x, cy) its left end
+        /// (or its middle), letters cap pixels tall, squeezed to maxWidth. Returns its width in pixels (0 without a font).
+        /// </summary>
+        internal static float DrawLabel(Color32[] px, int w, int h, string text, float x, float cy, float cap, float maxWidth, Color32 colour, bool fromLeft)
+        {
+            if (string.IsNullOrEmpty(text)) return 0f;
+            var face = LoadFace(text);
+            if (face == null) return 0f;
+            float capUnits = CapUnits(face);
+            float tracking = 0.06f;
+            float natural = NaturalWidth(face, text, capUnits, tracking, out _, out _) * cap / capUnits;
+            float shown = Mathf.Min(natural, maxWidth);
+            var style = new Style { Fill = colour, Gap = 0f, Rim = colour, RimWidth = 0.001f };
+            var line = new Line { Shape = Shape.Straight, Cx = fromLeft ? x + shown * 0.5f : x, Cy = cy, Cap = cap, Reference = text, ReferenceLength = natural, MaxLength = maxWidth, Tracking = tracking, Style = style };
+            var l = Lay(face, line, text);
+            var area = Bounds(l, 4f, Math.Max(w, h));
+            if (area == null) return shown;
+            var cover = new float[area.W * area.H];
+            Raster(face, l, area, cover);
+            for (int y = 0; y < area.H; y++)
+                for (int xx = 0; xx < area.W; xx++)
+                {
+                    int gx = area.X + xx, gy = area.Y + y;
+                    if (gx < 0 || gy < 0 || gx >= w || gy >= h) continue;
+                    float c = cover[y * area.W + xx];
+                    if (c <= 0f) continue;
+                    int i = gy * w + gx;
+                    px[i] = Color32.Lerp(px[i], colour, c);
+                }
+            return shown;
+        }
+
         private static void DrawShipLine(Face face, Line line, string text, Color32[] px, int w, int h)
         {
             var l = Lay(face, line, text);
