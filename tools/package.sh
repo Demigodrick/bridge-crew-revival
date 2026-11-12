@@ -14,11 +14,23 @@ mkdir -p "$out/plugins"
 cp "$root/src/bin/Release/net35/StbcRevival.dll" "$root/src/bin/Release/net35/StbcCore.dll" "$out/plugins/"
 # Revival voice's native libraries, committed in tools/<name>/out/ (tools/<name>/build.sh rebuilds one from
 # source, to upgrade it): RNNoise (noise suppression) and speexdsp (echo cancellation). Not under plugins/, which
-# BepInEx scans.
+# BepInEx scans. Each must match the SHA-256 pinned here, the build that was tested, so a DLL replaced by
+# accident or otherwise isn't shipped; after an intended rebuild, test it and update its pin.
+declare -A native_sha256=(
+  [rnnoise]=dd15796f87cf62e9f5a647d7e9328e2847b171e06173e71452c636ecffe53506
+  [speexdsp]=c40c469f35edc491bb6ddbc827da07340fd0a8aa363cabfbe61c662d6ac3350f
+)
 mkdir -p "$out/native"
 for lib in rnnoise speexdsp; do
-  [ -f "$root/tools/$lib/out/$lib.dll" ] || "$root/tools/$lib/build.sh"
-  cp "$root/tools/$lib/out/$lib.dll" "$out/native/"
+  dll="$root/tools/$lib/out/$lib.dll"
+  [ -f "$dll" ] || "$root/tools/$lib/build.sh"
+  actual="$(sha256sum "$dll" | cut -d" " -f1)"
+  if [ "$actual" != "${native_sha256[$lib]}" ]; then
+    echo "$lib.dll doesn't match its pinned SHA-256 in tools/package.sh (expected ${native_sha256[$lib]}, got $actual)." >&2
+    echo "If you rebuilt it on purpose, test it in game, then update the pin." >&2
+    exit 1
+  fi
+  cp "$dll" "$out/native/"
 done
 # The models of our own ship classes and bridge sets (BepInEx/ships, BepInEx/bridges), beside plugins/ in the zip.
 for d in ships bridges; do [ -d "$root/assets/$d" ] && mkdir -p "$out/$d" && cp -r "$root/assets/$d/." "$out/$d/"; done
