@@ -21,8 +21,9 @@ namespace StbcRevival
     {
         private const double LiveMs = 1000, StaleMs = 10000;
         private const int MaxCatchUp = 5;           // playout ticks made up at once after the thread was held up
-        private const int PlayerQueueMs = 60;       // how far ahead of the player's playback we hand audio over
-        private const int DropAboveMs = 160;        // at a burst's start, more queued than this is cut to PlayerQueueMs
+        private const int PlayerQueueMs = 60;       // how far ahead of the player's playback we hand audio over, at least
+        private const int DropMarginMs = 100;       // at a burst's start, more queued than the target plus this is cut back
+        private const int PlayerStartSamples = 2048; // a paused WwiseAudioPlayer plays again once this much is handed over
         private const int MaxOutputFrames = 50;     // 1 s: a main thread stuck that long loses the oldest
 
         private static readonly Stopwatch clock = Stopwatch.StartNew();
@@ -56,7 +57,7 @@ namespace StbcRevival
             public int RateWas;
             public Samples Samples;
             public JitterStats Window = new JitterStats();               // counters since the last Describe
-            public int Played, Dropped, NotPlayed;
+            public int Played, Dropped, NotPlayed, Restarts;
             public long DelaySumMs; public int DelaySamples;              // actual delay: buffer depth + player backlog
         }
 
@@ -234,9 +235,10 @@ namespace StbcRevival
                           + (s.DelaySamples > 0 ? $", actual delay {s.DelaySumMs / s.DelaySamples} ms" : "")
                           + $", {w.TailConcealed} frames faded out at speech ends"
                           + (s.Dropped + overflow > 0 ? $", {s.Dropped + overflow} frames dropped after a hold-up" : "")
-                          + (s.NotPlayed > 0 ? $", {s.NotPlayed} frames not played (no voice player, muted or out of earshot)" : "");
+                          + (s.NotPlayed > 0 ? $", {s.NotPlayed} frames not played (no voice player, muted or out of earshot)" : "")
+                          + (s.Restarts > 0 ? $", voice player restarted {s.Restarts} times after stalling" : "");
             s.Window = new JitterStats();
-            s.Played = s.Dropped = s.NotPlayed = 0;
+            s.Played = s.Dropped = s.NotPlayed = s.Restarts = 0;
             s.DelaySumMs = 0;
             s.DelaySamples = 0;
             return line;
@@ -291,17 +293,18 @@ namespace StbcRevival
                 lock (s.Output)
                 {
                     if (s.Output.Count == 0) break;
-                    if (s.Output.Peek().BurstStart && s.Output.Count * VoiceFormat.FrameMs > DropAboveMs)
+                    int target = QueueTargetMs(player);
+                    if (s.Output.Peek().BurstStart && s.Output.Count * VoiceFormat.FrameMs > target + DropMarginMs)
                     {
                         // The main thread was held up: start this burst no later than usual.
-                        while (s.Output.Count * VoiceFormat.FrameMs > PlayerQueueMs)
+                        while (s.Output.Count * VoiceFormat.FrameMs > target)
                         {
                             s.Spare.Push(s.Output.Dequeue().Pcm);
                             s.Dropped++;
                         }
                         burstStart = true; // what's left starts the burst
                     }
-                    if (QueuedMs(player) >= PlayerQueueMs) break;
+                    if (QueuedMs(player) >= target) break;
                     frame = s.Output.Dequeue();
                 }
                 if (frame.BurstStart || burstStart || !s.Configured) Configure(s, player);
@@ -315,6 +318,16 @@ namespace StbcRevival
                 VoiceJitter.Bypass(player, s.Samples);
                 s.Played++;
                 lock (s.Output) s.Spare.Push(frame.Pcm);
+            }
+            // A paused player (it pauses whenever it has played all it was given) only starts again once it has been
+            // handed PlayerStartSamples since; the target above covers that, and this catches one still paused with a
+            // full queue (we've stopped handing it more), so we never wait on it while it waits on us. With less
+            // queued it's left to start itself, as the game's own voice does, rather than starting on a sliver.
+            var source = Source(player);
+            if (source != null && !source.isPlaying && QueuedMs(player) >= QueueTargetMs(player))
+            {
+                source.Play();
+                s.Restarts++;
             }
             if (s.Buffer.Playing)
             {
@@ -348,6 +361,16 @@ namespace StbcRevival
             if (controller == null) return null;
             var player = OutputDevice(controller) as WwiseAudioPlayer;
             return player != null && Source(player) != null ? player : null;
+        }
+
+        // How far ahead to keep the player: PlayerQueueMs, but never less than what a paused player needs handed over
+        // to play again, plus a frame. At 24 kHz 60 ms is 1440 samples, short of the 2048 it waits for: playback
+        // stalled after every pause until something else nudged it (late, choppy voice).
+        private static int QueueTargetMs(WwiseAudioPlayer player)
+        {
+            int rate = SampleRate(player) > 0 ? SampleRate(player) : VoiceFormat.PlaybackRate;
+            int startMs = (int)((PlayerStartSamples * 1000L + rate - 1) / rate);
+            return Math.Max(PlayerQueueMs, startMs + VoiceFormat.FrameMs);
         }
 
         // What the player has been handed and not yet played (the game's own bookkeeping, as its BatchUpdate keeps it).
