@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Cross-build speexdsp.dll (x86_64 Windows, floating point) from the upstream release tarball, inside Docker:
 # Revival voice's echo cancellation (speex_echo_*).
-# Output: tools/speexdsp/out/speexdsp.dll (git-ignored). Needs a running Docker daemon.
+# Output: tools/speexdsp/out/speexdsp.dll, committed: releases ship that one, so this only needs running to upgrade
+# speexdsp. Needs a running Docker daemon.
 set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 out="$here/out"

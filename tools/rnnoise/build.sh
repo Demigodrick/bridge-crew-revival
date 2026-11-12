@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Cross-build rnnoise.dll (x86_64 Windows) from the upstream release tarball, inside Docker.
-# Output: tools/rnnoise/out/rnnoise.dll (git-ignored). Needs a running Docker daemon.
+# Output: tools/rnnoise/out/rnnoise.dll, committed: releases ship that one, so this only needs running to upgrade
+# RNNoise. Needs a running Docker daemon.
 # The release tarball already contains the generated configure script and the model data
 # (src/rnnoise_data.c), so nothing is downloaded during the build beyond the tarball itself.
 set -euo pipefail

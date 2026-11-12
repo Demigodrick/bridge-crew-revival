@@ -12,8 +12,9 @@ out="$root/dist/$name"
 rm -rf "$out" "$root/dist/$name.zip"
 mkdir -p "$out/plugins"
 cp "$root/src/bin/Release/net35/StbcRevival.dll" "$root/src/bin/Release/net35/StbcCore.dll" "$out/plugins/"
-# Revival voice's native libraries, each built once with Docker (tools/<name>/build.sh): RNNoise (noise suppression)
-# and speexdsp (echo cancellation). Not under plugins/, which BepInEx scans.
+# Revival voice's native libraries, committed in tools/<name>/out/ (tools/<name>/build.sh rebuilds one from
+# source, to upgrade it): RNNoise (noise suppression) and speexdsp (echo cancellation). Not under plugins/, which
+# BepInEx scans.
 mkdir -p "$out/native"
 for lib in rnnoise speexdsp; do
   [ -f "$root/tools/$lib/out/$lib.dll" ] || "$root/tools/$lib/build.sh"
