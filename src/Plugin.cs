@@ -90,6 +90,7 @@ namespace StbcRevival
         internal static ConfigEntry<bool> DirectVoice;
         internal static ConfigEntry<VoiceEngine> VoiceEngineChoice;
         internal static ConfigEntry<bool> VoiceNoiseSuppression;
+        internal static ConfigEntry<bool> VoiceEchoCancellation;
         internal static ConfigEntry<bool> VoiceAutoGain;
         internal static ConfigEntry<int> VoiceBitrate;
         internal static ConfigEntry<string> VoiceDebugNetSim;
@@ -271,6 +272,9 @@ namespace StbcRevival
             VoiceNoiseSuppression = Config.Bind("Voice", "NoiseSuppression", true,
                 "Revival voice: filter fans, keyboards and other background noise out of your microphone (needs BepInEx/native/rnnoise.dll; "
                 + "without it, it's off and logged).");
+            VoiceEchoCancellation = Config.Bind("Voice", "EchoCancellation", true,
+                "Revival voice: on speakers rather than headphones, take crewmates' voices back out of your microphone so they don't hear "
+                + "themselves (needs BepInEx/native/speexdsp.dll; without it, it's off and logged). Harmless with headphones.");
             VoiceAutoGain = Config.Bind("Voice", "AutoGain", true,
                 "Revival voice: lift a quiet microphone and tame a loud one towards an even speaking level (only while you speak).");
             VoiceBitrate = Config.Bind("Voice", "Bitrate", 48,

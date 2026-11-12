@@ -4,7 +4,7 @@
 # Builds locally (the mod compiles against the game's own DLLs, which can't go in the repo or CI),
 # then uploads BridgeCrewRevival.zip and its .sha256. The installers fetch
 # releases/latest/download/BridgeCrewRevival.zip, so the asset names must stay fixed.
-# The two DLLs, rnnoise.dll, the ship models' files and their SHA256SUMS go up too: the in-game updater
+# The two DLLs, rnnoise.dll, speexdsp.dll, the ship models' files and their SHA256SUMS go up too: the in-game updater
 # (UpdateCheck.cs) fetches those, as Unity 5.4's .NET can't open a zip.
 # It also updates docs/version.txt (the in-game update check reads it from the website), commits and
 # pushes that, so the site announces the new version once the release exists.
@@ -19,10 +19,10 @@ rm -rf "$out" && mkdir -p "$out"
 cp "$zip" "$out/BridgeCrewRevival.zip"
 (cd "$out" && sha256sum BridgeCrewRevival.zip > BridgeCrewRevival.zip.sha256)
 cp "$root/dist/BridgeCrewRevival-$version/plugins/StbcRevival.dll" "$root/dist/BridgeCrewRevival-$version/plugins/StbcCore.dll" "$out/"
-# Noise suppression's native library too: the in-game updater puts it in BepInEx/native (on update, or when it's missing).
-cp "$root/dist/BridgeCrewRevival-$version/native/rnnoise.dll" "$out/"
-(cd "$out" && sha256sum StbcRevival.dll StbcCore.dll rnnoise.dll > SHA256SUMS)
-assets=("$out/BridgeCrewRevival.zip" "$out/BridgeCrewRevival.zip.sha256" "$out/StbcRevival.dll" "$out/StbcCore.dll" "$out/rnnoise.dll")
+# Revival voice's native libraries too: the in-game updater puts them in BepInEx/native (on update, or when missing).
+cp "$root/dist/BridgeCrewRevival-$version/native/rnnoise.dll" "$root/dist/BridgeCrewRevival-$version/native/speexdsp.dll" "$out/"
+(cd "$out" && sha256sum StbcRevival.dll StbcCore.dll rnnoise.dll speexdsp.dll > SHA256SUMS)
+assets=("$out/BridgeCrewRevival.zip" "$out/BridgeCrewRevival.zip.sha256" "$out/StbcRevival.dll" "$out/StbcCore.dll" "$out/rnnoise.dll" "$out/speexdsp.dll")
 # Our ship models (BepInEx/ships) too, each file an asset of its own named with dots for the slashes
 # ("ships.Nova.Nova.obj") and listed in SHA256SUMS by its path ("ships/Nova/Nova.obj"): the updater fetches the
 # missing ones at launch and the changed ones on an update.

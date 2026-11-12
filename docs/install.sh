@@ -371,7 +371,7 @@ main() {
     step "2. Removing Bridge Crew Revival"
     rm -f "$game/BepInEx/plugins/StbcRevival.dll" "$game/BepInEx/plugins/StbcRevival.pdb" \
           "$game/BepInEx/plugins/StbcCore.dll" "$game/BepInEx/plugins/StbcCore.pdb"
-    rm -f "$game/BepInEx/native/rnnoise.dll"
+    rm -f "$game/BepInEx/native/rnnoise.dll" "$game/BepInEx/native/speexdsp.dll"
     rmdir "$game/BepInEx/native" 2>/dev/null || true
     rm -f "$game/BepInEx/bridges/bridge-designer"
     # Without winhttp.dll BepInEx doesn't load at all; the BepInEx folder is left for you to delete.
@@ -459,10 +459,10 @@ main() {
 
   cp "$plugins/"Stbc*.dll "$game/BepInEx/plugins/"
   cp "$plugins/"Stbc*.pdb "$game/BepInEx/plugins/" 2>/dev/null || true
-  # Noise suppression's native DLL, beside plugins/ in the zip (older releases don't have it).
+  # Voice chat's native DLLs, beside plugins/ in the zip (older releases don't have them).
   if [ -f "$plugins/../native/rnnoise.dll" ]; then
     mkdir -p "$game/BepInEx/native"
-    cp "$plugins/../native/rnnoise.dll" "$game/BepInEx/native/"
+    cp "$plugins/../native/"*.dll "$game/BepInEx/native/"
   fi
   # Ship classes and bridge sets of our own, beside plugins/ in the zip.
   for d in ships bridges; do

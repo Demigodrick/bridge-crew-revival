@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Build the mod and pack the release zip: dist/BridgeCrewRevival-<version>.zip
-#   install.sh / install.cmd / install.ps1, plugins/StbcRevival.dll + StbcCore.dll, native/rnnoise.dll, README.txt,
+#   install.sh / install.cmd / install.ps1, plugins/StbcRevival.dll + StbcCore.dll, native/rnnoise.dll + speexdsp.dll, README.txt,
 #   designer/ (the bridge designer, an optional program of its own for Windows and Linux; the installers put it in BepInEx/bridges)
 set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -12,10 +12,13 @@ out="$root/dist/$name"
 rm -rf "$out" "$root/dist/$name.zip"
 mkdir -p "$out/plugins"
 cp "$root/src/bin/Release/net35/StbcRevival.dll" "$root/src/bin/Release/net35/StbcCore.dll" "$out/plugins/"
-# Noise suppression: native RNNoise, built once with Docker (tools/rnnoise/build.sh); not under plugins/, which BepInEx scans.
-[ -f "$root/tools/rnnoise/out/rnnoise.dll" ] || "$root/tools/rnnoise/build.sh"
+# Revival voice's native libraries, each built once with Docker (tools/<name>/build.sh): RNNoise (noise suppression)
+# and speexdsp (echo cancellation). Not under plugins/, which BepInEx scans.
 mkdir -p "$out/native"
-cp "$root/tools/rnnoise/out/rnnoise.dll" "$out/native/"
+for lib in rnnoise speexdsp; do
+  [ -f "$root/tools/$lib/out/$lib.dll" ] || "$root/tools/$lib/build.sh"
+  cp "$root/tools/$lib/out/$lib.dll" "$out/native/"
+done
 # The models of our own ship classes and bridge sets (BepInEx/ships, BepInEx/bridges), beside plugins/ in the zip.
 for d in ships bridges; do [ -d "$root/assets/$d" ] && mkdir -p "$out/$d" && cp -r "$root/assets/$d/." "$out/$d/"; done
 # The bridge designer: one program each for Windows and Linux with .NET inside (nothing to install first), trimmed

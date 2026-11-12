@@ -31,11 +31,12 @@ namespace StbcRevival
         private const float SettleSeconds = 10f;
         private const string Releases = "https://github.com/Demigodrick/bridge-crew-revival/releases/download/v";
         private static readonly string[] Files = { "StbcRevival.dll", "StbcCore.dll" };
-        // Revival voice's noise suppression (native, not a plugin): in BepInEx/native, where the installer puts it. The
-        // updater brings it with an update, and fetches this version's when it's missing (a player who only ever
-        // updated in game never had it). Optional: without it noise suppression is just off.
-        private const string NativeFile = "rnnoise.dll";
-        private static string NativePath => Path.Combine(Path.Combine(Paths.BepInExRootPath, "native"), NativeFile);
+        // Revival voice's native libraries (not plugins): in BepInEx/native, where the installer puts them. The updater
+        // brings them with an update, and fetches this version's when one is missing (a player who only ever updated in
+        // game never had it). Optional: without one, what it does is just off.
+        private static readonly string[] NativeFiles = { "rnnoise.dll", "speexdsp.dll" };
+        private static string NativePath(string file) => Path.Combine(Path.Combine(Paths.BepInExRootPath, "native"), file);
+        private static string NativeUse(string file) => file == "rnnoise.dll" ? "noise suppression" : "echo cancellation";
         private static bool nativeTried;
         private const float DownloadSeconds = 120f;
 
@@ -82,8 +83,11 @@ namespace StbcRevival
         /// <summary>At startup: the DLLs an update replaced last time.</summary>
         internal static void CleanUp()
         {
-            try { if (File.Exists(NativePath + ".old")) File.Delete(NativePath + ".old"); }
-            catch (Exception e) { Plugin.Log.LogInfo($"Update: couldn't delete {NativePath}.old: {e.Message}"); }
+            foreach (var native in NativeFiles)
+            {
+                try { if (File.Exists(NativePath(native) + ".old")) File.Delete(NativePath(native) + ".old"); }
+                catch (Exception e) { Plugin.Log.LogInfo($"Update: couldn't delete {NativePath(native)}.old: {e.Message}"); }
+            }
             foreach (var file in Files)
             {
                 var old = Path.Combine(PluginFolder, file) + ".old";
@@ -125,10 +129,11 @@ namespace StbcRevival
                 }
                 else
                     Plugin.Log.LogInfo($"Update check: up to date ({Plugin.Version}; latest {latest})");
-                if (!downloading && !nativeTried && !File.Exists(NativePath))
+                if (!downloading && !nativeTried)
                 {
                     nativeTried = true;
-                    Plugin.Instance.StartCoroutine(FetchNative(Plugin.Version));
+                    foreach (var native in NativeFiles)
+                        if (!File.Exists(NativePath(native))) Plugin.Instance.StartCoroutine(FetchNative(Plugin.Version, native));
                 }
                 // Our ship models (BepInEx/ships): any of this version's that's missing, once a launch.
                 if (!downloading && !shipsTried)
@@ -166,14 +171,15 @@ namespace StbcRevival
                     yield break;
                 }
             }
-            // The noise suppression library too, if this release has it (older ones don't): its own try, as it's optional.
-            byte[] native = null;
+            // The native libraries too, if this release has them (older ones don't): each its own try, as they're optional.
+            var natives = new Dictionary<string, byte[]>();
+            foreach (var file in NativeFiles)
             {
-                var www = new WWW(Releases + version + "/" + NativeFile);
+                var www = new WWW(Releases + version + "/" + file);
                 float until = Time.realtimeSinceStartup + DownloadSeconds;
                 while (!www.isDone && Time.realtimeSinceStartup < until) yield return null;
-                if (www.isDone && string.IsNullOrEmpty(www.error)) native = www.bytes;
-                else Plugin.Log.LogInfo($"Update: {version}'s {NativeFile}: {(www.isDone ? www.error : "no answer")}; noise suppression stays as it is");
+                if (www.isDone && string.IsNullOrEmpty(www.error)) natives[file] = www.bytes;
+                else Plugin.Log.LogInfo($"Update: {version}'s {file}: {(www.isDone ? www.error : "no answer")}; {NativeUse(file)} stays as it is");
                 www.Dispose();
             }
             try
@@ -181,7 +187,7 @@ namespace StbcRevival
                 Install(version, sums, got);
                 installed = version;
                 Plugin.Log.LogInfo($"Update: {version} installed; it runs from the next launch");
-                if (native != null) InstallNative(version, sums, native);
+                foreach (var kv in natives) InstallNative(version, sums, kv.Key, kv.Value);
             }
             catch (Exception e)
             {
@@ -329,39 +335,40 @@ namespace StbcRevival
             }
         }
 
-        // This version's noise suppression library, when it's missing: from this version's release, checked against
-        // its SHA256SUMS. A release without it (before 0.7.36) just means it stays off.
-        private static IEnumerator FetchNative(string version)
+        // This version's native library, when it's missing: from this version's release, checked against its
+        // SHA256SUMS. A release without it (rnnoise.dll before 0.7.36, speexdsp.dll before echo cancellation) just
+        // means what it does stays off.
+        private static IEnumerator FetchNative(string version, string native)
         {
             string sums = null;
             byte[] data = null;
-            foreach (var file in new[] { "SHA256SUMS", NativeFile })
+            foreach (var file in new[] { "SHA256SUMS", native })
             {
                 var www = new WWW(Releases + version + "/" + file);
                 float until = Time.realtimeSinceStartup + DownloadSeconds;
                 while (!www.isDone && Time.realtimeSinceStartup < until) yield return null;
                 string problem = !www.isDone ? "no answer" : !string.IsNullOrEmpty(www.error) ? www.error : null;
-                if (problem == null) { if (file == NativeFile) data = www.bytes; else sums = www.text; }
+                if (problem == null) { if (file == native) data = www.bytes; else sums = www.text; }
                 www.Dispose();
                 if (problem != null)
                 {
-                    Plugin.Log.LogInfo($"Update: {NativeFile} is missing, and {version}'s {file} couldn't be fetched ({problem}); noise suppression stays off");
+                    Plugin.Log.LogInfo($"Update: {native} is missing, and {version}'s {file} couldn't be fetched ({problem}); {NativeUse(native)} stays off");
                     yield break;
                 }
             }
-            InstallNative(version, sums, data);
+            InstallNative(version, sums, native, data);
         }
 
         // Checked, then put in BepInEx/native: a copy already there (loaded, perhaps) is moved aside to .old first,
         // deleted at the next start.
-        private static void InstallNative(string version, string sums, byte[] data)
+        private static void InstallNative(string version, string sums, string file, byte[] data)
         {
+            var path = NativePath(file);
             try
             {
                 if (data == null || data.Length == 0) throw new Exception("no data");
-                if (!ParseSums(sums).TryGetValue(NativeFile, out var hash)) throw new Exception("no checksum for it in SHA256SUMS");
+                if (!ParseSums(sums).TryGetValue(file, out var hash)) throw new Exception("no checksum for it in SHA256SUMS");
                 if (Hash(data) != hash) throw new Exception("it doesn't match its checksum");
-                var path = NativePath;
                 Directory.CreateDirectory(Path.GetDirectoryName(path));
                 File.WriteAllBytes(path + ".new", data);
                 if (File.Exists(path))
@@ -370,12 +377,12 @@ namespace StbcRevival
                     File.Move(path, path + ".old");
                 }
                 File.Move(path + ".new", path);
-                Plugin.Log.LogInfo($"Update: {version}'s {NativeFile} put in {Path.GetDirectoryName(path)}; noise suppression from the next launch");
+                Plugin.Log.LogInfo($"Update: {version}'s {file} put in {Path.GetDirectoryName(path)}; {NativeUse(file)} from the next launch");
             }
             catch (Exception e)
             {
-                Plugin.Log.LogInfo($"Update: {version}'s {NativeFile} not installed ({e.Message}); noise suppression stays as it is");
-                try { File.Delete(NativePath + ".new"); } catch { }
+                Plugin.Log.LogInfo($"Update: {version}'s {file} not installed ({e.Message}); {NativeUse(file)} stays as it is");
+                try { File.Delete(path + ".new"); } catch { }
             }
         }
 

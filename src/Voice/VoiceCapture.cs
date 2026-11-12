@@ -1,6 +1,6 @@
-// Revival voice capture: voice chat's own microphone recording (MicTap) -> noise suppression (RNNoise, or the
-// energy detector without it) -> automatic gain -> speech gate -> Opus -> VoiceWire packets, queued for the
-// sender (TryTakePacket). The main thread copies the samples out of the clip (Unity's API is main-thread only);
+// Revival voice capture: voice chat's own microphone recording (MicTap) -> echo cancellation (speexdsp, against
+// what crewmates' voices played: RevivalPlayback.Echo) -> noise suppression (RNNoise, or the energy detector
+// without it) -> automatic gain -> speech gate -> Opus -> VoiceWire packets, queued for the sender (TryTakePacket). The main thread copies the samples out of the clip (Unity's API is main-thread only);
 // a worker thread does everything else and owns RNNoise, the encoder and the loopback decoder.
 using System;
 using System.Collections.Generic;
@@ -40,6 +40,7 @@ namespace StbcRevival
         private static volatile int lossPercent = -1; // the listeners' latest, -1 until one reports
         private static volatile float gainDb;
         private static volatile bool noiseSuppressed;
+        private static volatile EchoCanceller echoCanceller; // the worker's, for the report's figure
         private static int speechFrames; // Interlocked: frames the gate let through since the last Describe
         private static int loopbackWritten; // once per run
         private static volatile bool failureLogged;
@@ -135,7 +136,7 @@ namespace StbcRevival
                 Start(device, clip);
             }
             tapped.Clear();
-            if (reader.Read(tapped) > 0) worker.Feed(tapped);
+            if (reader.Read(tapped) > 0) worker.Feed(tapped, RevivalPlayback.NowMs);
         }
 
         private static void Start(string device, AudioClip clip)
@@ -145,7 +146,8 @@ namespace StbcRevival
             do next = (uint)random.Next() ^ ((uint)random.Next() << 16); while (next == 0 || next == stream);
             stream = next;
             bool loopback = Plugin.VoiceDebugLoopback.Value && Interlocked.CompareExchange(ref loopbackWritten, 0, 0) == 0;
-            worker = new Worker(stream, reader.Frequency, Plugin.VoiceNoiseSuppression.Value, Plugin.VoiceAutoGain.Value,
+            worker = new Worker(stream, reader.Frequency, Plugin.VoiceNoiseSuppression.Value, Plugin.VoiceEchoCancellation.Value,
+                                Plugin.VoiceAutoGain.Value,
                                 Mathf.Clamp(Plugin.VoiceBitrate.Value, 24, 96),
                                 loopback ? Path.Combine(Paths.BepInExRootPath, "voice-loopback.wav") : null);
             Plugin.Log.LogInfo($"Revival voice: capturing '{(string.IsNullOrEmpty(device) ? "default" : device)}' at {reader.Frequency} Hz"
@@ -201,8 +203,15 @@ namespace StbcRevival
             int dropped;
             lock (packetLock) { dropped = droppedPackets; droppedPackets = 0; }
             bool on = worker != null;
+            var echo = echoCanceller;
+            string echoText = echo == null ? "off" : "on";
+            if (echo != null)
+            {
+                double db = echo.TakeReductionDb();
+                echoText += double.IsNaN(db) ? " (no crewmate heard)" : $" (microphone {db:0.0} dB quieter while crewmates were heard)";
+            }
             return $"capture {(on ? "on" : "off")}, {speech:0.0} s of speech sent, gain {gainDb:+0.0;-0.0;0.0} dB, "
-                   + $"noise suppression {(noiseSuppressed ? "on" : "off")}"
+                   + $"noise suppression {(noiseSuppressed ? "on" : "off")}, echo cancellation {echoText}"
                    + (dropped > 0 ? $", {dropped} packets not taken" : "");
         }
 
@@ -213,6 +222,7 @@ namespace StbcRevival
             private const int Ring = 4;              // the last encoded frames: up to 3 of pre-roll and the current one
             private const int MaxOpus = 1275;        // the largest Opus frame
             private const int LoopbackSamples = 10 * VoiceFormat.SampleRate;
+            private const int EchoLeadMs = 40;       // within the canceller's tail: delays from -40 to +280 ms
 
             private readonly Thread thread;
             private readonly AutoResetEvent wake = new AutoResetEvent(false);
@@ -224,18 +234,20 @@ namespace StbcRevival
             private readonly object inputLock = new object();
             private float[] pending;
             private int pendingCount, skipped;
+            private double pendingEndMs;             // when the newest pending sample was read
 
             private readonly uint stream;
             private readonly int rate;
-            private readonly bool suppress, autoGain;
+            private readonly bool suppress, cancelEcho, autoGain;
             private readonly int bitrate;
             private readonly string loopbackPath;
 
-            internal Worker(uint stream, int rate, bool suppress, bool autoGain, int bitrate, string loopbackPath)
+            internal Worker(uint stream, int rate, bool suppress, bool cancelEcho, bool autoGain, int bitrate, string loopbackPath)
             {
                 this.stream = stream;
                 this.rate = rate;
                 this.suppress = suppress;
+                this.cancelEcho = cancelEcho;
                 this.autoGain = autoGain;
                 this.bitrate = bitrate;
                 this.loopbackPath = loopbackPath;
@@ -244,10 +256,11 @@ namespace StbcRevival
                 thread.Start();
             }
 
-            internal void Feed(List<float> samples)
+            internal void Feed(List<float> samples, double nowMs)
             {
                 lock (inputLock)
                 {
+                    pendingEndMs = nowMs;
                     int limit = Math.Max(rate, 1024);
                     int count = samples.Count;
                     if (pendingCount + count > limit)
@@ -277,6 +290,8 @@ namespace StbcRevival
             // ---- Worker thread only below ----
 
             private RnNoise noise;
+            private EchoCanceller echo;
+            private short[] reference = new short[0];
             private OpusEncoder encoder;
             private Resampler resampler;
             private Agc agc;
@@ -290,6 +305,13 @@ namespace StbcRevival
             private readonly int[] ringLength = new int[Ring];
             private int lossApplied = -1;
             private bool encodeWarned;
+
+            // The microphone's timeline: sample n (48 kHz, skipped ones included) was recorded at micOffsetMs + n / 48.
+            // Read times jitter by a game frame or more; the sample count runs on the microphone's own clock, so the
+            // offset only follows the read times slowly (the echo canceller needs a steady alignment).
+            private long micSamples;
+            private double micOffsetMs;
+            private bool micTimed;
 
             private OpusDecoder loopback;
             private VoicePacketIn loopbackPacket;
@@ -306,6 +328,12 @@ namespace StbcRevival
                         noise = RnNoise.TryCreate(out _); // logs once why not
                     }
                     noiseSuppressed = noise != null;
+                    if (cancelEcho)
+                    {
+                        echo = EchoCanceller.TryCreate(RevivalPlayback.Echo.Channels, out _); // logs once why not
+                        if (echo != null) reference = new short[EchoCanceller.FrameSamples * echo.Channels];
+                    }
+                    echoCanceller = echo;
                     encoder = new OpusEncoder(VoiceFormat.SampleRate, bitrate);
                     if (autoGain) agc = new Agc();
                     gainDb = 0f;
@@ -322,9 +350,11 @@ namespace StbcRevival
                         wake.WaitOne(100);
                         if (stopping) break;
                         int count, skip;
+                        double endMs;
                         lock (inputLock)
                         {
                             count = pendingCount;
+                            endMs = pendingEndMs;
                             skip = skipped;
                             skipped = 0;
                             if (input.Length < count) input = new float[Math.Max(count, input.Length * 2)];
@@ -332,7 +362,7 @@ namespace StbcRevival
                             pendingCount = 0;
                         }
                         if (skip > 0) Skip(skip);
-                        if (count > 0) Process(input, count);
+                        if (count > 0) Process(input, count, endMs);
                     }
                 }
                 catch (Exception e)
@@ -349,6 +379,8 @@ namespace StbcRevival
                     if (loopback != null) loopback.Dispose();
                     if (encoder != null) encoder.Dispose();
                     if (noise != null) noise.Dispose();
+                    echoCanceller = null;
+                    if (echo != null) echo.Dispose();
                 }
             }
 
@@ -356,13 +388,15 @@ namespace StbcRevival
             private void Skip(int samples)
             {
                 long at48 = (long)samples * VoiceFormat.SampleRate / rate;
+                micSamples += at48;
                 seq += (uint)(at48 / VoiceFormat.FrameSamples);
                 frameFill = 0;
                 encoded = 0; // the ring's frames aren't contiguous with what follows: no pre-roll or prev from them
                 Plugin.Log.LogWarning($"Revival voice: capture fell behind; skipped {at48 * 1000 / VoiceFormat.SampleRate} ms of microphone");
             }
 
-            private void Process(float[] samples, int count)
+            // endMs: when the last of these samples was read from the microphone (the voice clock).
+            private void Process(float[] samples, int count, double endMs)
             {
                 float[] source = samples;
                 int n = count;
@@ -373,6 +407,11 @@ namespace StbcRevival
                     n = resampler.Process(samples, count, resampled);
                     source = resampled;
                 }
+                long first = micSamples;
+                micSamples += n;
+                double offset = endMs - (double)micSamples / EchoReference.SamplesPerMs;
+                if (!micTimed || Math.Abs(offset - micOffsetMs) > 100) { micOffsetMs = offset; micTimed = true; }
+                else micOffsetMs += 0.01 * (offset - micOffsetMs);
                 for (int i = 0; i < n;)
                 {
                     int take = Math.Min(n - i, VoiceFormat.FrameSamples - frameFill);
@@ -382,15 +421,29 @@ namespace StbcRevival
                     if (frameFill == VoiceFormat.FrameSamples)
                     {
                         frameFill = 0;
-                        Frame();
+                        Frame(micOffsetMs + (double)(first + i) / EchoReference.SamplesPerMs);
                     }
                 }
             }
 
-            // One 20 ms frame: two 10 ms halves through RNNoise (or the energy detector), gain, encode, gate.
-            private void Frame()
+            // One 20 ms frame, recorded by endMs: two 10 ms halves through the echo canceller and RNNoise (or the
+            // energy detector), gain, encode, gate.
+            private void Frame(double endMs)
             {
                 const int half = VoiceFormat.NoiseFrameSamples;
+                if (echo != null)
+                {
+                    for (int h = 0; h < 2; h++)
+                    {
+                        // What played over these 10 ms, read EchoLeadMs ahead: the play times are estimates, and
+                        // the canceller can only learn an echo that comes after its reference.
+                        long to = (long)((endMs - (1 - h) * 10 + EchoLeadMs) * EchoReference.SamplesPerMs);
+                        long from = to - half;
+                        RevivalPlayback.Echo.Read(from, half, reference);
+                        bool active = RevivalPlayback.Echo.ActiveSince(from - EchoReference.SamplesPerMs * EchoCanceller.TailMs);
+                        echo.Process(frame, h * half, reference, active);
+                    }
+                }
                 float first, second;
                 if (noise != null)
                 {

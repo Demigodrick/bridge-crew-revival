@@ -25,6 +25,11 @@ namespace StbcRevival
         private const int DropMarginMs = 100;       // at a burst's start, more queued than the target plus this is cut back
         private const int PlayerStartSamples = 2048; // a paused WwiseAudioPlayer plays again once this much is handed over
         private const int MaxOutputFrames = 50;     // 1 s: a main thread stuck that long loses the oldest
+        private const int EchoChannels = 3;         // crewmates the echo canceller tells apart (the rest share)
+        private const int EchoResyncMs = 40;        // a crewmate's echo timeline further than this off is set anew
+
+        /// <summary>What crewmates' voices play out of the speakers and when, for the echo canceller.</summary>
+        internal static readonly EchoReference Echo = new EchoReference(EchoChannels, 2);
 
         private static readonly Stopwatch clock = Stopwatch.StartNew();
 
@@ -60,6 +65,10 @@ namespace StbcRevival
             public JitterStats Window = new JitterStats();               // counters since the last Describe
             public int Played, Dropped, NotPlayed, Restarts;
             public long DelaySumMs; public int DelaySamples;              // actual delay: buffer depth + player backlog
+            public int EchoChannel;
+            public long EchoAt = -1;                                      // where their next audio goes on the echo timeline
+            public Resampler EchoUp;                                      // their audio to 48 kHz
+            public float[] Echo48 = new float[0];
         }
 
         private static readonly object sync = new object();
@@ -181,6 +190,15 @@ namespace StbcRevival
                 Samples = new Samples(FrameSamples, FrameSamples),
             };
             s.Playout = new Playout(s.Buffer, FrameSamples, VoiceFormat.PlaybackRate);
+            s.EchoUp = new Resampler(VoiceFormat.PlaybackRate, VoiceFormat.SampleRate);
+            lock (sync)
+            {
+                // Its own echo channel while there are enough; then shared.
+                var used = new bool[EchoChannels];
+                foreach (var other in speakers.Values) if (other != s) used[other.EchoChannel] = true;
+                s.EchoChannel = actor % EchoChannels;
+                for (int c = 0; c < EchoChannels; c++) if (!used[c]) { s.EchoChannel = c; break; }
+            }
             lock (sync) speakers[actor] = s;
             return s;
         }
@@ -319,6 +337,7 @@ namespace StbcRevival
                 int n = frame.Pcm.Length;
                 if (volume != 1f)
                     for (int i = 0; i < n; i++) frame.Pcm[i] *= volume;
+                Remember(s, player, frame.Pcm, n);
                 s.Samples.Resize(n);
                 s.Samples.CopyFrom(frame.Pcm, 0, 0, n * 4);
                 player.SetReceived(n);
@@ -344,6 +363,20 @@ namespace StbcRevival
                 s.DelaySumMs += s.Buffer.DepthMs + s.Playout.HeldMs + output * VoiceFormat.FrameMs + QueuedMs(player);
                 s.DelaySamples++;
             }
+        }
+
+        // This frame on the echo timeline, where it will play: after what the player has queued. Consecutive frames
+        // follow on from each other (the player plays them back to back); a new burst, or an estimate gone too far
+        // from where the last one ended (a stall), starts the timeline afresh.
+        private static void Remember(Speaker s, WwiseAudioPlayer player, float[] pcm, int n)
+        {
+            long due = (long)((NowMs + QueuedMs(player)) * EchoReference.SamplesPerMs);
+            if (s.EchoAt < 0 || Math.Abs(s.EchoAt - due) > EchoResyncMs * EchoReference.SamplesPerMs) s.EchoAt = due;
+            int room = n * VoiceFormat.SampleRate / VoiceFormat.PlaybackRate + 64;
+            if (s.Echo48.Length < room) s.Echo48 = new float[room];
+            int m = s.EchoUp.Process(pcm, n, s.Echo48);
+            Echo.Write(s.EchoChannel, s.Echo48, m, s.EchoAt);
+            s.EchoAt += m;
         }
 
         // As UDPNetworkVoiceController.VoIPEventHandler and VoiceControllerBase's decoder decide, plus PvP's filter.

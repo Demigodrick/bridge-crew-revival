@@ -318,7 +318,7 @@ function Install-BridgeCrewRevival([string]$GameDir, [bool]$Uninstall, [string]$
             Remove-Item -LiteralPath (Join-Path $plugins $name) -ErrorAction SilentlyContinue
         }
         $native = Join-Path $GameDir "BepInEx\native"
-        Remove-Item -LiteralPath (Join-Path $native "rnnoise.dll") -ErrorAction SilentlyContinue
+        foreach ($name in "rnnoise.dll", "speexdsp.dll") { Remove-Item -LiteralPath (Join-Path $native $name) -ErrorAction SilentlyContinue }
         Remove-Item -LiteralPath (Join-Path $GameDir "BepInEx\bridges\Bridge Designer.exe") -ErrorAction SilentlyContinue
         if ((Test-Path $native) -and -not (Get-ChildItem -LiteralPath $native -Force)) { Remove-Item -LiteralPath $native -ErrorAction SilentlyContinue }
         # Without winhttp.dll BepInEx doesn't load at all; the BepInEx folder is left for you to delete.
@@ -409,12 +409,12 @@ function Install-BridgeCrewRevival([string]$GameDir, [bool]$Uninstall, [string]$
         # ---- Install ------------------------------------------------------------------------------
 
         Copy-Item -Path (Join-Path $source "Stbc*") -Destination $plugins -Force
-        # Noise suppression's native DLL, beside plugins\ in the zip (older releases don't have it).
-        $nativeSource = Join-Path (Split-Path -Parent $source) "native\rnnoise.dll"
-        if (Test-Path $nativeSource) {
+        # Voice chat's native DLLs, beside plugins\ in the zip (older releases don't have them).
+        $nativeSource = Join-Path (Split-Path -Parent $source) "native"
+        if (Test-Path (Join-Path $nativeSource "rnnoise.dll")) {
             $native = Join-Path $GameDir "BepInEx\native"
             New-Item -ItemType Directory -Force -Path $native | Out-Null
-            Copy-Item -LiteralPath $nativeSource -Destination $native -Force
+            Copy-Item -Path (Join-Path $nativeSource "*.dll") -Destination $native -Force
         }
         # Ship classes and bridge sets of our own, beside plugins\ in the zip.
         foreach ($d in "ships", "bridges") {

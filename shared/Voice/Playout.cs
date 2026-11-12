@@ -68,7 +68,8 @@ namespace StbcRevival.Voice
                 {
                     // Too much buffered: this frame and the next as one, a period shorter.
                     Array.Copy(one, two, frame);
-                    if (buffer.Pop(one, out source) && source != FrameSource.Concealed)
+                    bool got = buffer.Pop(one, out source);
+                    if (got && source != FrameSource.Concealed)
                     {
                         Array.Copy(one, 0, two, frame, frame);
                         int cut = TimeStretch.Compress(two, 2 * frame, rate, stretched);
@@ -78,7 +79,7 @@ namespace StbcRevival.Voice
                     else
                     {
                         Append(two, frame);
-                        Append(one, frame);
+                        if (got) Append(one, frame); // nothing popped: no silence tacked on after the last frame
                     }
                 }
                 else if (mode < 0)

@@ -7,3 +7,4 @@ decompiled/
 server/.env
 .superpowers/
 tools/rnnoise/out/
+tools/speexdsp/out/

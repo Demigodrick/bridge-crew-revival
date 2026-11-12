@@ -209,8 +209,8 @@ can't), which publishes `BridgeCrewRevival.zip` and its `.sha256`. The installer
 4. **Required:** in `BepInEx/config/BepInEx.cfg`, under `[Preloader.Entrypoint]`, change
    `Type = Application` to `Type = MonoBehaviour`. Without it the game hangs on a black screen.
 5. Copy `StbcRevival.dll` and `StbcCore.dll` into `BepInEx/plugins/`, and `rnnoise.dll` (voice chat's noise
-   suppression) into `BepInEx/native/`, creating that folder if it isn't there. Without `rnnoise.dll` voice chat
-   still works; noise suppression is simply off. Then launch.
+   suppression) and `speexdsp.dll` (its echo cancellation) into `BepInEx/native/`, creating that folder if it isn't
+   there. Without them voice chat still works; noise suppression or echo cancellation is simply off. Then launch.
 
 The log is `BepInEx/LogOutput.log`.
 
