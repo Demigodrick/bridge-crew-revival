@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Build the mod and pack the release zip: dist/BridgeCrewRevival-<version>.zip
 #   install.sh / install.cmd / install.ps1, plugins/StbcRevival.dll + StbcCore.dll, native/rnnoise.dll, README.txt,
-#   designer/ (the bridge designer, a program of its own for Windows and Linux; the installers put it in the game's folder)
+#   designer/ (the bridge designer, an optional program of its own for Windows and Linux; the installers put it in BepInEx/bridges)
 set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 version="$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' "$root/src/StbcRevival.csproj")"
@@ -58,9 +58,9 @@ Both find the game in your Steam libraries (or pass the game folder as an argume
 BepInEx 5.4.23.5 from its GitHub release, and copy the mod. Run again to update or remove it (it
 asks); --uninstall (Linux), -Uninstall or uninstall.cmd (Windows) removes it straight away.
 
-Bridge designer: move, turn and hide the pieces of a bridge, or add parts, in your browser. The installer puts it
-in the game's folder (BridgeDesigner) with a shortcut: Start menu > Bridge Designer (Windows), or your
-applications menu (Linux). It saves to BepInEx/bridges; in a crew, everyone sees the host's bridge.
+Bridge designer (optional): move, turn and hide the pieces of a bridge, or add parts, in your browser. Run
+"Bridge Designer.exe" (Windows) or bridge-designer (Linux) from designer/ here or from the game's BepInEx/bridges
+folder. Layouts are saved in BepInEx/bridges; in a crew, everyone sees the host's bridge.
 
 Voice commands: the installer asks whether the orders are in English or German (-VoiceLanguage German on
 Windows, --voice-language=german on Linux answers it).
