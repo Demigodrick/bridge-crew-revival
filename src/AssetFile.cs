@@ -169,12 +169,13 @@ namespace StbcRevival
     {
         public readonly List<KeyValuePair<int, PPtr>> Components = new List<KeyValuePair<int, PPtr>>(); // class ID, component
         public string Name;
+        public int Layer;
 
         public static GameObjectAsset Read(BinaryReader r)
         {
             var g = new GameObjectAsset();
             for (int n = r.ReadInt32(), i = 0; i < n; i++) g.Components.Add(new KeyValuePair<int, PPtr>(r.ReadInt32(), AssetFile.ReadPPtr(r)));
-            r.ReadUInt32(); // layer
+            g.Layer = (int)r.ReadUInt32();
             g.Name = AssetFile.ReadString(r);
             return g;
         }
@@ -314,6 +315,41 @@ namespace StbcRevival
         public PPtr GameObject, Mesh;
 
         public static MeshFilterAsset Read(BinaryReader r) => new MeshFilterAsset { GameObject = AssetFile.ReadPPtr(r), Mesh = AssetFile.ReadPPtr(r) };
+    }
+
+    /// <summary>
+    /// A Light (class 108) as Unity 5.4 serializes it (136 bytes): on or off, its kind, colour, intensity, range and
+    /// spot angle, which layers it lights, and whether it's baked (its light is in the lightmaps and light probes: at
+    /// run time it does nothing) or real-time (lit every frame: it can move, change or go off).
+    /// </summary>
+    internal sealed class LightAsset
+    {
+        public const int Spot = 0, Directional = 1, Point = 2, Area = 3;
+        public PPtr GameObject;
+        public bool Enabled;
+        public int Type, Lightmapping;          // lightmapping: 1 mixed, 2 baked, 4 real-time
+        public float[] Color;                   // r g b a
+        public float Intensity, Range, SpotAngle;
+        public uint CullingMask;
+
+        public bool Baked => Lightmapping == 2 || Type == Area; // area lights are only ever baked
+
+        /// <summary>The light, or null if it isn't laid out as this version's (by its size).</summary>
+        public static LightAsset Read(BinaryReader r, long size)
+        {
+            if (size != 136) return null;
+            var b = r.ReadBytes(136);
+            var l = new LightAsset { GameObject = new PPtr { FileId = BitConverter.ToInt32(b, 0), PathId = BitConverter.ToInt64(b, 4) } };
+            l.Enabled = b[12] != 0;
+            l.Type = BitConverter.ToInt32(b, 16);
+            l.Color = new[] { BitConverter.ToSingle(b, 20), BitConverter.ToSingle(b, 24), BitConverter.ToSingle(b, 28), BitConverter.ToSingle(b, 32) };
+            l.Intensity = BitConverter.ToSingle(b, 36);
+            l.Range = BitConverter.ToSingle(b, 40);
+            l.SpotAngle = BitConverter.ToSingle(b, 44);
+            l.CullingMask = BitConverter.ToUInt32(b, 116);
+            l.Lightmapping = BitConverter.ToInt32(b, 120);
+            return l;
+        }
     }
 
     /// <summary>A MeshRenderer (class 23) as Unity 5.4 serializes it: on or off, its materials, and for a

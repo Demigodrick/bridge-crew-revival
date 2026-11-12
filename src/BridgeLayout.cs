@@ -39,6 +39,8 @@ namespace StbcRevival
     /// bridge, which it flies on, with a layout of its own, &lt;scene&gt;-&lt;Class&gt;.json (Bridge_scene_02-Nova.json),
     /// never the Aegis's. With no such file in the
     /// layouts folder, the one that comes with the ship (BepInEx/ships/&lt;Class&gt;/&lt;scene&gt;.json), if there is one.
+    ///
+    /// Lights go with the objects they're on, go off when hidden, and can be set and added (BridgeLights).
     /// </summary>
     internal static class BridgeLayout
     {
@@ -51,13 +53,17 @@ namespace StbcRevival
             public Vector3 Pivot, Move;
             public float Turn;
             public bool Hidden;
+            public BridgeLights.Settings Light; // for a light: what's set on it (BridgeLights)
         }
 
         /// <summary>A layout file's changes (format 1); throws, saying what's wrong, if it isn't one.</summary>
         internal static List<LayoutPiece> ParseLayout(string text) => ParseLayout(text, out _);
 
         /// <summary>A layout file's changes and added parts (format 1); throws, saying what's wrong, if it isn't one.</summary>
-        internal static List<LayoutPiece> ParseLayout(string text, out List<BridgeParts.Spec> added)
+        internal static List<LayoutPiece> ParseLayout(string text, out List<BridgeParts.Spec> added) => ParseLayout(text, out added, out _);
+
+        /// <summary>A layout file's changes, added parts and added lights (format 1); throws, saying what's wrong, if it isn't one.</summary>
+        internal static List<LayoutPiece> ParseLayout(string text, out List<BridgeParts.Spec> added, out List<BridgeLights.Added> lights)
         {
             added = new List<BridgeParts.Spec>();
             var root = MiniJson.Parse(text) as Dictionary<string, object>;
@@ -70,6 +76,7 @@ namespace StbcRevival
                     throw new FormatException($"{what}: {name} isn't [x, y, z]");
                 return new Vector3((float)(double)a[0], (float)(double)a[1], (float)(double)a[2]);
             }
+            lights = BridgeLights.ParseAdded(root, VecOf);
             if (root.TryGetValue("added", out var addedList) && addedList is List<object> adds)
             {
                 int k = 0;
@@ -114,6 +121,7 @@ namespace StbcRevival
                     Move = Vec("move"),
                     Turn = o.TryGetValue("turn", out var t) && t is double td ? (float)td : 0f,
                     Hidden = o.TryGetValue("hidden", out var h) && h is bool hb && hb,
+                    Light = BridgeLights.Settings.Parse(o.TryGetValue("light", out var lt) ? lt : null, $"change {n}"),
                 });
             }
             return list;
@@ -125,6 +133,7 @@ namespace StbcRevival
             public Vector3 Pivot, Move;
             public float Turn;
             public bool Hidden;
+            public BridgeLights.Settings Light;
 
             public Transform T;
             public Vector3 BasePos;
@@ -132,6 +141,7 @@ namespace StbcRevival
             public readonly List<Renderer> Renderers = new List<Renderer>(); // on at the start
             public readonly List<Renderer> Batched = new List<Renderer>();
             public readonly List<Collider> Colliders = new List<Collider>();
+            public readonly List<BridgeLights.Saved> Lights = new List<BridgeLights.Saved>(); // on at the start, or its own
             public GameObject Copy;
             public readonly List<Mesh> CopyMeshes = new List<Mesh>();
             public string CopyProblem;
@@ -192,6 +202,9 @@ namespace StbcRevival
                 BridgeParts.Update();
                 // Copies of batched pieces wait for the scene's file to be read.
                 foreach (var c in changes) if (c.T != null && c.Moved && c.Batched.Count > 0 && c.Copy == null && c.CopyProblem == null) Refresh(c);
+                // Lights it switches off stay off (the game's scripts switch some on and off).
+                foreach (var c in changes)
+                    if (c.Hidden) foreach (var l in c.Lights) if (l.Light != null && l.Light.enabled) l.Light.enabled = false;
             }
             if (Time.unscaledTime < nextLook) return;
             nextLook = Time.unscaledTime + 1f;
@@ -290,16 +303,18 @@ namespace StbcRevival
         {
             List<LayoutPiece> layout;
             List<BridgeParts.Spec> added;
-            try { layout = ParseLayout(text, out added); }
+            List<BridgeLights.Added> lights;
+            try { layout = ParseLayout(text, out added, out lights); }
             catch (Exception e) { Plugin.Log.LogWarning($"Bridge layout: {label} for {scene.name} isn't a layout this version can read: {e.Message}"); return; }
-            Plugin.Log.LogInfo($"Bridge layout: {label} for {scene.name}: {layout.Count} change(s), {added.Count} added part(s)");
+            Plugin.Log.LogInfo($"Bridge layout: {label} for {scene.name}: {layout.Count} change(s), {added.Count} added part(s), {lights.Count} added light(s)");
             BridgeParts.Start(added, scene);
+            BridgeLights.Start(lights, scene);
             if (layout.Count == 0) return;
             var byPath = Index();
             int on = 0, missing = 0, refused = 0;
             foreach (var p in layout)
             {
-                var c = new Change { Path = p.Path, Pivot = p.Pivot, Move = p.Move, Turn = p.Turn, Hidden = p.Hidden };
+                var c = new Change { Path = p.Path, Pivot = p.Pivot, Move = p.Move, Turn = p.Turn, Hidden = p.Hidden, Light = p.Light };
                 var t = Resolve(byPath, c.Path, c.Pivot);
                 if (t == null) { missing++; Plugin.Log.LogInfo($"Bridge layout: {c.Path} isn't in this bridge"); continue; }
                 string why = StationProblem(t);
@@ -443,6 +458,10 @@ namespace StbcRevival
                 }
             }
             foreach (var col in t.GetComponentsInChildren<Collider>(false)) if (col.enabled) c.Colliders.Add(col);
+            // Its lights: the ones on, and its own (whose values the change may set) on or not.
+            var own = t.GetComponent<Light>();
+            foreach (var l in t.GetComponentsInChildren<Light>(true))
+                if (l == own || (l.enabled && l.gameObject.activeInHierarchy)) c.Lights.Add(BridgeLights.Saved.Of(l));
             if (c.Batched.Count > 0 && c.Moved) BatchedPieces.Ready(scene.buildIndex);
         }
 
@@ -462,6 +481,13 @@ namespace StbcRevival
             }
             if (copied) foreach (var r in c.Copy.GetComponentsInChildren<Renderer>(true)) r.enabled = !c.Hidden;
             foreach (var col in c.Colliders) if (col != null) col.enabled = !c.Hidden;
+            foreach (var l in c.Lights)
+            {
+                if (l.Light == null) continue;
+                if (l.Light.transform == c.T) { l.PutBack(); c.Light?.On(l.Light); }
+                if (c.Hidden) l.Light.enabled = false;
+                else if (l.Enabled) l.Light.enabled = true;
+            }
             SeatPlayers(c);
         }
 
@@ -530,6 +556,7 @@ namespace StbcRevival
             SeatPlayers(c);
             foreach (var r in c.Renderers) if (r != null) r.enabled = true;
             foreach (var col in c.Colliders) if (col != null) col.enabled = true;
+            foreach (var l in c.Lights) l.PutBack();
             if (c.Copy != null) UnityEngine.Object.Destroy(c.Copy);
             c.Copy = null;
         }
@@ -591,6 +618,7 @@ namespace StbcRevival
         private static void Forget()
         {
             BridgeParts.Clear();
+            BridgeLights.Clear();
             followers.Clear();
             seatsDone.Clear();
             foreach (var c in changes) foreach (var m in c.CopyMeshes) if (m != null) UnityEngine.Object.Destroy(m);

@@ -13,6 +13,11 @@
 // view is looking. An added part is a piece with the path "+id": moved, turned and scaled like any other (Delete
 // takes it away); the layout lists it under "added", and the mod builds it in the game.
 //
+// Lights: the bridge's point and spot lights are pieces too (a marker each; Lights shows them), moved with
+// whatever they're in. A real-time one can be moved, switched off (H) and given another colour, intensity and range;
+// a baked one's light is in the lightmaps already, so it's shown, not changed. Add light puts a new one (a point
+// light) where the view is looking: the layout lists those under "lights".
+//
 // Coordinates: this page works in glTF's (right-handed); the file has the game's (Unity's, left-handed: z flipped,
 // turns the other way).
 import * as THREE from 'three';
@@ -50,8 +55,10 @@ const extras = new THREE.Group(); // the added parts
 // path of a chair standing apart from it at its seat, the captain's: moving it moves the station), marker }.
 let stations = [];
 const seats = new THREE.Group(); // a marker at each station a chair takes with it
+const lamps = new THREE.Group(); // the lights (each a marker, and for a real-time one, its light)
 scene.add(extras);
 scene.add(seats);
+scene.add(lamps);
 let dirty = false;
 const undo = [], redo = [];
 
@@ -74,6 +81,7 @@ function load(b) {
   for (const a of added.values()) extras.remove(a.piece.obj);
   for (const s of stations) { seats.remove(s.marker); s.marker?.geometry.dispose(); }
   stations = [];
+  for (const o of [...lamps.children]) { lamps.remove(o); o.traverse(m => { if (m.isMesh) m.material.dispose(); }); }
   for (const t of lightmapTextures.values()) t.dispose();
   for (const m of bakedMaterials.values()) m.dispose();
   lightmapTextures.clear();
@@ -101,6 +109,7 @@ function load(b) {
       pieces.push({ obj: o, path, name: path.split('/').slice(-2).join(' / '), backdrop: box.getSize(new THREE.Vector3()).length() > 50, box, base: o.matrix.clone(), station: o.userData.station });
     });
     findStations(gltf.scene.userData.stations ?? []);
+    for (const l of gltf.scene.userData.lights ?? []) addLamp(l);
     pieces.sort((a, b) => a.path.localeCompare(b.path));
     buildList();
     await loadLayout();
@@ -108,7 +117,8 @@ function load(b) {
     if ($('baked').checked) setBaked(true);
     frame(pieces.filter(p => !p.backdrop));
     const tris = countTriangles(root);
-    $('stats').dataset.base = `${pieces.length} pieces · ${(tris / 1000).toFixed(0)}k triangles · ${((performance.now() - t0) / 1000).toFixed(1)} s`;
+    const nLights = pieces.filter(p => p.light).length;
+    $('stats').dataset.base = `${pieces.length - nLights} pieces · ${nLights} lights · ${(tris / 1000).toFixed(0)}k triangles · ${((performance.now() - t0) / 1000).toFixed(1)} s`;
     showStats();
     $('loading').hidden = true;
   }, e => { if (e.total) bar.style.width = `${(100 * e.loaded / e.total).toFixed(0)}%`; },
@@ -180,6 +190,8 @@ function ownerOf(path) {
 
 /** Why a path can't be changed (a group it's in, or something in it, is changed already), or null. */
 function blocked(path) {
+  if (pieces.some(p => p.path === path && p.light?.baked) && !pieces.some(p => p.path === path && !p.light))
+    return 'A baked light: its light is in the bridge\'s lightmaps, so the game can\'t move it, change it or switch it off.';
   for (const k of edits.keys()) {
     if (k === path) continue;
     if (under(path, k)) return `It's in ${short(k)}, which is changed: change that, or put it back first.`;
@@ -192,7 +204,9 @@ const pieceAt = path => pieces.find(p => p.path === path);
 
 function middle(path) {
   const box = new THREE.Box3();
-  for (const p of members(path)) box.union(p.box);
+  // What's drawn, as the game finds it (a light alone: where it is).
+  const list = members(path), drawn = list.filter(p => !p.light);
+  for (const p of drawn.length ? drawn : list) box.union(p.box);
   return box.isEmpty() ? new THREE.Vector3() : box.getCenter(new THREE.Vector3());
 }
 
@@ -211,13 +225,16 @@ function applyPiece(p) {
   } else p.obj.matrix.copy(p.base);
   p.obj.updateMatrixWorld(true);
   const hidden = !!o?.e.hidden;
-  p.obj.visible = !hidden && (!p.backdrop || $('backdrops').checked);
+  if (p.light) showLamp(p, hidden);
+  else p.obj.visible = !hidden && (!p.backdrop || $('backdrops').checked);
   if (p.row) {
     p.row.querySelector('input').checked = !hidden;
     p.row.classList.toggle('off', hidden);
     const tag = p.row.querySelector('.tag');
-    tag.textContent = p.added ? 'added' : hidden ? 'hidden' : o ? (o.k === p.path ? 'changed' : 'in ' + short(o.k)) : p.backdrop ? 'backdrop' : '';
+    tag.textContent = p.added ? (p.light ? 'added light' : 'added') : hidden ? (p.light ? 'off' : 'hidden')
+      : o ? (o.k === p.path ? 'changed' : 'in ' + short(o.k)) : p.light ? (p.light.baked ? 'baked light' : 'light') : p.backdrop ? 'backdrop' : '';
     tag.classList.toggle('edit', !!o);
+    tag.classList.toggle('lamp', !!p.light && !o);
   }
 }
 const applyAll = () => { for (const p of pieces) applyPiece(p); placeSeats(); refreshSelection(); };
@@ -232,7 +249,7 @@ function editFor(path) {
 function tidy(path) {
   if (path.startsWith('+')) return; // an added part's change is where it is: it stays
   const e = edits.get(path);
-  if (e && !e.hidden && e.move.lengthSq() < 1e-10 && Math.abs(e.turn) < 1e-6) edits.delete(path);
+  if (e && !e.hidden && !e.light && e.move.lengthSq() < 1e-10 && Math.abs(e.turn) < 1e-6) edits.delete(path);
 }
 
 function changed() { setDirty(true); showStats(); }
@@ -250,12 +267,12 @@ function showStats() {
 
 // Undo and redo: the whole set of changes, before each one.
 const snapshot = () => JSON.stringify({
-  edits: [...edits].map(([k, e]) => [k, e.pivot.toArray(), e.move.toArray(), e.turn, e.hidden]),
+  edits: [...edits].map(([k, e]) => [k, e.pivot.toArray(), e.move.toArray(), e.turn, e.hidden, e.light ?? null]),
   added: [...added.values()].map(a => [a.id, a.from, a.scale]),
 });
 async function restore(s) {
   const snap = JSON.parse(s);
-  edits = new Map(snap.edits.map(([k, p, m, t, h]) => [k, { pivot: new THREE.Vector3(...p), move: new THREE.Vector3(...m), turn: t, hidden: h }]));
+  edits = new Map(snap.edits.map(([k, p, m, t, h, l]) => [k, { pivot: new THREE.Vector3(...p), move: new THREE.Vector3(...m), turn: t, hidden: h, ...(l ? { light: l } : {}) }]));
   // Added parts: the ones gone go, the ones back are made again.
   const want = new Map(snap.added.map(([id, from, scale]) => [id, { from, scale }]));
   for (const id of [...added.keys()]) if (!want.has(id)) dropAdded(id);
@@ -272,7 +289,7 @@ function doUndo() { if (undo.length) { redo.push(snapshot()); restore(undo.pop()
 function doRedo() { if (redo.length) { undo.push(snapshot()); restore(redo.pop()); } }
 
 function toggleHidden(path) {
-  if (path.startsWith('+')) { say('An added part is taken away with Delete, not hidden.'); return; }
+  if (path.startsWith('+')) { say(`An added ${pieceAt(path)?.light ? 'light' : 'part'} is taken away with Delete, not hidden.`); return; }
   if (stationOf(path)) { say('A station can be moved, not hidden: players sit there.'); return; }
   const why = blocked(path);
   if (why) { say(why); return; }
@@ -307,7 +324,12 @@ async function loadLayout() {
   for (const c of layout.pieces ?? []) {
     // A chair's station: written from its chair's change, not one of its own.
     if (stations.some(s => s.chair && s.unit === c.path)) continue;
-    edits.set(c.path, { pivot: fromGame(c.pivot), move: fromGame(c.move), turn: -c.turn * Math.PI / 180, hidden: !!c.hidden });
+    edits.set(c.path, { pivot: fromGame(c.pivot), move: fromGame(c.move), turn: -c.turn * Math.PI / 180, hidden: !!c.hidden, ...(c.light ? { light: lightFrom(c.light) } : {}) });
+  }
+  for (const l of layout.lights ?? []) {
+    await makeAdded(l.id, { light: 'point' }, 1);
+    edits.set('+' + l.id, { pivot: fromGame(l.pivot), move: fromGame(l.move), turn: 0, hidden: false, light: lightFrom(l) });
+    nextId = Math.max(nextId, (parseInt(l.id) || 0) + 1);
   }
   for (const a of layout.added ?? []) {
     const from = a.model ? { model: a.model } : { scene: a.scene, level: a.level, path: a.path };
@@ -317,6 +339,14 @@ async function loadLayout() {
   }
   say(`Layout loaded: ${edits.size} change${edits.size === 1 ? '' : 's'}${added.size ? `, ${added.size} added` : ''}.`);
 }
+// A light's values as the file has them (anything missing: as the game has it, or an added light's defaults).
+function lightFrom(o) {
+  const l = {};
+  if (Array.isArray(o.color) && o.color.length >= 3) l.color = o.color.slice(0, 3).map(Number);
+  if (typeof o.intensity === 'number') l.intensity = o.intensity;
+  if (typeof o.range === 'number') l.range = o.range;
+  return l;
+}
 
 async function save() {
   for (const k of [...edits.keys()]) tidy(k);
@@ -324,13 +354,17 @@ async function save() {
     format: 1,
     scene: bridge.scene,
     pieces: [...edits].filter(([path]) => !path.startsWith('+'))
-      .map(([path, e]) => ({ path, pivot: toGame(e.pivot), move: toGame(e.move), turn: r4(-e.turn * 180 / Math.PI), hidden: e.hidden }))
+      .map(([path, e]) => ({ path, pivot: toGame(e.pivot), move: toGame(e.move), turn: r4(-e.turn * 180 / Math.PI), hidden: e.hidden, ...(e.light ? { light: lightOut(e.light) } : {}) }))
       // A chair's station goes with it, moved the same (where its player sits and its consoles stand).
       .concat(stations.filter(s => s.chair).map(s => [s, ownerOf(s.chair)]).filter(([, o]) => o && (o.e.move.lengthSq() > 1e-10 || Math.abs(o.e.turn) > 1e-6))
         .map(([s, { e }]) => ({ path: s.unit, pivot: toGame(e.pivot), move: toGame(e.move), turn: r4(-e.turn * 180 / Math.PI), hidden: false }))),
-    added: [...added.values()].map(a => {
+    added: [...added.values()].filter(a => !a.from.light).map(a => {
       const e = edits.get('+' + a.id);
       return { id: a.id, ...a.from, pivot: toGame(e.pivot), move: toGame(e.move), turn: r4(-e.turn * 180 / Math.PI), scale: r4(a.scale) };
+    }),
+    lights: [...added.values()].filter(a => a.from.light).map(a => {
+      const e = edits.get('+' + a.id);
+      return { id: a.id, pivot: toGame(e.pivot), move: toGame(e.move), ...lightOut({ ...AddedLight, ...e.light }) };
     }),
   };
   const res = await fetch(`/api/layout/${bridge.scene}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(layout, null, 2) });
@@ -339,6 +373,7 @@ async function save() {
   setDirty(false);
   say('Saved to ' + text);
 }
+const lightOut = l => ({ ...(l.color ? { color: l.color.map(r4) } : {}), ...(l.intensity != null ? { intensity: r4(l.intensity) } : {}), ...(l.range != null ? { range: r4(l.range) } : {}) });
 $('save').addEventListener('click', save);
 addEventListener('beforeunload', e => { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
 
@@ -377,7 +412,9 @@ const helper = /\/FX\/|Particle|Debris|Spark|Burst|HACK|ReferencePoint|Canvas|GU
 function filter() {
   const q = $('search').value.trim().toLowerCase();
   const helpers = $('helpers').checked;
-  for (const p of pieces) p.row.hidden = (q !== '' && !p.path.toLowerCase().includes(q)) || (!helpers && helper.test(p.path) && !edits.has(p.path));
+  const lightsOn = $('lights').checked;
+  for (const p of pieces) p.row.hidden = (q !== '' && !p.path.toLowerCase().includes(q)) || (!helpers && helper.test(p.path) && !edits.has(p.path))
+    || (!!p.light && !lightsOn);
 }
 $('search').addEventListener('input', filter);
 $('helpers').addEventListener('change', filter);
@@ -429,17 +466,21 @@ function refreshSelection() {
   for (const p of list) p.obj.traverse(m => { if (m.isMesh) for (const mat of [m.material].flat()) mats.add(mat.name || '(unnamed)'); });
   const path = sel[0];
   const one = sel.length === 1 && list.length === 1 && list[0].path === path ? list[0] : null;
-  $('infoName').textContent = sel.length > 1 ? `${sel.length} picked` : short(path) + (one ? '' : ` (group of ${list.length})`);
+  $('infoName').textContent = sel.length > 1 ? `${sel.length} picked` : one?.added ? one.name : short(path) + (one ? '' : ` (group of ${list.length})`);
   $('infoPath').textContent = sel.length > 1 ? sel.map(x => x.split('/').slice(-2).join('/')).join(', ') : path;
-  $('infoMesh').textContent = one?.added ? (one.added.from.model ? `model ${one.added.from.model}` : `${short(one.added.from.path)} from ${bridges.find(b => b.level === one.added.from.level && !b.scene.includes('-'))?.name ?? one.added.from.scene}`)
+  const lamp = sel.length === 1 ? pieces.find(p => p.path === path && p.light) : null;
+  for (const [id, light, piece] of [['infoMesh', 'Light', 'Mesh'], ['infoSize', 'Reach', 'Size'], ['infoMats', 'Colour', 'Materials']])
+    $(id).previousElementSibling.textContent = lamp ? light : piece;
+  $('infoMesh').textContent = lamp ? describeLight(lamp) : one?.added ? (one.added.from.model ? `model ${one.added.from.model}` : `${short(one.added.from.path)} from ${bridges.find(b => b.level === one.added.from.level && !b.scene.includes('-'))?.name ?? one.added.from.scene}`)
     : one ? `${one.obj.userData.mesh ?? '?'} (${one.obj.userData.file ?? '?'})` : '—';
-  $('infoSize').textContent = `${size.x.toFixed(2)} × ${size.y.toFixed(2)} × ${size.z.toFixed(2)} m`;
-  $('infoMats').textContent = [...mats].slice(0, 8).join(', ') + (mats.size > 8 ? ` +${mats.size - 8}` : '');
+  const lv = lamp && lightValues(lamp);
+  $('infoSize').textContent = lv ? `reaches ${lv.range.toFixed(1)} m · intensity ${lv.intensity.toFixed(2)}` : `${size.x.toFixed(2)} × ${size.y.toFixed(2)} × ${size.z.toFixed(2)} m`;
+  $('infoMats').textContent = lamp ? toHex(lightValues(lamp).color) : [...mats].slice(0, 8).join(', ') + (mats.size > 8 ? ` +${mats.size - 8}` : '');
   $('infoBatched').textContent = list.some(p => p.obj.userData.batched) ? 'yes: the game copies it to move it' : 'no';
   const why = sel.map(blocked).find(x => x);
   const hidden = sel.some(s => edits.get(s)?.hidden);
   const takes = sel.map(chairStation).find(x => x);
-  $('infoChange').textContent = why ?? (hidden ? 'hidden' : stationOf(path) ? 'a station: its console and its player go with it'
+  $('infoChange').textContent = why ?? (hidden ? (lamp ? 'off' : 'hidden') : stationOf(path) ? 'a station: its console and its player go with it'
     : takes ? `the ${short(takes.unit).replace(/_?root$/i, '').toLowerCase()} station (its console and seat, the blue ring) goes with it` : '');
   // Typed values: for one pick, its move (metres) and turn (degrees).
   const e = edits.get(path);
@@ -451,7 +492,15 @@ function refreshSelection() {
     $('fturn').value = (e ? e.turn * 180 / Math.PI : 0).toFixed(0);
     if (one?.added) $('fscale').value = one.added.scale.toFixed(2);
   }
-  $('fscaleWrap').hidden = !one?.added;
+  $('fscaleWrap').hidden = !one?.added || !!one.light;
+  $('fturnWrap').hidden = !!lamp && lamp.light.kind === 'point' && !pieces.some(p => p.path === path && !p.light);
+  // A real-time light's own values.
+  $('lightFields').hidden = !(typing && lamp && !lamp.light.baked);
+  if (!$('lightFields').hidden && document.activeElement?.closest('#lightFields') == null) {
+    $('lcolor').value = toHex(lv.color);
+    $('lint').value = lv.intensity.toFixed(2);
+    $('lrange').value = lv.range.toFixed(2);
+  }
   // The gizmo: on what can be changed and isn't hidden, at its middle as it is now.
   if (why || hidden) { attach(false); return; }
   if (dragging) return;
@@ -615,6 +664,9 @@ const pieceOf = o => { for (; o; o = o.parent) { const p = pieces.find(x => x.ob
 const ray = new THREE.Raycaster();
 function hitAt(e) {
   pointerRay(e);
+  // A light's marker first (they're small, and often inside a fitting).
+  const lamp = $('lights').checked && ray.intersectObject(lamps, true).find(h => h.object.isMesh && visibleUp(h.object));
+  if (lamp) return lamp;
   return root ? ray.intersectObjects([root, extras], true).find(h => visibleUp(h.object)) : null;
 }
 const visibleUp = o => { for (; o; o = o.parent) if (!o.visible) return false; return true; };
@@ -709,6 +761,16 @@ function filterParts() {
 
 /** Makes an added part's objects (from its bridge's copy, or its model file) and its piece; resolves when it's there. */
 async function makeAdded(id, from, scale) {
+  if (from.light) {
+    const piece = makeLamp({ path: '+' + id, kind: 'point', baked: false, ...AddedLight, at: [0, 0, 0], dir: [0, -1, 0] });
+    piece.name = '+ added light';
+    const a = { id: String(id), from, scale: 1, piece };
+    piece.added = a;
+    added.set(a.id, a);
+    pieces.unshift(piece);
+    addRow(piece);
+    return a;
+  }
   const group = new THREE.Group();
   if (from.model) {
     const base = '/api/models/' + from.model.split('/').slice(0, -1).map(encodeURIComponent).join('/');
@@ -750,7 +812,7 @@ async function makeAdded(id, from, scale) {
 function dropAdded(id) {
   const a = added.get(String(id));
   if (!a) return;
-  extras.remove(a.piece.obj);
+  a.piece.obj.removeFromParent();
   a.piece.row?.remove();
   pieces = pieces.filter(p => p !== a.piece);
   added.delete(String(id));
@@ -770,16 +832,17 @@ async function addPart(from) {
   // A model stands on the floor under where the view is looking; a bridge's part keeps its own height (the bridges'
   // floors are at about the same height).
   let dy = 0;
-  if (from.model) {
+  if (from.model || from.light) {
     const down = new THREE.Raycaster(at.clone().add(new THREE.Vector3(0, 2, 0)), new THREE.Vector3(0, -1, 0), 0, 10);
     const floor = root && down.intersectObject(root, true).find(h => visibleUp(h.object) && h.face && h.face.normal.y > 0.5);
-    dy = (floor ? floor.point.y : at.y) - a.piece.box.min.y;
+    // A light: 2 m above the floor.
+    dy = (floor ? floor.point.y : at.y) + (from.light ? 2 - pivot.y : -a.piece.box.min.y);
   }
-  edits.set('+' + id, { pivot, move: new THREE.Vector3(at.x - pivot.x, dy, at.z - pivot.z), turn: 0, hidden: false });
+  edits.set('+' + id, { pivot, move: new THREE.Vector3(at.x - pivot.x, dy, at.z - pivot.z), turn: 0, hidden: false, ...(from.light ? { light: { ...AddedLight } } : {}) });
   applyPiece(a.piece);
   changed();
   select('+' + id);
-  say(`Added ${from.model ?? short(from.path)}: drag it where you want it.`);
+  say(from.light ? 'Added a light: drag it where you want it (Page Up/Down: higher, lower).' : `Added ${from.model ?? short(from.path)}: drag it where you want it.`);
 }
 
 $('source').addEventListener('change', fillParts);
@@ -790,6 +853,78 @@ $('addGroup').addEventListener('click', () => {
   addPart({ ...partPick.from, path: partPick.from.path.split('/').slice(0, -1).join('/') });
 });
 $('addParts').addEventListener('toggle', () => { if ($('addParts').open && !$('parts').children.length) fillParts(); });
+
+// ------------------------------------------------------------------------------------------- lights
+// Each light is a piece: a marker (a ball in its colour; a baked one's is faint, a wire ball), and for a real-time one
+// its light, roughly as the game lights it (Unity's falloff isn't three.js's: about right a fifth of its range out).
+const AddedLight = { color: [1, 1, 1], intensity: 1.5, range: 3 }; // as the mod makes one
+const markerGeometry = new THREE.SphereGeometry(0.07, 16, 12);
+function makeLamp(l) {
+  const group = new THREE.Group();
+  group.matrixAutoUpdate = false;
+  const at = new THREE.Vector3(...l.at);
+  group.matrix.makeTranslation(at.x, at.y, at.z);
+  const marker = new THREE.Mesh(markerGeometry, new THREE.MeshBasicMaterial({ transparent: true, opacity: l.baked ? 0.3 : 0.95, depthTest: false, wireframe: !!l.baked }));
+  marker.renderOrder = 11;
+  group.add(marker);
+  let lamp = null;
+  if (!l.baked) {
+    lamp = l.kind === 'spot' ? new THREE.SpotLight() : new THREE.PointLight();
+    lamp.decay = 2;
+    if (lamp.isSpotLight) {
+      lamp.angle = THREE.MathUtils.degToRad(Math.min(170, l.angle ?? 30)) / 2;
+      lamp.penumbra = 0.3;
+      lamp.target.position.set(...l.dir); // the group only moves and turns it: its own space is the bridge's
+      group.add(lamp.target);
+    }
+    group.add(lamp);
+  }
+  lamps.add(group);
+  group.updateMatrixWorld(true);
+  return {
+    obj: group, path: l.path, name: l.path.split('/').slice(-2).join(' / '), backdrop: false,
+    box: new THREE.Box3().setFromCenterAndSize(at, new THREE.Vector3(0.14, 0.14, 0.14)), base: group.matrix.clone(),
+    light: { kind: l.kind, baked: !!l.baked, color: l.color, intensity: l.intensity, range: l.range }, marker, lamp,
+  };
+}
+function addLamp(l) {
+  const p = makeLamp(l);
+  p.station = stations.find(s => under(l.path, s.unit))?.unit;
+  pieces.push(p);
+}
+/** A light's values now: the game's (or an added one's), with what the change sets on top. */
+const lightValues = p => ({ color: p.light.color, intensity: p.light.intensity, range: p.light.range, ...(edits.get(p.path)?.light ?? {}) });
+function showLamp(p, off) {
+  const v = lightValues(p);
+  p.marker.visible = $('lights').checked;
+  p.marker.material.color.setRGB(...(off ? [0.4, 0.4, 0.4] : v.color), THREE.SRGBColorSpace);
+  if (!p.lamp) return;
+  p.lamp.visible = !off;
+  p.lamp.color.setRGB(...v.color, THREE.SRGBColorSpace);
+  p.lamp.distance = v.range;
+  // Unity's point light: about intensity / (1 + 25 (d / range)²); three.js's: intensity / d², so they meet at a fifth
+  // of the range out (times π: three.js's diffuse divides by it).
+  p.lamp.intensity = v.intensity * v.range * v.range / 50 * Math.PI;
+}
+const describeLight = p => `${p.added ? 'added ' : ''}${p.light.kind} light, ${p.light.baked ? 'baked: its light is in the lightmaps (shown for reference)' : 'real-time: lit as the game runs'}`;
+const toHex = c => '#' + c.map(x => Math.round(Math.min(1, Math.max(0, x)) * 255).toString(16).padStart(2, '0')).join('');
+const fromHex = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255);
+
+for (const id of ['lcolor', 'lint', 'lrange'])
+  $(id).addEventListener('change', () => {
+    const path = selPath();
+    const lamp = path && pieces.find(p => p.path === path && p.light);
+    if (!lamp || lamp.light.baked || blocked(path)) return;
+    remember();
+    const e = editFor(path);
+    const n = (id, lo, hi) => { const v = parseFloat($(id).value); return isFinite(v) ? Math.min(hi, Math.max(lo, v)) : null; };
+    e.light = { color: fromHex($('lcolor').value), intensity: n('lint', 0, 8) ?? lightValues(lamp).intensity, range: n('lrange', 0.05, 50) ?? lightValues(lamp).range };
+    tidy(path);
+    applyUnder(path);
+    changed();
+  });
+$('lights').addEventListener('change', () => { applyAll(); filter(); });
+$('addLight').addEventListener('click', () => root && addPart({ light: 'point' }));
 
 // ------------------------------------------------------------------------------------------- baked light
 // The bridge's own lightmaps, as the game draws its fixed pieces: Unity's RGBM (the PNG holds colour times alpha;
@@ -814,7 +949,7 @@ function setBaked(on) {
   hemi.intensity = on ? 0.45 : 1.5;
   key.intensity = on ? 0 : 1.1;
   for (const p of pieces) {
-    if (p.added) continue;
+    if (p.added || p.light) continue;
     const index = p.obj.userData.lightmap;
     p.obj.traverse(m => {
       if (!m.isMesh) return;
@@ -945,4 +1080,4 @@ if (first) { $('bridge').value = first.scene; load(first); }
 else $('stats').textContent = 'No bridges found in the game\'s files.';
 
 // For looking into the page from the browser's console.
-window.bridgeDesigner = { get edits() { return edits; }, get pieces() { return pieces; }, outline, members, get sel() { return sel; }, get added() { return added; }, addPart, camera, controls };
+window.bridgeDesigner = { get edits() { return edits; }, get pieces() { return pieces; }, outline, members, get sel() { return sel; }, get added() { return added; }, addPart, camera, controls, lamps };

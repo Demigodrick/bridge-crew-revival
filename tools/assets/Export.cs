@@ -79,6 +79,7 @@ internal static class GlbExport
         private readonly JsonArray nodes = new(), gmeshes = new(), accessors = new(), views = new(), materials = new(), textures = new(), images = new();
         private readonly JsonArray roots = new();
         private readonly JsonArray stations = new();
+        private readonly JsonArray lights = new();
         private int drawn, skippedInactive, skippedCompressed, skippedOther, batched, textureFails;
         private readonly SortedDictionary<string, int> problems = new();
         private Vector3 sceneMin = new(float.MaxValue), sceneMax = new(float.MinValue);
@@ -170,6 +171,30 @@ internal static class GlbExport
                 stations.Add((JsonNode)new JsonObject { ["unit"] = PathOf(unit), ["station"] = PathOf(st), ["seat"] = new JsonArray(seat.X, seat.Y, seat.Z) });
             }
             string UnitOf(string path) => unitPaths.FirstOrDefault(u => path == u || path.StartsWith(u + "/"));
+
+            // Lights that light the bridge (point and spot: the directional ones light the characters, and the game
+            // turns them on and off itself), on in the game: where they are and which way they point, as the page
+            // has it. A baked one's light is in the lightmaps already: it's shown for reference only.
+            foreach (var t in trs.Values)
+            {
+                var lc = t.Components.FirstOrDefault(c => c.Key == 108).Value;
+                if (lc.IsNull || !ActiveInHierarchy(t)) continue;
+                var le = scene.Find(lc.PathId);
+                var l = le == null ? null : LightAsset.Read(scene.At(le), le.Size);
+                if (l == null || !l.Enabled || (l.Type != LightAsset.Point && l.Type != LightAsset.Spot && l.Type != LightAsset.Area)) continue;
+                var w = Flip(World(t));
+                var at = Vector3.Transform(Vector3.Zero, w);
+                var dir = Vector3.Normalize(Vector3.TransformNormal(new Vector3(0, 0, -1), w)); // Unity's forward, z flipped
+                lights.Add((JsonNode)new JsonObject
+                {
+                    ["path"] = PathOf(t),
+                    ["kind"] = l.Type == LightAsset.Spot ? "spot" : l.Type == LightAsset.Area ? "area" : "point",
+                    ["baked"] = l.Baked,
+                    ["color"] = new JsonArray(l.Color[0], l.Color[1], l.Color[2]),
+                    ["intensity"] = l.Intensity, ["range"] = l.Range, ["angle"] = l.SpotAngle,
+                    ["at"] = new JsonArray(at.X, at.Y, at.Z), ["dir"] = new JsonArray(dir.X, dir.Y, dir.Z),
+                });
+            }
 
             foreach (var t in trs.Values)
             {
@@ -632,7 +657,7 @@ internal static class GlbExport
             {
                 ["asset"] = new JsonObject { ["version"] = "2.0", ["generator"] = "Bridge Crew Revival tools/assets glb" },
                 ["scene"] = 0,
-                ["scenes"] = new JsonArray(new JsonObject { ["name"] = Path.GetFileName(scene.Path), ["nodes"] = roots, ["extras"] = new JsonObject { ["stations"] = stations } }),
+                ["scenes"] = new JsonArray(new JsonObject { ["name"] = Path.GetFileName(scene.Path), ["nodes"] = roots, ["extras"] = new JsonObject { ["stations"] = stations, ["lights"] = lights } }),
                 ["nodes"] = nodes, ["meshes"] = gmeshes, ["accessors"] = accessors, ["bufferViews"] = views,
                 ["buffers"] = new JsonArray(new JsonObject { ["byteLength"] = bin.Length }),
             };
