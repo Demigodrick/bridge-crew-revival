@@ -5,6 +5,7 @@
 //   names <file> [classId] [filter]   objects (path ID, class, size, name), e.g. names sharedassets6.assets 43 Klingon
 //   renderers <file> [mesh filter]    skinned mesh renderers: their mesh and materials, followed into the other files
 //   material <file> <path ID>        a material: shader, keywords, textures (format, size, where), values
+//   lights <file>                    a scene's lights: on, baked or real-time, kind, intensity, range, layers
 //   tree <file> [depth] [root filter]  a scene's hierarchy: names, local positions, component class IDs
 //   drawn <file> <name filter>     drawn objects under matching ones: mesh, materials, static batching
 //   prefab <file> <renderer path ID>  the renderer's prefab: its root's name and children (local position, rotation)
@@ -89,6 +90,19 @@ switch (args[0])
         }
         Console.WriteLine("  floats: " + string.Join(", ", m.Floats.Select(f => $"{f.Key}={f.Value}")));
         Console.WriteLine("  colours: " + string.Join(", ", m.Colors.Select(c => $"{c.Key}=({string.Join(",", c.Value.Select(v => v.ToString("0.###")))})")));
+        break;
+    }
+    case "lights":
+    {
+        // A scene's lights: on or off, baked or real-time, kind, intensity, range, which layers they light.
+        string[] kinds = { "spot", "dir", "point", "area" };
+        foreach (var e in assets.Objects.Where(o => o.ClassId == 108))
+        {
+            var l = LightAsset.Read(assets.At(e), e.Size);
+            if (l == null) { Console.WriteLine($"{e.PathId}: not a 5.4 light ({e.Size} bytes)"); continue; }
+            var go = GameObjectAsset.Read(assets.At(assets.Find(l.GameObject.PathId)));
+            Console.WriteLine($"{(l.Enabled ? "on " : "off")} {(l.Baked ? "baked" : "real-time"),-9} {kinds[Math.Clamp(l.Type, 0, 3)],-5} i={l.Intensity:0.##} r={l.Range:0.#} layers={l.CullingMask:X8} layer={go.Layer} {go.Name}");
+        }
         break;
     }
     case "tree":

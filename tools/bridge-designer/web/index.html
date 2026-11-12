@@ -23,7 +23,11 @@
     <div class="row">
       <button id="group" type="button" title="Pick the group it's in (U)">Pick its group</button>
       <label title="Move in 5 cm steps, turn in 15° steps"><input id="snap" type="checkbox" checked> Snap</label>
-      <label title="The game's own baked lighting"><input id="baked" type="checkbox" checked> Light</label>
+      <label title="The game's own baked lighting"><input id="baked" type="checkbox" checked> Baked light</label>
+    </div>
+    <div class="row">
+      <label title="Show the bridge's lights, to pick, move, switch off or change them"><input id="lights" type="checkbox" checked> Lights</label>
+      <button id="addLight" type="button" title="A light where the view is looking">Add light</button>
     </div>
     <div class="row">
       <button id="undo" type="button" title="Undo (Ctrl+Z)">Undo</button>
@@ -68,15 +72,20 @@
       <label>X <input id="fx" type="number" step="0.05"></label>
       <label>Y <input id="fy" type="number" step="0.05"></label>
       <label>Z <input id="fz" type="number" step="0.05"></label>
-      <label>Turn° <input id="fturn" type="number" step="15"></label>
+      <label id="fturnWrap">Turn° <input id="fturn" type="number" step="15"></label>
       <label id="fscaleWrap" hidden>Scale <input id="fscale" type="number" step="0.05" min="0.05" max="20"></label>
+    </div>
+    <div id="lightFields" hidden>
+      <label>Colour <input id="lcolor" type="color"></label>
+      <label title="How bright (0 to 8)">Intensity <input id="lint" type="number" step="0.1" min="0" max="8"></label>
+      <label title="How far it reaches, in metres">Range <input id="lrange" type="number" step="0.1" min="0.05" max="50"></label>
     </div>
   </section>
   <div id="toast" role="status" hidden></div>
   <footer id="help">
     View: drag to orbit · right-drag pan · wheel zoom · WASD/QE fly · double-click: orbit there ·
     Click: pick (Shift: several) · U: its group · Drag a picked piece: move it (Shift: up/down) · gizmo ring: turn ·
-    Arrows/PgUp/PgDn: nudge · [ ]: turn · H: hide · Backspace: put back · F: focus · Ctrl+Z: undo · Ctrl+S: save
+    Arrows/PgUp/PgDn: nudge · [ ]: turn · H: hide (a light: off) · Backspace: put back · F: focus · Ctrl+Z: undo · Ctrl+S: save
   </footer>
 </main>
 <script type="module" src="app.js"></script>
