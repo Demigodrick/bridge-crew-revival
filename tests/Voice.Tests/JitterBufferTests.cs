@@ -377,15 +377,16 @@ public class JitterBufferTests
         for (int i = 0; i < 2; i++) { Assert.True(Pop(jb, out var s, out _)); Assert.Equal(FrameSource.Concealed, s); }
         Assert.True(jb.Playing);
         for (uint s = 6; s < 12; s++) Push(jb, s, 200 + s * 20.0);
+        // The concealment filled in the wait; 6 is still played when it comes, not dropped as late.
         Assert.True(Pop(jb, out var src, out var v));
         Assert.Equal(FrameSource.Normal, src);
-        Assert.Equal(8f, v);
+        Assert.Equal(6f, v);
         var st = jb.TakeStats();
         Assert.Equal(start + 20, st.TargetMs);
         Assert.Equal(1, st.Underruns);
-        Assert.Equal(2, st.Concealed);         // proven missing by 8
+        Assert.Equal(2, st.Concealed);         // the speaker was still talking: an underrun, not a tail
         Assert.Equal(0, st.TailConcealed);
-        Assert.Equal(2, st.Late);
+        Assert.Equal(0, st.Late);
     }
 
     [Fact]

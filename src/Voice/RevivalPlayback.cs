@@ -1,8 +1,8 @@
 // Revival voice playback: each crewmate's Revival voice through their own voice player, so lip sync, the 3D position,
 // their volume, mute and who-can-hear-whom all apply as for game voice. Packets go into a JitterBuffer per crewmate
 // (main thread); one playout thread pops every crewmate's buffer every 20 ms (decoding happens there, under the
-// buffer's lock) into an output queue; the main thread hands what's queued to the crewmate's WwiseAudioPlayer,
-// keeping about 60 ms ahead of what it has played.
+// buffer's lock), time-stretched to hold its delay (Playout), into an output queue; the main thread hands what's
+// queued to the crewmate's WwiseAudioPlayer, keeping it far enough ahead of what it has played to keep playing.
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -41,6 +41,7 @@ namespace StbcRevival
         {
             public int Actor;
             public JitterBuffer Buffer;
+            public Playout Playout;                                       // the buffer, time-stretched; playout thread only
             public OpusDecoder Decoder;                                   // popped (decoded) on the playout thread only
             public readonly Queue<OutFrame> Output = new Queue<OutFrame>(); // lock Output
             public readonly Stack<float[]> Spare = new Stack<float[]>();    // lock Output
@@ -179,6 +180,7 @@ namespace StbcRevival
                 Buffer = new JitterBuffer(decoder),
                 Samples = new Samples(FrameSamples, FrameSamples),
             };
+            s.Playout = new Playout(s.Buffer, FrameSamples, VoiceFormat.PlaybackRate);
             lock (sync) speakers[actor] = s;
             return s;
         }
@@ -229,11 +231,13 @@ namespace StbcRevival
             var w = s.Window;
             int overflow;
             lock (s.Output) { overflow = s.Overflow; s.Overflow = 0; }
+            s.Playout.TakeStretched(out int spedUp, out int slowedDown);
             if (w.Received == 0 && w.Late == 0 && w.Lost == 0 && s.Played == 0) return null;
             string line = $"last 30 s, received {w.Received}, lost {w.Lost} (redundancy {w.Redundant}, FEC {w.Fec}), concealed {w.Concealed}, "
                           + $"late {w.Late}, duplicates {w.Duplicates}, underruns {w.Underruns}, jitter {w.JitterMs} ms, buffer {w.TargetMs} ms"
                           + (s.DelaySamples > 0 ? $", actual delay {s.DelaySumMs / s.DelaySamples} ms" : "")
                           + $", {w.TailConcealed} frames faded out at speech ends"
+                          + (spedUp + slowedDown > 0 ? $", sped up by {spedUp} ms and slowed down by {slowedDown} ms to hold the buffer" : "")
                           + (s.Dropped + overflow > 0 ? $", {s.Dropped + overflow} frames dropped after a hold-up" : "")
                           + (s.NotPlayed > 0 ? $", {s.NotPlayed} frames not played (no voice player, muted or out of earshot)" : "")
                           + (s.Restarts > 0 ? $", voice player restarted {s.Restarts} times after stalling" : "");
@@ -334,7 +338,7 @@ namespace StbcRevival
                 // What a word heard now waits: the jitter buffer's depth, plus decoded audio not yet played.
                 int output;
                 lock (s.Output) output = s.Output.Count;
-                s.DelaySumMs += s.Buffer.DepthMs + output * VoiceFormat.FrameMs + QueuedMs(player);
+                s.DelaySumMs += s.Buffer.DepthMs + s.Playout.HeldMs + output * VoiceFormat.FrameMs + QueuedMs(player);
                 s.DelaySamples++;
             }
         }
@@ -479,11 +483,11 @@ namespace StbcRevival
         private static void StartThread()
         {
             var mine = run = new Run();
-            thread = new Thread(() => Playout(mine)) { IsBackground = true, Name = "Revival voice playout" };
+            thread = new Thread(() => PlayoutLoop(mine)) { IsBackground = true, Name = "Revival voice playout" };
             thread.Start();
         }
 
-        private static void Playout(Run mine)
+        private static void PlayoutLoop(Run mine)
         {
             var list = new List<Speaker>();
             var done = new List<Speaker>();
@@ -533,7 +537,9 @@ namespace StbcRevival
             float[] pcm;
             lock (s.Output) pcm = s.Spare.Count > 0 ? s.Spare.Pop() : null;
             if (pcm == null || pcm.Length != FrameSamples) pcm = new float[FrameSamples];
-            if (!s.Buffer.Pop(pcm, out _))
+            int downstream;
+            lock (s.Output) downstream = s.Output.Count * VoiceFormat.FrameMs;
+            if (!s.Playout.Next(pcm, downstream))
             {
                 s.WasPlaying = false;
                 lock (s.Output) s.Spare.Push(pcm);

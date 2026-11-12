@@ -75,6 +75,9 @@ namespace StbcRevival.Voice
         // Gauge: held audio ahead of the play position after the last Pop.
         public int DepthMs { get { lock (sync) return depthMs; } }
 
+        // The delay it aims for: picked at each burst start, raised by an underrun.
+        public int TargetMs { get { lock (sync) return targetMs; } }
+
         // Thread-safe. The packet's buffers are copied: the caller reuses them.
         public void Push(VoicePacketIn packet, double arrivalMs)
         {
@@ -231,18 +234,26 @@ namespace StbcRevival.Voice
 
             // 4/5. Conceal. Nothing later held means we ran dry: the speaker stopped, or the network stalled.
             // Which one is only known when something arrives (ResolveTail); until then it is a tail.
+            // A hole (something later is here) is skipped; a frame we ran dry waiting for is still waited for, as
+            // NetEq does: concealing inserts time instead of using the frame's up, so when the late frame comes it
+            // plays, a little later than planned, and the playout speeds back up to the target (Playout). Skipping
+            // it instead made every packet behind a stall late too, dropped until the burst broke off and started
+            // over: a 60 ms stall cost 200 ms and more of speech.
             source = FrameSource.Concealed;
             bool anyLater = held.Count > 0;
             n = decoder.Conceal(pcm);
             if (n < 0) n = 0;
-            if (anyLater) concealed++;
+            if (anyLater)
+            {
+                concealed++;
+                nextSeq = seq + 1;
+            }
             else
             {
                 if (!dry) { dry = true; dryFrom = seq; }
                 tailPending++;
             }
             concealRun++;
-            nextSeq = seq + 1;
 
             if (!anyLater && concealRun >= MaxConcealed)
             {
