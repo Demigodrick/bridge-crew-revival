@@ -128,6 +128,22 @@ namespace StbcRevival
             PvpRoles.Patch(harmony);
             PvpRelay.Patch(harmony);
             PvpSpace.Patch(harmony);
+            // Each on its own: one failing (a game name not found) must not stop the rest, the menu's PVP among them.
+            foreach (var part in new KeyValuePair<string, Action<Harmony>>[]
+            {
+                new KeyValuePair<string, Action<Harmony>>("load chain log", PvpSpawnDiag.Patch),
+                new KeyValuePair<string, Action<Harmony>>("bridge views", PvpBridgeViews.Patch),
+                new KeyValuePair<string, Action<Harmony>>("local bridge", PvpLocalBridge.Patch),
+                new KeyValuePair<string, Action<Harmony>>("transporter and hacking", PvpDistributed.Patch),
+                new KeyValuePair<string, Action<Harmony>>("sounds", PvpSounds.Patch),
+                new KeyValuePair<string, Action<Harmony>>("console state", PvpConsoleState.Patch),
+                new KeyValuePair<string, Action<Harmony>>("crew menus", PvpCrewMenu.Patch),
+                new KeyValuePair<string, Action<Harmony>>("ship B's crew bots", PvpCrewBots.Patch),
+            })
+            {
+                try { part.Value(harmony); }
+                catch (Exception e) { Plugin.Log.LogError($"PvP: {part.Key} couldn't be set up: {e}"); }
+            }
             PvpLobby.Patch(harmony);
             PvpShipChoice.Patch(harmony);
             var consoleAI = AccessTools.Method(typeof(AI.USSAegisCrew), "IsConsoleAI");
@@ -248,7 +264,10 @@ namespace StbcRevival
             exploded.Clear();
             PvpScope.Forget();
             PvpRouting.Forget();
+            PvpDistributed.Forget();
             PvpConsoles.Forget();
+            seatOf.Clear();
+            toldShowing.Clear();
             Plugin.Log.LogInfo("PvP: off the bridge; its ships, consoles and crews let go");
         }
 
@@ -284,6 +303,7 @@ namespace StbcRevival
             }
             PvpShips.Update();
             PvpConsoles.Update();
+            PvpDistributed.Update();
             if (Time.unscaledTime >= nextAvatarCheck)
             {
                 nextAvatarCheck = Time.unscaledTime + 0.5f;
@@ -367,8 +387,10 @@ namespace StbcRevival
         private static void SetUpCrew(AI.USSAegisCrew crew, string letter)
         {
             if (letter != "B" || crew == null || crewSetUp == null || crewReady == null || (bool)crewReady.GetValue(crew)) return;
+            bool ownBots = PvpCrewBots.ShipBHasBots();
             foreach (ConsoleBase console in new ConsoleBase[] { Bridge.KHFJCHHMFHN, Bridge.AGAFPEFMEGB, Bridge.LJFGEPOKONO })
-                if (console == null || console.LPMMGGIAOCL == null || console.LPMMGGIAOCL.PawnObject == null) return;
+                if (console == null || console.LPMMGGIAOCL == null || console.LPMMGGIAOCL.PawnObject == null
+                    || (ownBots && !PvpCrewBots.IsShipBBot(console.LPMMGGIAOCL))) return; // its own bots seated (they're set up with it)
             try
             {
                 crewSetUp.Invoke(crew, null);
@@ -420,8 +442,22 @@ namespace StbcRevival
             string mine = PvpShips.Mine;
             foreach (var player in UnityEngine.Object.FindObjectsOfType<NovaPlayerInfo>())
             {
-                if (player == null || player.AOLEJMABHPE || player.AOMGCCGDJJC) continue;
-                bool other = PvpShips.Of(PvpShips.Player(player.NJNHJKEPFAK)) != mine;
+                if (player == null) continue;
+                bool other;
+                if (player.AOMGCCGDJJC)
+                {
+                    // A crew bot of the other ship's own (PvpCrewBots): hidden as its players are.
+                    if (!PvpCrewBots.ShipBHasBots() || !(player.Station is NovaStation botStation)) continue;
+                    other = PvpConsoles.IsCopy(botStation, true) != (mine == "B");
+                    if (other) SetAvatarVisible(player, false);
+                    if (other == hiddenAvatars.Contains(player)) continue;
+                    if (!other) SetAvatarVisible(player, true);
+                    if (other) hiddenAvatars.Add(player); else hiddenAvatars.Remove(player);
+                    continue;
+                }
+                if (player.AOLEJMABHPE) { LogSeat(player, false); continue; } // you: only where you sit
+                other = PvpShips.Of(PvpShips.Player(player.NJNHJKEPFAK)) != mine;
+                LogSeat(player, other);
                 if (other) SetAvatarVisible(player, false); // every time: the game may switch renderers back on
                 if (other == hiddenAvatars.Contains(player)) continue;
                 if (!other) SetAvatarVisible(player, true);
@@ -429,6 +465,34 @@ namespace StbcRevival
                 else hiddenAvatars.Remove(player);
                 Plugin.Log.LogInfo($"PvP: {player.FAJABLKBGHN} (actor {player.NJNHJKEPFAK}) is {(other ? "on the other ship: hidden" : "on your ship: shown")}");
             }
+        }
+
+        private static readonly Dictionary<int, string> seatOf = new Dictionary<int, string>();
+        private static readonly HashSet<int> toldShowing = new HashSet<int>();
+
+        // Where each player sits (a ship A station or ship B's copy of it: both stand in the same place on the one
+        // bridge, so an other-ship player not hidden sits in your crewmate's chair), logged when it changes; and,
+        // once per player, an other-ship player whose body was drawn again (renderers back on) before this check
+        // hid it. A ship B captain was seen on ship A's bridge, unable to work their own ship.
+        private static void LogSeat(NovaPlayerInfo player, bool other)
+        {
+            int actor = player.NJNHJKEPFAK;
+            var station = player.Station as NovaStation;
+            string seat = station == null ? "no seat" : $"{station.name} ({(PvpConsoles.IsCopy(station) ? "ship B's" : "ship A's")}), console {(station.GHJLPNMIOAJ == null ? "none" : station.GHJLPNMIOAJ.name)}";
+            if (!seatOf.TryGetValue(actor, out var was) || was != seat)
+            {
+                seatOf[actor] = seat;
+                Plugin.Log.LogInfo($"PvP: [seat] {player.FAJABLKBGHN} (actor {actor}, crews ship {PvpShips.Of(PvpShips.Player(actor))}{(other ? ", the other ship" : "")}) sits at {seat}");
+            }
+            if (!other || toldShowing.Contains(actor)) return;
+            var drawn = new List<string>();
+            foreach (var pawn in new[] { player.VisualPawnObject, player.PawnObject })
+                if (pawn != null)
+                    foreach (var renderer in pawn.GetComponentsInChildren<Renderer>(true))
+                        if (renderer.enabled) drawn.Add(renderer.name);
+            if (drawn.Count == 0 || !hiddenAvatars.Contains(player)) return;
+            toldShowing.Add(actor);
+            Plugin.Log.LogWarning($"PvP: [seat] {player.FAJABLKBGHN} (the other ship) was being drawn again: {drawn.Count} renderers back on ({string.Join(", ", drawn.Take(8).ToArray())}); hidden again");
         }
 
         private static void ShowAllAvatars()
@@ -442,7 +506,10 @@ namespace StbcRevival
         {
             foreach (var pawn in new[] { player.VisualPawnObject, player.PawnObject })
                 if (pawn != null)
+                {
                     foreach (var renderer in pawn.GetComponentsInChildren<Renderer>(true)) renderer.enabled = visible;
+                    foreach (var canvas in pawn.GetComponentsInChildren<Canvas>(true)) canvas.enabled = visible; // the name tag over their head
+                }
         }
 
         // As an AI ship's (AgentShip.OnHideShip, ShipFX.OnExplodingAction): its explosion where it was, then

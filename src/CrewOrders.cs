@@ -146,7 +146,9 @@ namespace StbcRevival
                 if (player == null || !(Get(player, "get_ID") is int actor)) continue;
                 present.Add(actor);
                 var value = (Get(player, "get_customProperties") as IDictionary)?[PlayerKey] as string;
-                if (value == null) continue;
+                // Present with no order yet: tracked from now, so their first order counts as new (it was taken as
+                // already seen and never run).
+                if (value == null) { if (!seen.ContainsKey(actor)) seen[actor] = null; continue; }
                 // Only the host acts, but everyone keeps track: a new host doesn't replay what the old one ran.
                 bool known = seen.TryGetValue(actor, out var last);
                 seen[actor] = value;

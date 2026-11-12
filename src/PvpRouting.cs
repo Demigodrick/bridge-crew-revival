@@ -165,9 +165,19 @@ namespace StbcRevival
         private static bool Voice_Prefix() => !Muted;
 
         // A voice line for everyone from the other ship's code: that ship's players hear it (PvpRelay).
+        // And one from your own ship's code: played here and relayed to your own ship's players only (it went to
+        // everyone, so the other ship's crew heard your computer and crew).
         private static bool NetworkedVoice_Prefix(string __0, object __1, float __2)
         {
-            if (!Muted) return true;
+            if (Muted)
+            {
+                PvpRelay.Voice(Context, __0, __1, __2);
+                return false;
+            }
+            // The host's only (the relay is its room property); a crew member's are dropped where the other ship receives them.
+            if (!Routing || Context == null || Context != Mine
+                || !(Patches.PhotonNetworkType?.GetMethod("get_isMasterClient", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static)?.Invoke(null, null) is true)) return true;
+            if (!PvpRelay.PlayHere(__0, __1, __2)) return true;
             PvpRelay.Voice(Context, __0, __1, __2);
             return false;
         }

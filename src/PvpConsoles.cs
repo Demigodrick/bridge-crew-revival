@@ -111,6 +111,12 @@ namespace StbcRevival
             var setView = AccessTools.Method(typeof(ConsoleCaptain), "SetViewScreen");
             if (setView == null) Plugin.Log.LogWarning("PvP: ConsoleCaptain.SetViewScreen not found; the other captain's view modes reach your viewscreen");
             else harmony.Patch(setView, prefix: new HarmonyMethod(typeof(PvpConsoles), nameof(SetViewScreen_Prefix)));
+            var aiSeat = AccessTools.Method(typeof(PlayerInfo), "EnableAISeat");
+            if (aiSeat != null) harmony.Patch(aiSeat, prefix: new HarmonyMethod(typeof(PvpConsoles), nameof(AISeat_Prefix)));
+            else Plugin.Log.LogWarning("PvP: PlayerInfo.EnableAISeat not found; a player taking a station switches its crew bot off for both ships");
+            var redAlert = AccessTools.Method(typeof(ConsoleCaptain), "ToggleRedAlert");
+            if (redAlert == null) Plugin.Log.LogWarning("PvP: ConsoleCaptain.ToggleRedAlert not found; both captains work the one bridge's red alert");
+            else harmony.Patch(redAlert, prefix: new HarmonyMethod(typeof(PvpConsoles), nameof(RedAlert_Prefix)), postfix: new HarmonyMethod(typeof(PvpConsoles), nameof(RedAlert_Postfix)));
             var own = new HarmonyMethod(typeof(PvpConsoles), nameof(OwnCaptainOnly_Prefix));
             foreach (var name in new[] { "BPPOGPIHPOC", "BIDAEFBJNJC", "GDMNDIOHHMN" }) // SetupViewscreenCameras, SetViewscreenMaterial, UpdateViewscreenCamera
             {
@@ -124,6 +130,33 @@ namespace StbcRevival
         private static bool OtherCaptain(ConsoleCaptain console) => Active && copies.Count > 0 && IsCopy(console) != OnB;
 
         private static bool OwnCaptainOnly_Prefix(ConsoleCaptain __instance) => !OtherCaptain(__instance);
+
+        // Red alert (ConsoleCaptain.ToggleRedAlert, also run as a captain's state arrives: set_redAlert toggles) works
+        // the one bridge's lights and klaxon by flipping them, so with both captains' consoles on every game the
+        // lights followed both captains together (two on: off) and a second klaxon played over the first; and on the
+        // host, ship B's captain's red alert set ship A's crew orders (CommandManager.SetRedAlert, ship A's order board).
+        // The other ship's captain console only keeps its state; the host sets that ship's crew orders in its view.
+        private static readonly AccessTools.FieldRef<ConsoleCaptain, bool> RedAlertField = AccessTools.FieldRefAccess<ConsoleCaptain, bool>("AHCLOCKODKP"); // _redAlert
+        private static readonly MethodInfo LightsRedAlert = AccessTools.Method(typeof(BridgeLightingManager), "DBGNCMPNOJK"); // get_IsRedAlert
+        private static readonly MethodInfo SetCrewRedAlert = AccessTools.Method(typeof(AI.CommandManager), "SetRedAlert", new[] { typeof(bool) });
+
+        private static bool RedAlert_Prefix(ConsoleCaptain __instance)
+        {
+            if (!OtherCaptain(__instance)) return true;
+            bool on = !RedAlertField(__instance);
+            RedAlertField(__instance) = on;
+            if (Patches.PhotonNetworkType?.GetMethod("get_isMasterClient", BindingFlags.Public | BindingFlags.Static)?.Invoke(null, null) is true && SetCrewRedAlert != null)
+                PvpScope.Run(IsCopy(__instance) ? "B" : "A", () => SetCrewRedAlert.Invoke(null, new object[] { on }));
+            return false;
+        }
+
+        // Your own captain's red alert: the bridge's lights made to match it, in case the other's flipped them before.
+        private static void RedAlert_Postfix(ConsoleCaptain __instance)
+        {
+            if (!Active || copies.Count == 0 || OtherCaptain(__instance)) return;
+            var lights = BridgeLightingManager.IEFBKOMBFGO; // Instance
+            if (lights != null && LightsRedAlert?.Invoke(lights, null) is bool lit && lit != RedAlertField(__instance)) lights.ToggleRedAlert();
+        }
 
         private static bool SetViewScreen_Prefix(ConsoleCaptain __instance, ConsoleCaptain.EGJLFAIFPGC __0, bool __1)
         {
@@ -179,6 +212,12 @@ namespace StbcRevival
 
         internal static bool IsCopy(ConsoleBase console) => copies.Any(s => s != null && s.GHJLPNMIOAJ == console);
 
+        /// <summary>The same station in the other set (ship A's for ship B's, and back), or null.</summary>
+        internal static NovaStation TwinStation(NovaStation station) =>
+            station != null && twinOf.TryGetValue(station, out var twin) && twin != null ? twin : null;
+
+        internal static bool IsCopy(NovaStation station, bool _) => station != null && copies.Contains(station);
+
         /// <summary>The same console in the other set (ship A's for ship B's, and back), or null.</summary>
         internal static T Twin<T>(T console) where T : ConsoleBase
         {
@@ -194,7 +233,7 @@ namespace StbcRevival
         // counts a console with a bot and no player as an AI station).
         private static void ShareBots()
         {
-            if (SetAI == null) return;
+            if (SetAI == null || PvpCrewBots.ShipBHasBots()) return; // ship B has its own (PvpCrewBots)
             foreach (var copy in copies)
             {
                 var console = copy == null ? null : copy.GHJLPNMIOAJ;
@@ -203,6 +242,52 @@ namespace StbcRevival
                 if (bot == null) continue;
                 SetAI.Invoke(console, new object[] { bot });
                 Plugin.Log.LogInfo($"PvP: ship B's {copy.OGBAPMIPPID} console crewed by {bot.FAJABLKBGHN}");
+            }
+        }
+
+        // A shared bot is one body for both ships' consoles of its role. A player taking one of them switched the
+        // bot off (PlayerInfo.EnableAISeat(false): its body inactive, its crew no longer working that console), on
+        // every game, so the other ship lost its crewman too (the helmsman vanished from both bridges while one
+        // captain sat at helm). It stays on while the other ship's console of its role has no player.
+        private static readonly MethodInfo ConsolePlayer = AccessTools.PropertyGetter(typeof(ConsoleBase), "FKKJLMLCKJI"); // Player
+        private static readonly HashSet<string> toldBots = new HashSet<string>();
+
+        private static bool AISeat_Prefix(PlayerInfo __instance, bool __0)
+        {
+            if (__0 || !Active || copies.Count == 0 || __instance == null || ConsolePlayer == null) return true;
+            foreach (var copy in copies)
+            {
+                var copyConsole = copy == null ? null : copy.GHJLPNMIOAJ;
+                if (copyConsole == null || !ReferenceEquals(copyConsole.LPMMGGIAOCL, __instance)) continue;
+                if (!twinOf.TryGetValue(copy, out var original) || original == null || original.GHJLPNMIOAJ == null) continue;
+                var originalConsole = original.GHJLPNMIOAJ;
+                if (!ReferenceEquals(originalConsole.LPMMGGIAOCL, __instance)) continue;
+                bool copyFree = ConsolePlayer.Invoke(copyConsole, null) == null, originalFree = ConsolePlayer.Invoke(originalConsole, null) == null;
+                if (!copyFree && !originalFree) return true; // both ships' players there: off
+                if (toldBots.Add(copy.OGBAPMIPPID.ToString())) Plugin.Log.LogInfo($"PvP: the {copy.OGBAPMIPPID} crew bot stays on for the ship whose {copy.OGBAPMIPPID} has no player");
+                return false;
+            }
+            return true;
+        }
+
+        // Each game shows a shared bot only where its own ship's console of that role has no player (else it would
+        // sit in that player's chair).
+        private static void ShowSharedBots()
+        {
+            if (ConsolePlayer == null) return;
+            bool onB = OnB;
+            foreach (var copy in copies)
+            {
+                var copyConsole = copy == null ? null : copy.GHJLPNMIOAJ;
+                if (copyConsole == null || !twinOf.TryGetValue(copy, out var original) || original == null || original.GHJLPNMIOAJ == null) continue;
+                var bot = original.GHJLPNMIOAJ.LPMMGGIAOCL;
+                if (bot == null || !ReferenceEquals(copyConsole.LPMMGGIAOCL, bot)) continue;
+                var mine = onB ? copyConsole : original.GHJLPNMIOAJ;
+                bool show = ConsolePlayer.Invoke(mine, null) == null;
+                foreach (var pawn in new[] { bot.VisualPawnObject, bot.PawnObject })
+                    if (pawn != null)
+                        foreach (var r in pawn.GetComponentsInChildren<Renderer>(true))
+                            if (r.enabled != show) r.enabled = show;
             }
         }
 
@@ -419,8 +504,9 @@ namespace StbcRevival
         // Ship B's players sit at the copy of their station.
         private static void Seat_Prefix(NovaPlayerInfo __0, int __1, ref int __4)
         {
-            if (!Active || __0 == null || __0.AOMGCCGDJJC) return;
-            if (PvpShips.Of(PvpShips.Player(__1)) != "B") return;
+            if (!Active || __0 == null) return;
+            // A crew bot: ship B's own (PvpCrewBots) sit at ship B's stations; the game's at ship A's.
+            if (__0.AOMGCCGDJJC ? !PvpCrewBots.IsShipBBot(__0) : PvpShips.Of(PvpShips.Player(__1)) != "B") return;
             var list = (IList)stationList.GetValue(null);
             if (__4 < 0 || __4 >= list.Count || !(list[__4] is NovaStation station) || copies.Contains(station)) return;
             if (!twinOf.TryGetValue(station, out var copy) || copy == null) return;
@@ -551,6 +637,7 @@ namespace StbcRevival
             nextHide = Time.unscaledTime + 1f;
             LinkCopies();
             ShareBots();
+            ShowSharedBots();
             bool onB = OnB;
             var others = twinOf.Keys.Where(s => s != null && copies.Contains(s) != onB).ToList();
             if (others.Count == 0) return;

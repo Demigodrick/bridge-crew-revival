@@ -71,6 +71,8 @@ namespace StbcRevival
             if (view == null) return; // the other ship isn't there (yet): stay as you are
             Write(view);
             applied = ship;
+            if (ship == null) PvpShipChoice.Unpin();
+            else PvpShipChoice.Pin(ship); // and that ship's rules (the AI crew's helm and behaviour)
         }
 
         /// <summary>Runs something with that ship's view on, then puts back what was on.</summary>
@@ -97,6 +99,7 @@ namespace StbcRevival
         internal static void Forget()
         {
             applied = null;
+            PvpShipChoice.Unpin();
             yours = null;
             foreach (var orders in copiedOrders.Values)
                 if (orders != null) UnityEngine.Object.Destroy(orders.gameObject);

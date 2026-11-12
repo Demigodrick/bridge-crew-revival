@@ -14,6 +14,8 @@ namespace StbcRevival
     internal static class PvpSeatDiag
     {
         private static Object lastStation;
+        private static float resetAt = -1f;
+        private static readonly System.Reflection.MethodInfo CameraReset = HarmonyLib.AccessTools.Method(typeof(SVR.FPSCamera), "Reset");
         private static float recheckAt = -1f, awaySince = -1f, nextLook;
         private static bool toldAway;
 
@@ -30,12 +32,18 @@ namespace StbcRevival
             var me = NovaPlayerManager.IEFBKOMBFGO?.AJPNCBOKCLC as NovaPlayerInfo;
             var station = me == null ? null : me.Station as NovaStation;
             if (station == null) return;
+            if (resetAt > 0f && Time.unscaledTime >= resetAt)
+            {
+                resetAt = -1f;
+                ResetView(me);
+            }
             if (!ReferenceEquals(station, lastStation))
             {
                 bool first = lastStation == null;
                 lastStation = station;
                 toldAway = false;
                 awaySince = -1f;
+                resetAt = Time.unscaledTime + 0.5f; // once the game has seated you there
                 if (!first)
                 {
                     Plugin.Log.LogInfo("PvP: [seat] now at " + Describe(me, station));
@@ -56,6 +64,21 @@ namespace StbcRevival
             if (Time.unscaledTime - awaySince < 2f) return;
             toldAway = true;
             Plugin.Log.LogInfo($"PvP: [seat] your view is turned {off:0}° from your chair's facing at " + Describe(me, station));
+        }
+
+        // The desktop camera keeps its own turn (FPSCamera: mouse look) and puts it straight only when your console
+        // changes (Reset, on PlayerConsoleChangedEvent); a PvP lobby seat change or a join didn't always count, so a
+        // view turned before stayed turned in the new chair: seen as "view 240°, body 135°, local turn 105°".
+        private static void ResetView(NovaPlayerInfo me)
+        {
+            try
+            {
+                var camera = me?.PawnObject == null ? null : me.PawnObject.GetComponentInChildren<SVR.FPSCamera>(true);
+                if (camera == null || CameraReset == null) return;
+                CameraReset.Invoke(camera, null);
+                Plugin.Log.LogInfo("PvP: [seat] view put straight for the new chair");
+            }
+            catch (System.Exception e) { Plugin.Log.LogWarning("PvP: [seat] putting the view straight: " + (e.InnerException ?? e).Message); }
         }
 
         private static string Describe(NovaPlayerInfo me, NovaStation station)

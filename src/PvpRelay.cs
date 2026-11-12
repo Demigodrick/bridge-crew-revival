@@ -35,6 +35,26 @@ namespace StbcRevival
             Send(ship, "V", evt, Convert.ToInt32(voice).ToString(), delay.ToString(System.Globalization.CultureInfo.InvariantCulture));
         }
 
+        /// <summary>A voice line played here only (VOPlaybackManager.PlayVO), as a relayed one is.</summary>
+        internal static bool PlayHere(string evt, object voice, float delay)
+        {
+            try
+            {
+                var manager = AccessTools.Property(typeof(VOPlaybackManager), "IEFBKOMBFGO")?.GetValue(null, null)
+                              ?? AccessTools.Field(typeof(VOPlaybackManager), "IEFBKOMBFGO")?.GetValue(null);
+                var play = AccessTools.Method(typeof(VOPlaybackManager), "PlayVO");
+                if (manager == null || play == null) return false;
+                var p = play.GetParameters();
+                play.Invoke(manager, new object[]
+                {
+                    evt, Enum.ToObject(p[1].ParameterType, Convert.ToInt32(voice)), delay, false,
+                    p[4].DefaultValue is DBNull ? Activator.CreateInstance(p[4].ParameterType) : p[4].DefaultValue, true,
+                });
+                return true;
+            }
+            catch { return false; }
+        }
+
         /// <summary>A bridge message the host keeps off its bridge: for that ship's players.</summary>
         internal static void Message(string ship, object role, string text, float duration, bool a, bool b, string[] args)
         {

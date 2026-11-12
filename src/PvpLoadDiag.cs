@@ -67,6 +67,7 @@ namespace StbcRevival
 
             var parts = new List<string>();
             parts.Add($"you: {localLoading ?? "no player info"}");
+            parts.Add(BridgeScenes());
             parts.Add($"seated {(phase == null ? "no phase" : SeatedField?.GetValue(phase) is bool s ? (s ? "yes" : "no") : "?")}");
 
             // Your bridge's ship, and its impulse state.
@@ -115,6 +116,34 @@ namespace StbcRevival
                 return $"#{PvpShips.Actor(p)} ship {PvpShips.Of(p)} {(loading == null ? "no state" : loading.ToString())}";
             }).ToArray()));
             return string.Join("; ", parts.ToArray());
+        }
+
+        // The bridge scene this game's ship pick names (Loader.CurrentBridgeScene, which the mission load makes the
+        // active scene) against the scenes actually loaded.
+        private static string BridgeScenes()
+        {
+            string named;
+            try { named = AccessTools.Property(typeof(Loader), "OCPBJAHBFCB")?.GetValue(null, null) as string ?? "?"; } // CurrentBridgeScene
+            catch (Exception e) { named = "unreadable: " + e.GetType().Name; }
+            var loaded = new List<string>();
+            for (int i = 0; i < UnityEngine.SceneManagement.SceneManager.sceneCount; i++)
+            {
+                var scene = UnityEngine.SceneManagement.SceneManager.GetSceneAt(i);
+                if (scene.name.StartsWith("Bridge_scene", StringComparison.Ordinal)) loaded.Add(scene.name);
+            }
+            bool match = loaded.Contains(named);
+            // The Bridge's own Photon view (baked into each bridge scene): its RPCs (console messages, raise shields,
+            // the viewscreen mode) reach another game only if that game's bridge has the same view ID.
+            string view = "none";
+            try
+            {
+                var bridge = Bridge.Instance;
+                var pv = bridge == null ? null : bridge.GetComponent("PhotonView");
+                var id = pv == null ? null : Traverse.Create(pv).Property("viewID").GetValue() ?? Traverse.Create(pv).Field("viewIdField").GetValue();
+                view = id?.ToString() ?? (bridge == null ? "no bridge" : "no view");
+            }
+            catch (Exception e) { view = "unreadable: " + e.GetType().Name; }
+            return $"bridge view {view}, bridge scene named {named}, loaded {(loaded.Count == 0 ? "none" : string.Join(" ", loaded.ToArray()))}{(match || loaded.Count == 0 ? "" : " (MISMATCH)")}, active {UnityEngine.SceneManagement.SceneManager.GetActiveScene().name}";
         }
 
         private static string LoadingStateOf(NovaPlayerInfo info)
