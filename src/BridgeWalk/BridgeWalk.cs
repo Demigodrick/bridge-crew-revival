@@ -797,7 +797,8 @@ namespace StbcRevival.Walking
         {
             Restore();
             if (notThisShip) return;
-            var ship = UnityEngine.Object.FindObjectOfType<Sector.Spacecraft.PlayerSpacecraft>();
+            // Your own ship (in PvP there are two player ships: the first one found could be the other's).
+            var ship = StbcRevival.PvpPrototype.Bound ?? UnityEngine.Object.FindObjectOfType<Sector.Spacecraft.PlayerSpacecraft>();
             if (ship == null) return;
             // The ship object is "Enterprise D_", its model "Body - 1701D(Clone)".
             bool enterpriseD = ship.name.IndexOf("Enterprise D", StringComparison.OrdinalIgnoreCase) >= 0 || ship.name.IndexOf("1701D", StringComparison.OrdinalIgnoreCase) >= 0;
