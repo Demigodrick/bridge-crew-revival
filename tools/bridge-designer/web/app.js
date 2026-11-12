@@ -431,7 +431,7 @@ function refreshSelection() {
   const one = sel.length === 1 && list.length === 1 && list[0].path === path ? list[0] : null;
   $('infoName').textContent = sel.length > 1 ? `${sel.length} picked` : short(path) + (one ? '' : ` (group of ${list.length})`);
   $('infoPath').textContent = sel.length > 1 ? sel.map(x => x.split('/').slice(-2).join('/')).join(', ') : path;
-  $('infoMesh').textContent = one?.added ? (one.added.from.model ? `model ${one.added.from.model}` : `${short(one.added.from.path)} from ${bridges.find(b => b.level === one.added.from.level)?.name ?? one.added.from.scene}`)
+  $('infoMesh').textContent = one?.added ? (one.added.from.model ? `model ${one.added.from.model}` : `${short(one.added.from.path)} from ${bridges.find(b => b.level === one.added.from.level && !b.scene.includes('-'))?.name ?? one.added.from.scene}`)
     : one ? `${one.obj.userData.mesh ?? '?'} (${one.obj.userData.file ?? '?'})` : '—';
   $('infoSize').textContent = `${size.x.toFixed(2)} × ${size.y.toFixed(2)} × ${size.z.toFixed(2)} m`;
   $('infoMats').textContent = [...mats].slice(0, 8).join(', ') + (mats.size > 8 ? ` +${mats.size - 8}` : '');
@@ -931,15 +931,17 @@ renderer.setAnimationLoop(() => {
 new EventSource('/api/alive');
 fetch('/api/version').then(r => r.ok ? r.text() : '').then(v => { $('version').textContent = v ? 'v' + v : ''; document.title = `Bridge Designer ${v}`; });
 const bridges = await (await fetch('/api/bridges')).json();
-for (const b of bridges) $('bridge').add(new Option(b.name, b.level));
+// By scene: a ship's own copy of a bridge (Bridge_scene_02-Nova) is the same level as the game's.
+for (const b of bridges) $('bridge').add(new Option(b.name, b.scene));
 $('bridge').addEventListener('change', () => {
-  if (dirty && !confirm('This bridge has unsaved changes. Switch anyway?')) { $('bridge').value = bridge.level; return; }
-  load(bridges.find(b => b.level === +$('bridge').value));
+  if (dirty && !confirm('This bridge has unsaved changes. Switch anyway?')) { $('bridge').value = bridge.scene; return; }
+  load(bridges.find(b => b.scene === $('bridge').value));
 });
-for (const b of bridges) $('source').add(new Option(b.name, b.level));
+// Parts come from the game's bridges (a ship's copy has the same ones).
+for (const b of bridges.filter(x => !x.scene.includes('-'))) $('source').add(new Option(b.name, b.level));
 $('source').add(new Option('Models (BepInEx/bridges/models)', 'models'));
 const first = bridges.find(b => b.scene === 'Bridge_scene_02') ?? bridges[0];
-if (first) { $('bridge').value = first.level; load(first); }
+if (first) { $('bridge').value = first.scene; load(first); }
 else $('stats').textContent = 'No bridges found in the game\'s files.';
 
 // For looking into the page from the browser's console.

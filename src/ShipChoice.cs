@@ -14,8 +14,7 @@ namespace StbcRevival
     /// is on this PC (NOVA, SOVEREIGN) under the Next Generation's, and buttons on its left to scroll the list. The box
     /// still shows three rows; the game's own toggles (Aegis, original Enterprise, Next Generation) move up and out of
     /// sight as the list scrolls, ours come in below. Each is a copy of the Aegis's row (always choosable, never locked).
-    /// A class of ours flies on the Next Generation's ship when the crew can choose it (it's DLC), else on the Aegis's:
-    /// choosing one turns that toggle on and puts the class's name on the room (CustomShip), so the bridge, consoles and
+    /// A class of ours flies on the Aegis's ship (and its own copy of the Aegis's bridge): choosing one turns that toggle on and puts the class's name on the room (CustomShip), so the bridge, consoles and
     /// crew are that ship's and the hull the class's. It shows as a ship of its own: that row looks unchosen. Choosing
     /// any of the game's ships (a press on the one underneath too) takes ours off the room again. Ours can be chosen by
     /// whoever chooses the ship (the captain), not for the campaign.
@@ -148,7 +147,7 @@ namespace StbcRevival
         {
             if (__1 || boxes.Count == 0 || !(__0 is Toggle t) || !t.isOn || CustomShip.FlownNow == null) return;
             foreach (var box in boxes)
-                if (t == box.Aegis || t == box.Tng)
+                if (t == box.Aegis)
                 {
                     if (box.Console != null && CanChoose(box)) __1 = true;
                     return;
@@ -189,8 +188,8 @@ namespace StbcRevival
             try
             {
                 CustomShip.Choose(ship);
-                // The game's own choice under it: the Next Generation's ship if the crew can have it, else the Aegis's.
-                var under = box.Tng.interactable || box.Tng.isOn ? box.Tng : box.Aegis;
+                // The game's own choice under it: the Aegis's.
+                var under = box.Aegis;
                 if (!under.isOn) under.isOn = true;
             }
             finally { box.Applying = false; }
@@ -373,7 +372,7 @@ namespace StbcRevival
                 try
                 {
                     box.Applying = true;
-                    bool under = box.Tng.isOn || box.Aegis.isOn; // one of ours flies on one of these
+                    bool under = box.Aegis.isOn; // ours fly on the Aegis's ship
                     bool on = flown != null && under;
                     int chosen = box.Tng.isOn ? 2 : box.Tos.isOn ? 1 : 0;
                     // Choosable whenever the game's own choice is (the host's or captain's), greyed like the others when not,
@@ -399,11 +398,10 @@ namespace StbcRevival
                         if (row.interactable != canChoose) row.interactable = canChoose;
                     }
                     if (campaign && flown != null && Missions.RevivalBriefing.IsChooser(box.Console) && !JustPressed) { CustomShip.Choose(null); flown = null; on = false; }
-                    // Ours are ships of their own as far as the box shows (the ship they borrow for now, the Next
-                    // Generation's or the Aegis's, is to be replaced): that row looks unchosen while ours is, as when
-                    // another ship is chosen.
+                    // Ours are ships of their own as far as the box shows (the Aegis they borrow for now is to be
+                    // replaced): that row looks unchosen while ours is, as when another ship is chosen.
                     foreach (var row in new[] { box.Tng, box.Aegis })
-                        if (row.graphic != null) row.graphic.canvasRenderer.SetAlpha(on && row.isOn ? 0f : (row.isOn ? 1f : 0f));
+                        if (row.graphic != null) row.graphic.canvasRenderer.SetAlpha(on && row == box.Aegis && row.isOn ? 0f : (row.isOn ? 1f : 0f));
                     box.Applying = false;
                     // Scrolled so the ship chosen is in sight, when the choice changes (scrolling away is free after that).
                     if (chosen != box.LastChosen)

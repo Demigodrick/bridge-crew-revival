@@ -15,8 +15,8 @@ namespace StbcRevival
     /// <summary>
     /// [Ships] PlayerShip = Nova or Sovereign (beta): the crew flies a ship class of its own, built from a model in
     /// BepInEx/ships/&lt;Name&gt; (comes with the mod, from assets/ships): a Wavefront &lt;Name&gt;.obj with its .mtl and
-    /// textures (.png or .jpg beside it). The ship and its bridge stay the game's own for now: the Aegis, or the
-    /// Enterprise-D when the crew can choose the Next Generation.
+    /// textures (.png or .jpg beside it). The ship and its bridge stay the game's Aegis for now (its bridge is a copy of
+    /// the Aegis's, with a layout of its own: BridgeLayout).
     ///
     /// A player ship is two prefabs: the ship (Ship - Aegis: its systems, console interfaces, crew, network) and its
     /// body (Body - Aegis: model, hull collider, weapon hardpoints, damage spots by side, cameras, warp effects), which
@@ -106,10 +106,10 @@ namespace StbcRevival
 
         private static readonly FieldInfo BodyField = AccessTools.Field(typeof(BaseSpacecraft), "_body");
         private static GameObject holder;          // inactive: the templates under it never wake
-        private SpacecraftBody aegisTemplate, tngTemplate; // the class's body on the Aegis's ship, and on the Enterprise-D's
+        private SpacecraftBody aegisTemplate; // the class's body on the Aegis's ship
 
-        /// <summary>The class's bodies built so far (on the Aegis's ship and on the Enterprise-D's).</summary>
-        internal SpacecraftBody[] Templates => new[] { aegisTemplate, tngTemplate }.Where(b => b != null).ToArray();
+        /// <summary>The class's bodies built so far (on the Aegis's ship).</summary>
+        internal SpacecraftBody[] Templates => new[] { aegisTemplate }.Where(b => b != null).ToArray();
 
         private Func<Vector3, Vector3> spaceOrient;
         private Vector3 spaceCentre;
@@ -129,7 +129,7 @@ namespace StbcRevival
         {
             get
             {
-                var body = tngTemplate ?? aegisTemplate;
+                var body = aegisTemplate;
                 if (body == null) return new MeshFilter[0];
                 // Its hull pieces ("Name_…") and whatever else was put on it since (its name decals, "Name Name Decal").
                 return body.GetComponentsInChildren<MeshFilter>(true).Where(f => f.name.StartsWith(Name, StringComparison.Ordinal) && f.sharedMesh != null).ToArray();
@@ -401,9 +401,7 @@ namespace StbcRevival
             }
             SpacecraftBody body = null;
             yield return Guard(Build(data, "Sector/Ships/Ship - Aegis", "Aegis", b => body = b), "building its body (Aegis)");
-            aegisTemplate = body; body = null;
-            yield return Guard(Build(data, "Sector/Ships/Ship - Enterprise 1701D", "Enterprise-D", b => body = b), "building its body (Enterprise-D)");
-            tngTemplate = body;
+            aegisTemplate = body;
             data.ImageFiles.Clear();
             building = false;
             Changed();
@@ -436,7 +434,9 @@ namespace StbcRevival
                 var ship = Flown;
                 if (ship == null) return;
                 if (Campaign) { Plugin.Log.LogInfo($"{ship.Name}: a campaign mission; the ship keeps its own body"); return; }
-                var template = Loader.IOMGCNMDDCK ? ship.tngTemplate : ship.aegisTemplate;
+                // Ours fly on the Aegis's ship and bridge only (the ship box sets the Aegis under them).
+                if (Loader.IOMGCNMDDCK) { Plugin.Log.LogInfo($"{ship.Name}: the Next Generation's ship is chosen; it keeps its own body"); return; }
+                var template = ship.aegisTemplate;
                 // Never waited for here (that would hold up the mission's loading, a frozen headset in VR): a class that
                 // isn't ready yet means the game's own ship this time.
                 if (template == null)

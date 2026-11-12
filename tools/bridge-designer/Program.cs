@@ -5,7 +5,9 @@
 // only (127.0.0.1). Nothing from the game is copied anywhere else or kept on disk.
 //
 // Layouts (what was moved, turned or hidden) are saved to BepInEx/bridges/<scene>.json in the game folder, the
-// previous one kept as .json.bak; the mod puts a bridge's layout on whenever that bridge loads.
+// previous one kept as .json.bak; the mod puts a bridge's layout on whenever that bridge loads. Each ship class of
+// the mod's (BepInEx/ships/<Class>: the Nova, the Sovereign) has its own copy of the Aegis's bridge, which it flies on,
+// listed as a bridge of its own, with a layout of its own (<scene>-<Class>.json).
 //
 // Usage: dotnet run -- [--game <game folder>] [--port 8770] [--no-open] [--stay] [--web <folder>] [--layouts <folder>] [--models <folder>]
 //        (it stops by itself once its page is closed; --stay keeps it running until Ctrl+C)
@@ -53,6 +55,8 @@ while (gameDir == null || !GameFinder.IsGame(gameDir))
 }
 string dataDir = Path.Combine(gameDir, "stbc_Data");
 var bridges = Bridges(dataDir);
+string shipsDir = Path.Combine(gameDir, "BepInEx", "ships");
+bridges.AddRange(ShipBridges(bridges, shipsDir));
 Console.WriteLine($"Game: {gameDir}");
 Console.WriteLine($"Bridges: {string.Join(", ", bridges.Select(b => $"{b.Name} (level{b.Level})"))}");
 
@@ -214,8 +218,10 @@ void Serve(HttpListenerContext ctx)
             string layoutFile = Path.Combine(layouts, sceneName + ".json");
             if (ctx.Request.HttpMethod == "GET")
             {
-                if (!File.Exists(layoutFile)) { res.StatusCode = 404; res.Close(); return; }
-                Send(res, "application/json", File.ReadAllBytes(layoutFile));
+                // A ship's bridge with no layout of yours yet: the one its ship comes with, if any (as the mod does).
+                string read = File.Exists(layoutFile) ? layoutFile : ShippedLayout(sceneName, shipsDir);
+                if (read == null) { res.StatusCode = 404; res.Close(); return; }
+                Send(res, "application/json", File.ReadAllBytes(read));
                 return;
             }
             if (ctx.Request.HttpMethod == "POST")
@@ -319,6 +325,37 @@ static List<(int Level, string Scene, string Name)> Bridges(string dataDir)
         index++;
     }
     return found;
+}
+
+// Each ship class of the mod's (a folder in BepInEx/ships with its <Class>.obj) gets a copy of the bridge it flies on:
+// the same scene, under a name of its own (<scene>-<Class>), so its layout is its own.
+static List<(int Level, string Scene, string Name)> ShipBridges(List<(int Level, string Scene, string Name)> bridges, string shipsDir)
+{
+    var copies = new List<(int, string, string)>();
+    if (!Directory.Exists(shipsDir)) return copies;
+    // The game's bridge it flies on: the Aegis's.
+    string[] shipBases = { "Bridge_scene_02" };
+    foreach (string dir in Directory.GetDirectories(shipsDir).OrderBy(d => d, StringComparer.OrdinalIgnoreCase))
+    {
+        string cls = Path.GetFileName(dir);
+        if (!File.Exists(Path.Combine(dir, cls + ".obj")) || cls.Any(c => !char.IsLetterOrDigit(c))) continue;
+        foreach (string baseScene in shipBases)
+        {
+            var b = bridges.FirstOrDefault(x => x.Scene == baseScene);
+            if (b.Scene == null) continue;
+            copies.Add((b.Level, baseScene + "-" + cls, $"{cls} (a copy of the Aegis)"));
+        }
+    }
+    return copies;
+}
+
+// The layout a ship's bridge comes with (BepInEx/ships/<Class>/<scene>.json), or null.
+static string ShippedLayout(string sceneName, string shipsDir)
+{
+    int dash = sceneName.LastIndexOf('-');
+    if (dash <= 0) return null;
+    string file = Path.Combine(shipsDir, sceneName[(dash + 1)..], sceneName[..dash] + ".json");
+    return File.Exists(file) ? file : null;
 }
 
 // Ours, answering on that address? (The bridge list is only ours.)

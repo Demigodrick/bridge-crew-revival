@@ -34,6 +34,11 @@ namespace StbcRevival
     /// chair of its own in its model, standing where one of the bridge's chairs is. Where it sits comes from its
     /// animation, so it's only known once it's spawned: then, if its chair is where a moved piece was, its seat
     /// object gets the same move, and the NPC (and any that later takes its place) goes along (Followers).
+    ///
+    /// Each ship class of ours (CustomShip: the Nova, the Sovereign) has a bridge of its own: a copy of the Aegis's
+    /// bridge, which it flies on, with a layout of its own, &lt;scene&gt;-&lt;Class&gt;.json (Bridge_scene_02-Nova.json),
+    /// never the Aegis's. With no such file in the
+    /// layouts folder, the one that comes with the ship (BepInEx/ships/&lt;Class&gt;/&lt;scene&gt;.json), if there is one.
     /// </summary>
     internal static class BridgeLayout
     {
@@ -146,6 +151,37 @@ namespace StbcRevival
 
         private static string Folder => Path.Combine(Paths.BepInExRootPath, "bridges");
 
+        // The game's bridge a class of ours flies on (CustomShip): the Aegis's.
+        private static readonly string[] ShipBridges = { "Bridge_scene_02" };
+
+        /// <summary>
+        /// The name a loaded scene's layout goes by: on a bridge flown as a class of ours, that class's own copy of it
+        /// (Bridge_scene_02-Nova); otherwise the scene's own name.
+        /// </summary>
+        internal static string LayoutName(string sceneName)
+        {
+            var ship = CustomShip.FlownNow;
+            if (ship == null || Array.IndexOf(ShipBridges, sceneName) < 0 || CustomShip.Campaign) return sceneName;
+            return sceneName + "-" + ship.Name;
+        }
+
+        /// <summary>A layout's file on this PC (yours in the layouts folder, else for a class's bridge the one its ship comes with), or null.</summary>
+        private static string OwnFile(string name)
+        {
+            string folder = Path.GetFullPath(Folder);
+            string file = Path.GetFullPath(Path.Combine(folder, name + ".json"));
+            // Only a file right in the layouts folder (the name may come from a crewmate).
+            if (!string.Equals(Path.GetDirectoryName(file), folder.TrimEnd(Path.DirectorySeparatorChar), StringComparison.OrdinalIgnoreCase)) return null;
+            if (File.Exists(file)) return file;
+            int dash = name.LastIndexOf('-');
+            if (dash <= 0) return null;
+            var ship = CustomShip.Find(name.Substring(dash + 1));
+            string scene = name.Substring(0, dash);
+            if (ship == null || Array.IndexOf(ShipBridges, scene) < 0) return null;
+            string shipped = Path.Combine(ship.Folder, scene + ".json");
+            return File.Exists(shipped) ? shipped : null;
+        }
+
         // ------------------------------------------------------------------------------------------- every frame
         internal static void Update()
         {
@@ -169,7 +205,7 @@ namespace StbcRevival
                 if (root != boundRoot) { Forget(); }
                 else
                 {
-                    var now = SourceFor(scene.name);
+                    var now = SourceFor(LayoutName(scene.name));
                     if (now.Key == boundKey) { Followers(); return; }
                     if (now.Wait) return;
                     Plugin.Log.LogInfo($"Bridge layout: {scene.name}'s layout changed ({now.Label}): put on again");
@@ -185,7 +221,8 @@ namespace StbcRevival
             {
                 var s = SceneManager.GetSceneAt(i);
                 if (!s.isLoaded) continue;
-                var source = SourceFor(s.name);
+                string name = LayoutName(s.name);
+                var source = SourceFor(name);
                 if (source.Wait) return;           // asking the host for its layout: a moment
                 if (source.Text == null) continue;
                 int root = RootId(s);
@@ -194,7 +231,7 @@ namespace StbcRevival
                 boundRoot = root;
                 boundKey = source.Key;
                 Load(source.Text, source.Label);
-                if (source.Shared == false && BridgeShare.IsHost) BridgeShare.Push(s.name, source.Text);
+                if (source.Shared == false && BridgeShare.IsHost) BridgeShare.Push(name, source.Text);
                 return;
             }
         }
@@ -210,35 +247,34 @@ namespace StbcRevival
         /// Where a scene's layout comes from: in a crew whose host has the mod, the host's (none if the host has none);
         /// otherwise (hosting, alone, or a host without the mod) your own file.
         /// </summary>
-        private static Source SourceFor(string sceneName)
+        private static Source SourceFor(string name)
         {
-            switch (BridgeShare.HostLayout(sceneName, out var text, out int version))
+            // The name's in the key: a bridge that becomes a class's (or stops being one) takes that one's layout.
+            switch (BridgeShare.HostLayout(name, out var text, out int version))
             {
                 case BridgeShare.State.Waiting: return new Source { Wait = true, Key = "waiting" };
-                case BridgeShare.State.Has: return new Source { Text = text, Key = "host:" + version, Label = "the host's", Shared = true };
-                case BridgeShare.State.None: return new Source { Key = "host:none:" + version, Label = "the host has none" };
+                case BridgeShare.State.Has: return new Source { Text = text, Key = name + ":host:" + version, Label = "the host's", Shared = true };
+                case BridgeShare.State.None: return new Source { Key = name + ":host:none:" + version, Label = "the host has none" };
             }
-            string file = Path.Combine(Folder, sceneName + ".json");
-            if (!File.Exists(file)) return new Source { Key = "none" , Label = "no file" };
             try
             {
+                string file = OwnFile(name);
+                if (file == null) return new Source { Key = name + ":none", Label = "no file" };
                 var write = File.GetLastWriteTimeUtc(file);
-                return new Source { Text = File.ReadAllText(file), Key = "file:" + write.Ticks, Label = Path.GetFileName(file), Shared = false };
+                return new Source { Text = File.ReadAllText(file), Key = name + ":file:" + file + ":" + write.Ticks, Label = Path.GetFileName(file), Shared = false };
             }
-            catch (Exception e) { return new Source { Key = "unreadable", Label = e.Message }; }
+            catch (Exception e) { return new Source { Key = name + ":unreadable", Label = e.Message }; }
         }
 
         /// <summary>This scene's layout as your own file has it (for the host to share), or null.</summary>
         internal static string OwnLayout(string sceneName)
         {
-            // Asked for by a crewmate: only a file right in the layouts folder.
+            // Asked for by a crewmate: a plain name, and only a file in the layouts folder (or a class's bridge's own).
             if (!BridgeShare.SceneName(sceneName)) return null;
             try
             {
-                string folder = Path.GetFullPath(Folder);
-                string file = Path.GetFullPath(Path.Combine(folder, sceneName + ".json"));
-                if (!string.Equals(Path.GetDirectoryName(file), folder.TrimEnd(Path.DirectorySeparatorChar), StringComparison.OrdinalIgnoreCase)) return null;
-                return File.Exists(file) ? File.ReadAllText(file) : null;
+                string file = OwnFile(sceneName);
+                return file != null ? File.ReadAllText(file) : null;
             }
             catch { return null; }
         }

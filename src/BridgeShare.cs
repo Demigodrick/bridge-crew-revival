@@ -12,7 +12,7 @@ namespace StbcRevival
     /// <summary>
     /// Bridge layouts shared by the host: in a crew, everyone with the mod sees the host's layout of the bridge (the
     /// host's own BepInEx/bridges file), not their own. When a bridge (or briefing room) loads, a crewmate asks the
-    /// host for its layout and waits for the answer (up to WaitSeconds): the layout, or "none" (the bridge as the
+    /// host for its layout (a class of ours flies on its own copy of the bridge, which has its own) and waits for the answer (up to WaitSeconds): the layout, or "none" (the bridge as the
     /// game has it). No answer (a host without the mod, or with sharing off): your own file, as alone. The host also
     /// sends a layout to everyone again whenever it changes (saved from the designer while you play).
     ///
@@ -85,9 +85,11 @@ namespace StbcRevival
                 var roots = s.GetRootGameObjects();
                 int root = roots.Length > 0 ? roots[0].GetInstanceID() : 0;
                 if (root == 0) continue;
-                if (hostLayouts.TryGetValue(s.name, out var e) && e.Root == root) continue;
-                hostLayouts[s.name] = new Entry { Root = root, AskedAt = Time.unscaledTime };
-                Send(new object[] { Proto, Ask, s.name }, new[] { master });
+                // The layout's name: a class of ours flies on its own copy of the bridge (BridgeLayout.LayoutName).
+                string name = BridgeLayout.LayoutName(s.name);
+                if (hostLayouts.TryGetValue(name, out var e) && e.Root == root) continue;
+                hostLayouts[name] = new Entry { Root = root, AskedAt = Time.unscaledTime };
+                Send(new object[] { Proto, Ask, name }, new[] { master });
             }
         }
 
