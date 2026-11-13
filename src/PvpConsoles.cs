@@ -203,6 +203,7 @@ namespace StbcRevival
         /// <summary>Is this station (or console) part of the second set, ship B's?</summary>
         internal static bool IsCopy(NovaStation station) => station != null && copies.Contains(station);
 
+
         /// <summary>A station's other-ship twin (the copy of an original, or the original of a copy), or null.</summary>
         internal static NovaStation TwinOf(NovaStation station) =>
             station != null && twinOf.TryGetValue(station, out var twin) && twin != null ? twin : null;
@@ -252,22 +253,39 @@ namespace StbcRevival
         private static readonly MethodInfo ConsolePlayer = AccessTools.PropertyGetter(typeof(ConsoleBase), "FKKJLMLCKJI"); // Player
         private static readonly HashSet<string> toldBots = new HashSet<string>();
 
+        // More generally: a bot goes off only when a player sits at a console it crews. With ship B's own bots, ship
+        // A's player taking a station still switched a bot off somewhere (crew vanishing when the other ship's player
+        // took a position); whatever asks, a bot whose consoles have no player stays on, and the first time per bot
+        // the log says who asked.
         private static bool AISeat_Prefix(PlayerInfo __instance, bool __0)
         {
             if (__0 || !Active || copies.Count == 0 || __instance == null || ConsolePlayer == null) return true;
-            foreach (var copy in copies)
+            if (!(stationList.GetValue(null) is IList list)) return true;
+            ConsoleBase free = null;
+            int crewed = 0;
+            foreach (var station in list.OfType<NovaStation>())
             {
-                var copyConsole = copy == null ? null : copy.GHJLPNMIOAJ;
-                if (copyConsole == null || !ReferenceEquals(copyConsole.LPMMGGIAOCL, __instance)) continue;
-                if (!twinOf.TryGetValue(copy, out var original) || original == null || original.GHJLPNMIOAJ == null) continue;
-                var originalConsole = original.GHJLPNMIOAJ;
-                if (!ReferenceEquals(originalConsole.LPMMGGIAOCL, __instance)) continue;
-                bool copyFree = ConsolePlayer.Invoke(copyConsole, null) == null, originalFree = ConsolePlayer.Invoke(originalConsole, null) == null;
-                if (!copyFree && !originalFree) return true; // both ships' players there: off
-                if (toldBots.Add(copy.OGBAPMIPPID.ToString())) Plugin.Log.LogInfo($"PvP: the {copy.OGBAPMIPPID} crew bot stays on for the ship whose {copy.OGBAPMIPPID} has no player");
-                return false;
+                var console = station == null ? null : station.GHJLPNMIOAJ;
+                if (console == null || !ReferenceEquals(console.LPMMGGIAOCL, __instance)) continue;
+                crewed++;
+                if (free == null && ConsolePlayer.Invoke(console, null) == null) free = console;
             }
-            return true;
+            if (crewed == 0 || free == null) return true; // not seated yet, or players at all its consoles: off
+            string key = __instance.FAJABLKBGHN + "|" + free.name;
+            if (toldBots.Add(key))
+            {
+                string from = "?";
+                try
+                {
+                    var frames = new System.Diagnostics.StackTrace(1, false).GetFrames() ?? new System.Diagnostics.StackFrame[0];
+                    from = string.Join(" < ", frames.Select(f => f.GetMethod()).Where(m => m != null).Take(4)
+                        .Select(m => (m.DeclaringType == null ? "" : m.DeclaringType.Name + ".") + m.Name).ToArray());
+                }
+                catch { }
+                Plugin.Log.LogInfo($"PvP: [bots] {__instance.FAJABLKBGHN} stays on: told to go off while its console {free.name} "
+                                   + $"(ship {(IsCopy(free) ? "B" : "A")}'s) has no player ({(crewed > 1 ? "shared, " : "")}from {from})");
+            }
+            return false;
         }
 
         // Each game shows a shared bot only where its own ship's console of that role has no player (else it would
@@ -437,6 +455,8 @@ namespace StbcRevival
             if (InPvpBriefing && player != null) return BriefingSeat(role, player);
             var station = getStationByRole.Invoke(null, new object[] { role }) as NovaStation;
             if (!Active || station == null || player == null || player.AOMGCCGDJJC) return station;
+            // While ship B's crew code runs the lookup gives ship B's station (PvpCrewBots): start from ship A's.
+            if (copies.Contains(station) && twinOf.TryGetValue(station, out var original) && original != null) station = original;
             if (PvpShips.Of(PvpShips.Player(player.NJNHJKEPFAK)) != "B") return station;
             return twinOf.TryGetValue(station, out var copy) && copy != null ? copy : station;
         }
