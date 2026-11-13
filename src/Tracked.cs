@@ -14,7 +14,7 @@ namespace StbcRevival
     ///
     /// Each type's constructor gets a postfix that keeps the new object (Unity makes components with their
     /// constructor, sometimes off the main thread while loading, so it's only kept there, under a lock). A lookup
-    /// gives the ones still there and active; destroyed ones drop out, and prefabs once the check finds them.
+    /// gives the ones still there, active and in the game (not prefabs: see All); destroyed ones drop out.
     /// Subclasses' constructors are patched too (NovaPlayerInfo's), as the runtime may build a base constructor into
     /// them. Once a scene has been loaded a few seconds, each list is checked against one search of the scene: one
     /// that missed anything takes them in, and one that misses again is dropped, and that type searched for as before (said in the log). The same if a
@@ -96,8 +96,8 @@ namespace StbcRevival
             foreach (var o in kept)
                 if (!real.Contains(o))
                 {
-                    // Not in the scene: a prefab or other asset. Taken out for good.
-                    lock (gate) { assets.Add(o); made[key].Remove(o); }
+                    // Not in the scene (shouldn't happen: All holds back what it isn't sure of). Taken out for good.
+                    lock (gate) { assets.Add(o); made[key].Remove(o); live.Remove(o); }
                     Plugin.Log.LogInfo($"Tracked: {o.GetType().Name} on {((Component)o).gameObject.name} isn't in the scene (a prefab); left out of the list");
                 }
             foreach (var o in found)
@@ -116,6 +116,13 @@ namespace StbcRevival
                 + (again ? "; it missed before, so they're searched for as before" : "; the missed ones are in the list now"));
         }
 
+        // Objects whose scene isn't valid are either kept between scenes (your own player) or prefabs and other
+        // assets; on this Unity (5.4) nothing about them tells which (both: no name, handle 0), and a prefab must
+        // never be handed out: touching its Transform crashes the game. So such an object is held back until a search
+        // of the scene says which it is, once, when it first turns up active (not every lookup).
+        private static readonly HashSet<UnityEngine.Object> live = new HashSet<UnityEngine.Object>(SameObject.Instance);
+        private static readonly List<UnityEngine.Object> unsure = new List<UnityEngine.Object>();
+
         /// <summary>The T objects in the loaded scenes that are active, as FindObjectsOfType&lt;T&gt;() gives them.</summary>
         internal static List<T> All<T>() where T : Component
         {
@@ -127,19 +134,36 @@ namespace StbcRevival
             if (!kept) { result.AddRange(UnityEngine.Object.FindObjectsOfType<T>()); return result; }
             lock (gate)
             {
-                gone.Clear();
+                gone.Clear(); unsure.Clear();
                 foreach (var o in made[key])
                 {
                     if (o == null) { gone.Add(o); continue; } // destroyed
-                    if (!(o is T c)) continue;
-                    var go = c.gameObject;
-                    // Switched off. (Nothing on this Unity tells a prefab from an object kept between scenes - both
-                    // say their scene isn't valid, handle 0 - so prefabs are taken out by the check instead.)
-                    if (!go.activeInHierarchy || assets.Contains(o)) continue;
-                    result.Add(c);
+                    var go = ((Component)o).gameObject;
+                    if (go.scene.IsValid() || assets.Contains(o) || live.Contains(o)) continue;
+                    if (go.activeInHierarchy) unsure.Add(o);
                 }
-                foreach (var o in gone) made[key].Remove(o);
+                foreach (var o in gone) { made[key].Remove(o); live.Remove(o); }
             }
+            if (unsure.Count > 0)
+            {
+                // One search says which are in the game; the rest are assets (they're active, so a search would find them).
+                var found = new HashSet<UnityEngine.Object>(SameObject.Instance);
+                foreach (var o in UnityEngine.Object.FindObjectsOfType(key)) found.Add(o);
+                lock (gate)
+                    foreach (var o in unsure)
+                    {
+                        if (found.Contains(o)) live.Add(o);
+                        else { assets.Add(o); made[key].Remove(o); }
+                    }
+            }
+            lock (gate)
+                foreach (var o in made[key])
+                {
+                    if (o == null || !(o is T c)) continue;
+                    var go = c.gameObject;
+                    if (!go.activeInHierarchy) continue; // switched off
+                    if (go.scene.IsValid() || live.Contains(o)) result.Add(c);
+                }
             return result;
         }
 
