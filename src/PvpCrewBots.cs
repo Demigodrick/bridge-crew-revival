@@ -113,7 +113,7 @@ namespace StbcRevival
             string ship = PvpScope.Applied ?? PvpRouting.Context;
             if (ship != "B" || PvpConsoles.IsCopy(__result)) return;
             var twin = PvpConsoles.TwinStation(__result);
-            if (twin != null) __result = twin;
+            if (twin != null) { __result = twin; PvpRouteDiag.Count($"{__result.name} lookup: ship B's"); }
         }
 
         // The 2D crew menu marks each crew bot's station (by role): only your own ship's bots.

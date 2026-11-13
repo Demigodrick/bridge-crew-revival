@@ -110,6 +110,7 @@ namespace StbcRevival
             if (!localOnly || __1 == null || __2 == null) return true;
             var method = __1.GetType().GetMethod(__2, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.FlattenHierarchy);
             if (method == null) return true;
+            PvpRouteDiag.Count($"{__2} kept on this bridge");
             try { method.Invoke(__1, __4); }
             catch (Exception e) { if (told.Add("call" + __2)) Plugin.Log.LogWarning($"PvP: {__2} on this bridge: " + (e.InnerException ?? e).Message); }
             return false;

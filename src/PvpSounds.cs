@@ -114,6 +114,7 @@ namespace StbcRevival
             if (ship == (PvpShips.Mine ?? "A")) { if (play) emitter.Play(); else emitter.Stop(); }
             var at = EmitterOverride(emitter) != null ? EmitterOverride(emitter).transform.position : emitter.transform.position;
             ToShip(ship, "PostEvent_RPC", new object[] { play ? StartEvent(emitter) : StopEvent(emitter), at, NetSound.Invoke(emitter, null) });
+            PvpRouteDiag.Count($"emitter {emitter.name} {(play ? "play" : "stop")} to ship {ship}");
             return false;
         }
 
@@ -164,6 +165,7 @@ namespace StbcRevival
                     if (PvpShips.Actor(player) != me && PvpShips.Of(player) == ship)
                         sendTo.Invoke(null, new object[] { view, util, "PostEvent_Networked_RPC", player, new object[] { evt, at != null, at != null ? at.transform.position : Vector3.zero } });
                 if (told.Add(ship + evt)) Plugin.Log.LogInfo($"PvP: sound '{evt}' to ship {ship}'s crew only");
+                PvpRouteDiag.Count($"sound {evt} to ship {ship}");
             }
             catch (Exception e)
             {

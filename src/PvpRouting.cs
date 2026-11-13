@@ -159,10 +159,16 @@ namespace StbcRevival
         {
             if (!Muted) return false;
             if (keptOff.Add(text ?? "")) Plugin.Log.LogInfo($"PvP: ship {Context}'s console message '{text}' kept off your bridge");
+            PvpRouteDiag.Count($"ship {Context}'s message '{text}' kept off");
             return true;
         }
 
-        private static bool Voice_Prefix() => !Muted;
+        private static bool Voice_Prefix()
+        {
+            if (!Muted) return true;
+            PvpRouteDiag.Count($"ship {Context}'s local voice line kept off");
+            return false;
+        }
 
         // A voice line for everyone from the other ship's code: that ship's players hear it (PvpRelay).
         // And one from your own ship's code: played here and relayed to your own ship's players only (it went to
@@ -172,6 +178,7 @@ namespace StbcRevival
             if (Muted)
             {
                 PvpRelay.Voice(Context, __0, __1, __2);
+                PvpRouteDiag.Count($"voice line {__0} relayed to ship {Context}");
                 return false;
             }
             // The host's only (the relay is its room property); a crew member's are dropped where the other ship receives them.
@@ -179,6 +186,7 @@ namespace StbcRevival
                 || !(Patches.PhotonNetworkType?.GetMethod("get_isMasterClient", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static)?.Invoke(null, null) is true)) return true;
             if (!PvpRelay.PlayHere(__0, __1, __2)) return true;
             PvpRelay.Voice(Context, __0, __1, __2);
+            PvpRouteDiag.Count($"voice line {__0} to your ship {Context} only");
             return false;
         }
 
@@ -321,7 +329,11 @@ namespace StbcRevival
                 {
                     if (!(list[i] is Delegate wrapper)) continue;
                     string owner = Owner(Listener(wrapper)?.Target);
-                    if (eventShip != null ? (owner ?? Mine) != eventShip : sender != null && (owner ?? Mine) != sender) continue;
+                    if (eventShip != null ? (owner ?? Mine) != eventShip : sender != null && (owner ?? Mine) != sender)
+                    {
+                        PvpRouteDiag.Count($"event {type.Name} for ship {eventShip ?? sender} skipped ship {owner ?? Mine}'s listener");
+                        continue;
+                    }
                     SetContext(owner ?? sender);
                     var target = Listener(wrapper)?.Target;
                     string scope = PvpScope.Applied;

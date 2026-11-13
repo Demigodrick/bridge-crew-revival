@@ -102,9 +102,65 @@ namespace StbcRevival
             }
             harmony.Patch(apply, prefix: new HarmonyMethod(typeof(CrewOrders), nameof(Playbook_Prefix)));
             harmony.Patch(execute, prefix: new HarmonyMethod(typeof(CrewOrders), nameof(MenuOrder_Prefix)));
+
+            // Only the host knows what its crew can do (target, damage, power: its crew's state). A forwarding game's
+            // menu worked it out from its own copy, which isn't kept, and marked orders invalid ("No target", the
+            // invalid sound and voice) while forwarding them anyway. There every visible order is offered; the host's
+            // crew answers as usual (its "can't do that" too).
+            menuEnabled = AccessTools.Field(item, "<BFLLODMHGNL>k__BackingField");   // Enabled
+            menuVisible = AccessTools.Field(item, "<MOLFIBPOAIE>k__BackingField");   // IsVisible
+            int states = 0;
+            if (menuEnabled != null && menuVisible != null)
+                foreach (var type in AccessTools.AllTypes().Where(t => t != null && item.IsAssignableFrom(t)))
+                {
+                    var state = AccessTools.DeclaredMethod(type, "OnUpdateMenuState");
+                    if (state == null || state.IsAbstract) continue;
+                    harmony.Patch(state, postfix: new HarmonyMethod(typeof(CrewOrders), nameof(MenuState_Postfix)));
+                    states++;
+                }
+            var playbook = AccessTools.Method(manager, "UpdatePlaybookOrders");
+            playbookOn = AccessTools.Method(manager, "GGBIFBCOIND");      // get_PlaybookCommands
+            playbookShown = AccessTools.Method(manager, "IPDEODMCKJF");   // get_PlaybookVisibleCommands
+            if (playbook != null && playbookOn != null && playbookShown != null)
+                harmony.Patch(playbook, postfix: new HarmonyMethod(typeof(CrewOrders), nameof(PlaybookState_Postfix)));
+            target = AccessTools.TypeByName("AI.OILEJOBJAEJ");                                          // TargetSubsystemMenuItem
+            targetSubsystem = target == null ? null : AccessTools.Field(target, "AMEKCDKAADF");          // _subsystem
+            Plugin.Log.LogInfo($"Crew orders: a forwarding game's crew menu offers every order ({states} menu kinds"
+                               + $"{(playbookOn == null ? ", not the playbook" : "")}{(targetSubsystem == null ? ", target orders by their type" : "")})");
         }
 
-        private static FieldInfo menuCommand;
+        private static FieldInfo menuCommand, menuEnabled, menuVisible, targetSubsystem;
+        private static MethodInfo playbookOn, playbookShown;
+        private static Type target;
+
+        private static void MenuState_Postfix(object __instance)
+        {
+            if (!Forwarding || __instance == null) return;
+            if (menuVisible.GetValue(__instance) is bool shown && shown) menuEnabled.SetValue(__instance, true);
+        }
+
+        private static void PlaybookState_Postfix()
+        {
+            if (!Forwarding) return;
+            if (!(playbookOn.Invoke(null, null) is IDictionary on) || !(playbookShown.Invoke(null, null) is IDictionary shown)) return;
+            foreach (var key in on.Keys.Cast<object>().ToList())
+                if (shown.Contains(key) && shown[key] is bool visible && visible) on[key] = true;
+        }
+
+        // A target order's command, from the subsystem it aims at (its type is only set once the menu's state is
+        // worked out, which a forwarding game's own check could skip: it sent a number the host didn't know).
+        private static string TargetCommand(object item)
+        {
+            if (targetSubsystem == null || item == null || !target.IsInstanceOfType(item)) return null;
+            switch (targetSubsystem.GetValue(item)?.ToString())
+            {
+                case "Engines": return "TargetEngines";
+                case "Phasers": case "Lauchers": return "TargetWeapons";
+                case "Shields": return "TargetShields";
+                case "EMPTY": return "CeaseTargeting";
+                default: return null;
+            }
+        }
 
         private static bool Forwarding => PvpPrototype.Active && !IAmHost;
 
@@ -118,8 +174,13 @@ namespace StbcRevival
         private static bool MenuOrder_Prefix(object __instance)
         {
             if (!Forwarding || __instance == null) return true;
-            var command = menuCommand.GetValue(__instance)?.ToString();
+            var command = TargetCommand(__instance) ?? menuCommand.GetValue(__instance)?.ToString();
             if (string.IsNullOrEmpty(command) || command == "Invalid") return true;
+            if (!Valid(command))
+            {
+                Plugin.Log.LogWarning($"Crew orders: the menu's order {command} ({__instance.GetType().Name}) isn't one the host runs; not sent");
+                return false;
+            }
             SendToHost(command);
             return false;
         }
@@ -160,6 +221,7 @@ namespace StbcRevival
                 string command = string.Join(",", orders);
                 Plugin.Log.LogInfo($"Voice commands: {Get(player, "get_name") ?? "a crewmate"} ordered {command}");
                 // As that player's ship's code: in the PvP test, a ship B captain's orders are for ship B's crew.
+                PvpRouteDiag.Count($"order {command} from {Get(player, "get_name") ?? "?"} run as ship {PvpShips.Of(player) ?? "?"}");
                 try { PvpRouting.RunAs(PvpShips.Of(player), () => VoiceCommands.Run(command)); }
                 catch (Exception e) { Plugin.Log.LogWarning($"Voice commands: {command} from a crewmate: {(e.InnerException ?? e).Message}"); }
             }
