@@ -36,7 +36,7 @@ namespace StbcRevival
     {
         // ---- the classes ----
 
-        private static readonly CustomShip[] ships = { Nova(), Sovereign() };
+        private static readonly CustomShip[] ships = { Nova(), Sovereign(), AbramsEnterprise() };
 
         /// <summary>Every ship class there is (whether its model is on this PC or not), in the ship box's order.</summary>
         internal static IList<CustomShip> All => ships;
@@ -86,6 +86,34 @@ namespace StbcRevival
             };
         }
 
+        private static CustomShip AbramsEnterprise()
+        {
+            // Places as fractions of its half size (x starboard, y up, z forward): the two launcher groups under the
+            // saucer, and the six phaser banks.
+            var weapons = new Dictionary<string, Vector3>
+            {
+                ["Tube 1"] = new Vector3(-0.011f, -0.250f, 0.301f),
+                ["Tube 2"] = new Vector3(0f, -0.250f, 0.301f),
+                ["Tube 3"] = new Vector3(0.011f, -0.250f, 0.301f),
+                ["Tube 4"] = new Vector3(-0.010f, -0.810f, 0.094f),
+                ["Tube 5"] = new Vector3(0.010f, -0.810f, 0.094f),
+                ["Top Front Turret"] = new Vector3(0f, 0.435f, 0.745f),
+                ["Top Left Turret"] = new Vector3(-0.453f, 0.435f, 0.539f),
+                ["Top Right Turret"] = new Vector3(0.453f, 0.435f, 0.539f),
+                ["Bottom Front Turret"] = new Vector3(0f, 0.110f, 0.707f),
+                ["Bottom Left Turret"] = new Vector3(-0.370f, 0.110f, 0.539f),
+                ["Bottom Right Turret"] = new Vector3(0.370f, 0.110f, 0.539f),
+            };
+            return new CustomShip("AbramsEnterprise", "ENTERPRISE (KELVIN)", 42f, "USS Enterprise", "NCC-1701", weapons)
+            {
+                // Its nacelles' fronts are the game ship's own Bussard collectors: the glass drum with the blades that
+                // turn inside it, their materials and animation, taken whole from the Aegis. The model's own front
+                // pieces there go (the grey fan, the clamp and the dome), which would hide or cut through the drum.
+                originalBussards = true,
+                hidePart = part => part.Name == "m038_FanGrey" || part.Name == "m039_DomeClamp" || part.Name == "m060_NacelleDomes",
+            };
+        }
+
         // ---- one class ----
 
         internal readonly string Name;   // the room's "SHP", the folder's and the model file's name
@@ -95,6 +123,72 @@ namespace StbcRevival
         private readonly Dictionary<string, Vector3> weapons; // fractions of its half size (x starboard, y up, z forward)
         private Func<ObjModel.Part, Mesh, float, Mesh> takePlasma;  // its Bussard collectors' faces, taken out of a piece; or null
         private Func<ObjModel.Part, Mesh, bool, Mesh> takeLight;    // its port (true) or starboard navigation lights' faces; or null
+        private bool originalBussards;
+        private Func<ObjModel.Part, bool> hidePart;
+
+        // Preserve the actual Aegis renderers, materials and Animator controllers. Containers
+        // change placement without changing the animated blades' local transforms or bindings.
+        private List<Transform> KeepBussards(Transform model)
+        {
+            var groups = new List<Transform>();
+            if (!originalBussards) return groups;
+            var candidates = model.Cast<Transform>().Where(t => t.name.StartsWith("Aegis_Collectors", StringComparison.Ordinal) || t.name.StartsWith("Aegis_Blade_", StringComparison.Ordinal)).ToArray();
+            if (candidates.Length != 6)
+            {
+                Plugin.Log.LogWarning($"{Name}: Aegis collectors incomplete ({candidates.Length}/6); retaining Kelvin fronts");
+                return groups;
+            }
+            for (int side = 0; side < 2; side++)
+            {
+                var container = new GameObject("Kelvin Aegis collector " + side).transform;
+                container.SetParent(model.parent, false);
+                var axes = new GameObject("Original Aegis axes").transform;
+                axes.SetParent(container, false);
+                axes.localRotation = model.localRotation;
+                axes.localScale = model.localScale;
+                foreach (var child in candidates.Where(t => t.name.EndsWith(" (1)", StringComparison.Ordinal) == (side == 1)))
+                    child.SetParent(axes, false);
+                groups.Add(container);
+            }
+            return groups;
+        }
+
+        private void FitBussards(List<Transform> groups, Transform model, Loaded data,
+            Func<Vector3, Vector3> orient, Vector3 centre, float scale, List<MeshRenderer> renderers)
+        {
+            foreach (var group in groups)
+            {
+                group.SetParent(model, false);
+                var filters = group.GetComponentsInChildren<MeshFilter>(true);
+                var source = new UnityEngine.Bounds(); bool first = true;
+                foreach (var filter in filters)
+                    foreach (var vertex in filter.sharedMesh.vertices)
+                    {
+                        var p = group.InverseTransformPoint(filter.transform.TransformPoint(vertex));
+                        if (first) { source = new UnityEngine.Bounds(p, Vector3.zero); first = false; }
+                        else source.Encapsulate(p);
+                    }
+                // The original pair's side is determined in the body's axes, not by its asset suffix.
+                float sign = Mathf.Sign(source.center.x);
+                var target = new UnityEngine.Bounds(); first = true;
+                foreach (var part in data.Parts.Where(p => p.Name == "m060_NacelleDomes"))
+                    foreach (var vertex in part.Vertices)
+                    {
+                        var p = (orient(vertex) - centre) * scale;
+                        if (Mathf.Sign(p.x) != sign) continue;
+                        if (first) { target = new UnityEngine.Bounds(p, Vector3.zero); first = false; }
+                        else target.Encapsulate(p);
+                    }
+                if (first) throw new InvalidOperationException("Kelvin collector dome bounds missing");
+                var fit = new Vector3(target.size.x / Mathf.Max(.001f, source.size.x), target.size.y / Mathf.Max(.001f, source.size.y), target.size.z / Mathf.Max(.001f, source.size.z));
+                group.localScale = fit;
+                group.localPosition = target.center - Vector3.Scale(source.center, fit);
+                foreach (var t in group.GetComponentsInChildren<Transform>(true)) t.gameObject.layer = model.gameObject.layer;
+                foreach (var animator in group.GetComponentsInChildren<Animator>(true)) animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
+                renderers.AddRange(group.GetComponentsInChildren<MeshRenderer>(true));
+                Plugin.Log.LogInfo($"{Name}: original Aegis collector fitted at {target.center}, size {target.size}; {group.GetComponentsInChildren<Animator>(true).Length} original animators");
+            }
+        }
 
         private CustomShip(string name, string label, float length, string defaultName, string defaultRegistry, Dictionary<string, Vector3> weapons)
         {
@@ -109,7 +203,7 @@ namespace StbcRevival
         private SpacecraftBody aegisTemplate; // the class's body on the Aegis's ship
 
         /// <summary>The class's bodies built so far (on the Aegis's ship).</summary>
-        internal SpacecraftBody[] Templates => new[] { aegisTemplate }.Where(b => b != null).ToArray();
+        internal SpacecraftBody[] Templates => aegisTemplate != null ? new SpacecraftBody[] { aegisTemplate } : new SpacecraftBody[0];
 
         private Func<Vector3, Vector3> spaceOrient;
         private Vector3 spaceCentre;
@@ -499,7 +593,7 @@ namespace StbcRevival
             renderers.Add(renderer);
         }
 
-        private sealed class PartMeshes { public Mesh Hull, Plasma, Port, Starboard; public Vector3[] Verts, Normals; public Vector2[] Uv; public int[] Tris; public UnityEngine.Material Material; }
+        private sealed class PartMeshes { public Mesh Hull, Plasma, Port, Starboard, Back; public Vector3[] Verts, Normals; public Vector2[] Uv; public int[] Tris; public UnityEngine.Material Material; }
 
         /// <summary>The hull's shapes (each piece's vertices and triangles, in its model space), for cutting decals from; empty before it's built.</summary>
         internal List<KeyValuePair<Vector3[], int[]>> HullShapes => meshes.Values.Select(m => new KeyValuePair<Vector3[], int[]>(m.Verts, m.Tris)).ToList();
@@ -529,6 +623,7 @@ namespace StbcRevival
             var hullMaterial = model.GetComponentsInChildren<MeshRenderer>(true).Select(r => r.sharedMaterial).FirstOrDefault(m => m != null && m.name.StartsWith("Aegis_Body", StringComparison.Ordinal))
                                ?? model.GetComponentsInChildren<MeshRenderer>(true).Select(r => r.sharedMaterial).FirstOrDefault(m => m != null);
             Bounds(model, out var gameMin, out var gameMax);
+            var bussards = KeepBussards(model);
             // The hull collider (the ship's size comes from it) straight under the model first: on the Enterprise-D it sits
             // under its mesh, which goes.
             if (collider != null) collider.transform.SetParent(model, false);
@@ -551,10 +646,12 @@ namespace StbcRevival
             spaceOrient = orient; spaceCentre = centre; spaceScale = scale;
 
             var renderers = new List<MeshRenderer>();
+            FitBussards(bussards, model, data, orient, centre, scale, renderers);
             var all = new List<Vector3>(); var allTris = new List<int>();
             for (int n = 0; n < data.Parts.Count; n++)
             {
                 var part = data.Parts[n];
+                if (bussards.Count > 0 && hidePart != null && hidePart(part)) continue;
                 var material = MaterialFor(data, part.Texture, hullMaterial);
                 if (material == null) continue; // fully see-through in the model (its window glass): left out
                 if (!meshes.TryGetValue(n, out var shared))
@@ -571,6 +668,20 @@ namespace StbcRevival
                     m.RecalculateBounds();
                     UnityEngine.Object.DontDestroyOnLoad(m);
                     shared = new PartMeshes { Hull = m, Verts = verts, Tris = tris, Normals = keptNormals, Uv = part.Uv != null && part.Uv.Length == verts.Length ? part.Uv : null, Material = material };
+                    // The legacy Kelvin nacelle rear shell faces inward. Preserve its inner
+                    // surface and add the opposite winding so the end cap also renders outside.
+                    if (Name == "AbramsEnterprise" && part.Name == "m063_NacRear")
+                    {
+                        var backTris = (int[])tris.Clone();
+                        for (int i = 0; i < backTris.Length; i += 3)
+                        { int t = backTris[i + 1]; backTris[i + 1] = backTris[i + 2]; backTris[i + 2] = t; }
+                        shared.Back = new Mesh { name = Name + " nacelle rear outer surface", vertices = verts,
+                            triangles = backTris, normals = keptNormals.Select(v => -v).ToArray(), uv = m.uv };
+                        if (material.IsKeywordEnabled("_NORMALMAP")) Tangents(shared.Back);
+                        shared.Back.RecalculateBounds();
+                        UnityEngine.Object.DontDestroyOnLoad(shared.Back);
+                        Plugin.Log.LogInfo($"{Name}: nacelle rear outer surface added ({backTris.Length / 3} triangles)");
+                    }
                     // Its Bussard collectors' faces (the red plasma) apart, alive, and its navigation lights (red to port,
                     // green to starboard) blinking together: taken out of the piece.
                     shared.Plasma = takePlasma?.Invoke(part, m, scale);
@@ -578,10 +689,15 @@ namespace StbcRevival
                     shared.Starboard = takeLight?.Invoke(part, m, false);
                     meshes[n] = shared;
                 }
-                if (shared.Plasma != null) AddPiece(model, Name + "_Bussard_" + n, shared.Plasma, ShipGlow.Material(material), true, renderers);
+                if (shared.Plasma != null)
+                {
+                    Plugin.Log.LogInfo($"{Name}: bussard plasma from {part.Name} ({shared.Plasma.triangles.Length / 3} triangles)");
+                    AddPiece(model, Name + "_Bussard_" + n, shared.Plasma, ShipGlow.Material(material), true, renderers);
+                }
                 if (shared.Port != null) AddPiece(model, Name + "_PortLight_" + n, shared.Port, ShipGlow.LightMaterial(material, true), false, renderers);
                 if (shared.Starboard != null) AddPiece(model, Name + "_StarboardLight_" + n, shared.Starboard, ShipGlow.LightMaterial(material, false), false, renderers);
                 if (shared.Hull.triangles.Length > 0) AddPiece(model, Name + "_" + part.Name + "_" + n, shared.Hull, material, true, renderers);
+                if (shared.Back != null) AddPiece(model, Name + "_NacelleRearOutside_" + n, shared.Back, material, true, renderers);
                 if (all.Count + shared.Verts.Length <= 65000 * 4) { int offset = all.Count; all.AddRange(shared.Verts); allTris.AddRange(shared.Tris.Select(t => t + offset)); }
                 yield return null; // a piece per frame
             }
@@ -623,12 +739,54 @@ namespace StbcRevival
                 Plugin.Log.LogInfo($"{Name}: bridge at {bridgeTop}");
             }
 
+            // Kelvin has an actual front window below the bridge roof. The generic roof + 1m
+            // placement makes the interior float roughly 15m above it at the bridge's 10:1 scale.
+            // Anchor the eye at that window, preserving the game's seated/walking parallax.
+            if (Name == "AbramsEnterprise")
+            {
+                var windowVertices = data.Parts.Where(p => p.Name == "m023_BridgeWindow")
+                    .SelectMany(p => p.Vertices).Select(v => (orient(v) - centre) * scale).ToArray();
+                if (windowVertices.Length > 0)
+                {
+                    var windowMin = windowVertices.Aggregate(Vector3.Min);
+                    var windowMax = windowVertices.Aggregate(Vector3.Max);
+                    var eye = offsetInBody + (windowMin + windowMax) * .5f;
+                    eye.x = 0f;
+                    // The Aegis interior's seated/standing parallax puts the effective window
+                    // below this reference. Clearance calibrated from the in-game window view:
+                    // the literal model-window anchor clipped into the saucer while walking.
+                    eye.y += .7f;
+                    eye.z = offsetInBody.z + windowMax.z + .03f; // outside the glass
+                    var rig = body.transform.Find("ExternalViewCameraRig");
+                    var camera = rig != null ? rig.GetComponentInChildren<Camera>(true) : null;
+                    // Pivot moves with the observer; remove only the camera's fixed eye-height
+                    // offset, not the observer-dependent pivot translation.
+                    var cameraOffset = camera != null ? camera.transform.localPosition : Vector3.zero;
+                    var anchor = eye - cameraOffset;
+                    if (rig != null)
+                    {
+                        rig.localPosition = anchor;
+                        foreach (var c in rig.GetComponentsInChildren<Camera>(true)) c.nearClipPlane = .05f;
+                    }
+                    var view = body.transform.Find("SpaceViewReferenceTransform");
+                    // Space-bar view has no seated/standing parallax: give it its own elevated
+                    // reference. Keep the calibrated bridge/window rig untouched.
+                    if (view != null) view.localPosition = anchor + Vector3.up * 1.0f;
+                    Plugin.Log.LogInfo($"{Name}: bridge window eye {eye}, camera offset {cameraOffset}, rig anchor {anchor}, near clip 0.05");
+                }
+                else Plugin.Log.LogWarning($"{Name}: bridge window mesh missing; keeping generic viewpoint");
+            }
+
             var made = body.GetComponent<SpacecraftBody>();
             Plugin.Log.LogInfo($"{Name}: body ({label}) built from {Name}.obj: {data.Parts.Count} pieces, {data.Parts.Sum(p => p.Vertices.Length)} vertices, {data.Parts.Sum(p => p.Triangles.Length) / 3} triangles, {materials.Count} materials; read in {data.Seconds:0.0} s, built over {(Time.realtimeSinceStartup - startedAt) * 1000f:0} ms; size {half * 2f}");
             done(made);
         }
 
-        /// <summary>The hull collider's shape: the model's triangles welded to a coarse grid (at most 65000 vertices).</summary>
+        /// <summary>The hull collider's shape: the model's surface welded to a coarse grid, then its convex hull. Unity's
+        /// convex collider takes at most 255 polygons: a detailed hull (the Abrams' 22,800 welded triangles) fails to
+        /// cook, and physics then retries the failed cook every time something touches it (a ship under fire drops to
+        /// about one frame a second). A hull of n points has at most 2n-4 faces, so a spread of about a hundred points
+        /// stays well under the limit and keeps the shape.</summary>
         private Mesh ColliderMesh(List<Vector3> verts, List<int> tris)
         {
             // Always welded: the collider needs the shape, not the detail, and a light mesh cooks quickly (on the main
@@ -646,8 +804,144 @@ namespace StbcRevival
                 int a = Weld(verts[tris[i]]), b = Weld(verts[tris[i + 1]]), c = Weld(verts[tris[i + 2]]);
                 if (a != b && b != c && a != c) { outT.Add(a); outT.Add(b); outT.Add(c); }
             }
-            Plugin.Log.LogInfo($"{Name}: hull collider {outV.Count} vertices, {outT.Count / 3} triangles (from {verts.Count} / {tris.Count / 3})");
-            return new Mesh { name = Name + " hull collider", vertices = outV.ToArray(), triangles = outT.ToArray() };
+
+            // A hull this simple cooks without Unity's builder giving up (the Nova's and the Sovereign's do): kept as
+            // it is, so their collision stays exactly what it was.
+            if (outT.Count / 3 <= 18000)
+            {
+                Plugin.Log.LogInfo($"{Name}: hull collider {outV.Count} vertices, {outT.Count / 3} triangles (from {verts.Count} / {tris.Count / 3})");
+                return new Mesh { name = Name + " hull collider", vertices = outV.ToArray(), triangles = outT.ToArray() };
+            }
+
+            // A detailed hull (the Abrams' 22,800 welded triangles): its convex hull has more polygons than Unity takes.
+            var points = Spread(outV, 100);
+            var faces = ConvexHull(points);
+            if (faces != null && faces.Count >= 4 && faces.Count <= 255)
+            {
+                var hullVerts = new List<Vector3>(); var hullTris = new List<int>();
+                int Index(Vector3 v)
+                {
+                    for (int i = 0; i < hullVerts.Count; i++) if ((hullVerts[i] - v).sqrMagnitude < 1e-8f) return i;
+                    hullVerts.Add(v); return hullVerts.Count - 1;
+                }
+                foreach (var f in faces) { hullTris.Add(Index(points[f.A])); hullTris.Add(Index(points[f.B])); hullTris.Add(Index(points[f.C])); }
+                Plugin.Log.LogInfo($"{Name}: hull collider: {hullVerts.Count} points, {faces.Count} faces (welded {outV.Count} vertices from {verts.Count} / {tris.Count / 3})");
+                return new Mesh { name = Name + " hull collider", vertices = hullVerts.ToArray(), triangles = hullTris.ToArray() };
+            }
+
+            // A hull of the spread points can't go wrong in theory; if it did, a box still cooks and the ship collides.
+            Plugin.Log.LogWarning($"{Name}: the hull collider's hull failed; using its bounding box");
+            Vector3 lo = Vector3.one * float.MaxValue, hi = Vector3.one * float.MinValue;
+            foreach (var v in outV) { lo = Vector3.Min(lo, v); hi = Vector3.Max(hi, v); }
+            var boxV = new Vector3[8]; for (int i = 0; i < 8; i++) boxV[i] = new Vector3((i & 1) == 0 ? lo.x : hi.x, (i & 2) == 0 ? lo.y : hi.y, (i & 4) == 0 ? lo.z : hi.z);
+            var boxT = new[] { 0, 2, 1, 1, 2, 3, 4, 5, 6, 5, 7, 6, 0, 1, 4, 4, 1, 5, 2, 6, 3, 3, 6, 7, 0, 4, 2, 2, 4, 6, 1, 3, 5, 5, 3, 7 };
+            return new Mesh { name = Name + " hull collider", vertices = boxV, triangles = boxT };
+        }
+
+        /// <summary>At most <paramref name="max"/> of the points, spread over the outside of the shape: for each of a
+        /// hundred directions all round, the point furthest that way. Points on the hull, and few enough that their
+        /// hull stays under Unity's 255 polygons.</summary>
+        private static List<Vector3> Spread(List<Vector3> points, int max)
+        {
+            if (points.Count <= max) return points;
+            var centre = Vector3.zero; foreach (var p in points) centre += p; centre /= points.Count;
+            int count = max - 6;
+            float golden = Mathf.PI * (3f - Mathf.Sqrt(5f));
+            var dirs = new List<Vector3>(max) { Vector3.right, Vector3.left, Vector3.up, Vector3.down, Vector3.forward, Vector3.back };
+            for (int i = 0; i < count; i++)
+            {
+                float y = 1f - 2f * (i + 0.5f) / count;
+                float r = Mathf.Sqrt(Mathf.Max(0f, 1f - y * y));
+                float theta = golden * i;
+                dirs.Add(new Vector3(Mathf.Cos(theta) * r, y, Mathf.Sin(theta) * r));
+            }
+            var chosen = new List<Vector3>(max);
+            foreach (var dir in dirs)
+            {
+                int best = 0; float bestDot = float.MinValue;
+                for (int i = 0; i < points.Count; i++) { float dot = Vector3.Dot(points[i] - centre, dir); if (dot > bestDot) { bestDot = dot; best = i; } }
+                bool have = false;
+                foreach (var c in chosen) if ((c - points[best]).sqrMagnitude < 1e-6f) { have = true; break; }
+                if (!have) chosen.Add(points[best]);
+            }
+            return chosen;
+        }
+
+        private struct HullFace { public int A, B, C; public Vector3 Normal; public float D; public bool Gone; }
+        private struct HullEdge { public int A, B, Count; }
+
+        /// <summary>The convex hull of up to a few hundred points (an incremental hull): its outward-facing triangles,
+        /// or null if the points don't make a solid.</summary>
+        private static List<HullFace> ConvexHull(List<Vector3> p)
+        {
+            int n = p.Count;
+            if (n < 4) return null;
+            float extent = 0f; for (int i = 0; i < n; i++) extent = Mathf.Max(extent, (p[i] - p[0]).magnitude);
+            float eps = Mathf.Max(1e-4f, extent * 1e-4f);
+
+            // A tetrahedron to start from: two ends, a third off their line, a fourth off their plane.
+            int i0 = 0; for (int i = 1; i < n; i++) if (p[i].x < p[i0].x) i0 = i;
+            int i1 = -1; float best = 0f;
+            for (int i = 0; i < n; i++) { float d = (p[i] - p[i0]).sqrMagnitude; if (i != i0 && d > best) { best = d; i1 = i; } }
+            if (i1 < 0 || best <= eps * eps) return null;
+            var axis = (p[i1] - p[i0]).normalized;
+            int i2 = -1; best = 0f;
+            for (int i = 0; i < n; i++) { var v = p[i] - p[i0]; var d = v - Vector3.Dot(v, axis) * axis; if (d.sqrMagnitude > best) { best = d.sqrMagnitude; i2 = i; } }
+            if (i2 < 0 || best <= eps * eps) return null;
+            var normal = Vector3.Cross(p[i1] - p[i0], p[i2] - p[i0]).normalized;
+            int i3 = -1; best = 0f;
+            for (int i = 0; i < n; i++) { float d = Mathf.Abs(Vector3.Dot(p[i] - p[i0], normal)); if (d > best) { best = d; i3 = i; } }
+            if (i3 < 0 || best <= eps) return null;
+
+            var inside = (p[i0] + p[i1] + p[i2] + p[i3]) / 4f;
+            var faces = new List<HullFace>();
+            AddFace(faces, p, i0, i1, i2, inside, eps);
+            AddFace(faces, p, i0, i1, i3, inside, eps);
+            AddFace(faces, p, i0, i2, i3, inside, eps);
+            AddFace(faces, p, i1, i2, i3, inside, eps);
+            if (faces.Count < 4) return null;
+
+            var horizon = new Dictionary<long, HullEdge>();
+            for (int pi = 0; pi < n; pi++)
+            {
+                if (pi == i0 || pi == i1 || pi == i2 || pi == i3) continue;
+                var q = p[pi];
+                bool outside = false;
+                for (int f = 0; f < faces.Count; f++)
+                {
+                    var face = faces[f];
+                    if (face.Gone) continue;
+                    if (Vector3.Dot(face.Normal, q) > face.D + eps) { face.Gone = true; faces[f] = face; outside = true; }
+                }
+                if (!outside) continue;
+                horizon.Clear();
+                foreach (var face in faces)
+                {
+                    if (!face.Gone) continue;
+                    Edge(horizon, face.A, face.B); Edge(horizon, face.B, face.C); Edge(horizon, face.C, face.A);
+                }
+                faces.RemoveAll(f => f.Gone);
+                foreach (var edge in horizon.Values)
+                    if (edge.Count == 1) AddFace(faces, p, edge.A, edge.B, pi, inside, eps);
+            }
+            return faces;
+        }
+
+        private static void Edge(Dictionary<long, HullEdge> horizon, int a, int b)
+        {
+            long key = ((long)Mathf.Min(a, b) << 32) | (uint)Mathf.Max(a, b);
+            HullEdge edge;
+            if (horizon.TryGetValue(key, out edge)) { edge.Count++; horizon[key] = edge; return; }
+            horizon[key] = new HullEdge { A = a, B = b, Count = 1 };
+        }
+
+        private static void AddFace(List<HullFace> faces, List<Vector3> p, int a, int b, int c, Vector3 inside, float eps)
+        {
+            var normal = Vector3.Cross(p[b] - p[a], p[c] - p[a]);
+            if (normal.sqrMagnitude < eps * eps) return; // a sliver: no face
+            normal.Normalize();
+            if (Vector3.Dot(normal, inside - p[a]) > 0f) { int t = b; b = c; c = t; normal = -normal; }
+            faces.Add(new HullFace { A = a, B = b, C = c, Normal = normal, D = Vector3.Dot(normal, p[a]) });
         }
 
         private static Vector3 Remap(Vector3 p, Vector3 fromMin, Vector3 fromMax, Vector3 toMin, Vector3 toMax)
@@ -734,7 +1028,10 @@ namespace StbcRevival
             var tex = linear ? new Texture2D(2, 2, TextureFormat.ARGB32, true, true) { name = name } : new Texture2D(2, 2, TextureFormat.RGB24, true) { name = name };
             if (!tex.LoadImage(bytes)) { UnityEngine.Object.Destroy(tex); return null; }
             tex.anisoLevel = 4;
-            tex.Compress(false);
+            // Unity 5 / D3D11 cannot upload block-compressed textures whose base size
+            // isn't a multiple of four (the Kelvin bridge texture is 800 x 1022).
+            if (tex.width % 4 == 0 && tex.height % 4 == 0) tex.Compress(false);
+            else Plugin.Log.LogInfo($"Ship texture: keeping {name} uncompressed ({tex.width}x{tex.height})");
             tex.Apply(false, true);
             UnityEngine.Object.DontDestroyOnLoad(tex);
             return tex;
@@ -773,7 +1070,9 @@ namespace StbcRevival
                     }
                 if (!any) return null;
                 var tex = new Texture2D(w, h, TextureFormat.RGB24, true) { name = mask + " glow", anisoLevel = 4 };
-                tex.SetPixels32(glow); tex.Apply(true); tex.Compress(false); tex.Apply(false, true);
+                tex.SetPixels32(glow); tex.Apply(true);
+                if (w % 4 == 0 && h % 4 == 0) tex.Compress(false);
+                tex.Apply(false, true);
                 UnityEngine.Object.DontDestroyOnLoad(tex);
                 return tex;
             }

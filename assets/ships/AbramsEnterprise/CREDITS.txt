@@ -1,0 +1,21 @@
+The USS Enterprise, NCC-1701 as seen in Star Trek (2009).
+
+Model Format: .blend (Blender version 2.45)
+
+Faces: 270,000 or so
+
+Textures Included: Yes, they are packed.  If you are performing a conversion, open the file in Blender, click File, and select Unpack Textures.  This will output the textures into a folder beneath the one where the ship was extracted called "textures".
+
+Credit requirements: Ricky "MadMan1701A" Wallace (www.madshipyard.com)
+
+Description: This is the USS Enterprise, as seen in the new "Star Trek" movie.
+
+Notes:  This is version 6 of this mesh, and is my final version.  This model is much more accurate than my previous versions, since I was able to use DVD screencaps and Tobias Richter's excellent Orthographic views to get everything lined up right. It is not rigged for animation; if anyone wants to add those features, please send me a copy of the file to work with :).
+
+Feel free to use this model for personal use, but let me know what you create with it, since I am always curious to see what other fans can come up with.
+
+Thanks,
+
+Ricky "MadMan" Wallace
+www.madshipyard.com
+rickywallace.1701@gmail.com

@@ -1,0 +1,13 @@
+{
+  "positions": 300087,
+  "triangles": 564371,
+  "render_vertices": 508614,
+  "chunks": 95,
+  "textures": 43,
+  "collision_input_vertices": 259961,
+  "collision_extent_coverage": [
+    1.0,
+    0.9768979603887271,
+    1.0
+  ]
+}

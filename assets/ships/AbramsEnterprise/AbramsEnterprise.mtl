@@ -1,0 +1,476 @@
+newmtl m032_DefDishback
+Kd 0.800000011920929 0.800000011920929 0.800000011920929
+d 1.00000
+map_Kd tex_12_DeflectorBack_jpg.png
+
+newmtl m081_WhiteLights
+Kd 1.0 0.9597957134246826 0.9597957134246826
+d 1.00000
+map_Kd tex_43_SecondaryHull_jpg.png
+map_Ke tex_43_SecondaryHull_jpg.png
+
+newmtl m035_DishGuts
+Kd 0.800000011920929 0.800000011920929 0.800000011920929
+d 1.00000
+map_Kd tex_09_DarkBlueGreen_jpg.png
+
+newmtl m009_LightGrey
+Kd 0.8720817565917969 0.8612009286880493 0.8612009286880493
+d 1.00000
+
+newmtl m031_RedOrange
+Kd 0.8018013834953308 0.25061219930648804 0.04647080972790718
+d 1.00000
+Ke 0.5612609588885142 0.1754285365270114 0.032529566255559805
+
+newmtl m014_Hatches
+Kd 0.800000011920929 0.800000011920929 0.800000011920929
+d 1.00000
+map_Kd tex_32_Orange_jpg.png
+
+newmtl m029_CoilThing
+Kd 0.800000011920929 0.800000011920929 0.800000011920929
+d 1.00000
+map_Kd tex_46_SquarePanelsDarkHull_.png
+
+newmtl m036_BlueDishGlow
+Kd 0.5611473321914673 0.8661332726478577 1.0
+d 1.00000
+map_Kd tex_11_DefGlow_jpg.png
+map_Ke tex_11_DefGlow_jpg.png
+
+newmtl m055_LightBulbs
+Kd 0.800000011920929 0.800000011920929 0.800000011920929
+d 1.00000
+map_Kd tex_19_Green_jpg.png
+map_Ke tex_19_Green_jpg.png
+
+newmtl m071_Windows
+Kd 1.0 1.0 1.0
+d 1.00000
+map_Kd tex_36_RimWindows1_jpg.png
+map_Ke tex_36_RimWindows1_jpg.png
+
+newmtl m006_NacelleBody
+Kd 0.800000011920929 0.800000011920929 0.800000011920929
+d 1.00000
+map_Kd tex_28_NacelleInside_jpg.png
+
+newmtl m016_BottomPylonDetail
+Kd 0.800000011920929 0.800000011920929 0.800000011920929
+d 1.00000
+map_Kd tex_45_SmallStrip_jpg.png
+
+newmtl m087_TorpedoBay
+Kd 0.800000011920929 0.800000011920929 0.800000011920929
+d 1.00000
+map_Kd tex_46_SquarePanelsDarkHull_.png
+
+newmtl m060_NacelleDomes
+Kd 0.018265822902321815 0.09680218249559402 0.19455304741859436
+d 1.00000
+map_Kd tex_26_NacelleDome_jpg.png
+
+newmtl m017_Decal
+Kd 0.800000011920929 0.800000011920929 0.800000011920929
+d 0.00000
+map_Kd tex_34_Registry_png.png
+
+newmtl m050_ImpulseHood
+Kd 0.800000011920929 0.800000011920929 0.800000011920929
+d 1.00000
+map_Kd tex_47_SquarePanelsNew_jpg.png
+
+newmtl m046_ImpDetail
+Kd 0.800000011920929 0.800000011920929 0.800000011920929
+d 1.00000
+map_Kd tex_06_CopperStrip_jpg.png
+
+newmtl m007_NacelleBody
+Kd 0.800000011920929 0.800000011920929 0.800000011920929
+d 1.00000
+map_Kd tex_30_NacelleOutsideLeft_jp.png
+
+newmtl m075_SaucerCubes
+Kd 0.800000011920929 0.800000011920929 0.800000011920929
+d 1.00000
+map_Kd tex_37_SaucerDetailsDarker_j.png
+
+newmtl m074_SaucerBumps
+Kd 0.800000011920929 0.800000011920929 0.800000011920929
+d 1.00000
+map_Kd tex_37_SaucerDetailsDarker_j.png
+
+newmtl m041_EngSideVents
+Kd 0.800000011920929 0.800000011920929 0.800000011920929
+d 1.00000
+map_Kd tex_48_SquarePanelsNewDark_j.png
+
+newmtl m023_BridgeWindow
+Kd 0.800000011920929 0.800000011920929 0.800000011920929
+d 1.00000
+map_Kd tex_04_Bridge_Window_jpg.png
+map_Ke tex_04_Bridge_Window_jpg.png
+
+newmtl m008_Neckbase
+Kd 0.800000011920929 0.800000011920929 0.800000011920929
+d 1.00000
+map_Kd tex_48_SquarePanelsNewDark_j.png
+
+newmtl m005_NacelleBody
+Kd 0.800000011920929 0.800000011920929 0.800000011920929
+d 1.00000
+map_Kd tex_29_NacelleOutside_jpg.png
+
+newmtl m011_bayDoors2
+Kd 0.800000011920929 0.800000011920929 0.800000011920929
+d 1.00000
+map_Kd tex_00_BayDoorsDark_jpg.png
+
+newmtl m019_DarkGrey
+Kd 0.2938460111618042 0.2901797294616699 0.2901797294616699
+d 1.00000
+
+newmtl m042_FrontPyDetail
+Kd 0.800000011920929 0.800000011920929 0.800000011920929
+d 1.00000
+map_Kd tex_45_SmallStrip_jpg.png
+
+newmtl m034_DishGuts
+Kd 0.800000011920929 0.800000011920929 0.800000011920929
+d 1.00000
+map_Kd tex_13_DeflectorDetails_jpg.png
+
+newmtl m044_CowlLights
+Kd 0.7525538206100464 0.9489152431488037 1.0
+d 1.00000
+map_Kd tex_21_ImpulseStripsHoriz_jp.png
+map_Ke tex_21_ImpulseStripsHoriz_jp.png
+
+newmtl m085_Sensors
+Kd 0.800000011920929 0.800000011920929 0.800000011920929
+d 1.00000
+map_Kd tex_37_SaucerDetailsDarker_j.png
+
+newmtl m010_BayDoors1
+Kd 0.800000011920929 0.800000011920929 0.800000011920929
+d 1.00000
+map_Kd tex_01_BayDoorsLight_jpg.png
+
+newmtl m091_VIPLevel
+Kd 0.800000011920929 0.800000011920929 0.800000011920929
+d 1.00000
+map_Kd tex_23_LightBlueGreen_jpg.png
+
+newmtl m077_SaucerRimDetails
+Kd 0.800000011920929 0.800000011920929 0.800000011920929
+d 1.00000
+map_Kd tex_37_SaucerDetailsDarker_j.png
+
+newmtl m037_DockingRings
+Kd 0.800000011920929 0.800000011920929 0.800000011920929
+d 1.00000
+map_Kd tex_15_DockingRings_jpg.png
+map_Ke tex_15_DockingRings_jpg.png
+
+newmtl m025_RedLines
+Kd 0.5274766087532043 0.0 0.0
+d 1.00000
+
+newmtl m048_ImpulseDeck
+Kd 0.800000011920929 0.800000011920929 0.800000011920929
+d 1.00000
+map_Kd tex_38_SaucerRim_jpg.png
+
+newmtl m056_LightBulbs
+Kd 0.800000011920929 0.800000011920929 0.800000011920929
+d 1.00000
+map_Kd tex_49_White_jpg.png
+map_Ke tex_49_White_jpg.png
+
+newmtl m039_DomeClamp
+Kd 0.800000011920929 0.800000011920929 0.800000011920929
+d 1.00000
+map_Kd tex_48_SquarePanelsNewDark_j.png
+
+newmtl m066_NeckStrip
+Kd 0.800000011920929 0.800000011920929 0.800000011920929
+d 1.00000
+map_Kd tex_48_SquarePanelsNewDark_j.png
+
+newmtl m059_CowlLights
+Kd 0.7525538206100464 0.9489152431488037 1.0
+d 1.00000
+map_Kd tex_16_Engine_Glow_jpg.png
+map_Ke tex_16_Engine_Glow_jpg.png
+
+newmtl m022_DomeHousing
+Kd 0.27632373571395874 0.23732393980026245 0.19217897951602936
+d 1.00000
+
+newmtl m080_SecInset
+Kd 0.800000011920929 0.800000011920929 0.800000011920929
+d 1.00000
+map_Kd tex_46_SquarePanelsDarkHull_.png
+
+newmtl m026_BridgeBaseDet2
+Kd 0.800000011920929 0.800000011920929 0.800000011920929
+d 1.00000
+map_Kd tex_23_LightBlueGreen_jpg.png
+
+newmtl m058_Cowling
+Kd 0.800000011920929 0.800000011920929 0.800000011920929
+d 1.00000
+map_Kd tex_46_SquarePanelsDarkHull_.png
+
+newmtl m024_Bridgebase
+Kd 0.800000011920929 0.800000011920929 0.800000011920929
+d 1.00000
+map_Kd tex_02_BC_Deck2_jpg.png
+
+newmtl m054_LightBulbs
+Kd 0.800000011920929 0.800000011920929 0.800000011920929
+d 1.00000
+map_Kd tex_33_Red_jpg.png
+map_Ke tex_33_Red_jpg.png
+
+newmtl m028_Clamps
+Kd 0.800000011920929 0.800000011920929 0.800000011920929
+d 1.00000
+map_Kd tex_17_FakeChrome2_jpg.png
+
+newmtl m086_bayFloor
+Kd 0.800000011920929 0.800000011920929 0.800000011920929
+d 1.00000
+map_Kd tex_37_SaucerDetailsDarker_j.png
+
+newmtl m084_Sensors
+Kd 0.800000011920929 0.800000011920929 0.800000011920929
+d 1.00000
+map_Kd tex_18_GenericRound_jpg.png
+
+newmtl m001_SaucerBottom
+Kd 0.800000011920929 0.800000011920929 0.800000011920929
+d 1.00000
+map_Kd tex_38_SaucerRim_jpg.png
+
+newmtl m088_TurboLifts
+Kd 0.800000011920929 0.800000011920929 0.800000011920929
+d 1.00000
+map_Kd tex_09_DarkBlueGreen_jpg.png
+
+newmtl m062_NacelleJoints
+Kd 0.800000011920929 0.800000011920929 0.800000011920929
+d 1.00000
+map_Kd tex_48_SquarePanelsNewDark_j.png
+
+newmtl m027_BussardGlow
+Kd 0.1406121850013733 0.46680203080177307 1.0
+d 1.00000
+map_Kd tex_27_NacelleGlow_jpg.png
+map_Ke tex_27_NacelleGlow_jpg.png
+
+newmtl m013_Hatches
+Kd 0.800000011920929 0.800000011920929 0.800000011920929
+d 1.00000
+map_Kd tex_50_Yellow_jpg.png
+
+newmtl m020_Bridge
+Kd 0.800000011920929 0.800000011920929 0.800000011920929
+d 1.00000
+map_Kd tex_37_SaucerDetailsDarker_j.png
+
+newmtl m072_SaucerBotDetails
+Kd 0.800000011920929 0.800000011920929 0.800000011920929
+d 1.00000
+map_Kd tex_37_SaucerDetailsDarker_j.png
+
+newmtl m003_SecondaryHull
+Kd 0.800000011920929 0.800000011920929 0.800000011920929
+d 1.00000
+map_Kd tex_43_SecondaryHull_jpg.png
+
+newmtl m069_PyonTop
+Kd 0.800000011920929 0.800000011920929 0.800000011920929
+d 1.00000
+map_Kd tex_47_SquarePanelsNew_jpg.png
+
+newmtl m030_Hull
+Kd 0.8 0.8 0.8
+d 1.00000
+
+newmtl m063_NacRear
+Kd 0.251653254032135 0.2489909827709198 0.2489909827709198
+d 1.00000
+map_Kd tex_46_SquarePanelsDarkHull_.png
+
+newmtl m089_TurboLifts
+Kd 0.800000011920929 0.800000011920929 0.800000011920929
+d 1.00000
+map_Kd tex_39_SaucerStrip_jpg.png
+
+newmtl m033_DefDishFront
+Kd 0.3137255012989044 0.572549045085907 0.760784387588501
+d 1.00000
+map_Kd tex_14_DeflectorDish_jpg.png
+map_Ke tex_14_DeflectorDish_jpg.png
+
+newmtl m070_WhiteGlow
+Kd 1.0 0.989060640335083 0.989060640335083
+d 1.00000
+Ke 0.800000011920929 0.791248524058588 0.791248524058588
+
+newmtl m018_Bridge
+Kd 0.800000011920929 0.800000011920929 0.800000011920929
+d 1.00000
+map_Kd tex_05_Bridge_jpg.png
+
+newmtl m061_NacIntake
+Kd 0.800000011920929 0.800000011920929 0.800000011920929
+d 1.00000
+map_Kd tex_24_LowerIntakes_jpg.png
+
+newmtl m073_SaucerBottomRing
+Kd 0.800000011920929 0.800000011920929 0.800000011920929
+d 1.00000
+map_Kd tex_37_SaucerDetailsDarker_j.png
+
+newmtl m049_ImpulseDeck
+Kd 0.800000011920929 0.800000011920929 0.800000011920929
+d 1.00000
+map_Kd tex_37_SaucerDetailsDarker_j.png
+
+newmtl m045_WhiteLights
+Kd 1.0 0.9597957134246826 0.9597957134246826
+d 1.00000
+Ke 1.0 0.9597957134246826 0.9597957134246826
+
+newmtl m090_VIPLevel
+Kd 0.800000011920929 0.800000011920929 0.800000011920929
+d 1.00000
+map_Kd tex_39_SaucerStrip_jpg.png
+
+newmtl m092_VIPLevel
+Kd 0.800000011920929 0.800000011920929 0.800000011920929
+d 1.00000
+map_Kd tex_09_DarkBlueGreen_jpg.png
+
+newmtl m038_FanGrey
+Kd 0.2821645438671112 0.2769959568977356 0.2769959568977356
+d 1.00000
+
+newmtl m043_CowlLights
+Kd 0.7525538206100464 0.9489152431488037 1.0
+d 1.00000
+Ke 0.6020430654591777 0.7591322058309942 0.800000011920929
+
+newmtl m040_DomeClamp
+Kd 0.800000011920929 0.800000011920929 0.800000011920929
+d 1.00000
+map_Kd tex_06_CopperStrip_jpg.png
+
+newmtl m047_ImpulseGlow
+Kd 1.0 0.2399052381515503 0.2399052381515503
+d 1.00000
+map_Kd tex_20_Impulse_Glow_jpg.png
+map_Ke tex_20_Impulse_Glow_jpg.png
+
+newmtl m021_BridgeDome
+Kd 0.0 0.3686567544937134 0.3875214159488678
+d 0.85000
+
+newmtl m002_SaucerMiddle
+Kd 0.800000011920929 0.800000011920929 0.800000011920929
+d 1.00000
+map_Kd tex_38_SaucerRim_jpg.png
+
+newmtl m000_SaucerTop
+Kd 0.800000011920929 0.800000011920929 0.800000011920929
+d 1.00000
+map_Kd tex_41_SaucerTop_jpg.png
+
+newmtl m076_hatches
+Kd 0.800000011920929 0.800000011920929 0.800000011920929
+d 1.00000
+map_Kd tex_23_LightBlueGreen_jpg.png
+
+newmtl m052_ImpRidge
+Kd 0.800000011920929 0.800000011920929 0.800000011920929
+d 1.00000
+map_Kd tex_06_CopperStrip_jpg.png
+
+newmtl m065_NeckInset
+Kd 0.800000011920929 0.800000011920929 0.800000011920929
+d 1.00000
+map_Kd tex_46_SquarePanelsDarkHull_.png
+
+newmtl m064_Material
+Kd 0.800000011920929 0.800000011920929 0.800000011920929
+d 1.00000
+map_Kd tex_46_SquarePanelsDarkHull_.png
+
+newmtl m012_Hatches
+Kd 0.800000011920929 0.800000011920929 0.800000011920929
+d 1.00000
+map_Kd tex_47_SquarePanelsNew_jpg.png
+
+newmtl m057_Cowling
+Kd 0.800000011920929 0.800000011920929 0.800000011920929
+d 1.00000
+map_Kd tex_07_Cowling_jpg.png
+
+newmtl m053_ImpulseTop
+Kd 0.800000011920929 0.800000011920929 0.800000011920929
+d 1.00000
+map_Kd tex_22_ImpulseTop_jpg.png
+
+newmtl m068_Phaserbanks
+Kd 0.5333173871040344 0.5266632437705994 0.5266632437705994
+d 1.00000
+map_Kd tex_46_SquarePanelsDarkHull_.png
+
+newmtl m083_SensorDetail
+Kd 0.800000011920929 0.800000011920929 0.800000011920929
+d 1.00000
+map_Kd tex_48_SquarePanelsNewDark_j.png
+
+newmtl m078_SaucerRings
+Kd 0.800000011920929 0.800000011920929 0.800000011920929
+d 1.00000
+map_Kd tex_37_SaucerDetailsDarker_j.png
+
+newmtl m015_Hatches
+Kd 0.800000011920929 0.800000011920929 0.800000011920929
+d 1.00000
+map_Kd tex_46_SquarePanelsDarkHull_.png
+
+newmtl m082_Sensorbase
+Kd 0.800000011920929 0.800000011920929 0.800000011920929
+d 1.00000
+map_Kd tex_38_SaucerRim_jpg.png
+
+newmtl m079_SecondaryHull
+Kd 0.800000011920929 0.800000011920929 0.800000011920929
+d 1.00000
+map_Kd tex_10_DarkBlueGreenPaneled_.png
+
+newmtl m093_DarkGrey
+Kd 0.2938460111618042 0.2901797294616699 0.2901797294616699
+d 1.00000
+map_Kd tex_43_SecondaryHull_jpg.png
+
+newmtl m004_SecondaryHull
+Kd 0.800000011920929 0.800000011920929 0.800000011920929
+d 1.00000
+map_Kd tex_46_SquarePanelsDarkHull_.png
+
+newmtl m067_Nubs
+Kd 0.800000011920929 0.800000011920929 0.800000011920929
+d 1.00000
+map_Kd tex_10_DarkBlueGreenPaneled_.png
+
+newmtl m051_ImpulseHood
+Kd 0.800000011920929 0.800000011920929 0.800000011920929
+d 1.00000
+map_Kd tex_48_SquarePanelsNewDark_j.png
+
