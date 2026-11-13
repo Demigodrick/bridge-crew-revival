@@ -361,6 +361,7 @@ namespace StbcRevival
             DevConfig.Build();
 
             harmony = new Harmony(Guid);
+            Safely("tracked objects", () => Tracked.Patch(harmony)); // first: before the scenes make them
             Patches.Apply(harmony);
             Safely("revival voice capture patches", () => VoiceCapture.Patch(harmony));
             Safely("revival voice patches", () => RevivalVoice.Patch(harmony));
@@ -385,6 +386,7 @@ namespace StbcRevival
         {
             HangWatchdog.Beat(); // first: the watchdog only needs to know a frame ran
             Walking.StutterTrace.FrameStart(); // the frame that just ended, while standing (Bridge Walk)
+            Safely("tracked objects check", Tracked.Update);
             Safely("openssl sha fix", OpenSslShaFix.Apply);
             if (!deferredApplied)
             {

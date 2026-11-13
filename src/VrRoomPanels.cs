@@ -54,8 +54,8 @@ namespace StbcRevival
         {
             if (!Enabled || Time.realtimeSinceStartup < nextRefresh) return;
             nextRefresh = Time.realtimeSinceStartup + RefreshSeconds;
-            foreach (var news in UnityEngine.Object.FindObjectsOfType<NewsPage>()) Render(news);
-            foreach (var invites in UnityEngine.Object.FindObjectsOfType<InviteActionUI>()) invites.SetDirty();
+            foreach (var news in Tracked.All<NewsPage>()) Render(news);
+            foreach (var invites in Tracked.All<InviteActionUI>()) invites.SetDirty();
         }
 
         // ---- Rows -------------------------------------------------------------------------------

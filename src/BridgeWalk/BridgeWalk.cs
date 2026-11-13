@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using HarmonyLib;
 using SVR;
@@ -108,7 +109,7 @@ namespace StbcRevival.Walking
         {
             if (Time.unscaledTime - cacheAt > 1f)
             {
-                cache = UnityEngine.Object.FindObjectsOfType<NovaPlayerInfo>();
+                cache = Tracked.All<NovaPlayerInfo>().ToArray();
                 cacheAt = Time.unscaledTime;
             }
             return cache;

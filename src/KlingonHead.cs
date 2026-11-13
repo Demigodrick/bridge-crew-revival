@@ -54,10 +54,10 @@ namespace StbcRevival
             FindSources();
 
             bool inRoom = Publish();
-            foreach (var info in UnityEngine.Object.FindObjectsOfType<PlayerInfo>())
+            foreach (var info in Tracked.All<PlayerInfo>())
                 Apply(info.VisualPawnObject, Wants(info, inRoom));
             // The character creator's own copies of the presets (as RomulanFace).
-            var creator = UnityEngine.Object.FindObjectOfType<CustomizationManager>();
+            var creator = Tracked.First<CustomizationManager>();
             if (creator != null && RomulanFace.CreatorAvatars?.GetValue(creator) is GameObject[] avatars && RomulanFace.Profiles() is IList profiles)
             {
                 FollowLook(avatars, profiles);

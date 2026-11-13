@@ -381,7 +381,7 @@ namespace StbcRevival
             }
             if (Time.unscaledTime < nextRetitle) return;
             nextRetitle = Time.unscaledTime + 1f;
-            foreach (var menu in UnityEngine.Object.FindObjectsOfType<ConsoleMainMenu>())
+            foreach (var menu in Tracked.All<ConsoleMainMenu>())
             {
                 if (pages.ContainsKey(menu)) Show(menu);
                 else Retitle(menu);

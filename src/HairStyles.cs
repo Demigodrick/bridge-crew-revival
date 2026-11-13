@@ -845,7 +845,7 @@ namespace StbcRevival
             if (creator == null && Time.unscaledTime >= nextCreatorSearch)
             {
                 nextCreatorSearch = Time.unscaledTime + 1f;
-                creator = UnityEngine.Object.FindObjectOfType<CustomizationManager>();
+                creator = Tracked.First<CustomizationManager>();
             }
             if (creator == null || !creator.isActiveAndEnabled) return;
             try

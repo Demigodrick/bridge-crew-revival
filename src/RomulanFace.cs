@@ -33,11 +33,11 @@ namespace StbcRevival
             nextCheck = Time.unscaledTime + 1f;
 
             bool inRoom = Publish();
-            foreach (var info in UnityEngine.Object.FindObjectsOfType<PlayerInfo>())
+            foreach (var info in Tracked.All<PlayerInfo>())
                 Apply(info.VisualPawnObject, Wants(info, inRoom));
             // The character creator shows its own copy of each preset (CustomizationManager.FFJOIFLJFPF, in
             // the order of NovaPlayerManager.CharacterProfiles), not your player avatar.
-            var creator = UnityEngine.Object.FindObjectOfType<CustomizationManager>();
+            var creator = Tracked.First<CustomizationManager>();
             if (creator != null && CreatorAvatars?.GetValue(creator) is GameObject[] avatars && Profiles() is IList profiles)
                 for (int i = 0; i < avatars.Length && i < profiles.Count; i++)
                     if (avatars[i] != null && avatars[i].activeInHierarchy)
