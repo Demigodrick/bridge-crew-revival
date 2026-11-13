@@ -10,7 +10,7 @@ namespace StbcRevival.Walking
     /// While you stand and walk (Bridge Walk), a trace of what makes the view stutter, in the log ("Stutter trace:"):
     ///   - each frame over 20 ms: how long it took, whether memory was cleaned up in it (garbage collection), the
     ///     mod's slowest updates in it and the mod's total, and how far your floor height jumped that frame;
-    ///   - every 10 s standing: frames over 20 ms and 33 ms, the longest, the mod's slowest updates on average, and how
+    ///   - every 10 s standing, if any frame was over 20 ms: frames over 20 ms and 33 ms, the longest, the mod's slowest updates on average, and how
     ///     often and how far the floor height changed under you.
     /// The mod's updates are timed in Plugin.Safely and the walk's animation pass; nothing is timed or written while
     /// seated. At most 300 slow-frame lines a session, so a slow PC doesn't fill the log.
@@ -88,10 +88,16 @@ namespace StbcRevival.Walking
         private static void Summary()
         {
             summaryAt = Time.unscaledTime + SummarySeconds;
-            if (frames == 0) return;
+            if (frames == 0 || slow == 0) { Reset(); return; } // nothing to say: no slow frames
+
             Plugin.Log.LogInfo($"Stutter trace: last {frames} frames standing: {slow} over 20 ms, {verySlow} over 33 ms, longest {longest * 1000f:F0} ms, {collections} memory clean-up(s); "
                 + $"the mod {Ms(modTicks) / frames:F2} ms a frame on average ({Top(window, 4, frames)}); "
                 + $"floor height changed on {floorMoves} frames ({(floorMoves > 0 ? $"{stepSum * 100f / floorMoves:F1} cm on average, biggest {bigStep * 100f:+0.0;-0.0} cm" : "never")})");
+            Reset();
+        }
+
+        private static void Reset()
+        {
             window.Clear();
             frames = slow = verySlow = floorMoves = collections = 0; longest = bigStep = stepSum = 0f; modTicks = 0;
         }
