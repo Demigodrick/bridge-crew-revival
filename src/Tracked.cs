@@ -17,7 +17,7 @@ namespace StbcRevival
     /// gives the ones still there, in a loaded scene and active, as FindObjectsOfType does; destroyed ones drop out.
     /// Subclasses' constructors are patched too (NovaPlayerInfo's), as the runtime may build a base constructor into
     /// them. Once a scene has been loaded a few seconds, each list is checked against one search of the scene: one
-    /// that missed anything is dropped, and that type searched for as before (said in the log). The same if a
+    /// that missed anything takes them in, and one that misses again is dropped, and that type searched for as before (said in the log). The same if a
     /// type's constructor can't be patched.
     /// </summary>
     internal static class Tracked
@@ -78,16 +78,31 @@ namespace StbcRevival
             Check<PlayerInfo>(); Check<CustomizationManager>(); Check<ConsoleMainMenu>(); Check<NewsPage>(); Check<InviteActionUI>();
         }
 
+        private static readonly HashSet<Type> missedBefore = new HashSet<Type>();
+
+        // A list that missed objects takes them in (and says which, and why it might have missed them); one that
+        // misses again in a later scene is dropped, and that type searched for as before.
         private static void Check<T>() where T : Component
         {
-            lock (gate) if (!patched.Contains(typeof(T))) return;
+            Type key = typeof(T);
+            lock (gate) if (!patched.Contains(key)) return;
             var kept = new HashSet<UnityEngine.Object>(SameObject.Instance);
             foreach (var c in All<T>()) kept.Add(c);
-            int missed = 0;
-            foreach (var o in UnityEngine.Object.FindObjectsOfType<T>()) if (!kept.Contains(o)) missed++;
-            if (missed == 0) return;
-            lock (gate) patched.Remove(typeof(T));
-            Plugin.Log.LogWarning($"Tracked: the list of {typeof(T).Name} missed {missed}; searching the scene for them as before");
+            var missed = new List<string>();
+            foreach (var o in UnityEngine.Object.FindObjectsOfType<T>())
+            {
+                if (kept.Contains(o)) continue;
+                bool known;
+                lock (gate) { known = made[key].Contains(o); made[key].Add(o); }
+                var go = o.gameObject;
+                missed.Add($"{o.GetType().Name} on {go.name} (scene '{go.scene.name}' valid {go.scene.IsValid()}, active {go.activeInHierarchy}, "
+                    + (known ? "kept but left out of the list" : "never seen being made") + ")");
+            }
+            if (missed.Count == 0) return;
+            bool again;
+            lock (gate) { again = !missedBefore.Add(key); if (again) patched.Remove(key); }
+            Plugin.Log.LogWarning($"Tracked: the list of {key.Name} missed {missed.Count}: {string.Join("; ", missed.ToArray())}"
+                + (again ? "; it missed before, so they're searched for as before" : "; they're in the list now"));
         }
 
         /// <summary>The T objects in the loaded scenes that are active, as FindObjectsOfType&lt;T&gt;() gives them.</summary>
@@ -107,12 +122,19 @@ namespace StbcRevival
                     if (o == null) { gone.Add(o); continue; } // destroyed
                     if (!(o is T c)) continue;
                     var go = c.gameObject;
-                    if (!go.scene.IsValid() || !go.activeInHierarchy) continue; // a prefab, or switched off
+                    if (!go.activeInHierarchy || !InScene(go)) continue; // switched off, or a prefab
                     result.Add(c);
                 }
                 foreach (var o in gone) made[key].Remove(o);
             }
             return result;
+        }
+
+        // In a scene (DontDestroyOnLoad's too), not a prefab or other asset.
+        private static bool InScene(GameObject go)
+        {
+            var scene = go.scene;
+            return scene.IsValid() || scene.name == "DontDestroyOnLoad";
         }
 
         /// <summary>
