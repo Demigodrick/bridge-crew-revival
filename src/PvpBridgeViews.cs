@@ -87,12 +87,14 @@ namespace StbcRevival
                 if (CrewSounds.Contains(name) && __1 != null && PvpShips.Of(__1) != PvpShips.Mine && !IsMasterPlayer(__1))
                 {
                     if (told.Add("sound" + name)) Plugin.Log.LogInfo($"PvP: {name} from ship {PvpShips.Of(__1)}'s crew kept off your bridge");
+                    PvpRouteDiag.Count($"RPC {name} from ship {PvpShips.Of(__1)} kept off");
                     return false;
                 }
                 string from = !SendersShipOnly.Contains(name) ? null : __1 == null ? PvpShips.Mine : PvpShips.Of(__1);
                 if (from != null && from != PvpShips.Mine)
                 {
                     if (told.Add("drop" + name)) Plugin.Log.LogInfo($"PvP: {name} from ship {from}'s game kept off your bridge (its own bridge's)");
+                    PvpRouteDiag.Count($"RPC {name} from ship {from}'s game kept off");
                     return false;
                 }
                 if (Array.IndexOf(BridgeViews, view) < 0 || !ToHost.Contains(name)) return true;
@@ -102,6 +104,7 @@ namespace StbcRevival
                 {
                     rpc[(byte)0] = own;
                     if (told.Add(name + view)) Plugin.Log.LogInfo($"PvP: {name} from another bridge (view {view}) taken by this bridge (view {own})");
+                    PvpRouteDiag.Count($"RPC {name} from ship {PvpShips.Of(__1) ?? "?"} re-aimed at this bridge");
                 }
                 if (InSendersShip.Contains(name) && __1 != null)
                 {
@@ -112,6 +115,7 @@ namespace StbcRevival
                         PvpScope.Switch(ship);
                         scoped = true;
                         if (told.Add("scope" + name)) Plugin.Log.LogInfo($"PvP: {name} from ship {ship}'s crew carried out on ship {ship}");
+                        PvpRouteDiag.Count($"RPC {name} run as ship {ship}");
                     }
                 }
             }

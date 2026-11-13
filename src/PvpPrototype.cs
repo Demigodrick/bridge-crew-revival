@@ -288,6 +288,7 @@ namespace StbcRevival
             PvpShipChoice.Update();
             PvpLoadDiag.Update();
             PvpSeatDiag.Update();
+            PvpRouteDiag.Update();
             ForgetBridgeOnLeaving();
             if (!Active)
             {

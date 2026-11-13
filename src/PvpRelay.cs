@@ -101,6 +101,7 @@ namespace StbcRevival
             if (!__runOriginal) return false; // another prefix (Revival voice's handover) already let it go
             if (__0 != 125 || Hears(__2)) return true;
             if (__1 is SVR.Network.PLPKPDFOLDL packet) SVR.Network.PLPKPDFOLDL.Release(packet); // back to its pool, as the game does
+            PvpRouteDiag.Count($"game voice chat from player {__2} (other ship) not played");
             var phase = GamePhaseManager.IEFBKOMBFGO?.GetCurrentGamePhase();
             if (phase == typeof(GamePhase_Bridge) && toldOtherShip.Add(__2))
                 Plugin.Log.LogInfo($"PvP: voice chat from player {__2} (the other ship) not played here");
