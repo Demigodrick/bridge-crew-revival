@@ -384,6 +384,7 @@ namespace StbcRevival
         private void Update()
         {
             HangWatchdog.Beat(); // first: the watchdog only needs to know a frame ran
+            Walking.StutterTrace.FrameStart(); // the frame that just ended, while standing (Bridge Walk)
             Safely("openssl sha fix", OpenSslShaFix.Apply);
             if (!deferredApplied)
             {
@@ -443,11 +444,13 @@ namespace StbcRevival
         private void Safely(string what, System.Action action)
         {
             long before = MemoryLog.Before();
+            long started = System.Diagnostics.Stopwatch.GetTimestamp();
             try { action(); }
             catch (System.Exception e)
             {
                 if (failedOnce.Add(what)) Log.LogError($"{what} failed (logged once): {e}");
             }
+            Walking.StutterTrace.Add(what, System.Diagnostics.Stopwatch.GetTimestamp() - started);
             MemoryLog.After(what, before);
         }
 
