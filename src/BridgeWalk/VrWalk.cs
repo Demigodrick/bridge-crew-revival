@@ -17,8 +17,8 @@ namespace StbcRevival.Walking
     /// and the walk key, or holding B on the right controller with the Quest controls on ([VR] QuestControls), stands
     /// you up and sits you down. Sticks are read through the game's own input, so any controllers on any runtime walk.
     ///
-    /// Standing in VR, the game's seat warning (the screen fading when your head leaves the seat or nears your own
-    /// body) is off; seated it's as the game has it. Your headset's own boundary is never touched.
+    /// The game's seat warning (the screen fading when your head leaves the seat or nears your own body) is off
+    /// (SeatWarning). Your headset's own boundary is never touched.
     ///
     /// Each frame the rig is put back where the walk keeps it (in the bridge's space, so it moves with the ship) before
     /// the game's cameras draw, as the game sets it back toward the seat. Your hands stay where you hold them while the
@@ -324,7 +324,11 @@ namespace StbcRevival.Walking
         }
     }
 
-    /// <summary>The game's seat warning, off while you stand in VR (TrackingAndCalibrationWarning's check, AEFDMBEPPBN).</summary>
+    /// <summary>
+    /// The game's seat warning (the view fading out when your head leaves the seat or nears your own body;
+    /// TrackingAndCalibrationWarning's check, AEFDMBEPPBN): off unless [VR] SeatWarning is on, and always off while you
+    /// stand in VR. The headset's own boundary is never touched.
+    /// </summary>
     internal static class SeatWarning
     {
         private static readonly AccessTools.FieldRef<WarningBase, bool> show = TryShow();
@@ -345,7 +349,7 @@ namespace StbcRevival.Walking
 
         private static bool Check(TrackingAndCalibrationWarning __instance)
         {
-            if (!Walker.Standing || !Walker.InVr) return true;
+            if (Plugin.SeatWarning.Value && !(Walker.Standing && Walker.InVr)) return true;
             show(__instance) = false;
             return false;
         }

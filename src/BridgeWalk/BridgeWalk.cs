@@ -29,7 +29,6 @@ namespace StbcRevival.Walking
             WalkPatches.Apply(harmony);
             WalkNet.Hook();
             ShuttleView.Patch(harmony);
-            SeatWarning.Patch(harmony);
             BridgeMeshes.StartIndex(Application.dataPath);
             Active = true;
         }
