@@ -131,6 +131,7 @@ namespace StbcRevival
                     }
                 }
                 UpdatePaints(mats, name, registry);
+                UpdateKelvin(mats, name, registry);
                 UpdatePlaque(mats, name, registry);
             }
             catch (Exception e) { Plugin.Log.LogWarning("Hull name: " + e); scanUntil = 0f; }
@@ -222,6 +223,7 @@ namespace StbcRevival
             var ours = new HashSet<Texture>();
             foreach (var d in Decals) { names.Add(d.Texture); if (d.Diffuse != null) ours.Add(d.Diffuse); }
             foreach (var p in Paints) { names.Add(p.Texture); if (p.Done != null) ours.Add(p.Done); }
+            foreach (var p in kelvinPaints) { names.Add(p.File); if (p.Done != null) ours.Add(p.Done); }
             foreach (var p in Plaques) { names.Add(p.Diffuse); if (p.D != null) ours.Add(p.D); }
             var found = new List<Material>();
             foreach (var m in all)
@@ -251,7 +253,7 @@ namespace StbcRevival
         private static void Restore()
         {
             if (originals.Count == 0 && running == null && queued.Count == 0
-                && Decals.All(d => d.Diffuse == null) && Paints.All(p => p.Done == null) && Plaques.All(p => p.D == null && p.N == null)) return;
+                && Decals.All(d => d.Diffuse == null) && Paints.All(p => p.Done == null) && kelvinPaints.All(p => p.Done == null) && Plaques.All(p => p.D == null && p.N == null)) return;
             generation++; // a drawing still running is dropped when it's done
             foreach (var job in queued) try { job.Finally?.Invoke(); } catch { }
             queued.Clear();
@@ -267,6 +269,7 @@ namespace StbcRevival
             void Free<T>(ref T tex) where T : Texture { if (tex != null) UnityEngine.Object.Destroy(tex); tex = null; }
             foreach (var d in Decals) { d.DrawnFor = null; d.Pending = false; Free(ref d.Diffuse); Free(ref d.Glow); }
             foreach (var p in Paints) { p.DrawnFor = null; p.Pending = false; Free(ref p.Done); }
+            foreach (var p in kelvinPaints) { p.DrawnFor = null; p.Pending = false; Free(ref p.Done); }
             foreach (var p in Plaques) { p.DrawnFor = null; p.Pending = false; Free(ref p.D); Free(ref p.N); }
             pixels = glowPixels = null;
             Plugin.Log.LogInfo("Hull name: the game's names back on the hulls");

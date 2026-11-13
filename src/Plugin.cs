@@ -180,7 +180,7 @@ namespace StbcRevival
             ExcelsiorTest = Config.Bind("Ships", "Excelsior", false,
                 "Test: when you host, the crew flies an Excelsior-class ship, with the training holodeck as its bridge for now.");
             PlayerShip = Config.Bind("Ships", "PlayerShip", "Aegis",
-                "The crew's ship when you host: Aegis, Nova or Sovereign (beta). Nova and Sovereign are ship classes of their own (their models come with the mod, in BepInEx/ships); their bridge and systems are the game's own for now. The briefing room's ship box decides after that.");
+                "The crew's ship when you host: Aegis, Nova, Sovereign or AbramsEnterprise (the Kelvin Enterprise; beta). Those three are ship classes of their own (their models come with the mod, in BepInEx/ships); their bridge and systems are the game's own for now. The briefing room's ship box decides after that.");
             BlockedPlayers = Config.Bind("Players", "Blocked", "",
                 "Players kept out of crews you host (Steam IDs, as steamid=name;...). Added when you kick someone and choose to block them; players you've blocked or ignored in Steam are kept out too.");
             VoiceVolumes = Config.Bind("Players", "VoiceVolumes", "",
