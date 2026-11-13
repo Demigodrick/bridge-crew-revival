@@ -73,7 +73,12 @@ namespace StbcRevival.Walking
             {
                 Init();
                 if (Walker.Standing && Walker.Me != null && Walker.Me.VisualPawnObject != null && Walker.Me.PawnObject != null)
+                {
+                    // In VR your hands and head stay where you hold them.
+                    var tracked = Walker.InVr ? TrackedArms.Capture(Walker.Me.VisualPawnObject) : null;
                     Apply(Walker.Me.VisualPawnObject, Walker.Me.PawnObject.transform, Walker.Pose, Walker.Speed, 0f);
+                    tracked?.Restore();
+                }
                 foreach (var r in Remotes.All.Values)
                     if (r.Standing && r.Info != null && r.Info.VisualPawnObject != null && r.Info.PawnObject != null)
                         Apply(r.Info.VisualPawnObject, r.Info.PawnObject.transform, r.Pose, r.Speed, r.Pitch);

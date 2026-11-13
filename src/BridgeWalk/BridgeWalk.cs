@@ -8,9 +8,9 @@ using UnityEngine;
 namespace StbcRevival.Walking
 {
     /// <summary>
-    /// [Bridge Walk] Experimental, 2D (monitor) mode only: stand up from your seat with ToggleKey (F6) and walk
-    /// around the bridge, the shuttle or the briefing room (WASD/arrow keys, mouse to look, Shift to run, ToggleKey or
-    /// Escape to sit down again).
+    /// [Bridge Walk] Experimental: stand up from your seat with ToggleKey (F6) and walk around the bridge, the shuttle
+    /// or the briefing room (WASD/arrow keys, mouse to look, Shift to run, ToggleKey or Escape to sit down again). In VR
+    /// (VrWalk.cs) the headset's tracking moves with you instead: sticks to walk and turn, B held to stand or sit.
     /// Crewmates with the mod see you stand and walk, with a procedural walk cycle on the character's humanoid rig.
     ///
     /// The game's own 2D camera and console input are paused while standing. Floors and walls come from the
@@ -29,6 +29,7 @@ namespace StbcRevival.Walking
             WalkPatches.Apply(harmony);
             WalkNet.Hook();
             ShuttleView.Patch(harmony);
+            SeatWarning.Patch(harmony);
             BridgeMeshes.StartIndex(Application.dataPath);
             Active = true;
         }
@@ -52,7 +53,9 @@ namespace StbcRevival.Walking
             if (Walker.SwallowEscape && !Input.GetKey(KeyCode.Escape)) Walker.SwallowEscape = false;
             // Keys typed into the mod's text prompt aren't for walking.
             bool typing = TextPrompt.IsOpen;
-            if (!typing && Input.GetKeyDown(Plugin.BridgeWalkKey.Value))
+            // In VR, holding B on the right controller does what the key does.
+            bool held = Walker.VrOn && Walker.VrToggleHeld();
+            if (!typing && (Input.GetKeyDown(Plugin.BridgeWalkKey.Value) || held))
             {
                 if (Walker.Standing) Walker.SitDown("key");
                 else Walker.StandUp();
@@ -149,7 +152,7 @@ namespace StbcRevival.Walking
     }
 
     // ---------------------------------------------------------------- local player
-    internal static class Walker
+    internal static partial class Walker
     {
         public static bool Standing;
         /// <summary>Standing on the bridge (not the shuttle or briefing room): the viewscreen and the other consoles join in.</summary>
@@ -192,7 +195,7 @@ namespace StbcRevival.Walking
                 var me = Bridge.Local();
                 if (me == null || me.PawnObject == null) return;
                 var fps = me.PawnObject.GetComponentInChildren<FPSCamera>(true);
-                if (fps == null || !fps.isActiveAndEnabled) return;
+                if ((fps == null || !fps.isActiveAndEnabled) && !VrOn) return;
                 var t = me.PawnObject.transform;
                 WalkMesh.Ensure(t.position, t.parent);
             }
@@ -207,14 +210,21 @@ namespace StbcRevival.Walking
             if (!Bridge.Walkable(phase)) { Plugin.Log.LogInfo($"Bridge walk: not here ({Bridge.PlaceName(phase)})"); return; }
             var me = Bridge.Local();
             if (me == null || me.PawnObject == null) { Plugin.Log.LogWarning($"Bridge walk: your character wasn't found in {Bridge.PlaceName(phase)} (actor {Bridge.LocalActor()}, {Bridge.Players().Length} players)"); return; }
-            var fps = me.PawnObject.GetComponentInChildren<FPSCamera>(true);
-            if (fps == null || !fps.isActiveAndEnabled) { Plugin.Log.LogInfo($"Bridge walk: only in 2D mode (no 2D camera active on {Bridge.Path(me.PawnObject.transform)}{(fps == null ? "" : ", it's at " + Bridge.Path(fps.transform))})"); return; }
+            bool vr = VrOn;
+            Transform view;
+            if (vr) { if (!FindVrRig(me, out view)) return; }
+            else
+            {
+                var fps = me.PawnObject.GetComponentInChildren<FPSCamera>(true);
+                if (fps == null || !fps.isActiveAndEnabled) { Plugin.Log.LogInfo($"Bridge walk: no 2D camera active on {Bridge.Path(me.PawnObject.transform)}{(fps == null ? "" : ", it's at " + Bridge.Path(fps.transform))}"); return; }
+                view = fps.transform;
+            }
             onBridge = phase == typeof(GamePhase_Bridge);
             standPhase = phase;
 
             Me = me;
             pawn = me.PawnObject.transform;
-            cam = fps.transform;
+            cam = view;
             seatLocalPos = pawn.localPosition;
             seatLocalRot = pawn.localRotation;
             camLocalPos = cam.localPosition;
@@ -241,6 +251,7 @@ namespace StbcRevival.Walking
             if (phase == typeof(GamePhase_MainMenu)) ShuttleView.Capture();
             ResetGameFreeLook();
             HookCamera();
+            if (vr) StandVr();
 
             Standing = true;
             SwallowEscape = false;
@@ -248,9 +259,8 @@ namespace StbcRevival.Walking
             if (onBridge) OtherConsoles.Show();
             savedLockMode = Cursor.lockState;
             savedCursorVisible = Cursor.visible;
-            Cursor.lockState = CursorLockMode.Locked;
-            Cursor.visible = false;
-            Plugin.Log.LogInfo($"Bridge walk: stood up in {Bridge.PlaceName(phase)} at {Bridge.Path(pawn)}; floor {(floorFromGeometry ? "from the bridge geometry" : "flat (no floor found)")}");
+            if (!vr) { Cursor.lockState = CursorLockMode.Locked; Cursor.visible = false; }
+            Plugin.Log.LogInfo($"Bridge walk: stood up{(vr ? " in VR" : "")} in {Bridge.PlaceName(phase)} at {Bridge.Path(pawn)}; floor {(floorFromGeometry ? "from the bridge geometry" : "flat (no floor found)")}");
             WalkNet.SendState(true);
         }
 
@@ -267,11 +277,13 @@ namespace StbcRevival.Walking
                     pawn.localRotation = seatLocalRot;
                     try { Bridge.Reseat(Me); } catch (Exception e) { Plugin.Log.LogWarning("Bridge walk: reseating: " + e.Message); }
                 }
-                if (cam != null) { cam.localPosition = camLocalPos; cam.localRotation = camLocalRot; }
+                if (InVr) SitVr(); // the head is tracked: only its rig goes back
+                else if (cam != null) { cam.localPosition = camLocalPos; cam.localRotation = camLocalRot; }
                 if (onBridge) ViewscreenRig.Restore();
                 ShuttleView.Restore();
             }
             catch (Exception e) { Plugin.Log.LogWarning("Bridge walk: sitting down: " + e.Message); }
+            InVr = false;
             if (onBridge) OtherConsoles.Restore();
             if (why == "escape") SwallowEscape = true;
             Cursor.lockState = savedLockMode;
@@ -286,6 +298,7 @@ namespace StbcRevival.Walking
             if (pawn == null || cam == null || Me == null || Bridge.Phase() != standPhase) { SitDown("left " + Bridge.PlaceName(standPhase)); return; }
             // The bridge's meshes finished reading after you stood up: from now on they carry you.
             if (!floorFromGeometry && Plugin.BridgeWalkCollisions.Value && WalkMesh.ReadyFor(Basis)) floorFromGeometry = true;
+            if (InVr) { TickVr(typing); return; }
             if (typing)
             {
                 Speed = Mathf.Lerp(Speed, 0f, 1f - Mathf.Exp(-10f * Time.deltaTime));
@@ -338,6 +351,7 @@ namespace StbcRevival.Walking
         public static void HoldFacing()
         {
             if (!Standing || pawn == null) return;
+            if (InVr) { if (cam != null) HeadingFromHead(); return; }
             Quaternion want = BasisRot * Quaternion.Euler(0, yaw, 0);
             float off = Quaternion.Angle(pawn.rotation, want);
             if (off > 5f && Time.unscaledTime - lastHoldLog > 5f) { lastHoldLog = Time.unscaledTime; Plugin.Log.LogInfo($"Bridge walk: your character had been turned {off:F0}° back toward the seat; turned to your heading again"); }
@@ -347,6 +361,7 @@ namespace StbcRevival.Walking
         public static void PlaceCamera()
         {
             if (!Standing || pawn == null || cam == null) return;
+            if (InVr) { PlaceVr(); return; }
             Quaternion yawRot = BasisRot * Quaternion.Euler(0, yaw, 0);
             cam.position = pawn.position + Up * Plugin.BridgeWalkEyeHeight.Value + yawRot * Vector3.forward * 0.12f;
             cam.rotation = yawRot * Quaternion.Euler(pitch, 0, 0);
@@ -497,6 +512,7 @@ namespace StbcRevival.Walking
             beforeRender = c =>
             {
                 if (!Standing || c == null || cam == null || pawn == null) return;
+                if (InVr) { BeforeVrCamera(c); return; }
                 if (c.transform != cam && !c.transform.IsChildOf(cam)) return;
                 Quaternion yawRot = BasisRot * Quaternion.Euler(0, yaw, 0);
                 cam.position = pawn.position + Up * Plugin.BridgeWalkEyeHeight.Value + yawRot * Vector3.forward * 0.12f;
@@ -1038,6 +1054,7 @@ namespace StbcRevival.Walking
         // off until Escape is let go, so the same press doesn't open the game's menu.
         private static bool Blocks(LONCAPHEAPA a)
         {
+            if (Walker.ReadingInput) return false;
             if (Walker.Standing)
                 return a != LONCAPHEAPA.VoiceCommand && a != LONCAPHEAPA.KeyboardAny && a != LONCAPHEAPA.MouseAny && a != LONCAPHEAPA.GamePadAny
                     && a != LONCAPHEAPA.TouchControllersAny && a != LONCAPHEAPA.ViveControllersAny && a != LONCAPHEAPA.MoveControllersAny;
@@ -1048,7 +1065,7 @@ namespace StbcRevival.Walking
 
         private static bool NoAxis(ref float __result)
         {
-            if (!Walker.Standing) return true;
+            if (!Walker.Standing || Walker.ReadingInput) return true;
             __result = 0f;
             return false;
         }

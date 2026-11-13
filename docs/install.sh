@@ -5,7 +5,7 @@
 #   curl -fsSL https://demigodrick.github.io/bridge-crew-revival/install.sh | bash -s -- --uninstall
 #
 # or from the release zip:  ./install.sh  [game folder]  [--uninstall]  [--import-save | --no-import]
-#                           [--voice-language=german | english]
+#                           [--voice-language=german | english]  [--quest-controls=yes | no]
 #
 # Finds the game in your Steam libraries, installs BepInEx 5 (from its GitHub release, checksum
 # verified), sets the BepInEx entrypoint this game needs, and copies the mod (from the zip it's in,
@@ -14,6 +14,9 @@
 # Ubisoft cloud save (avatar, options) by starting the game once.
 # It also asks which language the voice commands are in, English or German (the German model is a second,
 # small download); --voice-language=german or STBC_VOICE_LANGUAGE=german answers that without asking.
+# And whether you play on a Meta Quest through SteamVR: yes turns on the mod's Quest controller buttons and has
+# SteamVR use the layout that goes with them (its settings backed up first); --quest-controls=yes / no or
+# STBC_QUEST_CONTROLS answers that without asking.
 set -euo pipefail
 
 REPO="Demigodrick/bridge-crew-revival"
@@ -40,11 +43,14 @@ usage() {
   cat <<'EOF'
 Bridge Crew Revival installer (Linux)
   install.sh [game folder] [--uninstall] [--import-save | --no-import] [--voice-language=german | english]
+             [--quest-controls=yes | no]
   --import-save  copy your Ubisoft cloud save (starts the game once; Ubisoft Connect must be signed in)
   --no-import    don't ask about it
   --voice-language=german | english   the voice commands' language, without asking
+  --quest-controls=yes | no           Quest controller buttons through SteamVR, without asking
 Environment: STBC_VERSION=0.6.1 installs that release instead of the latest.
              STBC_VOICE_LANGUAGE=german does the same as --voice-language=german.
+             STBC_QUEST_CONTROLS=yes does the same as --quest-controls=yes.
 EOF
 }
 
@@ -110,6 +116,118 @@ set_pvp_test() { # game, true|false
     # BepInEx reads a section named twice as one, and tidies the file when the game starts.
     printf '\n[Debug]\n\nPvpTest = %s\n' "$2" >> "$cfg"
   fi
+}
+
+# ---- Quest controller buttons through SteamVR ---------------------------------------------------
+
+quest_choice() { # text -> yes, no, or nothing
+  case "$1" in [yY1tT]*) echo yes ;; [nN0fF]*) echo no ;; esac
+}
+
+quest_controls() { # game -> true / false ([VR] QuestControls in the mod's config, in any [VR] section)
+  local cfg="$1/BepInEx/config/stbc.revival.cfg"
+  [ -f "$cfg" ] && awk '/^\[/ { vr = ($0 ~ /^\[VR\]/) } vr && /^QuestControls = true/ { found = 1 } END { exit !found }' "$cfg" \
+    && echo true || echo false
+}
+
+set_quest_controls() { # game, true|false
+  local cfg="$1/BepInEx/config/stbc.revival.cfg"
+  mkdir -p "$1/BepInEx/config"
+  if [ -f "$cfg" ] && awk '/^\[/ { vr = ($0 ~ /^\[VR\]/) } vr && /^QuestControls = / { found = 1 } END { exit !found }' "$cfg"; then
+    # Only the key inside [VR] sections; keeps BepInEx's CRLF line endings.
+    awk -v v="$2" '/^\[/ { vr = ($0 ~ /^\[VR\]/) } vr && /^QuestControls = / { cr = ($0 ~ /\r$/) ? "\r" : ""; $0 = "QuestControls = " v cr } { print }' "$cfg" > "$cfg.new" && mv -f "$cfg.new" "$cfg"
+  else
+    # BepInEx reads a section named twice as one, and tidies the file when the game starts.
+    printf '\n[VR]\n\nQuestControls = %s\n' "$2" >> "$cfg"
+  fi
+}
+
+steamvr_settings() { # -> SteamVR's settings file (steamvr.vrsettings), or fails
+  local root
+  for root in "$HOME/.local/share/Steam" "$HOME/.steam/steam" "$HOME/.steam/root" \
+              "$HOME/.var/app/com.valvesoftware.Steam/.local/share/Steam" "$HOME/snap/steam/common/.local/share/Steam"; do
+    [ -f "$root/config/steamvr.vrsettings" ] && { printf '%s\n' "$root/config/steamvr.vrsettings"; return 0; }
+  done
+  return 1
+}
+
+set_quest_binding() { # binding file, on|off -> prints done, steamvr-running, no-steamvr, not-yet or unchanged
+  if pgrep -x vrserver >/dev/null 2>&1 || pgrep -x vrmonitor >/dev/null 2>&1; then echo steamvr-running; return 0; fi
+  local file
+  file="$(steamvr_settings)" || { echo no-steamvr; return 0; }
+  command -v python3 >/dev/null || { echo no-steamvr; return 0; }
+  # SteamVR's Touch layout for Bridge Crew (app 527100): on, pointed at the mod's file (what it was is kept beside
+  # that file, steamvr-before.json); off, put back as it was. SteamVR's settings are backed up first.
+  python3 -I - "$file" "$1" "$2" <<'EOF'
+import json, os, re, shutil, sys
+from pathlib import Path
+path, binding, mode = sys.argv[1], sys.argv[2], sys.argv[3]
+ours = "BepInEx/vr/quest-binding.json"
+before_file = os.path.join(os.path.dirname(binding), "steamvr-before.json")
+with open(path, encoding="utf-8") as f: settings = json.load(f)
+app = settings.get("steam.app.527100") or {}
+keys = [k for k in app if re.match(r"^oculus_touch(?:_.+)?_CurrentURL_legacy$", k)]
+try:
+    with open(before_file, encoding="utf-8") as f: before = json.load(f)
+except Exception:
+    before = {}
+if mode == "on":
+    if not keys: print("not-yet"); sys.exit(0)
+    url = Path(os.path.abspath(binding)).as_uri()
+    for key in keys:
+        prefix = key[:-len("CurrentURL_legacy")]
+        for k in (key, prefix + "AutosaveURL_legacy"):
+            if k in app and not str(app[k]).endswith(ours): before[k] = app[k]
+        app[key] = url
+        app[prefix + "AutosaveURL_legacy"] = url
+        app[prefix + "NeedToUpdateAutosave_legacy"] = False
+    with open(before_file, "w", encoding="utf-8") as f: json.dump(before, f, indent=2)
+else:
+    keys = [k for k in keys if str(app[k]).endswith(ours)]
+    if not keys: print("unchanged"); sys.exit(0)
+    for key in keys:
+        prefix = key[:-len("CurrentURL_legacy")]
+        for k in (key, prefix + "AutosaveURL_legacy"):
+            if k in before: app[k] = before[k]
+            elif str(app.get(k, "")).endswith(ours): del app[k]
+text = json.dumps(settings, indent=3)
+json.loads(text)
+shutil.copyfile(path, path + ".before-revival-quest.bak")
+tmp = path + ".revival-new"
+with open(tmp, "w", encoding="utf-8") as f: f.write(text)
+os.replace(tmp, path)
+print("done")
+EOF
+}
+
+install_quest_controls() { # game choice(yes/no/"")
+  local binding="$1/BepInEx/vr/quest-binding.json" choice="$2" on answer="" result
+  [ -f "$binding" ] || return 0
+  on="$(quest_controls "$1")"
+  if [ -z "$choice" ]; then
+    { : < /dev/tty; } 2>/dev/null || return 0
+    if [ "$on" = true ]; then printf '       Playing on a Meta Quest through SteamVR (Virtual Desktop, Steam Link)? Use Quest controller buttons? [Y/n] ' > /dev/tty
+    else printf '       Playing on a Meta Quest through SteamVR (Virtual Desktop, Steam Link)? Use Quest controller buttons? [y/N] ' > /dev/tty; fi
+    read -r answer < /dev/tty || answer=""
+    choice="$(quest_choice "$answer")"
+    [ -n "$choice" ] || { [ "$on" = true ] && choice=yes || choice=no; }
+  fi
+  if [ "$choice" = yes ]; then
+    set_quest_controls "$1" true
+    result="$(set_quest_binding "$binding" on 2>/dev/null)" || result=error
+    case "$result" in
+      done) ok "Quest controller buttons on (A confirm, B back, X help, Y outside view, hold B to stand up and walk)" ;;
+      steamvr-running) warn "Quest controller buttons are on, but SteamVR is running: quit it and run the installer again so SteamVR uses them." ;;
+      not-yet) warn "Quest controller buttons are on, but SteamVR hasn't seen the game with your Quest yet: play once in VR, quit the game and SteamVR, then run the installer again." ;;
+      *) warn "Quest controller buttons are on, but SteamVR's settings weren't found. In SteamVR's controller settings for Bridge Crew, choose \"Bridge Crew Revival: Quest controllers\"." ;;
+    esac
+  elif [ "$on" = true ]; then
+    set_quest_controls "$1" false
+    result="$(set_quest_binding "$binding" off 2>/dev/null)" || result=error
+    if [ "$result" = steamvr-running ]; then warn "Quest controller buttons are off; quit SteamVR and run the installer again to give SteamVR its own layout back."
+    else ok "Quest controller buttons off"; fi
+  fi
+  return 0
 }
 
 install_designer() { # game from: the bridge designer (designer/ in the zip; older releases don't have it), for those
@@ -321,14 +439,16 @@ import_save() { # game -> prints the outcome
 }
 
 main() {
-  local uninstall=0 game="" import="" beta="" voice="" arg
+  local uninstall=0 game="" import="" beta="" voice="" quest="" arg
   voice="$(voice_choice "${STBC_VOICE_LANGUAGE:-}")"
+  quest="$(quest_choice "${STBC_QUEST_CONTROLS:-}")"
   for arg in "$@"; do
     case "$arg" in
       --uninstall) uninstall=1 ;;
       --import-save) import=yes ;;
       --no-import) import=no ;;
       --voice-language=*) voice="$(voice_choice "${arg#*=}")" ;;
+      --quest-controls=*) quest="$(quest_choice "${arg#*=}")" ;;
       -h|--help) usage; exit 0 ;;
       *) game="$arg" ;;
     esac
@@ -374,6 +494,10 @@ main() {
     rm -f "$game/BepInEx/native/rnnoise.dll" "$game/BepInEx/native/speexdsp.dll"
     rmdir "$game/BepInEx/native" 2>/dev/null || true
     rm -f "$game/BepInEx/bridges/bridge-designer"
+    # SteamVR's own controller layout back, if the Quest buttons had it use the mod's.
+    if [ "$(set_quest_binding "$game/BepInEx/vr/quest-binding.json" off 2>/dev/null)" = steamvr-running ]; then
+      warn "SteamVR is running: quit it and run the uninstaller again to give SteamVR its own Quest layout back."
+    fi
     # Without winhttp.dll BepInEx doesn't load at all; the BepInEx folder is left for you to delete.
     rm -f "$game/winhttp.dll" "$game/doorstop_config.ini" "$game/.doorstop_version" "$game/changelog.txt"
     set_prefix_override "$game" off || true
@@ -465,7 +589,7 @@ main() {
     cp "$plugins/../native/"*.dll "$game/BepInEx/native/"
   fi
   # Ship classes and bridge sets of our own, beside plugins/ in the zip.
-  for d in ships bridges; do
+  for d in ships bridges vr; do
     if [ -d "$plugins/../$d" ]; then mkdir -p "$game/BepInEx/$d" && cp -r "$plugins/../$d/." "$game/BepInEx/$d/"; fi
   done
   install_designer "$game" "$plugins/.."
@@ -501,6 +625,7 @@ main() {
       set_voice_language "$game" English
     fi
   fi
+  install_quest_controls "$game" "$quest"
   local loader_on=1
   if set_prefix_override "$game" on; then
     ok "Mod loader switched on for the game (no Steam launch options needed)"
