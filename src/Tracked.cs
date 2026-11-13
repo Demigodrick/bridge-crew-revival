@@ -97,14 +97,14 @@ namespace StbcRevival
                 if (!real.Contains(o))
                 {
                     // Not in the scene (shouldn't happen: All holds back what it isn't sure of). Taken out for good.
-                    lock (gate) { assets.Add(o); made[key].Remove(o); live.Remove(o); }
+                    lock (gate) { assets.Add(o); live.Remove(o); }
                     Plugin.Log.LogInfo($"Tracked: {o.GetType().Name} on {((Component)o).gameObject.name} isn't in the scene (a prefab); left out of the list");
                 }
             foreach (var o in found)
             {
                 if (kept.Contains(o)) continue;
                 bool known;
-                lock (gate) { known = made[key].Contains(o); made[key].Add(o); }
+                lock (gate) { known = made[key].Contains(o); made[key].Add(o); assets.Remove(o); live.Add(o); } // the search found it, so it is in the game
                 var go = o.gameObject;
                 missed.Add($"{o.GetType().Name} on {go.name} (scene '{go.scene.name}' valid {go.scene.IsValid()}, active {go.activeInHierarchy}, "
                     + (known ? "kept but left out of the list" : "never seen being made") + ")");
@@ -142,7 +142,7 @@ namespace StbcRevival
                     if (go.scene.IsValid() || assets.Contains(o) || live.Contains(o)) continue;
                     if (go.activeInHierarchy) unsure.Add(o);
                 }
-                foreach (var o in gone) { made[key].Remove(o); live.Remove(o); }
+                foreach (var o in gone) { made[key].Remove(o); live.Remove(o); assets.Remove(o); }
             }
             if (unsure.Count > 0)
             {
@@ -152,8 +152,9 @@ namespace StbcRevival
                 lock (gate)
                     foreach (var o in unsure)
                     {
-                        if (found.Contains(o)) live.Add(o);
-                        else { assets.Add(o); made[key].Remove(o); }
+                        // Not found: an asset, or one still being loaded (no scene yet, and not searchable). Kept, so
+                        // it's handed out once its scene is valid; only its having no scene leaves it out.
+                        if (found.Contains(o)) live.Add(o); else assets.Add(o);
                     }
             }
             lock (gate)
