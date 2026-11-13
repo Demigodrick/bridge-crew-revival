@@ -94,4 +94,3 @@ with open(os.path.join(out,'AbramsEnterprise.mtl'),'w') as f:
 with open(os.path.join(root,'conversion-report.json'),'w') as f:
     json.dump({'vertices':vertex_base-1,'triangles':triangles,'bounds':[list(all_min),list(all_max)],'materials':list(materials.values()),'objects':stats},f,indent=2)
 print('EXPORT_COMPLETE vertices=%d triangles=%d materials=%d' % (vertex_base-1,triangles,len(materials)))
-
