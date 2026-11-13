@@ -14,7 +14,7 @@ namespace StbcRevival
     ///
     /// Each type's constructor gets a postfix that keeps the new object (Unity makes components with their
     /// constructor, sometimes off the main thread while loading, so it's only kept there, under a lock). A lookup
-    /// gives the ones still there, in a loaded scene and active, as FindObjectsOfType does; destroyed ones drop out.
+    /// gives the ones still there and active; destroyed ones drop out, and prefabs once the check finds them.
     /// Subclasses' constructors are patched too (NovaPlayerInfo's), as the runtime may build a base constructor into
     /// them. Once a scene has been loaded a few seconds, each list is checked against one search of the scene: one
     /// that missed anything takes them in, and one that misses again is dropped, and that type searched for as before (said in the log). The same if a
@@ -78,6 +78,7 @@ namespace StbcRevival
             Check<PlayerInfo>(); Check<CustomizationManager>(); Check<ConsoleMainMenu>(); Check<NewsPage>(); Check<InviteActionUI>();
         }
 
+        private static readonly HashSet<UnityEngine.Object> assets = new HashSet<UnityEngine.Object>(SameObject.Instance);
         private static readonly HashSet<Type> missedBefore = new HashSet<Type>();
 
         // A list that missed objects takes them in (and says which, and why it might have missed them); one that
@@ -95,8 +96,9 @@ namespace StbcRevival
             foreach (var o in kept)
                 if (!real.Contains(o))
                 {
-                    var g = ((Component)o).gameObject;
-                    missed.Add($"{o.GetType().Name} on {g.name} is in the list but not in the scene (scene handle {g.scene.GetHashCode()})");
+                    // Not in the scene: a prefab or other asset. Taken out for good.
+                    lock (gate) { assets.Add(o); made[key].Remove(o); }
+                    Plugin.Log.LogInfo($"Tracked: {o.GetType().Name} on {((Component)o).gameObject.name} isn't in the scene (a prefab); left out of the list");
                 }
             foreach (var o in found)
             {
@@ -104,13 +106,13 @@ namespace StbcRevival
                 bool known;
                 lock (gate) { known = made[key].Contains(o); made[key].Add(o); }
                 var go = o.gameObject;
-                missed.Add($"{o.GetType().Name} on {go.name} (scene '{go.scene.name}' valid {go.scene.IsValid()}, handle {go.scene.GetHashCode()}, active {go.activeInHierarchy}, "
+                missed.Add($"{o.GetType().Name} on {go.name} (scene '{go.scene.name}' valid {go.scene.IsValid()}, active {go.activeInHierarchy}, "
                     + (known ? "kept but left out of the list" : "never seen being made") + ")");
             }
             if (missed.Count == 0) return;
             bool again;
             lock (gate) { again = !missedBefore.Add(key); if (again) patched.Remove(key); }
-            Plugin.Log.LogWarning($"Tracked: the list of {key.Name} was wrong about {missed.Count}: {string.Join("; ", missed.ToArray())}"
+            Plugin.Log.LogWarning($"Tracked: the list of {key.Name} missed {missed.Count}: {string.Join("; ", missed.ToArray())}"
                 + (again ? "; it missed before, so they're searched for as before" : "; the missed ones are in the list now"));
         }
 
@@ -131,21 +133,14 @@ namespace StbcRevival
                     if (o == null) { gone.Add(o); continue; } // destroyed
                     if (!(o is T c)) continue;
                     var go = c.gameObject;
-                    if (!go.activeInHierarchy || !InScene(go)) continue; // switched off, or a prefab
+                    // Switched off. (Nothing on this Unity tells a prefab from an object kept between scenes - both
+                    // say their scene isn't valid, handle 0 - so prefabs are taken out by the check instead.)
+                    if (!go.activeInHierarchy || assets.Contains(o)) continue;
                     result.Add(c);
                 }
                 foreach (var o in gone) made[key].Remove(o);
             }
             return result;
-        }
-
-        // In a scene (DontDestroyOnLoad's too), not a prefab or other asset.
-        private static bool InScene(GameObject go)
-        {
-            // On this Unity (5.4) an object kept between scenes reports a scene that isn't "valid", with no name,
-            // but it has a handle (GetHashCode gives it); an asset's is 0.
-            var scene = go.scene;
-            return scene.IsValid() || scene.GetHashCode() != 0;
         }
 
         /// <summary>
