@@ -296,6 +296,11 @@ Check("  Error.KBNGALKDCHL(string) (set_Message)", game.GetType("SVR.Network.PAF
 Check("  Error.get_ErrorId", game.GetType("SVR.Network.PAFNPDODDCM")?.GetMethod("get_ErrorId", Inst));
 Check("  NetErrorIntroElement.CCPDMKAHEDO (_currentError)", game.GetType("NetErrorIntroElement")?.GetField("CCPDMKAHEDO", Inst));
 Check("  NetErrorIntroElement.Update / OnReconnect", game.GetType("NetErrorIntroElement")?.GetMethod("Update", Inst) != null ? game.GetType("NetErrorIntroElement")?.GetMethod("OnReconnect", Inst) : null);
+Check("CameraManager.EDPLGHHIGNF (IsVREnabled: VR walking)", game.GetType("CameraManager")?.GetProperty("EDPLGHHIGNF", AnyS));
+Check("SteamVR_Camera get_head / get_origin (VR walking)", game.GetType("SteamVR_Camera")?.GetMethod("get_head", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance) != null ? game.GetType("SteamVR_Camera")?.GetMethod("get_origin", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance) : null);
+Check("TrackingAndCalibrationWarning.AEFDMBEPPBN() (seat warning: VR walking)", game.GetType("TrackingAndCalibrationWarning")?.GetMethod("AEFDMBEPPBN", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly, null, Type.EmptyTypes, null));
+Check("  WarningBase.CDODPBAOPDN (shown)", game.GetType("WarningBase")?.GetField("CDODPBAOPDN", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance));
+Check("SVR.GJDABPJJLBF.HFMELMLOJPG(bool[]) / KGKMIOOCKLC(float[]) (Quest controls)", game.GetType("SVR.GJDABPJJLBF")?.GetMethod("HFMELMLOJPG", AnyS) != null ? game.GetType("SVR.GJDABPJJLBF")?.GetMethod("KGKMIOOCKLC", AnyS) : null);
 Check("PhotonNetwork.get_playerList (host hand-off)", photon?.GetMethod("get_playerList", PS));
 var roomType = photon?.GetMethod("get_room", PS)?.ReturnType;
 foreach (var m in new[] { "get_maxPlayers", "get_open", "get_visible", "get_propertiesListedInLobby", "get_customProperties", "get_name" })

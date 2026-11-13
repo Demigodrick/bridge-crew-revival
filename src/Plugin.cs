@@ -67,7 +67,6 @@ namespace StbcRevival
         internal static ConfigEntry<bool> HullPreview;
         internal static ConfigEntry<UnityEngine.KeyCode> BugReportKey;
         internal static ConfigEntry<UnityEngine.KeyCode> CrewLogsKey;
-        internal static ConfigEntry<UnityEngine.KeyCode> GameDumpKey;
         internal static ConfigEntry<bool> RomulanFace;
         internal static ConfigEntry<int> KlingonHead;
         internal static ConfigEntry<bool> AllHairStyles;
@@ -85,6 +84,8 @@ namespace StbcRevival
         internal static ConfigEntry<string> UpdateUrl;
         internal static ConfigEntry<bool> ShuttleWasd;
         internal static ConfigEntry<float> ControllerGraceSeconds;
+        internal static ConfigEntry<bool> QuestControlsOn;
+        internal static ConfigEntry<bool> SeatWarning;
         internal static ConfigEntry<VrDeviceChoice> VrDevice;
         internal static ConfigEntry<int> VoiceJitterBufferMs;
         internal static ConfigEntry<bool> DirectVoice;
@@ -108,6 +109,10 @@ namespace StbcRevival
         internal static ConfigEntry<float> BridgeWalkRunSpeed;
         internal static ConfigEntry<float> BridgeWalkMouseSensitivity;
         internal static ConfigEntry<float> BridgeWalkEyeHeight;
+        internal enum VrTurning { Smooth, Snap }
+        internal static ConfigEntry<VrTurning> BridgeWalkVrTurning;
+        internal static ConfigEntry<float> BridgeWalkVrTurnSpeed;
+        internal static ConfigEntry<float> BridgeWalkVrSnapAngle;
         internal static ConfigEntry<float> BridgeWalkMaxDistance;
         internal static ConfigEntry<bool> BridgeWalkCollisions;
         internal static ConfigEntry<bool> BridgeWalkWalls;
@@ -200,7 +205,7 @@ namespace StbcRevival
             HullPreview = Config.Bind("Debug", "HullNamePreview", false,
                 "Saves each ship name decal the mod draws as a PNG in the BepInEx folder (hull-name-<ship>.png).");
             BugReportKey = Config.Bind("Debug", "BugReportKey", UnityEngine.KeyCode.F10,
-                "Saves the logs and settings needed for a bug report as one zip in the game folder.");
+                "Saves the logs and settings needed for a bug report, and a description of the game's state, as one zip in the game folder.");
             CrewLogsKey = Config.Bind("Debug", "CrewLogsKey", UnityEngine.KeyCode.F11,
                 "Asks your crewmates for their logs: each one with the mod is asked whether to send theirs (the zip BugReportKey saves), and those that agree arrive in the game folder's CrewLogs folder.");
             RomulanFace = Config.Bind("Avatar", "RomulanFace", false,
@@ -217,8 +222,6 @@ namespace StbcRevival
             KlingonHeadChoice = Config.Bind("Avatar", "KlingonHeadChoice", Math.Max(1, KlingonHead.Value),
                 new ConfigDescription("Which Klingon captain's head the character creator's KLINGON wears: 1 the captain, 2 the flagship's captain "
                                       + "(Revival settings changes it).", new AcceptableValueRange<int>(1, 2)));
-            GameDumpKey = Config.Bind("Debug", "GameDumpKey", UnityEngine.KeyCode.F9,
-                "Testing only: describes the game's state (hail-screen characters, player avatars, sound, the scene) to BepInEx/game-dump.txt.");
             VoiceCommands = Config.Bind("Voice", "VoiceCommands", true,
                 "Experimental: the captain's spoken orders without IBM Watson, recognised offline on this PC. Hold the game's voice "
                 + "command button (or PushToTalkKey) as captain and give an order, as with the original Watson voice commands: "
@@ -286,6 +289,13 @@ namespace StbcRevival
                 "Testing only, Revival voice: record the first 10 seconds of what you send (encoded and decoded again) to BepInEx/voice-loopback.wav.");
             ControllerGraceSeconds = Config.Bind("VR", "ControllerGraceSeconds", 30f,
                 "How long a VR controller the headset stops reporting (resting controllers often go to sleep) still counts as connected before the game's \"controllers disconnected\" warning shows. 0 = the game's own behaviour (at once).");
+            QuestControlsOn = Config.Bind("VR", "QuestControls", false,
+                "Meta Quest controllers through SteamVR (Virtual Desktop, Steam Link): Touch-style buttons, as through Meta Link, instead of the Vive wands' layout. "
+                + "A confirm, B back, X help, Y exterior view, right stick click pause, left stick held to recentre. Needs SteamVR to use the mod's Quest binding "
+                + "(the installer's Quest question sets it up). Only with a Meta/Oculus headset on SteamVR. Takes effect after a restart.");
+            SeatWarning = Config.Bind("VR", "SeatWarning", false,
+                "The game's out-of-bounds warning while seated: the view fades out when your head moves away from your seat or close to your own body. "
+                + "Off by default. Always off while you stand and walk in VR. Your headset's own boundary isn't affected.");
             VrDevice = Config.Bind("VR", "Device", VrDeviceChoice.Auto,
                 "Which VR runtime the game starts: the game tries Oculus first, which crashes some headsets that aren't Oculus Rifts (a Quest through Virtual Desktop). SteamVR = try SteamVR first; Oculus = the game's own order; Auto = SteamVR first when the game is launched with -vrmode openvr or the Oculus runtime (the Oculus/Meta app) is missing or won't load. Whenever SteamVR goes first, Oculus is only tried after it if its runtime loads.");
             ShuttleWasd = Config.Bind("Shuttle", "WasdControls", false,
@@ -293,14 +303,18 @@ namespace StbcRevival
             ShuttleSpeed = Config.Bind("Shuttle", "Speed", 20f, "Shuttle keyboard speed (scene units per second).");
             ShuttleTurnSpeed = Config.Bind("Shuttle", "TurnSpeed", 30f, "Shuttle keyboard turn speed (degrees per second).");
             BridgeWalkEnabled = Config.Bind("Bridge Walk", "Enabled", true,
-                "Experimental, 2D (monitor) mode only: stand up from your seat with the key and walk around the bridge: WASD or arrow keys, "
-                + "mouse to look around, Shift to run, the key again or Escape to sit back down. Crewmates with the mod see you stand and walk. "
-                + "Takes effect after a restart.");
-            BridgeWalkKey = Config.Bind("Bridge Walk", "Key", UnityEngine.KeyCode.F6, "Stands you up and sits you back down (on the bridge, in 2D mode).");
+                "Experimental: stand up from your seat with the key and walk around the bridge: WASD or arrow keys, "
+                + "mouse to look around, Shift to run, the key again or Escape to sit back down. In VR: hold B on the right controller (or press the key) "
+                + "to stand up or sit down, the left stick walks, the right stick turns, and you can walk around your play space. "
+                + "Crewmates with the mod see you stand and walk. Takes effect after a restart.");
+            BridgeWalkKey = Config.Bind("Bridge Walk", "Key", UnityEngine.KeyCode.F6, "Stands you up and sits you back down.");
             BridgeWalkSpeed = Config.Bind("Bridge Walk", "WalkSpeed", 1.4f, "Walking speed, metres per second.");
             BridgeWalkRunSpeed = Config.Bind("Bridge Walk", "RunSpeed", 2.6f, "Speed with Shift held, metres per second.");
             BridgeWalkMouseSensitivity = Config.Bind("Bridge Walk", "MouseSensitivity", 2f, "How fast the mouse turns you while standing.");
-            BridgeWalkEyeHeight = Config.Bind("Bridge Walk", "EyeHeight", 1.62f, "Eye height standing, metres.");
+            BridgeWalkEyeHeight = Config.Bind("Bridge Walk", "EyeHeight", 1.62f, "Eye height standing, metres. In VR, where your eyes are put as you stand up (stand up for real first to play standing).");
+            BridgeWalkVrTurning = Config.Bind("Bridge Walk", "VrTurning", VrTurning.Smooth, "In VR, how the right stick turns you: Smooth, or Snap (in steps, easier on the stomach).");
+            BridgeWalkVrTurnSpeed = Config.Bind("Bridge Walk", "VrTurnSpeed", 60f, "In VR with Smooth turning, degrees per second at full stick.");
+            BridgeWalkVrSnapAngle = Config.Bind("Bridge Walk", "VrSnapAngle", 30f, "In VR with Snap turning, degrees per step.");
             BridgeWalkMaxDistance = Config.Bind("Bridge Walk", "MaxDistance", 15f, "How far from your seat you can walk, metres: keeps you from walking out of the bridge.");
             BridgeWalkCollisions = Config.Bind("Bridge Walk", "Collisions", true, "Walls, floors, ramps and steps stop or carry you (from the bridge's colliders and meshes). Off: walk through everything at seat floor height.");
             BridgeWalkWalls = Config.Bind("Bridge Walk", "Walls", true, "Walls and furniture stop you. Off: walk through them; floors, ramps and steps still carry you (with Collisions on).");
@@ -351,6 +365,8 @@ namespace StbcRevival
             Safely("revival voice capture patches", () => VoiceCapture.Patch(harmony));
             Safely("revival voice patches", () => RevivalVoice.Patch(harmony));
             Safely("revival voice playback patches", () => RevivalPlayback.Patch(harmony));
+            Safely("quest controls", () => StbcRevival.QuestControls.Patch(harmony));
+            Safely("seat warning", () => Walking.SeatWarning.Patch(harmony));
             SteamMode.Install(harmony);
             ShuttleControls.Install();
 
@@ -393,7 +409,6 @@ namespace StbcRevival
             Safely("bug report", BugReport.Update);
             Safely("crew logs", CrewLogs.Update);
             Safely("performance log", PerfLog.Update);
-            Safely("game dump", GameDump.Update);
             Safely("romulan face", StbcRevival.RomulanFace.Update);
             Safely("klingon head", StbcRevival.KlingonHead.Update);
             Safely("hairstyles", StbcRevival.HairStyles.Tick);

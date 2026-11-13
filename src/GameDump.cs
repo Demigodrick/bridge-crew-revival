@@ -10,7 +10,7 @@ using UnityEngine;
 namespace StbcRevival
 {
     /// <summary>
-    /// [Debug] GameDumpKey (F9): describe the game's state to BepInEx/game-dump.txt, with a summary in the log:
+    /// Part of the bug report (BugReportKey, F10): describes the game's state as game-dump.txt in the report's zip:
     /// the hail-screen characters (Romulan captain and the rest, from the bridge's NPCHailingManager), the
     /// player avatar presets (CharacterProfile.VisualPrefab, plus any avatars in the scene), the sound objects
     /// and the scene, with a head-by-head comparison (could an NPC head fit a player avatar: same skeleton,
@@ -18,25 +18,20 @@ namespace StbcRevival
     /// </summary>
     internal static class GameDump
     {
-        private static float lastRun = -10f;
-
-        internal static void Update()
+        /// <summary>The game's state described, for the bug report; a line saying why if it couldn't be.</summary>
+        internal static string Text()
         {
-            if (!Input.GetKeyDown(Plugin.GameDumpKey.Value) || Time.realtimeSinceStartup - lastRun < 3f) return;
-            lastRun = Time.realtimeSinceStartup;
-            var path = Path.Combine(Paths.BepInExRootPath, "game-dump.txt");
             try
             {
                 var report = new StringBuilder();
                 var summary = Run(report);
-                File.WriteAllText(path, report.ToString());
-                foreach (var line in summary) Plugin.Log.LogInfo("Game dump: " + line);
-                Plugin.Log.LogInfo($"Game dump: full details in {path}");
-                RoomBrowser.Show("Game dump saved: BepInEx/game-dump.txt");
+                report.Insert(0, string.Join("\n", summary.ToArray()) + "\n\n");
+                return report.ToString();
             }
             catch (Exception e)
             {
                 Plugin.Log.LogWarning("Game dump failed: " + e);
+                return "Game dump failed: " + e;
             }
         }
 

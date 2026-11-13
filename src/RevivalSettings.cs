@@ -87,6 +87,8 @@ namespace StbcRevival
                 Press = ShipName.Ask,
             },
             Switch("Public crews in VR", () => Plugin.VrRoomPanels),
+            // The game's fade-out when your head leaves your seat (never the headset's own boundary).
+            Switch("VR seat warning", () => Plugin.SeatWarning),
             new Entry
             {
                 Text = () => "Crews listed: " + ContentName(Plugin.CrewContentFilter.Value),

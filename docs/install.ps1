@@ -14,12 +14,16 @@
 # It also asks which language the voice commands are in, English or German (the German model is a second,
 # small download); -VoiceLanguage German / English answers that without asking ($env:STBC_VOICE_LANGUAGE
 # does the same when it's run through "irm | iex").
+# It asks whether you play on a Meta Quest through SteamVR (Virtual Desktop, Steam Link): yes turns on the mod's
+# Quest controller buttons and has SteamVR use the controller layout that goes with them (SteamVR's settings are
+# backed up first); -QuestControls yes / no answers that without asking ($env:STBC_QUEST_CONTROLS).
 param(
     [string]$GameDir = "",
     [switch]$Uninstall,
     [switch]$ImportSave,
     [switch]$NoImport,
-    [string]$VoiceLanguage = ""
+    [string]$VoiceLanguage = "",
+    [string]$QuestControls = ""
 )
 
 $Repo = "Demigodrick/bridge-crew-revival"
@@ -203,6 +207,122 @@ function Install-VoiceLanguage([string]$GameDir, [string]$Tmp, [string]$Choice) 
     }
 }
 
+# A setting in the mod's config (BepInEx\config\stbc.revival.cfg), or "" when it isn't there.
+function Get-RevivalSetting([string]$GameDir, [string]$Section, [string]$Key) {
+    $cfg = Join-Path $GameDir "BepInEx\config\stbc.revival.cfg"
+    if (-not (Test-Path $cfg)) { return "" }
+    $current = ""
+    foreach ($line in Get-Content $cfg) {
+        if ($line -match '^\[(.*)\]') { $current = $Matches[1] }
+        elseif ($current -eq $Section -and $line -match ('^' + [regex]::Escape($Key) + ' = (.*)$')) { return $Matches[1].Trim() }
+    }
+    return ""
+}
+
+function Set-RevivalSetting([string]$GameDir, [string]$Section, [string]$Key, [string]$Value) {
+    $configDir = Join-Path $GameDir "BepInEx\config"
+    New-Item -ItemType Directory -Force -Path $configDir | Out-Null
+    $cfg = Join-Path $configDir "stbc.revival.cfg"
+    $current = ""; $found = $false
+    $lines = @(if (Test-Path $cfg) {
+        foreach ($line in Get-Content $cfg) {
+            if ($line -match '^\[(.*)\]') { $current = $Matches[1] }
+            if ($current -eq $Section -and $line -match ('^' + [regex]::Escape($Key) + ' = ')) { $found = $true; "$Key = $Value" } else { $line }
+        }
+    })
+    # BepInEx reads a section named twice as one, and tidies the file when the game starts.
+    if (-not $found) { $lines += @("", "[$Section]", "", "$Key = $Value") }
+    Set-Content -Path $cfg -Value $lines -Encoding UTF8
+}
+
+# SteamVR's settings file (steamvr.vrsettings in Steam's config folder), or $null.
+function Find-SteamVrSettings {
+    $steam = (Get-ItemProperty -LiteralPath 'HKCU:\Software\Valve\Steam' -ErrorAction SilentlyContinue).SteamPath
+    if (-not $steam) { return $null }
+    $file = Join-Path $steam 'config\steamvr.vrsettings'
+    if (Test-Path -LiteralPath $file) { return $file }
+    return $null
+}
+
+# SteamVR's Touch controller layout for Bridge Crew (app 527100): "on" points it at the mod's ($Binding), keeping what
+# it was beside that file (steamvr-before.json); "off" puts that back. SteamVR's settings are backed up first.
+# Returns what happened, for the installer to say.
+function Set-QuestBinding([string]$Binding, [string]$Mode) {
+    if (Get-Process -Name "vrserver", "vrmonitor" -ErrorAction SilentlyContinue) { return "steamvr-running" }
+    $file = Find-SteamVrSettings
+    if (-not $file) { return "no-steamvr" }
+    $settings = [IO.File]::ReadAllText($file) | ConvertFrom-Json
+    $app = $settings.'steam.app.527100'
+    $keys = @(if ($null -ne $app) { $app.PSObject.Properties.Name | Where-Object { $_ -match '^oculus_touch(?:_.+)?_CurrentURL_legacy$' } })
+    $ours = "BepInEx/vr/quest-binding.json"
+    $beforeFile = Join-Path (Split-Path -Parent $Binding) "steamvr-before.json"
+    $before = @{}
+    if (Test-Path -LiteralPath $beforeFile) {
+        try { (Get-Content -LiteralPath $beforeFile -Raw | ConvertFrom-Json).PSObject.Properties | ForEach-Object { $before[$_.Name] = $_.Value } } catch { }
+    }
+    if ($Mode -eq "on") {
+        if (-not $keys.Count) { return "not-yet" }
+        $url = ([uri]([IO.Path]::GetFullPath($Binding))).AbsoluteUri
+        foreach ($key in $keys) {
+            $prefix = $key.Substring(0, $key.Length - 'CurrentURL_legacy'.Length)
+            foreach ($k in $key, ($prefix + 'AutosaveURL_legacy')) {
+                $now = $app.PSObject.Properties[$k]
+                if ($null -ne $now -and -not ("$($now.Value)" -like "*$ours")) { $before[$k] = $now.Value }
+            }
+            $app | Add-Member -NotePropertyName $key -NotePropertyValue $url -Force
+            $app | Add-Member -NotePropertyName ($prefix + 'AutosaveURL_legacy') -NotePropertyValue $url -Force
+            $app | Add-Member -NotePropertyName ($prefix + 'NeedToUpdateAutosave_legacy') -NotePropertyValue $false -Force
+        }
+        [IO.File]::WriteAllText($beforeFile, ($before | ConvertTo-Json), (New-Object Text.UTF8Encoding($false)))
+    } else {
+        $keys = @($keys | Where-Object { "$($app.$_)" -like "*$ours" })
+        if (-not $keys.Count) { return "unchanged" }
+        foreach ($key in $keys) {
+            $prefix = $key.Substring(0, $key.Length - 'CurrentURL_legacy'.Length)
+            foreach ($k in $key, ($prefix + 'AutosaveURL_legacy')) {
+                if ($before.ContainsKey($k)) { $app | Add-Member -NotePropertyName $k -NotePropertyValue $before[$k] -Force }
+                elseif ("$($app.$k)" -like "*$ours") { $app.PSObject.Properties.Remove($k) }
+            }
+        }
+    }
+    $json = $settings | ConvertTo-Json -Depth 100
+    $null = $json | ConvertFrom-Json   # still readable before it's written
+    Copy-Item -LiteralPath $file -Destination ($file + '.before-revival-quest.bak') -Force
+    [IO.File]::WriteAllText($file, $json, (New-Object Text.UTF8Encoding($false)))
+    return "done"
+}
+
+# Quest controller buttons through SteamVR: asks (unless told), then sets [VR] QuestControls and SteamVR's layout.
+function Install-QuestControls([string]$GameDir, [string]$Choice) {
+    $binding = Join-Path $GameDir "BepInEx\vr\quest-binding.json"
+    if (-not (Test-Path $binding)) { return }
+    $on = (Get-RevivalSetting $GameDir "VR" "QuestControls") -eq "true"
+    if (-not $Choice) {
+        if (-not [Environment]::UserInteractive) { return }
+        $default = if ($on) { "Y/n" } else { "y/N" }
+        $answer = try { Read-Host "       Playing on a Meta Quest through SteamVR (Virtual Desktop, Steam Link)? Use Quest controller buttons? [$default]" } catch { "" }
+        $Choice = if ($answer -match '^\s*[yY]') { "yes" } elseif ($answer -match '^\s*[nN]') { "no" } elseif ($on) { "yes" } else { "no" }
+    }
+    try {
+        if ($Choice -eq "yes") {
+            Set-RevivalSetting $GameDir "VR" "QuestControls" "true"
+            switch (Set-QuestBinding $binding "on") {
+                "done" { Ok "Quest controller buttons on (A confirm, B back, X help, Y outside view, hold B to stand up and walk)" }
+                "steamvr-running" { Warn "Quest controller buttons are on, but SteamVR is running: quit it and run the installer again so SteamVR uses them." }
+                "no-steamvr" { Warn "Quest controller buttons are on, but SteamVR's settings weren't found. In SteamVR's controller settings for Bridge Crew, choose `"Bridge Crew Revival: Quest controllers`"." }
+                "not-yet" { Warn "Quest controller buttons are on, but SteamVR hasn't seen the game with your Quest yet: play once in VR, quit the game and SteamVR, then run the installer again." }
+            }
+        } elseif ($on) {
+            Set-RevivalSetting $GameDir "VR" "QuestControls" "false"
+            $result = Set-QuestBinding $binding "off"
+            if ($result -eq "steamvr-running") { Warn "Quest controller buttons are off; quit SteamVR and run the installer again to give SteamVR its own layout back." }
+            else { Ok "Quest controller buttons off" }
+        }
+    } catch {
+        Warn "Quest controller buttons: $($_.Exception.Message). Run the installer again to retry."
+    }
+}
+
 function Step([string]$Text) { Write-Host ""; Write-Host $Text -ForegroundColor Cyan }
 function Ok([string]$Text) { Write-Host "  OK   $Text" -ForegroundColor Green }
 function Info([string]$Text) { Write-Host "       $Text" }
@@ -277,7 +397,7 @@ function Set-PvpTest([string]$GameDir, [bool]$On) {
     Set-Content -Path $cfg -Value $lines -Encoding UTF8
 }
 
-function Install-BridgeCrewRevival([string]$GameDir, [bool]$Uninstall, [string]$Here, [string]$Import, [string]$Voice) {
+function Install-BridgeCrewRevival([string]$GameDir, [bool]$Uninstall, [string]$Here, [string]$Import, [string]$Voice, [string]$Quest) {
     [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
 
     Write-Host "Bridge Crew Revival installer" -ForegroundColor Cyan
@@ -320,6 +440,8 @@ function Install-BridgeCrewRevival([string]$GameDir, [bool]$Uninstall, [string]$
         $native = Join-Path $GameDir "BepInEx\native"
         foreach ($name in "rnnoise.dll", "speexdsp.dll") { Remove-Item -LiteralPath (Join-Path $native $name) -ErrorAction SilentlyContinue }
         Remove-Item -LiteralPath (Join-Path $GameDir "BepInEx\bridges\Bridge Designer.exe") -ErrorAction SilentlyContinue
+        # SteamVR's own controller layout back, if the Quest buttons had it use the mod's.
+        try { if ((Set-QuestBinding (Join-Path $GameDir "BepInEx\vr\quest-binding.json") "off") -eq "steamvr-running") { Warn "SteamVR is running: quit it and run the uninstaller again to give SteamVR its own Quest layout back." } } catch { }
         if ((Test-Path $native) -and -not (Get-ChildItem -LiteralPath $native -Force)) { Remove-Item -LiteralPath $native -ErrorAction SilentlyContinue }
         # Without winhttp.dll BepInEx doesn't load at all; the BepInEx folder is left for you to delete.
         foreach ($name in "winhttp.dll", "doorstop_config.ini", ".doorstop_version", "changelog.txt") {
@@ -417,7 +539,7 @@ function Install-BridgeCrewRevival([string]$GameDir, [bool]$Uninstall, [string]$
             Copy-Item -Path (Join-Path $nativeSource "*.dll") -Destination $native -Force
         }
         # Ship classes and bridge sets of our own, beside plugins\ in the zip.
-        foreach ($d in "ships", "bridges") {
+        foreach ($d in "ships", "bridges", "vr") {
             $assetSource = Join-Path (Split-Path -Parent $source) $d
             if (Test-Path $assetSource) {
                 $assetTarget = Join-Path $GameDir "BepInEx\$d"
@@ -428,6 +550,7 @@ function Install-BridgeCrewRevival([string]$GameDir, [bool]$Uninstall, [string]$
         Install-Designer $GameDir (Split-Path -Parent $source)
         Install-Vosk $GameDir $tmp
         Install-VoiceLanguage $GameDir $tmp $Voice
+        Install-QuestControls $GameDir $Quest
     } finally {
         Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue
     }
@@ -469,7 +592,9 @@ try {
     $import = if ($ImportSave) { "yes" } elseif ($NoImport) { "no" } else { "" }
     $asked = if ($VoiceLanguage) { $VoiceLanguage } else { $env:STBC_VOICE_LANGUAGE }
     $voice = if ($asked -match '^\s*[gGdD]') { "German" } elseif ($asked -match '^\s*[eE]') { "English" } else { "" }
-    Install-BridgeCrewRevival -GameDir $GameDir -Uninstall:$Uninstall.IsPresent -Here $PSScriptRoot -Import $import -Voice $voice
+    $askedQuest = if ($QuestControls) { $QuestControls } else { $env:STBC_QUEST_CONTROLS }
+    $quest = if ($askedQuest -match '^\s*[yY1tT]') { "yes" } elseif ($askedQuest -match '^\s*[nN0fF]') { "no" } else { "" }
+    Install-BridgeCrewRevival -GameDir $GameDir -Uninstall:$Uninstall.IsPresent -Here $PSScriptRoot -Import $import -Voice $voice -Quest $quest
 } catch {
     Write-Host ""
     Write-Host "  Error: $($_.Exception.Message)" -ForegroundColor Red

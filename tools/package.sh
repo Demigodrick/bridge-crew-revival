@@ -32,8 +32,9 @@ for lib in rnnoise speexdsp; do
   fi
   cp "$dll" "$out/native/"
 done
-# The models of our own ship classes and bridge sets (BepInEx/ships, BepInEx/bridges), beside plugins/ in the zip.
-for d in ships bridges; do [ -d "$root/assets/$d" ] && mkdir -p "$out/$d" && cp -r "$root/assets/$d/." "$out/$d/"; done
+# The models of our own ship classes and bridge sets (BepInEx/ships, BepInEx/bridges) and the Quest controllers' SteamVR
+# layout (BepInEx/vr), beside plugins/ in the zip.
+for d in ships bridges vr; do [ -d "$root/assets/$d" ] && mkdir -p "$out/$d" && cp -r "$root/assets/$d/." "$out/$d/"; done
 # The bridge designer: one program each for Windows and Linux with .NET inside (nothing to install first), trimmed
 # to what it uses.
 mkdir -p "$out/designer"
@@ -77,6 +78,9 @@ asks); --uninstall (Linux), -Uninstall or uninstall.cmd (Windows) removes it str
 Bridge designer (optional): move, turn and hide the pieces of a bridge, or add parts, in your browser. The
 installer puts it in the game's BepInEx/bridges folder: run "Bridge Designer.exe" (Windows) or bridge-designer
 (Linux) there. Layouts are saved beside it; in a crew, everyone sees the host's bridge.
+
+Quest controllers through SteamVR (Virtual Desktop, Steam Link): the installer asks whether to use Quest-style
+buttons (-QuestControls yes on Windows, --quest-controls=yes on Linux answers it). SteamVR must be closed.
 
 Voice commands: the installer asks whether the orders are in English or German (-VoiceLanguage German on
 Windows, --voice-language=german on Linux answers it).

@@ -66,6 +66,10 @@ any station** in REVIVAL SETTINGS (experimental).
   the game's `BepInEx/bridges` folder (`Bridge Designer.exe` on Windows); the mod puts your layout on, and in a
   crew everyone sees the host's. The Nova and the Sovereign each have their own copy of the Aegis bridge, with a
   layout of its own.
+- **Walk around the bridge in VR** too: hold B on the right controller (with the Quest buttons on) or press
+  F6 to stand up, then walk around your room or use the left stick, and turn with the right stick.
+- **Quest controller buttons** for a Meta Quest through SteamVR (Virtual Desktop, Steam Link): A, B, X and Y
+  work as they do through Meta Link. The installer asks whether you want them.
 - **F10** saves a bug report in one keypress, and if the game crashes, a crash report is saved for you on the next launch.
 - Most of it can be switched on and off from **REVIVAL SETTINGS** on the shuttle console.
 
@@ -225,3 +229,5 @@ the game on Steam; this repository contains no game code or assets, only patches
 Credits: the Nova-class ship is Raul Mamoru's model "Nova class U.S.S. Equinox"
 ([TrekMeshes](https://trekmeshes.eu/download/dl225/NovaclassUSSEquinox)), included with his permission; see
 `assets/ships/Nova/CREDITS.txt`. The Sovereign-class ship's model is by YannikB98, made for the mod.
+VR walking and the Quest controller buttons come from BamaSuperman's
+[Bridge Crew VR add-ons](https://github.com/BamaSuperman/bridge-crew-vr-addons) (MIT).

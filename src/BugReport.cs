@@ -10,7 +10,8 @@ namespace StbcRevival
     /// <summary>
     /// [Debug] BugReportKey (F10): save what a bug report needs as one zip in the game folder:
     /// BepInEx's log, the game's own log, the mod's and BepInEx's settings, the last Ubisoft import result,
-    /// and a summary of versions and where the game was. No save data or personal files.
+    /// a summary of versions and where the game was, and a description of the game's state (GameDump). No save data
+    /// or personal files.
     /// </summary>
     internal static class BugReport
     {
@@ -47,6 +48,7 @@ namespace StbcRevival
             var files = new List<KeyValuePair<string, byte[]>>
             {
                 Entry("summary.txt", Encoding.UTF8.GetBytes(Summary())),
+                Entry("game-dump.txt", Encoding.UTF8.GetBytes(GameDump.Text())),
             };
             void Add(string name, string path)
             {
