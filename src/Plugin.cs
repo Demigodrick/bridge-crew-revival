@@ -264,7 +264,7 @@ namespace StbcRevival
             UpdateUrl = Config.Bind("Updates", "VersionUrl", "",
                 "Where to read the latest version number. Empty = the official website's version.txt.");
             VoiceJitterBufferMs = Config.Bind("Voice", "JitterBufferMs", 100,
-                "Voice chat: how much of a crewmate's speech is held before it starts playing (milliseconds), so small delays on the way don't make it choppy. It's where each crewmate's cushion starts: it grows by itself (up to 400) when their voice keeps arriving late, and eases back when it doesn't. More is smoother but later; 0 = the game's own (plays each piece as it arrives).");
+                "Voice chat: how much of a crewmate's speech is held before it starts playing (milliseconds), so small delays on the way don't make it choppy. It's where each crewmate's cushion starts: it grows by itself (up to 120) when their voice keeps arriving late, and eases back when it doesn't. More is smoother but later; 0 = the game's own (plays each piece as it arrives).");
             DirectVoice = Config.Bind("Voice", "DirectVoice", true,
                 "Steam mode: voice chat goes straight between players over Steam, instead of through the host's game, so a hitch on the host's "
                 + "game or a lost packet doesn't hold everyone's voice up. Crewmates without it (or whom Steam can't reach directly) still get your voice through the host.");

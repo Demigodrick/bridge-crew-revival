@@ -17,14 +17,18 @@ namespace StbcRevival
     /// the game's player takes), so Wwise has that much in hand for the rest of the burst. The cushion adapts,
     /// per crewmate: it starts at [Voice] JitterBufferMs (0 = the game's behaviour); when their voice runs dry in
     /// the middle of a burst (it came late), playback holds again until there's a cushion, and the cushion grows
-    /// (up to 400 ms); each burst that plays through shrinks it back a little. A good connection stays quick,
+    /// (up to 120 ms: Wwise holds no more); each burst that plays through shrinks it back a little. A good connection stays quick,
     /// a bad one gets smoother. Every 30 s, for each crewmate heard, the log gives the bursts, the times the
     /// voice ran dry, the voice frames that never arrived (filled in by the decoder), and the cushion.
     /// </summary>
     internal static class VoiceJitter
     {
         private const float BurstGap = 0.25f; // seconds of no voice that end a burst of speech
-        private const int MaxCushionMs = 400, GrowMs = 40, ShrinkMs = 10;
+        private const int MaxCushionMs = 120, GrowMs = 20, ShrinkMs = 10;
+        // Wwise's voice buffer holds 4096 samples (170 ms at the game's 24 kHz) and a hand-over larger than what's
+        // left in it overwrites audio not yet played: crackle and static, worst on the worst connections, whose
+        // cushion could grow to 400 ms. A cushion is handed over to an empty buffer, so it stays under this (120 ms).
+        private const int MaxCushionSamples = 3000;
         private const int Piece = 4000;       // samples per hand-over: what the player's own 4096-sample clip takes
 
         private static readonly AccessTools.FieldRef<DaikonForge.VoIP.AudioPlayerBase, AudioSource> Source =
@@ -73,7 +77,7 @@ namespace StbcRevival
         private static int Target(WwiseAudioPlayer player, Speaker s)
         {
             int rate = SampleRate(player) > 0 ? SampleRate(player) : 16000;
-            return rate * s.CushionMs / 1000;
+            return Math.Min(MaxCushionSamples, rate * s.CushionMs / 1000);
         }
 
         // Decoded voice for Wwise: within a burst, straight through; at the start of one, held until there's a

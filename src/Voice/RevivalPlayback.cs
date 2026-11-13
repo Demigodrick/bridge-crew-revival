@@ -2,7 +2,11 @@
 // their volume, mute and who-can-hear-whom all apply as for game voice. Packets go into a JitterBuffer per crewmate
 // (main thread); one playout thread pops every crewmate's buffer every 20 ms (decoding happens there, under the
 // buffer's lock), time-stretched to hold its delay (Playout), into an output queue; the main thread hands what's
-// queued to the crewmate's WwiseAudioPlayer, keeping it far enough ahead of what it has played to keep playing.
+// queued to the crewmate's WwiseAudioPlayer, keeping Wwise about WwiseAheadMs ahead of what it has played.
+// Wwise plays what it's handed at once, at the voice rate, and silence when it has nothing (it doesn't skip ahead),
+// so how far ahead it is, is modelled on our own clock (Speaker.WwiseEndMs). The player's Unity "tracking" clip,
+// which only starts once 2048 samples are handed over and pauses when it catches up, is bookkeeping for lip sync:
+// pacing by it left Wwise all but empty from each sentence's start, and every hitch of the game was a gap.
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -21,9 +25,10 @@ namespace StbcRevival
     {
         private const double LiveMs = 1000, StaleMs = 10000;
         private const int MaxCatchUp = 5;           // playout ticks made up at once after the thread was held up
-        private const int PlayerQueueMs = 60;       // how far ahead of the player's playback we hand audio over, at least
+        private const int WwiseAheadMs = 80;        // how far ahead of Wwise's playback we keep it: covers a game hitch
+        private const int WwiseStartMs = 60;        // a sentence starts once this much is ready, handed over at once
+        private const int WwiseRingSamples = 3000;  // never more ahead than this: Wwise's voice buffer holds 4096
         private const int DropMarginMs = 100;       // at a burst's start, more queued than the target plus this is cut back
-        private const int PlayerStartSamples = 2048; // a paused WwiseAudioPlayer plays again once this much is handed over
         private const int MaxOutputFrames = 50;     // 1 s: a main thread stuck that long loses the oldest
         private const int EchoChannels = 3;         // crewmates the echo canceller tells apart (the rest share)
         private const int EchoResyncMs = 40;        // a crewmate's echo timeline further than this off is set anew
@@ -63,7 +68,8 @@ namespace StbcRevival
             public int RateWas;
             public Samples Samples;
             public JitterStats Window = new JitterStats();               // counters since the last Describe
-            public int Played, Dropped, NotPlayed, Restarts;
+            public int Played, Dropped, NotPlayed, DryOuts;
+            public double WwiseEndMs;                                     // when Wwise will have played all it was handed
             public long DelaySumMs; public int DelaySamples;              // actual delay: buffer depth + player backlog
             public int EchoChannel;
             public long EchoAt = -1;                                      // where their next audio goes on the echo timeline
@@ -261,9 +267,9 @@ namespace StbcRevival
                           + (spedUp + slowedDown > 0 ? $", sped up by {spedUp} ms and slowed down by {slowedDown} ms to hold the buffer" : "")
                           + (s.Dropped + overflow > 0 ? $", {s.Dropped + overflow} frames dropped after a hold-up" : "")
                           + (s.NotPlayed > 0 ? $", {s.NotPlayed} frames not played (no voice player, muted or out of earshot)" : "")
-                          + (s.Restarts > 0 ? $", voice player restarted {s.Restarts} times after stalling" : "");
+                          + (s.DryOuts > 0 ? $", Wwise ran out mid-sentence {s.DryOuts} times (the game held up)" : "");
             s.Window = new JitterStats();
-            s.Played = s.Dropped = s.NotPlayed = s.Restarts = 0;
+            s.Played = s.Dropped = s.NotPlayed = s.DryOuts = 0;
             s.DelaySumMs = 0;
             s.DelaySamples = 0;
             return line;
@@ -312,32 +318,46 @@ namespace StbcRevival
             int viewId = info.View.LJIBDPHGLMM; // viewID
             float volume = Mathf.Clamp01(voip.GetChannelVolume(viewId) * voip.GetVolumeForPlayer(info.Player));
             bool burstStart = false;
+            int rate = VoiceFormat.PlaybackRate;
+            int maxAheadMs = Math.Min(WwiseAheadMs, WwiseRingSamples * 1000 / rate);
+            double now = NowMs;
             while (true)
             {
                 OutFrame frame;
                 lock (s.Output)
                 {
                     if (s.Output.Count == 0) break;
-                    int target = QueueTargetMs(player);
-                    if (s.Output.Peek().BurstStart && s.Output.Count * VoiceFormat.FrameMs > target + DropMarginMs)
+                    double ahead = Math.Max(0, s.WwiseEndMs - now);
+                    if (ahead == 0)
                     {
-                        // The main thread was held up: start this burst no later than usual.
-                        while (s.Output.Count * VoiceFormat.FrameMs > target)
+                        // Wwise is idle: a sentence starts here (or one ran dry). Wait for a start's worth, unless
+                        // no more is coming (a short word), then hand it over at once.
+                        int ready = s.Output.Count * VoiceFormat.FrameMs;
+                        if (ready < WwiseStartMs && s.Buffer.Playing) break;
+                        if (s.Output.Peek().BurstStart && ready > maxAheadMs + DropMarginMs)
                         {
-                            s.Spare.Push(s.Output.Dequeue().Pcm);
-                            s.Dropped++;
+                            // The main thread was held up: start this burst no later than usual.
+                            while (s.Output.Count * VoiceFormat.FrameMs > maxAheadMs)
+                            {
+                                s.Spare.Push(s.Output.Dequeue().Pcm);
+                                s.Dropped++;
+                            }
+                            burstStart = true; // what's left starts the burst
                         }
-                        burstStart = true; // what's left starts the burst
                     }
-                    if (QueuedMs(player) >= target) break;
+                    if (ahead + VoiceFormat.FrameMs > maxAheadMs) break;
                     frame = s.Output.Dequeue();
+                    // Mid-sentence, Wwise had run out before this frame: a gap was heard.
+                    if (ahead == 0 && !frame.BurstStart && !burstStart && s.WwiseEndMs > 0) s.DryOuts++;
                 }
                 if (frame.BurstStart || burstStart || !s.Configured) Configure(s, player);
                 burstStart = false;
                 int n = frame.Pcm.Length;
                 if (volume != 1f)
                     for (int i = 0; i < n; i++) frame.Pcm[i] *= volume;
-                Remember(s, player, frame.Pcm, n);
+                double start = Math.Max(now, s.WwiseEndMs);
+                Remember(s, frame.Pcm, n, start);
+                s.WwiseEndMs = start + n * 1000.0 / rate;
                 s.Samples.Resize(n);
                 s.Samples.CopyFrom(frame.Pcm, 0, 0, n * 4);
                 player.SetReceived(n);
@@ -345,32 +365,26 @@ namespace StbcRevival
                 s.Played++;
                 lock (s.Output) s.Spare.Push(frame.Pcm);
             }
-            // A paused player (it pauses whenever it has played all it was given) only starts again once it has been
-            // handed PlayerStartSamples since; the target above covers that, and this catches one still paused with a
-            // full queue (we've stopped handing it more), so we never wait on it while it waits on us. With less
-            // queued it's left to start itself, as the game's own voice does, rather than starting on a sliver.
+            // The tracking clip (lip sync) only starts by itself once 2048 samples have been handed over since it
+            // paused; with Wwise kept 80 ms ahead that can be never at 24 kHz. Started whenever it has some to play.
             var source = Source(player);
-            if (source != null && !source.isPlaying && QueuedMs(player) >= QueueTargetMs(player))
-            {
-                source.Play();
-                s.Restarts++;
-            }
+            if (source != null && !source.isPlaying && QueuedMs(player) > 0) source.Play();
             if (s.Buffer.Playing)
             {
                 // What a word heard now waits: the jitter buffer's depth, plus decoded audio not yet played.
                 int output;
                 lock (s.Output) output = s.Output.Count;
-                s.DelaySumMs += s.Buffer.DepthMs + s.Playout.HeldMs + output * VoiceFormat.FrameMs + QueuedMs(player);
+                s.DelaySumMs += s.Buffer.DepthMs + s.Playout.HeldMs + output * VoiceFormat.FrameMs + (long)Math.Max(0, s.WwiseEndMs - NowMs);
                 s.DelaySamples++;
             }
         }
 
-        // This frame on the echo timeline, where it will play: after what the player has queued. Consecutive frames
-        // follow on from each other (the player plays them back to back); a new burst, or an estimate gone too far
-        // from where the last one ended (a stall), starts the timeline afresh.
-        private static void Remember(Speaker s, WwiseAudioPlayer player, float[] pcm, int n)
+        // This frame on the echo timeline, where it will play: startMs, when Wwise gets to it. Consecutive frames
+        // follow on from each other (Wwise plays them back to back); a new burst, or an estimate gone too far from
+        // where the last one ended, starts the timeline afresh.
+        private static void Remember(Speaker s, float[] pcm, int n, double startMs)
         {
-            long due = (long)((NowMs + QueuedMs(player)) * EchoReference.SamplesPerMs);
+            long due = (long)(startMs * EchoReference.SamplesPerMs);
             if (s.EchoAt < 0 || Math.Abs(s.EchoAt - due) > EchoResyncMs * EchoReference.SamplesPerMs) s.EchoAt = due;
             int room = n * VoiceFormat.SampleRate / VoiceFormat.PlaybackRate + 64;
             if (s.Echo48.Length < room) s.Echo48 = new float[room];
@@ -401,16 +415,6 @@ namespace StbcRevival
             if (controller == null) return null;
             var player = OutputDevice(controller) as WwiseAudioPlayer;
             return player != null && Source(player) != null ? player : null;
-        }
-
-        // How far ahead to keep the player: PlayerQueueMs, but never less than what a paused player needs handed over
-        // to play again, plus a frame. At 24 kHz 60 ms is 1440 samples, short of the 2048 it waits for: playback
-        // stalled after every pause until something else nudged it (late, choppy voice).
-        private static int QueueTargetMs(WwiseAudioPlayer player)
-        {
-            int rate = SampleRate(player) > 0 ? SampleRate(player) : VoiceFormat.PlaybackRate;
-            int startMs = (int)((PlayerStartSamples * 1000L + rate - 1) / rate);
-            return Math.Max(PlayerQueueMs, startMs + VoiceFormat.FrameMs);
         }
 
         // What the player has been handed and not yet played (the game's own bookkeeping, as its BatchUpdate keeps it).
