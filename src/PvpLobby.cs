@@ -135,7 +135,7 @@ namespace StbcRevival
             if (!Picked) return;
             __0 = GameMode;
             // The menu's mode back to "none" (Play set Quick), so picking Quick afterwards counts as a change.
-            foreach (var menu in UnityEngine.Object.FindObjectsOfType<ConsoleMainMenu>())
+            foreach (var menu in Tracked.All<ConsoleMainMenu>())
                 ModeField?.SetValue(menu, Enum.ToObject(ModeField.FieldType, 4));
             if (NovaPlayerManager.IEFBKOMBFGO != null) NovaPlayerManager.IEFBKOMBFGO.MaxNumPlayers = PvpRoles.Slots;
             Plugin.Log.LogInfo($"PvP: looking for a PvP crew (game mode {GameMode}, {PvpRoles.Slots} players), or hosting one");

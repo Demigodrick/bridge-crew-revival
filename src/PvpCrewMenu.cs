@@ -46,7 +46,7 @@ namespace StbcRevival
             var mine = new bool[ai.Length];   // roles a player on your ship holds (besides you)
             var theirs = new bool[ai.Length]; // roles a player on the other ship holds
             string myShip = PvpShips.Mine ?? "A";
-            foreach (var player in UnityEngine.Object.FindObjectsOfType<NovaPlayerInfo>())
+            foreach (var player in Tracked.All<NovaPlayerInfo>())
             {
                 if (player == null || player.AOLEJMABHPE || player.AOMGCCGDJJC || !(player.Station is NovaStation station)) continue; // you, a bot
                 int role = (int)station.OGBAPMIPPID;

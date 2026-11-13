@@ -441,7 +441,7 @@ namespace StbcRevival
         {
             if (Bound == null) return;
             string mine = PvpShips.Mine;
-            foreach (var player in UnityEngine.Object.FindObjectsOfType<NovaPlayerInfo>())
+            foreach (var player in Tracked.All<NovaPlayerInfo>())
             {
                 if (player == null) continue;
                 bool other;

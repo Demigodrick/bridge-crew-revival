@@ -84,7 +84,7 @@ namespace StbcRevival
             if (PvpRouting.Context != null) found["context"] = $"ship {PvpRouting.Context}'s code context is still set outside its code";
 
             // Players and bots.
-            foreach (var player in UnityEngine.Object.FindObjectsOfType<NovaPlayerInfo>())
+            foreach (var player in Tracked.All<NovaPlayerInfo>())
             {
                 if (player == null) continue;
                 var station = player.Station as NovaStation;

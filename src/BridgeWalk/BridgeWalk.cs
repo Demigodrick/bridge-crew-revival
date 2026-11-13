@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using HarmonyLib;
 using SVR;
@@ -108,7 +109,7 @@ namespace StbcRevival.Walking
         {
             if (Time.unscaledTime - cacheAt > 1f)
             {
-                cache = UnityEngine.Object.FindObjectsOfType<NovaPlayerInfo>();
+                cache = Tracked.All<NovaPlayerInfo>().ToArray();
                 cacheAt = Time.unscaledTime;
             }
             return cache;
@@ -159,6 +160,8 @@ namespace StbcRevival.Walking
         private static Type standPhase;
         public static NovaPlayerInfo Me;
         public static float Speed;
+        /// <summary>How far your floor height changed in the last walk update (metres, up positive): StutterTrace.</summary>
+        public static float LastStep;
         public static readonly Pose Pose = new Pose();
 
         private static Transform pawn;
@@ -293,7 +296,15 @@ namespace StbcRevival.Walking
 
         public static void Tick(bool typing)
         {
+            LastStep = 0f;
             if (!Standing) return;
+            float startHeight = pawn != null ? Vector3.Dot(pawn.position - (Basis != null ? Basis.position : Vector3.zero), Up) : 0f;
+            try { TickInner(typing); }
+            finally { if (Standing && pawn != null) LastStep = Vector3.Dot(pawn.position - (Basis != null ? Basis.position : Vector3.zero), Up) - startHeight; }
+        }
+
+        private static void TickInner(bool typing)
+        {
             if (pawn == null || cam == null || Me == null || Bridge.Phase() != standPhase) { SitDown("left " + Bridge.PlaceName(standPhase)); return; }
             // The bridge's meshes finished reading after you stood up: from now on they carry you.
             if (!floorFromGeometry && Plugin.BridgeWalkCollisions.Value && WalkMesh.ReadyFor(Basis)) floorFromGeometry = true;
@@ -1071,7 +1082,10 @@ namespace StbcRevival.Walking
 
         private static void AfterLateUpdate()
         {
-            if (Walker.Standing || Remotes.All.Count > 0) BodyAnim.ApplyAll();
+            if (!Walker.Standing && Remotes.All.Count == 0) return;
+            long started = System.Diagnostics.Stopwatch.GetTimestamp();
+            BodyAnim.ApplyAll();
+            StutterTrace.Add("walk animation", System.Diagnostics.Stopwatch.GetTimestamp() - started);
         }
     }
 }

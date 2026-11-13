@@ -428,7 +428,7 @@ namespace StbcRevival
         private static void SeatPlayers(Change c)
         {
             if (c.T == null || c.T.GetComponentInChildren<NovaStation>(true) == null) return;
-            foreach (var player in UnityEngine.Object.FindObjectsOfType<NovaPlayerInfo>())
+            foreach (var player in Tracked.All<NovaPlayerInfo>())
             {
                 var station = player == null ? null : player.Station;
                 if (station == null || player.PawnObject == null || !station.transform.IsChildOf(c.T)) continue;
