@@ -89,20 +89,29 @@ namespace StbcRevival
             var kept = new HashSet<UnityEngine.Object>(SameObject.Instance);
             foreach (var c in All<T>()) kept.Add(c);
             var missed = new List<string>();
-            foreach (var o in UnityEngine.Object.FindObjectsOfType<T>())
+            var found = UnityEngine.Object.FindObjectsOfType<T>();
+            var real = new HashSet<UnityEngine.Object>(SameObject.Instance);
+            foreach (var o in found) real.Add(o);
+            foreach (var o in kept)
+                if (!real.Contains(o))
+                {
+                    var g = ((Component)o).gameObject;
+                    missed.Add($"{o.GetType().Name} on {g.name} is in the list but not in the scene (scene handle {g.scene.GetHashCode()})");
+                }
+            foreach (var o in found)
             {
                 if (kept.Contains(o)) continue;
                 bool known;
                 lock (gate) { known = made[key].Contains(o); made[key].Add(o); }
                 var go = o.gameObject;
-                missed.Add($"{o.GetType().Name} on {go.name} (scene '{go.scene.name}' valid {go.scene.IsValid()}, active {go.activeInHierarchy}, "
+                missed.Add($"{o.GetType().Name} on {go.name} (scene '{go.scene.name}' valid {go.scene.IsValid()}, handle {go.scene.GetHashCode()}, active {go.activeInHierarchy}, "
                     + (known ? "kept but left out of the list" : "never seen being made") + ")");
             }
             if (missed.Count == 0) return;
             bool again;
             lock (gate) { again = !missedBefore.Add(key); if (again) patched.Remove(key); }
-            Plugin.Log.LogWarning($"Tracked: the list of {key.Name} missed {missed.Count}: {string.Join("; ", missed.ToArray())}"
-                + (again ? "; it missed before, so they're searched for as before" : "; they're in the list now"));
+            Plugin.Log.LogWarning($"Tracked: the list of {key.Name} was wrong about {missed.Count}: {string.Join("; ", missed.ToArray())}"
+                + (again ? "; it missed before, so they're searched for as before" : "; the missed ones are in the list now"));
         }
 
         /// <summary>The T objects in the loaded scenes that are active, as FindObjectsOfType&lt;T&gt;() gives them.</summary>
@@ -133,8 +142,10 @@ namespace StbcRevival
         // In a scene (DontDestroyOnLoad's too), not a prefab or other asset.
         private static bool InScene(GameObject go)
         {
+            // On this Unity (5.4) an object kept between scenes reports a scene that isn't "valid", with no name,
+            // but it has a handle (GetHashCode gives it); an asset's is 0.
             var scene = go.scene;
-            return scene.IsValid() || scene.name == "DontDestroyOnLoad";
+            return scene.IsValid() || scene.GetHashCode() != 0;
         }
 
         /// <summary>
