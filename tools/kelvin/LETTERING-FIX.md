@@ -30,3 +30,9 @@ checks pass. Actual Unity compression and successful in-game painting still need
 runtime check. Expected: all three DXT5/no-block warnings disappear, then the custom
 crew name and registry appear on the saucer and both nacelles. Check a changed name
 and a second mission as well. This patch has not been installed over the user's release.
+
+Second failure reproduced after fixing DXT1: all three painting jobs threw NullReferenceException.
+KelvinPaint static initializers captured EnterprisePlain before that style was initialized
+in the other HullName partial file. Fix: create the paint definitions lazily after type
+initialization. A reflection regression check fails on the previous build (null style)
+and passes on the corrected build for all four lettering lines. Both fixes are required.

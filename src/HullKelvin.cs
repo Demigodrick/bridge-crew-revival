@@ -32,7 +32,11 @@ namespace StbcRevival
         private static Line KelvinNacelleLine() => new Line { Shape = Shape.Straight, Cx = 1120, Cy = 183, Cap = 32,
             Says = Says.Registry, Reference = "NCC-1701", ReferenceLength = 335, MaxLength = 500, Tracking = .12f, Style = EnterprisePlain };
 
-        private static readonly KelvinPaint[] kelvinPaints =
+        // HullName spans several files: their static field order follows compiler input order.
+        // Resolve EnterprisePlain only after the entire type has finished initializing.
+        private static KelvinPaint[] kelvinPaintCache;
+        private static KelvinPaint[] kelvinPaints => kelvinPaintCache ?? (kelvinPaintCache = CreateKelvinPaints());
+        private static KelvinPaint[] CreateKelvinPaints() => new KelvinPaint[]
         {
             new KelvinPaint
             {
