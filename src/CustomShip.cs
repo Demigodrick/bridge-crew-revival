@@ -36,7 +36,7 @@ namespace StbcRevival
     {
         // ---- the classes ----
 
-        private static readonly CustomShip[] ships = { Nova(), Sovereign(), AbramsEnterprise() };
+        private static readonly CustomShip[] ships = { Nova(), Sovereign(), AbramsEnterprise(), Defiant() };
 
         /// <summary>Every ship class there is (whether its model is on this PC or not), in the ship box's order.</summary>
         internal static IList<CustomShip> All => ships;
@@ -116,6 +116,33 @@ namespace StbcRevival
                 windowPart = "m023_BridgeWindow",
                 // The saucer's name and registry and the nacelles' registry (HullKelvin).
                 lettered = new[] { "tex_41_SaucerTop_jpg.png", "tex_29_NacelleOutside_jpg.png", "tex_30_NacelleOutsideLeft_jp.png" },
+            };
+        }
+
+        private static CustomShip Defiant()
+        {
+            var weapons = new Dictionary<string, Vector3>
+            {
+                // Forward torpedo launchers in the nose deflector pod:
+                ["Tube 1"] = new Vector3(-0.06f, -0.15f, 0.90f),
+                ["Tube 2"] = new Vector3(0.06f, -0.15f, 0.90f),
+                ["Tube 3"] = new Vector3(0f, -0.15f, 0.92f),
+                ["Tube 4"] = new Vector3(-0.08f, -0.10f, -0.85f),
+                ["Tube 5"] = new Vector3(0.08f, -0.10f, -0.85f),
+
+                // Pulse phaser cannons in the forward nacelle roots:
+                ["Top Left Turret"] = new Vector3(-0.551f, 0.283f, 0.565f),
+                ["Top Right Turret"] = new Vector3(0.551f, 0.283f, 0.565f),
+                ["Bottom Left Turret"] = new Vector3(-0.551f, -0.259f, 0.565f),
+                ["Bottom Right Turret"] = new Vector3(0.551f, -0.259f, 0.565f),
+                ["Top Front Turret"] = new Vector3(-0.38f, -0.03f, 0.44f),
+                ["Bottom Front Turret"] = new Vector3(0.38f, -0.03f, 0.44f),
+            };
+
+            return new CustomShip("Defiant", "DEFIANT", 28f, "USS Defiant", "NX-74205", weapons)
+            {
+                takePlasma = (part, mesh, scale) => part.Name.IndexOf("Bussard", StringComparison.OrdinalIgnoreCase) >= 0 ? ShipGlow.TakeAllAsPlasma(mesh) : null,
+                takeLight = (part, mesh, port) => part.Name == (port ? "Defiant_Light_Red" : "Defiant_Light_Green") ? ShipGlow.TakeAll(mesh) : null,
             };
         }
 

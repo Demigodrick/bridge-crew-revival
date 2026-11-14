@@ -427,6 +427,7 @@ namespace StbcRevival
             Safely("restock sync", StbcRevival.Missions.RestockSync.Update);
             Safely("excelsior", Excelsior.Update);
             Safely("ships", CustomShip.Update);
+            Safely("defiant", Defiant.Update);
             Safely("ship choice", ShipChoice.Update);
             Safely("pvp prototype", PvpPrototype.Update);
             Safely("pvp space", PvpSpace.Update);

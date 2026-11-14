@@ -269,7 +269,7 @@ namespace StbcRevival
             void Free<T>(ref T tex) where T : Texture { if (tex != null) UnityEngine.Object.Destroy(tex); tex = null; }
             foreach (var d in Decals) { d.DrawnFor = null; d.Pending = false; Free(ref d.Diffuse); Free(ref d.Glow); }
             foreach (var p in Paints) { p.DrawnFor = null; p.Pending = false; Free(ref p.Done); }
-            foreach (var p in kelvinPaints) { p.DrawnFor = null; p.Pending = false; Free(ref p.Done); }
+            foreach (var p in kelvinPaints) { p.DrawnFor = null; p.Attempted = null; p.Pending = false; Free(ref p.Done); }
             foreach (var p in Plaques) { p.DrawnFor = null; p.Pending = false; Free(ref p.D); Free(ref p.N); }
             pixels = glowPixels = null;
             Plugin.Log.LogInfo("Hull name: the game's names back on the hulls");
@@ -850,3 +850,4 @@ namespace StbcRevival
         }
     }
 }
+

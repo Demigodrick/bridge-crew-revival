@@ -25,14 +25,16 @@ namespace StbcRevival
             public int[][] Erase;          // the old lettering: x0, y0, x1, y1 (pixels, y up, inclusive)
             public Line[] Lines;
             public Texture2D Done;
-            public string DrawnFor;
+            public string DrawnFor, Attempted;
             public bool Pending;
         }
 
         private static Line KelvinNacelleLine() => new Line { Shape = Shape.Straight, Cx = 1120, Cy = 183, Cap = 32,
             Says = Says.Registry, Reference = "NCC-1701", ReferenceLength = 335, MaxLength = 500, Tracking = .12f, Style = EnterprisePlain };
 
-        private static readonly KelvinPaint[] kelvinPaints =
+        private static KelvinPaint[] kelvinPaintCache;
+        private static KelvinPaint[] kelvinPaints => kelvinPaintCache ?? (kelvinPaintCache = CreateKelvinPaints());
+        private static KelvinPaint[] CreateKelvinPaints() => new KelvinPaint[]
         {
             new KelvinPaint
             {
@@ -97,7 +99,7 @@ namespace StbcRevival
                         && m.GetTexture("_MainTex") is Texture t && (t.name == paint.File || t == paint.Done)).ToArray();
                     if (mine.Length == 0) continue;
                     string want = name + "|" + registry;
-                    if (paint.DrawnFor != want && !paint.Pending)
+                    if (paint.DrawnFor != want && paint.Attempted != want && !paint.Pending)
                     {
                         paint.DrawnFor = want; // tried once per name, whether it works or not (failures are logged)
                         var original = mine.Select(m => m.GetTexture("_MainTex")).FirstOrDefault(t => t != paint.Done);
@@ -130,7 +132,8 @@ namespace StbcRevival
             if (raw == null) { Plugin.Log.LogInfo($"Hull name: the Kelvin's {paint.File} has no blocks kept; its lettering stays as it is"); return; }
             var texts = paint.Lines.Select(l => l.Says == Says.Name ? HullText(name) : (registry.Length > 0 ? registry : l.Reference).ToUpperInvariant()).ToArray();
             bool preview = Plugin.HullPreview.Value;
-            paint.Pending = true;
+            paint.Attempted = want;
+                        paint.Pending = true;
             Run("Kelvin lettering " + paint.File, () =>
             {
                 var watch = System.Diagnostics.Stopwatch.StartNew();
@@ -253,3 +256,4 @@ namespace StbcRevival
         }
     }
 }
+

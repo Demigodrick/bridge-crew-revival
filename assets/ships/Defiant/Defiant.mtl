@@ -1,0 +1,31 @@
+newmtl Defiant
+Ka 0 0 0
+Kd 1 1 1
+Ks 0.05 0.05 0.05
+d 1
+illum 2
+map_Kd Defiant_D.png
+map_Ke Defiant_E.png
+
+newmtl Defiant_Bussard
+Ka 0 0 0
+Kd 1 0.08 0.03
+Ke 1 0.15 0.03
+d 1
+
+newmtl Defiant_Light_Red
+Ka 0 0 0
+Kd 0.25 0.02 0.02
+Ke 1 0.04 0.02
+d 1
+
+newmtl Defiant_Light_Green
+Ka 0 0 0
+Kd 0.02 0.25 0.05
+Ke 0.05 1 0.2
+d 1
+
+newmtl Defiant_Glass
+Ka 0 0 0
+Kd 0.05 0.1 0.2
+d 0.05
