@@ -36,3 +36,7 @@ KelvinPaint static initializers captured EnterprisePlain before that style was i
 in the other HullName partial file. Fix: create the paint definitions lazily after type
 initialization. A reflection regression check fails on the previous build (null style)
 and passes on the corrected build for all four lettering lines. Both fixes are required.
+
+Runtime follow-up: both fixes were installed together and the contributor confirmed
+that the Kelvin hull lettering works in game. The earlier pending-validation notes
+above describe the intermediate DXT1-only build, which still failed on null styles.

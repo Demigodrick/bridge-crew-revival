@@ -25,4 +25,3 @@ class KelvinInitTest {
   Console.WriteLine("PASS: all four Kelvin lettering styles initialized despite HullKelvin.cs preceding HullName.cs");
  }
 }
-
