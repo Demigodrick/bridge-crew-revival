@@ -1,0 +1,10 @@
+The USS Defiant, NX-74205, as seen in Star Trek: Deep Space Nine.
+
+Model: "U.S.S Defiant" by FatManInABox, Blend Swap #93289
+(http://www.blendswap.com/blends/view/93289)
+Released under Creative Commons Attribution 3.0. Marked as fan art: non-commercial use only.
+
+Changes for this mod: the model was joined, unwrapped, and its procedural Blender materials were baked into a
+diffuse atlas (Defiant_D.png) and an emission/glow atlas (Defiant_E.png), then exported to Wavefront .obj/.mtl.
+
+Pulse cannon sound (pulse_phaser.wav): supplied by YannikB98.

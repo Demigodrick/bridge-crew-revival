@@ -11,7 +11,7 @@ namespace StbcRevival
 {
     /// <summary>
     /// The briefing console's SHIP box with more ships than its three rows: a row for each ship class of ours whose model
-    /// is on this PC (NOVA, SOVEREIGN, ENTERPRISE (KELVIN)) under the Next Generation's, and buttons on its left to scroll the list. The box
+    /// is on this PC (NOVA, SOVEREIGN, ENTERPRISE (KELVIN), DEFIANT) under the Next Generation's, and buttons on its left to scroll the list. The box
     /// still shows three rows; the game's own toggles (Aegis, original Enterprise, Next Generation) move up and out of
     /// sight as the list scrolls, ours come in below. Each is a copy of the Aegis's row (always choosable, never locked).
     /// A class of ours flies on the Aegis's ship (and its own copy of the Aegis's bridge): choosing one turns that toggle on and puts the class's name on the room (CustomShip), so the bridge, consoles and

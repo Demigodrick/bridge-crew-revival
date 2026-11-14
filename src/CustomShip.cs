@@ -13,7 +13,7 @@ using UnityEngine;
 namespace StbcRevival
 {
     /// <summary>
-    /// [Ships] PlayerShip = Nova, Sovereign or AbramsEnterprise (beta): the crew flies a ship class of its own, built from a model in
+    /// [Ships] PlayerShip = Nova, Sovereign, AbramsEnterprise or Defiant (beta): the crew flies a ship class of its own, built from a model in
     /// BepInEx/ships/&lt;Name&gt; (comes with the mod, from assets/ships): a Wavefront &lt;Name&gt;.obj with its .mtl and
     /// textures (.png or .jpg beside it). The ship and its bridge stay the game's Aegis for now (its bridge is a copy of
     /// the Aegis's, with a layout of its own: BridgeLayout).
@@ -36,7 +36,7 @@ namespace StbcRevival
     {
         // ---- the classes ----
 
-        private static readonly CustomShip[] ships = { Nova(), Sovereign(), AbramsEnterprise() };
+        private static readonly CustomShip[] ships = { Nova(), Sovereign(), AbramsEnterprise(), Defiant() };
 
         /// <summary>Every ship class there is (whether its model is on this PC or not), in the ship box's order.</summary>
         internal static IList<CustomShip> All => ships;
@@ -116,6 +116,33 @@ namespace StbcRevival
                 windowPart = "m023_BridgeWindow",
                 // The saucer's name and registry and the nacelles' registry (HullKelvin).
                 lettered = new[] { "tex_41_SaucerTop_jpg.png", "tex_29_NacelleOutside_jpg.png", "tex_30_NacelleOutsideLeft_jp.png" },
+            };
+        }
+
+        private static CustomShip Defiant()
+        {
+            var weapons = new Dictionary<string, Vector3>
+            {
+                // Forward torpedo launchers in the nose deflector pod:
+                ["Tube 1"] = new Vector3(-0.06f, -0.15f, 0.90f),
+                ["Tube 2"] = new Vector3(0.06f, -0.15f, 0.90f),
+                ["Tube 3"] = new Vector3(0f, -0.15f, 0.92f),
+                ["Tube 4"] = new Vector3(-0.08f, -0.10f, -0.85f),
+                ["Tube 5"] = new Vector3(0.08f, -0.10f, -0.85f),
+
+                // Pulse phaser cannons in the forward nacelle roots:
+                ["Top Left Turret"] = new Vector3(-0.551f, 0.283f, 0.565f),
+                ["Top Right Turret"] = new Vector3(0.551f, 0.283f, 0.565f),
+                ["Bottom Left Turret"] = new Vector3(-0.551f, -0.259f, 0.565f),
+                ["Bottom Right Turret"] = new Vector3(0.551f, -0.259f, 0.565f),
+                ["Top Front Turret"] = new Vector3(-0.38f, -0.03f, 0.44f),
+                ["Bottom Front Turret"] = new Vector3(0.38f, -0.03f, 0.44f),
+            };
+
+            return new CustomShip("Defiant", "DEFIANT", 28f, "USS Defiant", "NX-74205", weapons)
+            {
+                takePlasma = (part, mesh, scale) => part.Name.IndexOf("Bussard", StringComparison.OrdinalIgnoreCase) >= 0 ? ShipGlow.TakeAllAsPlasma(mesh) : null,
+                takeLight = (part, mesh, port) => part.Name == (port ? "Defiant_Light_Red" : "Defiant_Light_Green") ? ShipGlow.TakeAll(mesh) : null,
             };
         }
 
@@ -216,6 +243,9 @@ namespace StbcRevival
         private SpacecraftBody aegisTemplate; // the class's body on the Aegis's ship
 
         /// <summary>The class's bodies built so far (on the Aegis's ship).</summary>
+        /// <summary>The class's body has been built (cheap: asked by hooks that run for every ship).</summary>
+        internal bool HasBody => aegisTemplate != null;
+
         internal SpacecraftBody[] Templates => aegisTemplate != null ? new SpacecraftBody[] { aegisTemplate } : new SpacecraftBody[0];
 
         private Func<Vector3, Vector3> spaceOrient;

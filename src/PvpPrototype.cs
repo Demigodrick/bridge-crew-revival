@@ -608,6 +608,9 @@ namespace StbcRevival
 
         private static bool IsOther(PlayerSpacecraft ship) => Active && Bound != null && ship != Bound;
 
+        /// <summary>The player ship this PC's crew is on (outside PvP, any player ship): its own sounds play on our bridge.</summary>
+        internal static bool IsOwn(PlayerSpacecraft ship) => ship != null && !IsOther(ship);
+
         private static bool OwnShipOnly_Prefix(PlayerSpacecraft __instance) => !IsOther(__instance);
 
         // The other ship's AI crew (run on the master, PvpScope) called out its shields and systems aloud on your

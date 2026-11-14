@@ -1,0 +1,6 @@
+# Dynamic ship name on the dorsal bridge ring; registry on the nose.
+# Coordinates measured from NX-74205.blend, transformed to OBJ (x,z,-y).
+# Original raised lettering at these two locations is removed from Defiant.obj.
+# kind centreXYZ normalXYZ readingAxisXYZ length height upXYZ [radius cap across]
+name 0 0.1829 0.217 0 1 0 1 0 0 0.49 0.17 0 0 -1 0.267 0.034 0.217
+registry 0 0.015 1.369 0 0.9 0.43 1 0 0 0.15 0.022 0 0 -1
