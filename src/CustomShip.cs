@@ -409,6 +409,8 @@ namespace StbcRevival
         {
             get
             {
+                if (hologram == null && built && !building && meshes.Count > 0 && Plugin.FullHologram != null && Plugin.FullHologram.Value)
+                    hologram = meshes.Values.Where(p => p.Material != null && p.Hull != null).Select(p => new KeyValuePair<Mesh, UnityEngine.Material>(p.Hull, p.Material)).ToList(); // the ship itself (already built), at full detail
                 if (hologram == null && !hologramStarted && built && !building && meshes.Count > 0) StartHologram();
                 return hologram;
             }

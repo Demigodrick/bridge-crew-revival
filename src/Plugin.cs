@@ -101,6 +101,7 @@ namespace StbcRevival
         internal static ConfigEntry<string> VoiceVolumes;
         internal static ConfigEntry<bool> ExcelsiorTest;
         internal static ConfigEntry<string> PlayerShip;
+        internal static ConfigEntry<bool> FullHologram;
         internal static ConfigEntry<bool> QuantumTorpedoes;
         internal static ConfigEntry<float> QuantumDamage, QuantumVolume;
         internal static ConfigEntry<float> ShuttleSpeed;
@@ -186,6 +187,8 @@ namespace StbcRevival
                 "Skip the microphone check the game shows when you start. Your mic still works; set it up in the game's options.");
             ExcelsiorTest = Config.Bind("Ships", "Excelsior", false,
                 "Test: when you host, the crew flies an Excelsior-class ship, with the training holodeck as its bridge for now.");
+            FullHologram = Config.Bind("Ships", "FullHologram", true,
+                "The briefing room's table shows our ship classes at full detail (the ship itself, already built). Off: a lighter copy, for slower PCs in VR.");
             PlayerShip = Config.Bind("Ships", "PlayerShip", "Aegis",
                 "The crew's ship when you host: Aegis, Nova, Sovereign, AbramsEnterprise (the Kelvin Enterprise) or Defiant (beta). Those four are ship classes of their own (their models come with the mod, in BepInEx/ships); their bridge and systems are the game's own for now. The briefing room's ship box decides after that.");
             QuantumTorpedoes = Config.Bind("Ships", "QuantumTorpedoes", true,
