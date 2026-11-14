@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Build the mod and pack the release zip: dist/BridgeCrewRevival-<version>.zip
-#   install.sh / install.cmd / install.ps1, plugins/StbcRevival.dll + StbcCore.dll, native/rnnoise.dll + speexdsp.dll, README.txt,
+#   install.sh / install.cmd / install.ps1, LICENSE.txt + NOTICE.txt, plugins/StbcRevival.dll + StbcCore.dll, native/rnnoise.dll + speexdsp.dll, README.txt,
 #   designer/ (the bridge designer, an optional program of its own for Windows and Linux; the installers put it in BepInEx/bridges)
 set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -46,6 +46,8 @@ done
 cp "$root/tools/bridge-designer/bin/publish/win-x64/bridge-designer.exe" "$out/designer/Bridge Designer.exe"
 cp "$root/tools/bridge-designer/bin/publish/linux-x64/bridge-designer" "$out/designer/bridge-designer"
 chmod +x "$out/designer/bridge-designer"
+# The licence (GPL-3.0) and the notices for the parts under their own terms, as the GPL and BSD/MIT licences ask.
+for f in LICENSE NOTICE.md; do sed 's/\r$//; s/$/\r/' "$root/$f" > "$out/${f%.md}.txt"; done
 cp "$root/docs/install.sh" "$out/"
 chmod +x "$out/install.sh"
 # Windows files with CRLF line endings.
