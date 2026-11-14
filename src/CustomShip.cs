@@ -161,8 +161,9 @@ namespace StbcRevival
         private string windowPart;                         // the bridge window's piece: the view from the bridge is placed at it
         private string[] lettered;                         // textures the crew's name is painted into (HullName, on their DXT1 blocks)
 
-        /// <summary>A lettered texture's DXT1 blocks (every mip), as made: what HullName paints the crew's name into.</summary>
-        internal sealed class Blocks { public int W, H, MipCount; public byte[] Data; }
+        /// <summary>A lettered texture's blocks (every mip), as made: what HullName paints the crew's name into. DXT1 or DXT5
+        /// (LoadImage gives an alpha format even for an opaque PNG, so it compresses to DXT5): BlockBytes 8 or 16.</summary>
+        internal sealed class Blocks { public int W, H, MipCount, BlockBytes; public TextureFormat Format; public byte[] Data; }
         private readonly Dictionary<string, Blocks> blocks = new Dictionary<string, Blocks>(StringComparer.OrdinalIgnoreCase);
         internal Blocks BlocksOf(string file) => blocks.TryGetValue(file, out var b) ? b : null;
 
@@ -1074,8 +1075,9 @@ namespace StbcRevival
             // A texture the crew's name is painted into (HullName): its blocks kept, as the texture itself won't be readable.
             if (!linear && lettered != null && Array.IndexOf(lettered, name) >= 0)
             {
-                if (tex.format == TextureFormat.DXT1) blocks[name] = new Blocks { W = tex.width, H = tex.height, MipCount = tex.mipmapCount, Data = tex.GetRawTextureData() };
-                else Plugin.Log.LogWarning($"{Name}: {name} compressed to {tex.format}, not DXT1; its lettering stays as it is");
+                if (tex.format == TextureFormat.DXT1 || tex.format == TextureFormat.DXT5)
+                    blocks[name] = new Blocks { W = tex.width, H = tex.height, MipCount = tex.mipmapCount, Format = tex.format, BlockBytes = tex.format == TextureFormat.DXT5 ? 16 : 8, Data = tex.GetRawTextureData() };
+                else Plugin.Log.LogWarning($"{Name}: {name} compressed to {tex.format}, not DXT1 or DXT5; its lettering stays as it is");
             }
             tex.Apply(false, true);
             UnityEngine.Object.DontDestroyOnLoad(tex);

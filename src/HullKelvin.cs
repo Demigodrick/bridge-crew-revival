@@ -10,7 +10,7 @@ namespace StbcRevival
     /// The Kelvin Enterprise's name and registry (the saucer's "U.S.S. ENTERPRISE" and "NCC-1701", the nacelles'
     /// "NCC-1701"), painted into its own textures in Michroma, a font that comes with the model (an atlas beside it:
     /// Unity 5 doesn't reliably find per-user Windows fonts). As the game ships' hull numbers (HullPaint): the
-    /// texture's DXT1 blocks, kept as it was made (CustomShip), the piece with the lettering decoded, painted over and
+    /// texture's DXT blocks (DXT5 as LoadImage makes it, or DXT1), kept as it was made (CustomShip), the piece with the lettering decoded, painted over and
     /// encoded again in every mip that still shows it, all on the worker thread; only the texture is made on the main thread.
     /// </summary>
     internal static partial class HullName
@@ -138,7 +138,7 @@ namespace StbcRevival
             Run("Kelvin lettering " + paint.File, () =>
             {
                 var watch = System.Diagnostics.Stopwatch.StartNew();
-                int w = raw.W, h = raw.H;
+                int w = raw.W, h = raw.H, block = raw.BlockBytes; // DXT5: its alpha half stays as it is, only the colours are painted
                 float s = (float)w / paint.DesignW;
                 if (Mathf.Abs(h - paint.DesignH * s) > 4f) throw new InvalidDataException($"{w}x{h}, not the shape of the {paint.DesignW}x{paint.DesignH} it was measured on");
 
@@ -167,10 +167,10 @@ namespace StbcRevival
                 int aw = ax1 - ax, ah = ay1 - ay;
 
                 long expected = 0;
-                for (int m = 0; m < raw.MipCount; m++) expected += Math.Max(1, (Math.Max(1, w >> m) + 3) / 4) * Math.Max(1, (Math.Max(1, h >> m) + 3) / 4) * 8;
+                for (int m = 0; m < raw.MipCount; m++) expected += Math.Max(1, (Math.Max(1, w >> m) + 3) / 4) * Math.Max(1, (Math.Max(1, h >> m) + 3) / 4) * block;
                 if (raw.Data.Length != expected) throw new InvalidDataException($"{raw.Data.Length} bytes of blocks, {expected} expected");
                 var data = (byte[])raw.Data.Clone(); // the kept blocks stay as made: a later name starts from them again
-                var px = DecodeDxt1(data, 0, w, ax, ay, aw, ah, 8);
+                var px = DecodeDxt1(data, 0, w, ax, ay, aw, ah, block);
 
                 int grow = Math.Max(2, Mathf.RoundToInt(4f * s));
                 foreach (var e in paint.Erase)
@@ -203,14 +203,14 @@ namespace StbcRevival
                 for (int m = 0; m < raw.MipCount; m++)
                 {
                     int mw = Math.Max(1, w >> m), mh = Math.Max(1, h >> m);
-                    if (m < mips) EncodeDxt1(Downsample(px, aw, ah, m), aw >> m, ah >> m, data, offset, mw, ax >> m, ay >> m, 8);
-                    offset += Math.Max(1, (mw + 3) / 4) * Math.Max(1, (mh + 3) / 4) * 8;
+                    if (m < mips) EncodeDxt1(Downsample(px, aw, ah, m), aw >> m, ah >> m, data, offset, mw, ax >> m, ay >> m, block);
+                    offset += Math.Max(1, (mw + 3) / 4) * Math.Max(1, (mh + 3) / 4) * block;
                 }
                 long ms = watch.ElapsedMilliseconds;
                 return () =>
                 {
                     var old = paint.Done;
-                    paint.Done = FromBlocks(paint.File + " (crew's name)", w, h, TextureFormat.DXT1, raw.MipCount > 1, false, data, original);
+                    paint.Done = FromBlocks(paint.File + " (crew's name)", w, h, raw.Format, raw.MipCount > 1, false, data, original);
                     Swap(old, paint.Done);
                     if (preview) SavePreview(px, aw, ah, "hull-name-Kelvin-" + paint.File);
                     Plugin.Log.LogInfo($"Hull name: the Kelvin's {paint.File}: {string.Join(" / ", texts)} painted in {ms} ms (off the main thread)");
