@@ -220,6 +220,12 @@ The log is `BepInEx/LogOutput.log`.
 
 </details>
 
+## Licence
+
+Bridge Crew Revival is free software under the [GNU General Public License v3.0](LICENSE), with an added permission
+to run it with the game. The ship models, and the libraries the mod includes, keep their own terms: see
+[NOTICE.md](NOTICE.md).
+
 ## Legal
 
 Bridge Crew Revival is an unofficial fan project, not affiliated with or endorsed by Ubisoft, Red Storm
@@ -228,6 +234,7 @@ the game on Steam; this repository contains no game code or assets, only patches
 
 Credits: the Nova-class ship is Raul Mamoru's model "Nova class U.S.S. Equinox"
 ([TrekMeshes](https://trekmeshes.eu/download/dl225/NovaclassUSSEquinox)), included with his permission; see
-`assets/ships/Nova/CREDITS.txt`. The Sovereign-class ship's model is by YannikB98, made for the mod.
+`assets/ships/Nova/CREDITS.txt`. The Sovereign-class ship's model is by YannikB98, made for the mod. The Kelvin
+Enterprise is Ricky "MadMan1701A" Wallace's model ([madshipyard.com](http://www.madshipyard.com)).
 VR walking and the Quest controller buttons come from BamaSuperman's
 [Bridge Crew VR add-ons](https://github.com/BamaSuperman/bridge-crew-vr-addons) (MIT).
