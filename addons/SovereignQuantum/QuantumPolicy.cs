@@ -7,7 +7,8 @@ namespace SovereignQuantum
         public static bool IsSovereignBody(bool playerShip, string bodyName)
         {
             return playerShip && bodyName != null &&
-                bodyName.StartsWith("Body - Sovereign (", StringComparison.Ordinal);
+                (bodyName.StartsWith("Body - Sovereign (", StringComparison.Ordinal) ||
+                 bodyName.StartsWith("Body - Defiant (", StringComparison.Ordinal));
         }
 
         public static float Multiplier(float value)

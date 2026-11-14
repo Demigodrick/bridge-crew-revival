@@ -1,6 +1,6 @@
 # Sovereign quantum torpedoes (experimental add-on)
 
-An optional BepInEx plugin for Bridge Crew Revival. Sovereign player ships fire blue quantum torpedoes through their existing launchers, with a subtle star-shaped flare and a configurable damage multiplier (default 1.5). Other ships retain their normal torpedoes. This prototype is separate from Revival and is not included in the release/package scripts.
+An optional BepInEx plugin for Bridge Crew Revival. Sovereign and Defiant player ships fire blue quantum torpedoes through their existing launchers, with a subtle star-shaped flare and a configurable damage multiplier (default 1.5). Other ships retain their normal torpedoes. This prototype is separate from Revival and is not included in the release/package scripts.
 
 ## Behavior and implementation
 
@@ -61,3 +61,13 @@ Restart after editing. DamageMultiplier is clamped to 1–3; volume to 0–1. Th
 - Review/test: Sovereign versus stock ships and Nova; host/client and different PvP ship classes; repeated volleys and pooled reuse; shield/hull damage; mission transitions; skybox scale, occlusion, VR billboarding and sound overlap.
 
 This draft deliberately leaves release integration to the maintainer after the prototype's combat behavior is verified.
+
+## Defiant extension
+
+Also selects actual Defiant player bodies. The main plugin (src/Defiant.cs) launches both ready forward tubes when
+single-fire is commanded. Each projectile retains its own ammo use, cooldown and damage.
+The Defiant integration depends on the original quantum commit
+8d26d63d7dcc3e2ba623a26f8b95dde8f6e5c542 (PR #30); merge/push that foundation together
+with the extension. This branch already contains it. Build/install this separate add-on
+as described above; the main plugin alone does not implement quantum torpedoes.
+

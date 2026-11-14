@@ -19,7 +19,7 @@ internal static class Tests
     public static void Main(string[] args)
     {
         Check(QuantumPolicy.IsSovereignBody(true, "Body - Sovereign (Enterprise-D)(Clone)"), "TNG Sovereign");
-        Check(QuantumPolicy.IsSovereignBody(true, "Body - Sovereign (Aegis)(Clone)"), "Aegis Sovereign");
+        Check(QuantumPolicy.IsSovereignBody(true, "Body - Sovereign (Aegis)(Clone)"), "Aegis Sovereign"); Check(QuantumPolicy.IsSovereignBody(true, "Body - Defiant (Aegis)(Clone)"), "Defiant body");
         Check(!QuantumPolicy.IsSovereignBody(false, "Body - Sovereign (Aegis)"), "NPC exclusion");
         Check(!QuantumPolicy.IsSovereignBody(true, "Body - Nova (Enterprise-D)(Clone)"), "Nova exclusion");
         Check(!QuantumPolicy.IsSovereignBody(true, "Body - Enterprise 1701D(Clone)"), "stock Enterprise exclusion");

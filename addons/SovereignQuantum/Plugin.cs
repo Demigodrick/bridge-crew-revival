@@ -30,7 +30,7 @@ namespace SovereignQuantum
         private void Awake()
         {
             Instance = this;
-            enabledSetting = Config.Bind<bool>("Quantum", "Enabled", true, "Quantum torpedoes on Sovereign player ships only. Restart after changes.");
+            enabledSetting = Config.Bind<bool>("Quantum", "Enabled", true, "Quantum torpedoes on Sovereign and Defiant player ships only. Restart after changes.");
             damage = Config.Bind<float>("Quantum", "DamageMultiplier", 1.5f, "Gameplay balance, not a canon figure. Clamped to 1..3. Host controls damage.");
             soundVolume = Config.Bind<float>("Audio", "SalvoVolume", 0.6f, "Additional quantum salvo sound, 0..1; 0 disables it. Standard game audio remains.");
         }
@@ -64,7 +64,7 @@ namespace SovereignQuantum
                     launchAudio.spatialBlend = 0f;
                 }
                 catch (Exception e) { Logger.LogWarning("Quantum sound unavailable: " + e.Message); }
-                Logger.LogInfo("Quantum ready: Sovereign only, damage x" + QuantumPolicy.Multiplier(damage.Value) + "; sound " + (launchClip != null ? "loaded" : "unavailable"));
+                Logger.LogInfo("Quantum ready: Sovereign and Defiant, damage x" + QuantumPolicy.Multiplier(damage.Value) + "; sound " + (launchClip != null ? "loaded" : "unavailable"));
             }
             catch (Exception e)
             {

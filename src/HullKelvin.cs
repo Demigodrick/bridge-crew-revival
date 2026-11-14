@@ -132,8 +132,8 @@ namespace StbcRevival
             if (raw == null) { Plugin.Log.LogInfo($"Hull name: the Kelvin's {paint.File} has no blocks kept; its lettering stays as it is"); return; }
             var texts = paint.Lines.Select(l => l.Says == Says.Name ? HullText(name) : (registry.Length > 0 ? registry : l.Reference).ToUpperInvariant()).ToArray();
             bool preview = Plugin.HullPreview.Value;
-            paint.Attempted = want;
-                        paint.Pending = true;
+            paint.Attempted = name + "|" + registry;
+            paint.Pending = true;
             Run("Kelvin lettering " + paint.File, () =>
             {
                 var watch = System.Diagnostics.Stopwatch.StartNew();
@@ -256,4 +256,3 @@ namespace StbcRevival
         }
     }
 }
-
