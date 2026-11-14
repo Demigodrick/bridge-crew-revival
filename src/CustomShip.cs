@@ -1039,10 +1039,27 @@ namespace StbcRevival
             if (name == null || !data.ImageFiles.TryGetValue(name, out var bytes)) return null;
             var tex = linear ? new Texture2D(2, 2, TextureFormat.ARGB32, true, true) { name = name } : new Texture2D(2, 2, TextureFormat.RGB24, true) { name = name };
             if (!tex.LoadImage(bytes)) { UnityEngine.Object.Destroy(tex); return null; }
+            bool keepLettering = !linear && lettered != null && Array.IndexOf(lettered, name) >= 0;
+            if (keepLettering && tex.format != TextureFormat.RGB24)
+            {
+                // LoadImage may replace RGB24 with an alpha format even for an opaque PNG.
+                // Compress then produces DXT5, but HullName's block painter only accepts DXT1.
+                var pixels = tex.GetPixels32();
+                bool opaque = Array.TrueForAll(pixels, p => p.a == 255);
+                if (opaque)
+                {
+                    var rgb = new Texture2D(tex.width, tex.height, TextureFormat.RGB24, true) { name = name };
+                    rgb.SetPixels32(pixels);
+                    rgb.Apply(true, false);
+                    UnityEngine.Object.Destroy(tex);
+                    tex = rgb;
+                }
+                // Preserve real transparency; the format guard below reports unsupported assets.
+            }
             tex.anisoLevel = 4;
             tex.Compress(false);
             // A texture the crew's name is painted into (HullName): its blocks kept, as the texture itself won't be readable.
-            if (!linear && lettered != null && Array.IndexOf(lettered, name) >= 0)
+            if (keepLettering)
             {
                 if (tex.format == TextureFormat.DXT1) blocks[name] = new Blocks { W = tex.width, H = tex.height, MipCount = tex.mipmapCount, Data = tex.GetRawTextureData() };
                 else Plugin.Log.LogWarning($"{Name}: {name} compressed to {tex.format}, not DXT1; its lettering stays as it is");
