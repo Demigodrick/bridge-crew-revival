@@ -70,4 +70,3 @@ The Defiant integration depends on the original quantum commit
 8d26d63d7dcc3e2ba623a26f8b95dde8f6e5c542 (PR #30); merge/push that foundation together
 with the extension. This branch already contains it. Build/install this separate add-on
 as described above; the main plugin alone does not implement quantum torpedoes.
-
