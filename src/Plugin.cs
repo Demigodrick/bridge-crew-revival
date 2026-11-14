@@ -86,6 +86,7 @@ namespace StbcRevival
         internal static ConfigEntry<float> ControllerGraceSeconds;
         internal static ConfigEntry<bool> QuestControlsOn;
         internal static ConfigEntry<bool> SeatWarning;
+        internal static ConfigEntry<bool> VrPerformance;
         internal static ConfigEntry<VrDeviceChoice> VrDevice;
         internal static ConfigEntry<int> VoiceJitterBufferMs;
         internal static ConfigEntry<bool> DirectVoice;
@@ -301,6 +302,8 @@ namespace StbcRevival
                 "Meta Quest controllers through SteamVR (Virtual Desktop, Steam Link): Touch-style buttons, as through Meta Link, instead of the Vive wands' layout. "
                 + "A confirm, B back, X help, Y exterior view, right stick click pause, left stick held to recentre. Needs SteamVR to use the mod's Quest binding "
                 + "(the installer's Quest question sets it up). Only with a Meta/Oculus headset on SteamVR. Takes effect after a restart.");
+            VrPerformance = Config.Bind("VR", "Performance", false,
+                "For slower PCs in VR: lighter where it costs most. The briefing room table shows a simplified copy of our ship classes instead of the full-detail ship.");
             SeatWarning = Config.Bind("VR", "SeatWarning", false,
                 "The game's out-of-bounds warning while seated: the view fades out when your head moves away from your seat or close to your own body. "
                 + "Off by default. Always off while you stand and walk in VR. Your headset's own boundary isn't affected.");

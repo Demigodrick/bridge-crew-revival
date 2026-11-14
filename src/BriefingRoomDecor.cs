@@ -11,7 +11,7 @@ namespace StbcRevival
     ///     the side table.
     ///   - The table hologram (Mdl_AegisBriefingRoom: a slowly spinning Aegis, or the Enterprise / Enterprise-D,
     ///     chosen by ConsoleBriefingRoomShipHolograms) shows the chosen ship: the game's own for its ships, and for a
-    ///     class of ours (CustomShip) a lighter copy of it (CustomShip.Hologram) in its own materials, under the same
+    ///     class of ours (CustomShip) the ship itself or a lighter copy of it (CustomShip.Hologram) in its own materials, under the same
     ///     spinning mount. The game's own hologram is hidden meanwhile by switching its renderers off and back on, so
     ///     its own ship choice is left alone.
     /// </summary>
@@ -48,11 +48,12 @@ namespace StbcRevival
             }
             bool wereOut = ShowProps();
             if (wereOut && !placed) PlaceProps(); // a tick after switching them on, when their bounds are known
-            // The table shows the chosen ship: the game's own hologram, or ours (once its lighter copy is made).
+            // The table shows the chosen ship: the game's own hologram, or ours (the ship itself, or with [VR] Performance
+            // its lighter copy once made; switching that setting shows the other at once).
             var flown = CustomShip.FlownNow;
             if (flown != null && CustomShip.Campaign) flown = null;
             var pieces = flown?.Hologram;
-            string want = flown != null && pieces != null ? ShipKey + flown.Name : null;
+            string want = flown != null && pieces != null ? ShipKey + flown.Name + (CustomShip.LightHologram ? " light" : "") : null;
             if (want == shown && (want == null || hologram != null)) return;
             Restore();
             shown = want;

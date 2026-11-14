@@ -89,6 +89,8 @@ namespace StbcRevival
             Switch("Public crews in VR", () => Plugin.VrRoomPanels),
             // The game's fade-out when your head leaves your seat (never the headset's own boundary).
             Switch("VR seat warning", () => Plugin.SeatWarning),
+            // Lighter where it costs most in VR (for now the briefing table's hologram: a simplified copy of our ships).
+            Switch("VR performance", () => Plugin.VrPerformance),
             new Entry
             {
                 Text = () => "Crews listed: " + ContentName(Plugin.CrewContentFilter.Value),

@@ -396,20 +396,30 @@ namespace StbcRevival
             foreach (var ship in ships) ship.Tick();
         }
 
-        // ---- the hologram: a lighter copy for the briefing room's table ----
-        // The full model is far too much for a table ornament in VR (the Nova 430,000 triangles, the Sovereign 545,000).
-        // Each piece's vertices are merged on a grid (about 200 cells along the ship), on a thread, once.
+        // ---- the hologram: the briefing room table's copy of the ship ----
+        // The ship itself by default (its meshes, already built: no more memory, only more triangles drawn). With [VR]
+        // Performance on, a lighter copy instead, as the full model is a lot for a table ornament in VR (the Nova 430,000
+        // triangles, the Sovereign 545,000): each piece's vertices merged on a grid (about 300 cells along the ship, a
+        // hull's sides kept apart), on a thread, once, when first wanted.
 
-        private List<KeyValuePair<Mesh, UnityEngine.Material>> hologram;
+        private List<KeyValuePair<Mesh, UnityEngine.Material>> fullHologram;
+        private List<KeyValuePair<Mesh, UnityEngine.Material>> hologram; // the lighter copy
         private volatile List<KeyValuePair<KeyValuePair<Vector3[], KeyValuePair<Vector3[], Vector2[]>>, KeyValuePair<int[], UnityEngine.Material>>> hologramMade;
         private bool hologramStarted;
+
+        /// <summary>The table shows the lighter copy ([VR] Performance); asked as it's drawn, so a change shows at once.</summary>
+        internal static bool LightHologram => Plugin.VrPerformance != null && Plugin.VrPerformance.Value;
 
         /// <summary>The class's hologram pieces (mesh and material, in its model space), or null while it's being made.</summary>
         internal List<KeyValuePair<Mesh, UnityEngine.Material>> Hologram
         {
             get
             {
-                if (hologram == null && !hologramStarted && built && !building && meshes.Count > 0) StartHologram();
+                if (!built || building || meshes.Count == 0) return null;
+                if (!LightHologram)
+                    return fullHologram ?? (fullHologram = meshes.Values.Where(p => p.Material != null && p.Hull != null)
+                        .Select(p => new KeyValuePair<Mesh, UnityEngine.Material>(p.Hull, p.Material)).ToList()); // the ship itself, at full detail
+                if (hologram == null && !hologramStarted) StartHologram();
                 return hologram;
             }
         }
@@ -418,7 +428,7 @@ namespace StbcRevival
         {
             hologramStarted = true;
             var parts = meshes.Values.Where(p => p.Material != null).ToList();
-            float cell = length / 200f;
+            float cell = length / 300f;
             var thread = new Thread(() =>
             {
                 var made = new List<KeyValuePair<KeyValuePair<Vector3[], KeyValuePair<Vector3[], Vector2[]>>, KeyValuePair<int[], UnityEngine.Material>>>();
@@ -460,35 +470,51 @@ namespace StbcRevival
             Plugin.Log.LogInfo($"{Name}: hologram made, {hologramCounts}");
         }
 
-        /// <summary>Vertices merged on a grid (positions averaged; a corner's normal and mapping kept), collapsed triangles dropped.</summary>
+        /// <summary>
+        /// Vertices merged on a grid, but only with others facing the same way (the grid cell and the main direction of the
+        /// normal), so a thin hull's two sides (a saucer's top and bottom, a nacelle's walls) stay apart instead of folding
+        /// into each other; positions and normals averaged, a corner's mapping kept. Collapsed triangles, and triangles
+        /// the merge turned to face the other way, dropped.
+        /// </summary>
         private static int[] Simplify(Vector3[] verts, Vector3[] normals, Vector2[] uv, int[] tris, float cell, out Vector3[] outV, out Vector3[] outN, out Vector2[] outUv)
         {
             var map = new Dictionary<long, int>();
             var remap = new int[verts.Length];
-            var sum = new List<Vector3>(); var count = new List<int>(); var n = new List<Vector3>(); var u = new List<Vector2>();
+            var sum = new List<Vector3>(); var count = new List<int>(); var nsum = new List<Vector3>(); var u = new List<Vector2>();
             for (int i = 0; i < verts.Length; i++)
             {
                 var p = verts[i];
-                long key = ((long)Mathf.RoundToInt(p.x / cell) & 0xFFFFF) << 40 | ((long)Mathf.RoundToInt(p.y / cell) & 0xFFFFF) << 20 | ((long)Mathf.RoundToInt(p.z / cell) & 0xFFFFF);
+                var nv = normals != null ? normals[i] : Vector3.zero;
+                float ax = Mathf.Abs(nv.x), ay = Mathf.Abs(nv.y), az = Mathf.Abs(nv.z);
+                long side = ax >= ay && ax >= az ? (nv.x >= 0 ? 0 : 1) : ay >= az ? (nv.y >= 0 ? 2 : 3) : (nv.z >= 0 ? 4 : 5);
+                long key = side << 60 | ((long)Mathf.RoundToInt(p.x / cell) & 0xFFFFF) << 40 | ((long)Mathf.RoundToInt(p.y / cell) & 0xFFFFF) << 20 | ((long)Mathf.RoundToInt(p.z / cell) & 0xFFFFF);
                 if (!map.TryGetValue(key, out var at))
                 {
                     at = map[key] = sum.Count;
-                    sum.Add(Vector3.zero); count.Add(0);
-                    n.Add(normals != null ? normals[i] : Vector3.up);
+                    sum.Add(Vector3.zero); count.Add(0); nsum.Add(Vector3.zero);
                     u.Add(uv != null ? uv[i] : Vector2.zero);
                 }
-                sum[at] += p; count[at]++;
+                sum[at] += p; count[at]++; nsum[at] += nv;
                 remap[i] = at;
             }
+            outV = new Vector3[sum.Count];
+            for (int i = 0; i < outV.Length; i++) outV[i] = sum[i] / count[i];
             var t = new List<int>(tris.Length / 4);
             for (int i = 0; i + 2 < tris.Length; i += 3)
             {
                 int a = remap[tris[i]], b = remap[tris[i + 1]], c = remap[tris[i + 2]];
-                if (a != b && b != c && a != c) { t.Add(a); t.Add(b); t.Add(c); }
+                if (a == b || b == c || a == c) continue;
+                var before = Vector3.Cross(verts[tris[i + 1]] - verts[tris[i]], verts[tris[i + 2]] - verts[tris[i]]);
+                var after = Vector3.Cross(outV[b] - outV[a], outV[c] - outV[a]);
+                if (Vector3.Dot(before, after) <= 0f) continue; // turned over by the merge
+                t.Add(a); t.Add(b); t.Add(c);
             }
-            outV = new Vector3[sum.Count];
-            for (int i = 0; i < outV.Length; i++) outV[i] = sum[i] / count[i];
-            outN = normals != null ? n.ToArray() : null;
+            outN = null;
+            if (normals != null)
+            {
+                outN = new Vector3[nsum.Count];
+                for (int i = 0; i < outN.Length; i++) outN[i] = nsum[i].sqrMagnitude > 1e-12f ? nsum[i].normalized : Vector3.up;
+            }
             outUv = uv != null ? u.ToArray() : null;
             return t.ToArray();
         }
