@@ -250,6 +250,8 @@ namespace StbcRevival
             LoadingScreenLabel.Patch(harmony);
             Excelsior.Patch(harmony);
             CustomShip.Patch(harmony);
+            Defiant.Patch(harmony);
+            Quantum.Patch(harmony);
             ShipChoice.Patch(harmony);
             VoiceJitter.Patch(harmony);
             Walking.BridgeWalk.Patch(harmony);

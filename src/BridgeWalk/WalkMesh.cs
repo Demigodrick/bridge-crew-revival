@@ -14,6 +14,10 @@ namespace StbcRevival.Walking
     /// parent (the bridge, which moves with the ship), so "up" is the bridge's up and the grid moves with it. The
     /// meshes are listed on the main thread; reading them from the asset files and sorting the triangles happen on a
     /// background thread. The game knows nothing of this.
+    ///
+    /// A bridge layout (BridgeLayout) can hide batched pieces, or hide them while a movable copy stands in: their
+    /// shapes are still in the combined mesh, so those sub-meshes are left out (the copy, a mesh of its own, counts
+    /// where it is now). The grid is read again whenever which pieces those are changes.
     /// </summary>
     internal static class WalkMesh
     {
@@ -36,6 +40,9 @@ namespace StbcRevival.Walking
             public Matrix4x4 M; // mesh space to bridge space
             public Vector3[] Verts;
             public int[] Tris;
+            public bool Combined;
+            public BridgeMeshes.Source Source; // read from the asset files: which mesh, and its sub-meshes' triangles
+            public bool[] Skip;                // its sub-meshes left out (a layout's hidden or moved pieces)
         }
 
         private static volatile Grid grid;
@@ -73,13 +80,14 @@ namespace StbcRevival.Walking
             builtWithIndex = BridgeMeshes.Indexed;
         }
 
-        /// <summary>Forgets the bridge's geometry (on leaving the bridge).</summary>
-        public static void Clear()
+        /// <summary>Forgets the bridge's geometry (on leaving the bridge, or when a layout changes it); false if it's being read just now.</summary>
+        public static bool Clear()
         {
-            if (Building) return;
+            if (Building) return false;
             grid = null;
             builtBasis = null;
             builtScene = -1;
+            return true;
         }
 
         private static void Start(Vector3 center, Vector3 localCenter, Transform basis, bool fresh)
@@ -109,6 +117,7 @@ namespace StbcRevival.Walking
                     Name = mesh.name,
                     VertexCount = mesh.vertexCount,
                     M = toLocal * (combined ? Matrix4x4.identity : mf.transform.localToWorldMatrix),
+                    Combined = combined,
                 };
                 if (mesh.isReadable)
                 {
@@ -116,31 +125,38 @@ namespace StbcRevival.Walking
                 }
                 jobs.Add(job);
             }
-            builder = new Thread(() => Build(jobs, localCenter, basis, fresh, nearby)) { IsBackground = true };
+            List<BridgeLayout.WalkHole> holes;
+            try { holes = BridgeLayout.WalkHoles(); }
+            catch (Exception e) { holes = new List<BridgeLayout.WalkHole>(); Plugin.Log.LogWarning("Bridge walk: the layout's pieces: " + e.Message); }
+            builder = new Thread(() => Build(jobs, localCenter, basis, fresh, nearby, holes)) { IsBackground = true };
             builder.Start();
         }
 
         // On the background thread: no Unity objects are touched here, only the copied data.
-        private static void Build(List<Job> jobs, Vector3 center, Transform basis, bool fresh, int nearby)
+        private static void Build(List<Job> jobs, Vector3 center, Transform basis, bool fresh, int nearby, List<BridgeLayout.WalkHole> holes)
         {
             var sw = Stopwatch.StartNew();
             var g = new Grid { Basis = basis };
-            int unreadable = 0, used = 0, fromDisk = 0;
+            int unreadable = 0, used = 0, fromDisk = 0, leftOut = 0;
             try
             {
                 if (fresh) BridgeMeshes.ClearLoaded();
                 foreach (var job in jobs)
                 {
+                    if (job.Verts != null && job.Tris != null) continue;
+                    if (BridgeMeshes.TryLoad(job.Name, job.VertexCount, out job.Verts, out job.Tris, out job.Source)) fromDisk++;
+                    else { job.Verts = null; job.Tris = null; }
+                }
+                leftOut = LeaveOut(jobs, holes);
+                foreach (var job in jobs)
+                {
                     var verts = job.Verts; var tris = job.Tris;
-                    if (verts == null || tris == null)
-                    {
-                        if (BridgeMeshes.TryLoad(job.Name, job.VertexCount, out verts, out tris)) fromDisk++;
-                        else { unreadable++; continue; }
-                    }
+                    if (verts == null || tris == null) { unreadable++; continue; }
                     used++;
                     var m = job.M;
                     for (int i = 0; i + 2 < tris.Length; i += 3)
                     {
+                        if (job.Skip != null && job.Source.Skipped(job.Skip, i)) continue;
                         Vector3 a = m.MultiplyPoint3x4(verts[tris[i]]), bb = m.MultiplyPoint3x4(verts[tris[i + 1]]), c = m.MultiplyPoint3x4(verts[tris[i + 2]]);
                         if ((a - center).sqrMagnitude > Radius * Radius * 1.5f && (bb - center).sqrMagnitude > Radius * Radius * 1.5f) continue;
                         Vector3 n = Vector3.Cross(bb - a, c - a);
@@ -156,7 +172,36 @@ namespace StbcRevival.Walking
             finally { BridgeMeshes.CloseFiles(); }
             grid = g;
             Plugin.Log.LogInfo($"Bridge walk: bridge geometry: {nearby} meshes nearby, {used} used ({fromDisk} from the asset files), {unreadable} unreadable, "
-                + $"{g.Fv.Count / 3} floor and {g.Wv.Count / 3} wall triangles, {sw.ElapsedMilliseconds} ms (in the background); {BridgeMeshes.Status}");
+                + $"{g.Fv.Count / 3} floor and {g.Wv.Count / 3} wall triangles{(leftOut > 0 ? $" ({leftOut} of the layout's hidden or moved pieces left out)" : "")}, {sw.ElapsedMilliseconds} ms (in the background); {BridgeMeshes.Status}");
+        }
+
+        // Marks the sub-meshes of the layout's hidden and moved batched pieces in the combined meshes read: for each,
+        // of the shapes with its path (a path can be in the bridge more than once), the one nearest where the piece
+        // was drawn. How many were found.
+        private static int LeaveOut(List<Job> jobs, List<BridgeLayout.WalkHole> holes)
+        {
+            int found = 0;
+            foreach (var h in holes)
+            {
+                Job best = null; int bestCandidate = -1; float bestD = float.MaxValue;
+                foreach (var job in jobs)
+                {
+                    if (!job.Combined || job.Source == null || job.Verts == null) continue;
+                    if (!string.Equals(Path.GetFileName(job.Source.File), h.File, StringComparison.OrdinalIgnoreCase)) continue;
+                    for (int k = 0; k < h.Combined.Length; k++)
+                    {
+                        if (h.Combined[k] != job.Source.PathId) continue;
+                        if (!job.Source.Middle(job.Verts, job.Tris, h.SubMeshes[k], out var mid)) continue;
+                        float d = (mid - h.Center).sqrMagnitude;
+                        if (d < bestD) { bestD = d; best = job; bestCandidate = k; }
+                    }
+                }
+                if (best == null) continue;
+                if (best.Skip == null) best.Skip = new bool[best.Source.SubStart.Length];
+                foreach (int sub in h.SubMeshes[bestCandidate]) if (sub >= 0 && sub < best.Skip.Length) best.Skip[sub] = true;
+                found++;
+            }
+            return found;
         }
 
         private static void Add(Dictionary<long, List<int>> cells, List<Vector3> store, Vector3 a, Vector3 b, Vector3 c)
@@ -241,7 +286,42 @@ namespace StbcRevival.Walking
         private sealed class Ref { public string File; public long PathId; }
 
         private static readonly Dictionary<string, List<Ref>> byName = new Dictionary<string, List<Ref>>();
-        private static readonly Dictionary<string, KeyValuePair<Vector3[], int[]>> loaded = new Dictionary<string, KeyValuePair<Vector3[], int[]>>();
+        /// <summary>Where a mesh read from the asset files came from, and where each of its sub-meshes' triangles are.</summary>
+        internal sealed class Source
+        {
+            public string File;
+            public long PathId;
+            public int[] SubStart, SubCount; // into the triangle indices (a sub-mesh that isn't triangles: none)
+
+            /// <summary>Whether the triangle starting at index i is in a sub-mesh marked in skip.</summary>
+            public bool Skipped(bool[] skip, int i)
+            {
+                for (int s = 0; s < skip.Length; s++) if (skip[s] && i >= SubStart[s] && i < SubStart[s] + SubCount[s]) return true;
+                return false;
+            }
+
+            /// <summary>The middle of these sub-meshes' vertices; false if they have none.</summary>
+            public bool Middle(Vector3[] verts, int[] tris, int[] subs, out Vector3 mid)
+            {
+                Vector3 min = new Vector3(float.MaxValue, float.MaxValue, float.MaxValue), max = -min;
+                bool any = false;
+                foreach (int s in subs)
+                {
+                    if (s < 0 || s >= SubStart.Length) continue;
+                    for (int i = SubStart[s]; i < SubStart[s] + SubCount[s] && i < tris.Length; i++)
+                    {
+                        var v = verts[tris[i]];
+                        min = Vector3.Min(min, v); max = Vector3.Max(max, v);
+                        any = true;
+                    }
+                }
+                mid = any ? (min + max) * 0.5f : Vector3.zero;
+                return any;
+            }
+        }
+
+        private sealed class Read1 { public Vector3[] Verts; public int[] Tris; public Source Source; }
+        private static readonly Dictionary<string, Read1> loaded = new Dictionary<string, Read1>();
         private static readonly Dictionary<string, AssetFile> open = new Dictionary<string, AssetFile>();
         private static volatile bool indexed;
         private static Thread worker;
@@ -291,30 +371,30 @@ namespace StbcRevival.Walking
         }
 
         /// <summary>A mesh's positions and triangle indices, from the asset files.</summary>
-        public static bool TryLoad(string meshName, int vertexCount, out Vector3[] verts, out int[] tris)
+        public static bool TryLoad(string meshName, int vertexCount, out Vector3[] verts, out int[] tris, out Source source)
         {
-            verts = null; tris = null;
+            verts = null; tris = null; source = null;
             if (!indexed) return false;
             string key = meshName + "#" + vertexCount;
-            if (loaded.TryGetValue(key, out var hit)) { verts = hit.Key; tris = hit.Value; return verts != null; }
+            if (loaded.TryGetValue(key, out var hit)) { verts = hit.Verts; tris = hit.Tris; source = hit.Source; return verts != null; }
             List<Ref> refs;
             lock (byName) byName.TryGetValue(meshName, out refs);
             if (refs != null)
                 foreach (var rf in refs)
                 {
-                    try { if (Read(rf, vertexCount, out verts, out tris)) break; }
-                    catch { verts = null; tris = null; }
+                    try { if (Read(rf, vertexCount, out verts, out tris, out source)) break; }
+                    catch { verts = null; tris = null; source = null; }
                 }
-            loaded[key] = new KeyValuePair<Vector3[], int[]>(verts, tris);
+            loaded[key] = new Read1 { Verts = verts, Tris = tris, Source = source };
             return verts != null;
         }
 
         /// <summary>Forgets the meshes read for the last bridge.</summary>
         public static void ClearLoaded() => loaded.Clear();
 
-        private static bool Read(Ref rf, int vertexCount, out Vector3[] verts, out int[] tris)
+        private static bool Read(Ref rf, int vertexCount, out Vector3[] verts, out int[] tris, out Source source)
         {
-            verts = null; tris = null;
+            verts = null; tris = null; source = null;
             if (!open.TryGetValue(rf.File, out var file)) open[rf.File] = file = new AssetFile(rf.File);
             var entry = file.Find(rf.PathId);
             if (entry == null) return false;
@@ -328,8 +408,11 @@ namespace StbcRevival.Walking
                 verts[i] = new Vector3(p[0], p[1], p[2]);
             }
             var list = new List<int>();
-            foreach (var s in m.SubMeshes)
+            source = new Source { File = rf.File, PathId = rf.PathId, SubStart = new int[m.SubMeshes.Count], SubCount = new int[m.SubMeshes.Count] };
+            for (int si = 0; si < m.SubMeshes.Count; si++)
             {
+                var s = m.SubMeshes[si];
+                source.SubStart[si] = list.Count;
                 if (s.Topology != 0) continue; // triangles only
                 for (uint i = 0; i < s.IndexCount; i++)
                 {
@@ -339,6 +422,7 @@ namespace StbcRevival.Walking
                     if (index >= verts.Length) { verts = null; return false; }
                     list.Add(index);
                 }
+                source.SubCount[si] = list.Count - source.SubStart[si];
             }
             tris = list.ToArray();
             return true;

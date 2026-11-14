@@ -101,6 +101,8 @@ namespace StbcRevival
         internal static ConfigEntry<string> VoiceVolumes;
         internal static ConfigEntry<bool> ExcelsiorTest;
         internal static ConfigEntry<string> PlayerShip;
+        internal static ConfigEntry<bool> QuantumTorpedoes;
+        internal static ConfigEntry<float> QuantumDamage, QuantumVolume;
         internal static ConfigEntry<float> ShuttleSpeed;
         internal static ConfigEntry<float> ShuttleTurnSpeed;
         internal static ConfigEntry<bool> BridgeWalkEnabled;
@@ -185,7 +187,13 @@ namespace StbcRevival
             ExcelsiorTest = Config.Bind("Ships", "Excelsior", false,
                 "Test: when you host, the crew flies an Excelsior-class ship, with the training holodeck as its bridge for now.");
             PlayerShip = Config.Bind("Ships", "PlayerShip", "Aegis",
-                "The crew's ship when you host: Aegis, Nova, Sovereign or AbramsEnterprise (the Kelvin Enterprise; beta). Those three are ship classes of their own (their models come with the mod, in BepInEx/ships); their bridge and systems are the game's own for now. The briefing room's ship box decides after that.");
+                "The crew's ship when you host: Aegis, Nova, Sovereign, AbramsEnterprise (the Kelvin Enterprise) or Defiant (beta). Those four are ship classes of their own (their models come with the mod, in BepInEx/ships); their bridge and systems are the game's own for now. The briefing room's ship box decides after that.");
+            QuantumTorpedoes = Config.Bind("Ships", "QuantumTorpedoes", true,
+                "The Sovereign's and the Defiant's torpedoes are quantum torpedoes: blue, and QuantumDamage times the damage. Restart after changing it.");
+            QuantumDamage = Config.Bind("Ships", "QuantumDamage", 1.5f,
+                "Quantum torpedoes' damage against a photon torpedo's, 1 to 3 (a balance choice). The host's setting counts.");
+            QuantumVolume = Config.Bind("Ships", "QuantumVolume", 0.6f,
+                "The quantum salvo sound's volume, 0 to 1, if BepInEx/ships/quantum.wav is there (a PCM WAV of your own; none comes with the mod).");
             BlockedPlayers = Config.Bind("Players", "Blocked", "",
                 "Players kept out of crews you host (Steam IDs, as steamid=name;...). Added when you kick someone and choose to block them; players you've blocked or ignored in Steam are kept out too.");
             VoiceVolumes = Config.Bind("Players", "VoiceVolumes", "",
@@ -427,6 +435,8 @@ namespace StbcRevival
             Safely("restock sync", StbcRevival.Missions.RestockSync.Update);
             Safely("excelsior", Excelsior.Update);
             Safely("ships", CustomShip.Update);
+            Safely("defiant", Defiant.Update);
+            Safely("quantum", Quantum.Update);
             Safely("ship choice", ShipChoice.Update);
             Safely("pvp prototype", PvpPrototype.Update);
             Safely("pvp space", PvpSpace.Update);

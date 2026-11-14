@@ -27,8 +27,9 @@ namespace StbcRevival
     ///
     /// Most bridge pieces are statically batched (drawn as part of one combined mesh), so they can't move: those are
     /// hidden, and a copy of their shape read from the scene's file moves instead (BatchedPieces). Colliders move with
-    /// the object. Bridge Walk's floors and walls are read again after a layout goes on; a hidden or moved batched
-    /// piece still counts where it was for those (they come from the combined mesh).
+    /// the object. Bridge Walk's floors and walls are read again after a layout goes on, and again whenever which
+    /// batched pieces are hidden or copied changes: those are left out of the combined meshes it reads (WalkHoles),
+    /// and a copy counts where it is now.
     ///
     /// The background crew (RedShirtStation) are spawned by the game as children of their seat objects, each with a
     /// chair of its own in its model, standing where one of the bridge's chairs is. Where it sits comes from its
@@ -140,6 +141,7 @@ namespace StbcRevival
             public Quaternion BaseRot;
             public readonly List<Renderer> Renderers = new List<Renderer>(); // on at the start
             public readonly List<Renderer> Batched = new List<Renderer>();
+            public readonly List<Vector3> BatchedAt = new List<Vector3>(); // the middle of each, where the bridge drew it
             public readonly List<Collider> Colliders = new List<Collider>();
             public readonly List<BridgeLights.Saved> Lights = new List<BridgeLights.Saved>(); // on at the start, or its own
             public GameObject Copy;
@@ -205,6 +207,7 @@ namespace StbcRevival
                 // Lights it switches off stay off (the game's scripts switch some on and off).
                 foreach (var c in changes)
                     if (c.Hidden) foreach (var l in c.Lights) if (l.Light != null && l.Light.enabled) l.Light.enabled = false;
+                WalkFollow();
             }
             if (Time.unscaledTime < nextLook) return;
             nextLook = Time.unscaledTime + 1f;
@@ -448,7 +451,7 @@ namespace StbcRevival
             {
                 if (!r.enabled || r is ParticleSystemRenderer) continue;
                 c.Renderers.Add(r);
-                if (r.isPartOfStaticBatch && r is MeshRenderer) c.Batched.Add(r);
+                if (r.isPartOfStaticBatch && r is MeshRenderer) { c.Batched.Add(r); c.BatchedAt.Add(r.bounds.center); }
                 if (r is MeshRenderer)
                 {
                     if (!c.HasBounds) { c.BaseBounds = r.bounds; c.HasBounds = true; }
@@ -462,7 +465,8 @@ namespace StbcRevival
             var own = t.GetComponent<Light>();
             foreach (var l in t.GetComponentsInChildren<Light>(true))
                 if (l == own || (l.enabled && l.gameObject.activeInHierarchy)) c.Lights.Add(BridgeLights.Saved.Of(l));
-            if (c.Batched.Count > 0 && c.Moved) BatchedPieces.Ready(scene.buildIndex);
+            // Its shapes in the bridge's file: to copy it (moved), and for Bridge Walk to leave out (moved or hidden).
+            if (c.Batched.Count > 0 && (c.Moved || c.Hidden)) BatchedPieces.Ready(scene.buildIndex);
         }
 
         private static void Refresh(Change c)
@@ -561,6 +565,54 @@ namespace StbcRevival
             c.Copy = null;
         }
 
+        // ------------------------------------------------------------------------------------------- Bridge Walk
+        /// <summary>A batched piece the layout hides (or hides while its copy stands in), for Bridge Walk to leave out
+        /// of the combined meshes: the shapes with its path in the bridge's file (combined mesh and its sub-meshes),
+        /// and where it was drawn, to tell which one it is.</summary>
+        internal sealed class WalkHole
+        {
+            public string File;
+            public long[] Combined;
+            public int[][] SubMeshes;
+            public Vector3 Center;
+        }
+
+        private static int walkHoles = -1;  // how many holes Bridge Walk's floors and walls were last read with
+
+        /// <summary>The layout's hidden batched pieces whose shapes in the bridge's file are known (main thread).</summary>
+        internal static List<WalkHole> WalkHoles()
+        {
+            var list = new List<WalkHole>();
+            if (boundRoot == 0 || !scene.IsValid() || !scene.isLoaded) return list;
+            string file = "level" + scene.buildIndex;
+            foreach (var c in changes)
+                for (int i = 0; i < c.Batched.Count; i++)
+                {
+                    var r = c.Batched[i];
+                    if (r == null || r.enabled) continue;
+                    var shapes = BatchedPieces.At(Walking.Bridge.Path(r.transform));
+                    if (shapes == null || shapes.Count == 0) continue;
+                    var h = new WalkHole { File = file, Combined = new long[shapes.Count], SubMeshes = new int[shapes.Count][], Center = c.BatchedAt[i] };
+                    for (int k = 0; k < shapes.Count; k++) { h.Combined[k] = shapes[k].Combined; h.SubMeshes[k] = shapes[k].SubMeshes.ToArray(); }
+                    list.Add(h);
+                }
+            return list;
+        }
+
+        // Every frame: once more of the layout's hidden pieces can be left out (the bridge's file read, or a copy
+        // made), Bridge Walk reads its floors and walls again.
+        private static void WalkFollow()
+        {
+            int n = 0;
+            foreach (var c in changes)
+                foreach (var r in c.Batched)
+                    if (r != null && !r.enabled) n++;
+            // Their shapes are known once the bridge's file is read.
+            if (n > 0 && (!BatchedPieces.Ready(scene.buildIndex) || BatchedPieces.Error != null)) n = 0;
+            if (n == walkHoles) return;
+            try { if (WalkMesh.Clear()) walkHoles = n; } catch { walkHoles = n; }
+        }
+
         // ------------------------------------------------------------------------------------------- background crew
         private sealed class Follower
         {
@@ -623,6 +675,7 @@ namespace StbcRevival
             seatsDone.Clear();
             foreach (var c in changes) foreach (var m in c.CopyMeshes) if (m != null) UnityEngine.Object.Destroy(m);
             changes.Clear();
+            walkHoles = -1;
             boundRoot = 0;
             boundKey = null;
         }
