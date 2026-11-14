@@ -27,7 +27,11 @@ These aren't under the GPL. Don't take them out of the mod to share or use elsew
 - **Nova class** (`assets/ships/Nova`): by Raul Mamoru, included with his permission; see its `CREDITS.txt`.
 - **Sovereign class** (`assets/ships/Sovereign`): by YannikB98, made for Bridge Crew Revival.
 - **Kelvin Enterprise** (`assets/ships/AbramsEnterprise`): by Ricky "MadMan1701A" Wallace
-  (www.madshipyard.com); see its `CREDITS.txt`.
+  (www.madshipyard.com); see its `CREDITS.txt`. Its lettering font, Michroma (`Michroma-atlas.bin`, a rendering of
+  it), is by Vernon Adams and the Michroma Project Authors, under the SIL Open Font License; see `Michroma-OFL.txt`.
+- **Defiant** (`assets/ships/Defiant`): "U.S.S Defiant" by FatManInABox (Blend Swap #93289), under Creative Commons
+  Attribution 3.0, marked fan art for non-commercial use; converted for the mod by YannikB98, who also supplied its
+  pulse sound. See its `CREDITS.txt`.
 
 Star Trek and related marks are trademarks of CBS Studios / Paramount Global. Bridge Crew Revival is an unofficial
 fan project, not affiliated with or endorsed by Ubisoft, Red Storm Entertainment, CBS Studios or Paramount.
