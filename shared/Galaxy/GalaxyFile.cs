@@ -30,6 +30,21 @@ namespace StbcRevival.Galaxy
         /// <summary>The game's tag names (jump point, station, ...), from the catalogue.</summary>
         public List<string> Tags = new List<string>();
         public float LandingRadius = 1000f;
+        /// <summary>Text on the family's map entry; null leaves the game's default.</summary>
+        public string MapName;
+        /// <summary>Sprite name for the family's map background; null for none.</summary>
+        public string FamilyBackground;
+        /// <summary>Sprite name for the family's map icon; null for none.</summary>
+        public string MapIcon;
+        /// <summary>When set, this top-level node is a copy of a Trench family and has no body of its own.</summary>
+        public CopyFamily CopyFamily;
+    }
+
+    /// <summary>Stands in for a whole Trench family: the game's own family, copied under this system.</summary>
+    public sealed class CopyFamily
+    {
+        public string System;
+        public string Family;
     }
 
     /// <summary>A system of the new region, built by copying a Trench system's look and feel.</summary>
@@ -134,9 +149,23 @@ namespace StbcRevival.Galaxy
             n.Id = id;
             n.Parent = Json.Str(d, "parent", where, false, null);
             n.Name = Json.Str(d, "name", where, false, id);
-            n.Prefab = Json.Str(d, "prefab", where, true, null);
-            float[] pos = Json.Floats(d, "position", where, 3, true);
+            if (d.ContainsKey("copyFamily") && d["copyFamily"] != null)
+            {
+                var c = Json.Obj(d["copyFamily"], where + ": copyFamily");
+                n.CopyFamily = new CopyFamily
+                {
+                    System = Json.Str(c, "system", where + ": copyFamily", true, null),
+                    Family = Json.Str(c, "family", where + ": copyFamily", true, null),
+                };
+                if (n.Parent != null) throw new FormatException(where + ": a copied family can't have a parent");
+            }
+            n.Prefab = Json.Str(d, "prefab", where, n.CopyFamily == null, null);
+            float[] pos = d.ContainsKey("position") || n.CopyFamily == null
+                ? Json.Floats(d, "position", where, 3, true) : new float[3];
             n.X = pos[0]; n.Y = pos[1]; n.Z = pos[2];
+            n.MapName = Json.Str(d, "mapName", where, false, null);
+            n.FamilyBackground = Json.Str(d, "familyBackground", where, false, null);
+            n.MapIcon = Json.Str(d, "mapIcon", where, false, null);
             n.Unit = Json.Str(d, "unit", where, false, "Kilometers");
             if (Array.IndexOf(Units, n.Unit) < 0)
                 throw new FormatException(where + ": unknown unit '" + n.Unit + "' (use " + string.Join(", ", Units) + ")");
@@ -193,6 +222,11 @@ namespace StbcRevival.Galaxy
             d["rotation"] = new List<object> { n.RotX, n.RotY, n.RotZ };
             d["tags"] = Json.StringList(n.Tags);
             d["landingRadius"] = n.LandingRadius;
+            if (n.MapName != null) d["mapName"] = n.MapName;
+            if (n.FamilyBackground != null) d["familyBackground"] = n.FamilyBackground;
+            if (n.MapIcon != null) d["mapIcon"] = n.MapIcon;
+            if (n.CopyFamily != null)
+                d["copyFamily"] = new Dictionary<string, object> { { "system", n.CopyFamily.System }, { "family", n.CopyFamily.Family } };
             return d;
         }
 

@@ -12,6 +12,14 @@ namespace StbcRevival.Galaxy
         /// <summary>The tag the game gives a station, which Patrol restocks at.</summary>
         public const string StationTag = "SpaceStation";
 
+        /// <summary>The prefab of a node that groups a system's bodies into a map family.</summary>
+        public const string FamilyPrefab = "Family Group";
+
+        /// <summary>The prefab of a node that is one entry (a place to warp to) on the impulse map.</summary>
+        public const string PoiPrefab = "Point of Interest";
+
+        private static bool IsFamily(GalaxyNode n) { return n.CopyFamily != null || n.Prefab == FamilyPrefab; }
+
         /// <summary>Two systems closer than this share of the universe width sit on top of each other on the map.</summary>
         private const float OverlapShare = 0.02f;
 
@@ -33,7 +41,10 @@ namespace StbcRevival.Galaxy
             foreach (var t in catalogue.Tags) tags[t] = true;
             var templates = new Dictionary<string, bool>();
             var trenchNames = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
-            foreach (var s in catalogue.TrenchSystems) { templates[s.Name] = true; trenchNames[s.Name] = true; }
+            var trench = new Dictionary<string, CatalogueSystem>();
+            foreach (var s in catalogue.TrenchSystems) { templates[s.Name] = true; trenchNames[s.Name] = true; trench[s.Name] = s; }
+            var sprites = new Dictionary<string, bool>();
+            foreach (var x in catalogue.Sprites) sprites[x] = true;
 
             bool anyStation = false;
             foreach (var sys in file.Systems)
@@ -43,14 +54,49 @@ namespace StbcRevival.Galaxy
                 if (known && sys.Name != null && trenchNames.ContainsKey(sys.Name))
                     p.Add(sys.Id + ": '" + sys.Name + "' is already a Trench system");
 
+                if (sys.Name != null && sys.Name.IndexOf('|') >= 0)
+                    p.Add(sys.Id + ": use a plain name, not a text key ('" + sys.Name + "')");
+
                 var ids = new Dictionary<string, GalaxyNode>();
                 foreach (var n in sys.Nodes) ids[n.Id] = n;
 
-                bool jump = false;
+                bool jump = false, anyPoi = false;
                 foreach (var n in sys.Nodes)
                 {
                     string at = sys.Id + "/" + n.Id;
-                    if (known && (n.Prefab == null || !prefabs.ContainsKey(n.Prefab))) p.Add(at + ": no prefab '" + n.Prefab + "' in the game");
+                    if (n.Name != null && n.Name.IndexOf('|') >= 0)
+                        p.Add(at + ": use a plain name, not a text key ('" + n.Name + "')");
+                    if (n.Parent == null && !IsFamily(n))
+                        p.Add(at + ": top-level nodes must be families (Family Group) or a copied family");
+                    if (n.Prefab == PoiPrefab)
+                    {
+                        GalaxyNode up;
+                        if (n.Parent == null || (ids.TryGetValue(n.Parent, out up) && !IsFamily(up)))
+                            p.Add(at + ": a Point of Interest must sit directly under a family");
+                        else if (ids.TryGetValue(n.Parent, out up) && up.CopyFamily == null) anyPoi = true;
+                    }
+                    if (n.CopyFamily != null)
+                    {
+                        CatalogueFamily fam = null;
+                        CatalogueSystem ts;
+                        if (known)
+                        {
+                            if (trench.TryGetValue(n.CopyFamily.System ?? "", out ts))
+                                foreach (var cf in ts.Families) if (cf.Name == n.CopyFamily.Family) fam = cf;
+                            if (fam == null)
+                                p.Add(at + ": no family '" + n.CopyFamily.Family + "' in Trench system '" + n.CopyFamily.System + "'");
+                        }
+                        if (!known || (fam != null && fam.Pois.Count > 0)) anyPoi = true;
+                        if (fam != null && fam.HasSpawn) jump = true;
+                    }
+                    if (known)
+                    {
+                        if (n.FamilyBackground != null && !sprites.ContainsKey(n.FamilyBackground))
+                            p.Add(at + ": no sprite '" + n.FamilyBackground + "' in the game");
+                        if (n.MapIcon != null && !sprites.ContainsKey(n.MapIcon))
+                            p.Add(at + ": no sprite '" + n.MapIcon + "' in the game");
+                    }
+                    if (known && n.CopyFamily == null && (n.Prefab == null || !prefabs.ContainsKey(n.Prefab))) p.Add(at + ": no prefab '" + n.Prefab + "' in the game");
                     foreach (var t in n.Tags)
                     {
                         if (known && !tags.ContainsKey(t)) p.Add(at + ": no tag '" + t + "' in the game");
@@ -63,6 +109,8 @@ namespace StbcRevival.Galaxy
                         else if (IsOwnAncestor(n, ids)) p.Add(at + ": is its own ancestor");
                     }
                 }
+                if (!anyPoi)
+                    p.Add(sys.Id + ": no family with a Point of Interest: the impulse map would be empty");
                 // With no spawn tag known there's nothing to look for, so don't claim a system lacks one.
                 if (!jump && catalogue.SpawnTags.Count > 0)
                     p.Add(sys.Id + ": no jump point (a node tagged " + catalogue.SpawnTags[0] + ")");

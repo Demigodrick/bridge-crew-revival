@@ -30,8 +30,10 @@ public class DesignerApiTests : IDisposable
                     Id = "kessar", Name = "Kessar", X = 100, Z = 100, Template = "Venov",
                     Nodes = new List<GalaxyNode>
                     {
-                        new GalaxyNode { Id = "star", Name = "Star", Prefab = prefab, Tags = new List<string> { "Player" } },
+                        new GalaxyNode { Id = "star", Parent = "poi", Name = "Star", Prefab = prefab, Tags = new List<string> { "Player" } },
                         new GalaxyNode { Id = "stn", Parent = "star", Name = "Stn", Prefab = "Planet_Rock", Tags = new List<string> { "SpaceStation" } },
+                        new GalaxyNode { Id = "fam", Name = "Fam", Prefab = "Family Group" },
+                        new GalaxyNode { Id = "poi", Parent = "fam", Name = "Poi", Prefab = "Point of Interest" },
                     },
                 },
             },
@@ -46,6 +48,8 @@ public class DesignerApiTests : IDisposable
         {
             new CataloguePrefab { Name = "Star_Yellow", Kind = "star", Radius = 10 },
             new CataloguePrefab { Name = "Planet_Rock", Kind = "planet", Radius = 2 },
+            new CataloguePrefab { Name = "Family Group" },
+            new CataloguePrefab { Name = "Point of Interest" },
         },
         Tags = new List<string> { "Player", "SpaceStation" },
         SpawnTags = new List<string> { "Player" },

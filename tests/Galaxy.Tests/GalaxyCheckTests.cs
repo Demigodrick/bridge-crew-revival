@@ -14,28 +14,42 @@ public class GalaxyCheckTests
 
     static Catalogue Cat() => new Catalogue
     {
-        TrenchSystems = new List<CatalogueSystem> { new CatalogueSystem { Name = "Venov", Nodes = new List<GalaxyNode>() } },
+        TrenchSystems = new List<CatalogueSystem> { new CatalogueSystem { Name = "Venov", Nodes = new List<GalaxyNode>(), Families = new List<CatalogueFamily> {
+            new CatalogueFamily { Name = "FAMILY Venov III", Pois = new List<string> { "POI Start Planet" }, HasSpawn = true },
+            new CatalogueFamily { Name = "FAMILY Empty", Pois = new List<string>(), HasSpawn = false } } } },
         Prefabs = new List<CataloguePrefab>
         {
             new CataloguePrefab { Name = "Star_Yellow", Kind = "star", Radius = 10 },
             new CataloguePrefab { Name = "Planet_Rock", Kind = "planet", Radius = 2 },
+            new CataloguePrefab { Name = "Family Group", Kind = "other" },
+            new CataloguePrefab { Name = "Point of Interest", Kind = "other" },
+            new CataloguePrefab { Name = "Region", Kind = "other" },
         },
+        Sprites = new List<string> { "Icon_A", "Bg_A" },
         Tags = new List<string> { "Player", "SpaceStation", "Planet" },
         Skyboxes = new List<string>(),
         SpawnTags = new List<string> { "Player" },
         UniverseWidth = 1000, UniverseHeight = 1000,
     };
 
-    // One valid system: a jump point and a station.
+    // One valid system: family -> POI -> region -> a star with the jump point and a station.
     static GalaxyFile Valid() => new GalaxyFile
     {
         Format = 1, Name = "R", Page = new Page { Label = "R", Background = "trench-darkened" },
         Systems = new List<GalaxySystem>
         {
             System("kessar", 100, 100,
-                Node("kessar-star", null, "Star_Yellow", "Player"),
+                Node("kessar-fam", null, "Family Group"),
+                Node("kessar-poi", "kessar-fam", "Point of Interest"),
+                Node("kessar-region", "kessar-poi", "Region"),
+                Node("kessar-star", "kessar-region", "Star_Yellow", "Player"),
                 Node("kessar-station", "kessar-star", "Planet_Rock", "SpaceStation")),
         },
+    };
+
+    static GalaxyNode Copy(string id, string sys, string fam) => new GalaxyNode
+    {
+        Id = id, Name = id, Unit = "Lightseconds", CopyFamily = new CopyFamily { System = sys, Family = fam },
     };
 
     [Fact]
@@ -44,8 +58,8 @@ public class GalaxyCheckTests
     [Fact]
     public void NullCatalogue_OnlyStructuralProblems()
     {
-        var f = Valid(); f.Systems[0].Nodes[0].Prefab = "X"; f.Systems[0].Nodes[0].Tags.Add("Y");
-        f.Systems[0].Nodes[1].Parent = "ghost";
+        var f = Valid(); f.Systems[0].Nodes[3].Prefab = "X"; f.Systems[0].Nodes[3].Tags.Add("Y");
+        f.Systems[0].Nodes[4].Parent = "ghost";
         var p = GalaxyCheck.Problems(f, null);
         Assert.Contains("kessar/kessar-station: parent 'ghost' isn't in this system", p);
         Assert.Single(p);
@@ -54,14 +68,14 @@ public class GalaxyCheckTests
     [Fact]
     public void UnknownPrefab()
     {
-        var f = Valid(); f.Systems[0].Nodes[0].Prefab = "X";
+        var f = Valid(); f.Systems[0].Nodes[3].Prefab = "X";
         Assert.Contains("kessar/kessar-star: no prefab 'X' in the game", GalaxyCheck.Problems(f, Cat()));
     }
 
     [Fact]
     public void UnknownTag()
     {
-        var f = Valid(); f.Systems[0].Nodes[0].Tags.Add("X");
+        var f = Valid(); f.Systems[0].Nodes[3].Tags.Add("X");
         Assert.Contains("kessar/kessar-star: no tag 'X' in the game", GalaxyCheck.Problems(f, Cat()));
     }
 
@@ -91,14 +105,14 @@ public class GalaxyCheckTests
     [Fact]
     public void NoJumpPoint()
     {
-        var f = Valid(); f.Systems[0].Nodes[0].Tags.Clear();
+        var f = Valid(); f.Systems[0].Nodes[3].Tags.Clear();
         Assert.Contains("kessar: no jump point (a node tagged Player)", GalaxyCheck.Problems(f, Cat()));
     }
 
     [Fact]
     public void NoStationInRegion()
     {
-        var f = Valid(); f.Systems[0].Nodes.RemoveAt(1);
+        var f = Valid(); f.Systems[0].Nodes.RemoveAt(4);
         Assert.Contains("No station anywhere in the region: Patrol can't restock there", GalaxyCheck.Problems(f, Cat()));
     }
 
@@ -113,10 +127,101 @@ public class GalaxyCheckTests
     public void SystemsOverlap()
     {
         var f = Valid();
-        f.Systems.Add(System("dorn", 110, 105, Node("dorn-star", null, "Star_Yellow", "Player")));
+        f.Systems.Add(System("dorn", 110, 105, Node("dorn-fam", null, "Family Group"), Node("dorn-star", "dorn-fam", "Star_Yellow", "Player")));
         Assert.Contains("kessar and dorn overlap on the map", GalaxyCheck.Problems(f, Cat()));
         f.Systems[1].X = 200; f.Systems[1].Z = 200;
         Assert.DoesNotContain("kessar and dorn overlap on the map", GalaxyCheck.Problems(f, Cat()));
+    }
+
+    [Fact]
+    public void TopLevelNotFamily()
+    {
+        var f = Valid(); f.Systems[0].Nodes.Add(Node("x", null, "Planet_Rock"));
+        Assert.Contains("kessar/x: top-level nodes must be families (Family Group) or a copied family", GalaxyCheck.Problems(f, Cat()));
+    }
+
+    [Fact]
+    public void PoiNotUnderFamily()
+    {
+        var f = Valid(); f.Systems[0].Nodes.Add(Node("x", "kessar-region", "Point of Interest"));
+        Assert.Contains("kessar/x: a Point of Interest must sit directly under a family", GalaxyCheck.Problems(f, Cat()));
+        f = Valid(); f.Systems[0].Nodes.Add(Node("y", null, "Point of Interest"));
+        Assert.Contains("kessar/y: a Point of Interest must sit directly under a family", GalaxyCheck.Problems(f, Cat()));
+    }
+
+    [Fact]
+    public void NoPoi()
+    {
+        var f = Valid(); f.Systems[0].Nodes.RemoveRange(1, 4); f.Systems[0].Nodes.Add(Node("kessar-s", "kessar-fam", "Star_Yellow", "Player", "SpaceStation"));
+        Assert.Contains("kessar: no family with a Point of Interest: the impulse map would be empty", GalaxyCheck.Problems(f, Cat()));
+    }
+
+    [Fact]
+    public void CopiedFamilyWithoutPoi_IsNoPoi()
+    {
+        var f = Valid(); f.Systems[0].Nodes.RemoveRange(0, 3);
+        f.Systems[0].Nodes.Insert(0, Copy("c", "Venov", "FAMILY Empty"));
+        f.Systems[0].Nodes[1].Parent = "c";
+        Assert.Contains("kessar: no family with a Point of Interest: the impulse map would be empty", GalaxyCheck.Problems(f, Cat()));
+    }
+
+    [Fact]
+    public void CopiedFamily_ValidAndCountsAsPoi()
+    {
+        var f = Valid(); f.Systems[0].Nodes.RemoveRange(0, 4);
+        f.Systems[0].Nodes.Insert(0, Copy("c", "Venov", "FAMILY Venov III"));
+        f.Systems[0].Nodes.Add(Node("kessar-station", null, "Planet_Rock", "SpaceStation"));
+        f.Systems[0].Nodes.RemoveAt(1);
+        f.Systems[0].Nodes.Add(Node("kessar-fam", null, "Family Group"));
+        f.Systems[0].Nodes[1].Parent = "kessar-fam";
+        Assert.Empty(GalaxyCheck.Problems(f, Cat()));
+    }
+
+    [Fact]
+    public void UnknownCopyFamily()
+    {
+        var f = Valid(); f.Systems[0].Nodes.Add(Copy("x", "Venov", "F"));
+        Assert.Contains("kessar/x: no family 'F' in Trench system 'Venov'", GalaxyCheck.Problems(f, Cat()));
+        f.Systems[0].Nodes[5] = Copy("x", "S", "F");
+        Assert.Contains("kessar/x: no family 'F' in Trench system 'S'", GalaxyCheck.Problems(f, Cat()));
+    }
+
+    [Fact]
+    public void UnknownSprite()
+    {
+        var f = Valid(); f.Systems[0].Nodes[0].FamilyBackground = "X"; f.Systems[0].Nodes[0].MapIcon = "Icon_A";
+        var p = GalaxyCheck.Problems(f, Cat());
+        Assert.Contains("kessar/kessar-fam: no sprite 'X' in the game", p);
+        f.Systems[0].Nodes[0].FamilyBackground = "Bg_A"; f.Systems[0].Nodes[0].MapIcon = "Y";
+        Assert.Contains("kessar/kessar-fam: no sprite 'Y' in the game", GalaxyCheck.Problems(f, Cat()));
+    }
+
+    [Fact]
+    public void JumpPoint_FromCopiedFamily_Counts()
+    {
+        var f = Valid(); f.Systems[0].Nodes[3].Tags.Clear();
+        f.Systems[0].Nodes.Add(Copy("c", "Venov", "FAMILY Venov III"));
+        Assert.DoesNotContain("kessar: no jump point (a node tagged Player)", GalaxyCheck.Problems(f, Cat()));
+        f.Systems[0].Nodes[5] = Copy("c", "Venov", "FAMILY Empty");
+        Assert.Contains("kessar: no jump point (a node tagged Player)", GalaxyCheck.Problems(f, Cat()));
+    }
+
+    [Fact]
+    public void KeyedName()
+    {
+        var f = Valid(); f.Systems[0].Name = "2824|Kessar";
+        Assert.Contains("kessar: use a plain name, not a text key ('2824|Kessar')", GalaxyCheck.Problems(f, Cat()));
+        f = Valid(); f.Systems[0].Nodes[3].Name = "1|x";
+        Assert.Contains("kessar/kessar-star: use a plain name, not a text key ('1|x')", GalaxyCheck.Problems(f, Cat()));
+    }
+
+    [Fact]
+    public void NullCatalogue_SkipsCopyFamilyAndSprites()
+    {
+        var f = Valid(); f.Systems[0].Nodes[0].MapIcon = "Nope"; f.Systems[0].Nodes.Add(Copy("x", "Nowhere", "F"));
+        Assert.Empty(GalaxyCheck.Problems(f, null));
+        f.Systems[0].Nodes.Add(Node("t", null, "Planet_Rock"));
+        Assert.Contains("kessar/t: top-level nodes must be families (Family Group) or a copied family", GalaxyCheck.Problems(f, null));
     }
 
     [Fact]
@@ -136,8 +241,10 @@ public class CatalogueTests
         {
             TrenchSystems = new List<CatalogueSystem> { new CatalogueSystem {
                 Name = "Venov", X = 5, Z = 6, Skybox = "Sky/A", SystemTags = new List<string> { "T" },
-                Nodes = new List<GalaxyNode> { new GalaxyNode { Id = "n", Name = "N", Prefab = "P", X = 1, Y = 2, Z = 3, Unit = "Skybox", Tags = new List<string> { "Player" } } } } },
+                Nodes = new List<GalaxyNode> { new GalaxyNode { Id = "n", Name = "N", Prefab = "P", X = 1, Y = 2, Z = 3, Unit = "Skybox", Tags = new List<string> { "Player" } } },
+                Families = new List<CatalogueFamily> { new CatalogueFamily { Name = "FAMILY V", Pois = new List<string> { "POI A" }, HasSpawn = true } } } },
             Prefabs = new List<CataloguePrefab> { new CataloguePrefab { Name = "P", Kind = "planet", Radius = 2.5 } },
+            Sprites = new List<string> { "Icon_A" },
             Tags = new List<string> { "Player" }, Skyboxes = new List<string> { "Sky/A" }, SpawnTags = new List<string> { "Player" },
             UniverseMinX = -10, UniverseMinZ = -20, UniverseWidth = 1000, UniverseHeight = 800, Background = "map.png",
         };
@@ -147,5 +254,17 @@ public class CatalogueTests
         Assert.Equal(3f, d.TrenchSystems[0].Nodes[0].Z);
         Assert.Equal(2.5, d.Prefabs[0].Radius);
         Assert.Equal(800f, d.UniverseHeight);
+        Assert.Equal("FAMILY V", d.TrenchSystems[0].Families[0].Name);
+        Assert.Equal(new[] { "POI A" }, d.TrenchSystems[0].Families[0].Pois);
+        Assert.True(d.TrenchSystems[0].Families[0].HasSpawn);
+        Assert.Equal(new[] { "Icon_A" }, d.Sprites);
+    }
+
+    [Fact]
+    public void Parse_OlderCatalogueWithoutFamiliesOrSprites_Ok()
+    {
+        var d = Catalogue.Parse(@"{ ""trenchSystems"": [ { ""name"": ""V"", ""position"": [0, 0] } ] }");
+        Assert.Empty(d.TrenchSystems[0].Families);
+        Assert.Empty(d.Sprites);
     }
 }

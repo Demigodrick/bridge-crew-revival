@@ -3,6 +3,15 @@ using System.Collections.Generic;
 
 namespace StbcRevival.Galaxy
 {
+    /// <summary>A family of a Trench system: its Points of Interest, and whether a jump point arrives in it.</summary>
+    public sealed class CatalogueFamily
+    {
+        public string Name;
+        public List<string> Pois = new List<string>();
+        /// <summary>Any node under the family carries a SpawnTags tag.</summary>
+        public bool HasSpawn;
+    }
+
     /// <summary>A Trench system as the game has it, offered to the designer for reference and as a template.</summary>
     public class CatalogueSystem
     {
@@ -11,6 +20,7 @@ namespace StbcRevival.Galaxy
         public string Skybox;
         public List<string> SystemTags = new List<string>();
         public List<GalaxyNode> Nodes = new List<GalaxyNode>();
+        public List<CatalogueFamily> Families = new List<CatalogueFamily>();
     }
 
     /// <summary>A SectorBody prefab the game has, with a size and a rough type so the designer can draw it.</summary>
@@ -38,6 +48,8 @@ namespace StbcRevival.Galaxy
         public float UniverseMinX, UniverseMinZ, UniverseWidth, UniverseHeight;
         /// <summary>File name of the warp map background PNG exported next to the catalogue.</summary>
         public string Background;
+        /// <summary>Sprite names usable as a family's background or map icon.</summary>
+        public List<string> Sprites = new List<string>();
 
         public static Catalogue Parse(string json)
         {
@@ -56,6 +68,18 @@ namespace StbcRevival.Galaxy
                     s.Skybox = Json.Str(d, "skybox", where, false, null);
                     s.SystemTags = Json.Strings(d, "systemTags", where);
                     foreach (var no in Json.List(d, "nodes", where, false)) s.Nodes.Add(ReadNode(no, name));
+                    foreach (var fo in Json.List(d, "families", where, false))
+                    {
+                        var fd = Json.Obj(fo, "a family in " + where);
+                        string fname = Json.Str(fd, "name", "a family in " + where, true, null);
+                        object hs;
+                        s.Families.Add(new CatalogueFamily
+                        {
+                            Name = fname,
+                            Pois = Json.Strings(fd, "pois", "family '" + fname + "'"),
+                            HasSpawn = fd.TryGetValue("hasSpawn", out hs) && hs is bool && (bool)hs,
+                        });
+                    }
                     c.TrenchSystems.Add(s);
                 }
                 foreach (var po in Json.List(root, "prefabs", "the catalogue", false))
@@ -80,6 +104,7 @@ namespace StbcRevival.Galaxy
                     c.UniverseWidth = (float)Json.Num(u, "width", "universe", false, 0);
                     c.UniverseHeight = (float)Json.Num(u, "height", "universe", false, 0);
                 }
+                c.Sprites = Json.Strings(root, "sprites", "the catalogue");
                 c.Background = Json.Str(root, "background", "the catalogue", false, null);
                 return c;
             }
@@ -117,6 +142,10 @@ namespace StbcRevival.Galaxy
                 var nodes = new List<object>();
                 foreach (var n in s.Nodes) nodes.Add(GalaxyFile.NodeToJson(n));
                 d["nodes"] = nodes;
+                var fams = new List<object>();
+                foreach (var f in s.Families)
+                    fams.Add(new Dictionary<string, object> { { "name", f.Name }, { "pois", Json.StringList(f.Pois) }, { "hasSpawn", f.HasSpawn } });
+                d["families"] = fams;
                 systems.Add(d);
             }
             root["trenchSystems"] = systems;
@@ -131,6 +160,7 @@ namespace StbcRevival.Galaxy
             {
                 { "minX", UniverseMinX }, { "minZ", UniverseMinZ }, { "width", UniverseWidth }, { "height", UniverseHeight },
             };
+            root["sprites"] = Json.StringList(Sprites);
             root["background"] = Background;
             return MiniJson.Write(root);
         }

@@ -23,6 +23,43 @@ public class GalaxyFileTests
   ]
 }";
 
+    const string Families = @"{ ""format"": 1, ""name"": ""R"", ""systems"": [ { ""id"": ""k"", ""name"": ""K"", ""position"": [1, 2], ""template"": ""Venov"", ""nodes"": [
+        { ""id"": ""f"", ""name"": ""Fam"", ""prefab"": ""Family Group"", ""position"": [0, 0, 0], ""unit"": ""Lightseconds"",
+          ""mapName"": ""Kessar Deep"", ""familyBackground"": ""Bg"", ""mapIcon"": ""Ic"" },
+        { ""id"": ""c"", ""name"": ""Copy"", ""copyFamily"": { ""system"": ""Venov"", ""family"": ""FAMILY Venov III"" } } ] } ] }";
+
+    [Fact]
+    public void RoundTrip_KeepsMapFieldsAndCopyFamily()
+    {
+        var a = GalaxyFile.Parse(Families);
+        var b = GalaxyFile.Parse(a.ToJson());
+        var f = b.Systems[0].Nodes[0];
+        Assert.Equal("Kessar Deep", f.MapName); Assert.Equal("Bg", f.FamilyBackground); Assert.Equal("Ic", f.MapIcon);
+        Assert.Null(f.CopyFamily);
+        var c = b.Systems[0].Nodes[1];
+        Assert.Equal("Venov", c.CopyFamily.System); Assert.Equal("FAMILY Venov III", c.CopyFamily.Family);
+        Assert.Null(c.MapName);
+        Assert.Equal(a.ToJson(), b.ToJson());
+        Assert.DoesNotContain("mapName\": null", b.ToJson());
+        Assert.DoesNotContain("copyFamily\": null", b.ToJson());
+    }
+
+    [Fact]
+    public void Parse_CopyFamilyWithoutPrefab_Ok()
+    {
+        var c = GalaxyFile.Parse(Families).Systems[0].Nodes[1];
+        Assert.Null(c.Prefab);
+        Assert.Null(c.Parent);
+    }
+
+    [Fact]
+    public void Parse_CopyFamilyWithParent_Throws()
+    {
+        var bad = Families.Replace(@"""id"": ""c"",", @"""id"": ""c"", ""parent"": ""f"",");
+        var e = Assert.Throws<FormatException>(() => GalaxyFile.Parse(bad));
+        Assert.Contains("k/c", e.Message);
+    }
+
     [Fact]
     public void RoundTrip_KeepsEverything()
     {
