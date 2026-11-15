@@ -15,6 +15,8 @@
   <ItemGroup>
     <ProjectReference Include="../server/StbcCore/StbcCore.csproj" />
     <Compile Include="../shared/VirtualSockets.cs" Link="Shared/VirtualSockets.cs" />
+    <Compile Include="../shared/MiniJson.cs" Link="Shared/MiniJson.cs" />
+    <Compile Include="../shared/Galaxy/*.cs" Link="Shared/Galaxy/%(Filename).cs" />
     <Compile Include="../shared/Voice/*.cs" Link="Shared/Voice/%(Filename).cs" />
   </ItemGroup>
 
