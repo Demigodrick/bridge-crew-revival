@@ -62,3 +62,7 @@ canvas { display: block; width: 100%; height: 100%; }
   body { grid-template-columns: 1fr; grid-template-rows: 55vh 1fr; }
   #side { border-right: 0; border-bottom: 1px solid var(--line); }
 }
+
+.copyrow { display: grid; gap: 6px; }
+#geom.nested { padding: 0; border: 0; }
+#famList li small.warn { color: var(--bad); }

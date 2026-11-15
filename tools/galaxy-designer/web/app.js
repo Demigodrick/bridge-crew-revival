@@ -143,15 +143,23 @@ function drawGalaxy() {
 
 // ----- system plan: world positions in km, centred and zoomed by `cam`
 const cam = { x: 0, z: 0, k: 1e-3 };
+const FAMILY = 'Family Group', POI = 'Point of Interest', REGION = 'Region';
+let selFam = null, fitFam = undefined;   // id of the family the plan shows (a top-level node)
+const dispName = v => (v || '').indexOf('|') >= 0 ? v.slice(v.indexOf('|') + 1) : v;   // "2824|Venov" shows as Venov
+const isCopy = n => !!n.copyFamily;
+function famOf(s, n) { let c = n, i = 0; while (c && c.parent && i++ < 50) c = nodeById(s, c.parent); return c; }
+function levelOf(s, n) { let l = 0, c = n; while (c && c.parent && l < 50) { c = nodeById(s, c.parent); l++; } return l; }
+const famNodes = s => (s.nodes || []).filter(n => famOf(s, n) && famOf(s, n).id === selFam);   // the shown family's nodes
 function worldPos(s, n, depth = 0) {
-  const u = UNIT_KM[n.unit] || 1;
-  let x = n.position[0] * u, y = n.position[1] * u, z = n.position[2] * u;
+  if (!n.parent && n.id === selFam) return [0, 0, 0];   // the plan is drawn around the shown family
+  const u = UNIT_KM[n.unit] || 1, pos = n.position || [0, 0, 0];
+  let x = pos[0] * u, y = pos[1] * u, z = pos[2] * u;
   if (n.parent && depth < 50) { const p = nodeById(s, n.parent); if (p) { const [px, py, pz] = worldPos(s, p, depth + 1); x += px; y += py; z += pz; } }
   return [x, y, z];
 }
 function fitCam() {
   const s = sys(); if (!s) return;
-  let m = 0; for (const n of s.nodes || []) { const p = worldPos(s, n); m = Math.max(m, Math.abs(p[0]), Math.abs(p[2])); }
+  let m = 0; for (const n of famNodes(s)) { const p = worldPos(s, n); m = Math.max(m, Math.abs(p[0]), Math.abs(p[2])); }
   cam.x = 0; cam.z = 0; cam.k = 0.4 * Math.min(canvas.width, canvas.height) / Math.max(m, 1);
 }
 const toS = (x, z) => [canvas.width / 2 + (x - cam.x) * cam.k, canvas.height / 2 - (z - cam.z) * cam.k];
@@ -166,7 +174,10 @@ function drawSystem() {
   ctx.font = `${11 * d}px system-ui, sans-serif`; ctx.textBaseline = 'middle';
   const [ox, oy] = toS(0, 0);
   ctx.strokeStyle = '#1b2430'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(0, oy); ctx.lineTo(w, oy); ctx.moveTo(ox, 0); ctx.lineTo(ox, h); ctx.stroke();
-  const L = layout(s), items = (s.nodes || []).map(n => ({ n }));
+  const fam = (s.nodes || []).find(n => n.id === selFam);
+  if (!fam) { ctx.fillStyle = '#8592a0'; ctx.fillText('Add a family to begin: an empty one, or a copy of a Trench family.', 24 * d, 40 * d); return; }
+  if (isCopy(fam)) { ctx.fillStyle = '#8592a0'; ctx.fillText(`A copy of ${dispName(fam.copyFamily.system)} / ${fam.copyFamily.family}: read-only, its Points of Interest are listed on the left.`, 24 * d, 40 * d); return; }
+  const L = layout(s), items = famNodes(s).map(n => ({ n }));
   for (const { n } of items) {
     if (!n.parent) continue; const par = nodeById(s, n.parent); if (!par) continue;
     const a = L[par.id], b = L[n.id], rad = Math.hypot(b.x - a.x, b.y - a.y);
@@ -184,7 +195,7 @@ function drawSystem() {
     if (isJump(n)) { ctx.strokeStyle = '#f2c14e'; ctx.lineWidth = d; ctx.beginPath(); ctx.arc(px, py, (big + 5) * d, 0, 7); ctx.stroke(); }
     ctx.fillStyle = sel ? '#f2c14e' : '#e6edf3'; ctx.fillText(n.name || n.id, px + (big + 5) * d, py);
   }
-  $('help').textContent = 'Click: select a node · drag it: set X/Z (Y is a field; a node drawn stacked above its parent is too close to drag: use the fields) · drag empty space: pan · wheel: zoom · F: fit · Delete: remove the node';
+  $('help').textContent = 'Click: select a node · drag it: set X/Z (Y is a field; a node drawn stacked above its parent is too close to drag: use the fields) · drag empty space: pan · wheel: zoom · F: fit · Delete: remove the node (and what is inside it)';
 }
 // Where each node is drawn. A child that would land within ~12 px of its parent is stacked in a short column
 // above it (purely visual; stored positions don't change), so dots and labels stay readable. off=true for those.
@@ -203,13 +214,13 @@ function layout(s) {
     }
     return pos[n.id] = { x, y, off: false };
   };
-  for (const n of s.nodes || []) place(n, 0);
+  for (const n of famNodes(s)) place(n, 0);
   return pos;
 }
 function hitNode(px, py) {
   const s = sys(), d = dpr(); let best = null, bd = 14 * d;
   const L = layout(s);
-  for (const n of s.nodes || []) { const dd = Math.hypot(L[n.id].x - px, L[n.id].y - py); if (dd <= bd) { bd = dd; best = n; } }
+  for (const n of famNodes(s)) { const dd = Math.hypot(L[n.id].x - px, L[n.id].y - py); if (dd <= bd) { bd = dd; best = n; } }
   return best;
 }
 function hitSystem(px, py) {
@@ -229,7 +240,7 @@ canvas.addEventListener('pointerdown', e => {
     else drag = { kind: 'empty', px, py, moved: false };
   } else {
     const n = hitNode(px, py);
-    if (n) { selNode = n.id; drag = layout(sys())[n.id].off ? { kind: 'none' } : { kind: 'node', moved: false }; refreshSystemPanel(); }
+    if (n) { selNode = n.id; selFam = famOf(sys(), n).id; drag = (layout(sys())[n.id].off || !n.parent) ? { kind: 'none' } : { kind: 'node', moved: false }; refreshSystemPanel(); }
     else drag = { kind: 'pan', px, py, cx: cam.x, cz: cam.z, moved: false };
   }
   draw();
@@ -270,7 +281,7 @@ canvas.addEventListener('wheel', e => {
 }, { passive: false });
 
 // ---------- galaxy view
-function trenchTemplates() { return cat ? (cat.trenchSystems || []).map(s => ({ value: s.name })) : []; }
+function trenchTemplates() { return cat ? (cat.trenchSystems || []).map(s => ({ value: s.name, label: dispName(s.name) })) : []; }
 
 let addedAt = 0;   // a double-click on empty space adds one system and doesn't then open it
 function addSystemAt(px, py) {
@@ -311,16 +322,15 @@ function deleteSystem() {
   gal.systems.splice(selSys, 1); selSys = -1; setDirty(); refreshGalaxyPanel(); draw();
 }
 
-// ---------- system view
+// ---------- system view: families -> POIs -> regions -> bodies
 function openSystem(i) {
-  selSys = i; selNode = null; view = 'system';
+  selSys = i; selNode = null; selFam = null; fitFam = undefined; view = 'system';
   $('galaxyPanel').hidden = true; $('systemPanel').hidden = false;
-  $('sysTitle').textContent = sys().name; fitCam(); buildPrefabPicker(); refreshSystemPanel(); draw();
+  buildPrefabPicker(); buildCopyPicker(); refreshSystemPanel(); draw();
 }
 function backToGalaxy() { view = 'galaxy'; $('galaxyPanel').hidden = false; $('systemPanel').hidden = true; $('coords').textContent = ''; refreshGalaxyPanel(); draw(); }
 $('backBtn').addEventListener('click', backToGalaxy);
 
-let addPrefab = '';
 function prefabOptions() {
   if (!cat) return [];
   const order = ['star', 'planet', 'moon', 'station', 'asteroids', 'nebula', 'other'];
@@ -329,55 +339,141 @@ function prefabOptions() {
 }
 function buildPrefabPicker() {
   const w = $('prefabWrap'); w.textContent = '';
-  const opts = prefabOptions(); addPrefab = opts.length ? opts[0].value : '';
-  const p = picker(opts, addPrefab, v => addPrefab = v, 'addPrefabSel'); if (!opts.length) p.placeholder = 'Prefab name'; w.append(p);
+  const opts = prefabOptions();
+  const p = picker(opts, opts.length ? opts[0].value : '', () => { }, 'addPrefabSel'); if (!opts.length) p.placeholder = 'Body prefab name'; w.append(p);
 }
+function spritePicker(value, onChange, id) {
+  const sp = (cat && cat.sprites) || [];
+  return picker(sp.length ? [{ value: '', label: '(none)' }, ...sp.map(v => ({ value: v }))] : [], value || '', onChange, id);
+}
+function setOpt(n, key, v) { if (v) n[key] = v; else delete n[key]; setDirty(); }
+
+// Copy-a-family pickers: a Trench system (by its plain name) then one of its families; free text without that data.
+function buildCopyPicker() {
+  const w = $('cpWrap'); w.textContent = '';
+  const tss = cat ? (cat.trenchSystems || []).filter(t => (t.families || []).length) : [];
+  if (!tss.length) {
+    w.append(el('input', { id: 'cpSys', type: 'text', placeholder: 'Trench system (as the game names it)', spellcheck: false }), el('input', { id: 'cpFam', type: 'text', placeholder: 'Family name', spellcheck: false }));
+    return;
+  }
+  const famsOf = name => { const t = tss.find(x => x.name === name); return t ? t.families.map(f => ({ value: f.name, label: f.name + (f.pois && f.pois.length ? ` (${f.pois.length} POI)` : '') })) : []; };
+  const fillFam = name => { const f = $('cpFamWrap'); f.textContent = ''; f.append(picker(famsOf(name), famsOf(name)[0].value, () => { }, 'cpFam')); };
+  w.append(picker(tss.map(t => ({ value: t.name, label: dispName(t.name) })), tss[0].name, v => fillFam(v), 'cpSys'), el('span', { id: 'cpFamWrap' }));
+  fillFam(tss[0].name);
+}
+
+function addChild(parent, props) {
+  const s = sys(), ids = s.nodes.map(n => n.id);
+  const n = Object.assign({ id: uniqueId(props.name, ids), parent, position: [0, 0, 0], rotation: [0, 0, 0], tags: [], landingRadius: 1000 }, props);
+  s.nodes.push(n); selNode = n.id; selFam = famOf(s, n).id; setDirty(); refreshSystemPanel(); draw(); return n;
+}
+$('addFamily').addEventListener('click', () => {
+  const s = sys(), name = 'New family ' + (s.nodes.filter(n => !n.parent).length + 1);
+  addChild(null, { name, prefab: FAMILY, unit: 'Lightseconds' });
+  $('nName').focus(); $('nName').select();
+});
+$('addCopy').addEventListener('click', () => {
+  const sysName = ($('cpSys').value || '').trim(), fam = ($('cpFam').value || '').trim();
+  if (!sysName || !fam) return toast('Pick a Trench system and one of its families');
+  const s = sys(), ids = s.nodes.map(n => n.id), name = dispName(fam);
+  const n = { id: uniqueId(name, ids), parent: null, name, copyFamily: { system: sysName, family: fam } };
+  s.nodes.push(n); selNode = n.id; selFam = n.id; setDirty(); refreshSystemPanel(); draw();
+});
+function selectedAt(level) {   // the selected node's ancestor-or-self at a level (0 family, 1 POI, 2 region), or null
+  const s = sys(); let n = selNode && nodeById(s, selNode);
+  if (!n) return null; let l = levelOf(s, n);
+  while (n && l > level) { n = nodeById(s, n.parent); l--; }
+  return n && l === level ? n : null;
+}
+$('addPoi').addEventListener('click', () => {
+  const fam = selectedAt(0) || nodeById(sys(), selFam);
+  if (!fam) return toast('Add or select a family first');
+  if (isCopy(fam)) return toast('A copied family is read-only: it keeps its own POIs');
+  addChild(fam.id, { name: 'New POI', prefab: POI, unit: 'Lightseconds' });
+  $('nName').focus(); $('nName').select();
+});
+$('addRegion').addEventListener('click', () => {
+  const poi = selectedAt(1);
+  if (!poi) return toast('Select a POI first');
+  addChild(poi.id, { name: 'New region', prefab: REGION, unit: 'Kilometers' });
+  $('nName').focus(); $('nName').select();
+});
 $('addNode').addEventListener('click', () => {
-  const s = sys(); if (!s) return;
+  const s = sys(), parent = selNode && nodeById(s, selNode);
+  if (!parent || levelOf(s, parent) < 1 || isCopy(parent)) return toast('Select a POI, region or body to put it in');
   const prefab = ($('addPrefabSel').value || '').trim();
   if (!prefab) return toast('Pick a prefab first');
-  const parent = $('underSel').checked && selNode ? selNode : null;
-  const base = prefab.replace(/^.*[\\/]/, '');
-  const ids = (s.nodes || []).map(n => n.id);
-  s.nodes = s.nodes || [];
-  const n = { id: uniqueId(base, ids), parent, name: base, prefab, position: [0, 0, 0], unit: parent ? 'Kilometers' : 'AstronomicalUnits', rotation: [0, 0, 0], tags: [], landingRadius: 1000 };
-  s.nodes.push(n); selNode = n.id; setDirty(); refreshSystemPanel(); draw();
+  const k = (cat && (cat.prefabs || []).find(p => p.name === prefab) || {}).kind;
+  addChild(parent.id, { name: prefab.replace(/^.*[\\/]/, ''), prefab, unit: k === 'star' || k === 'planet' ? 'AstronomicalUnits' : 'Kilometers' });
 });
 
-function depthOrder(s) {
+function depthOrder(s, root) {
   const nodes = s.nodes || [], out = [], seen = new Set();
-  const walk = (parent, depth) => { for (const n of nodes) if ((n.parent || null) === parent && !seen.has(n.id)) { seen.add(n.id); out.push({ n, depth }); walk(n.id, depth + 1); } };
-  walk(null, 0);
-  for (const n of nodes) if (!seen.has(n.id)) { seen.add(n.id); out.push({ n, depth: 0 }); walk(n.id, 1); }
+  const walk = (n, depth) => { if (seen.has(n.id)) return; seen.add(n.id); out.push({ n, depth }); for (const k of nodes) if (k.parent === n.id) walk(k, depth + 1); };
+  walk(root, 0);
   return out;
 }
 function isJump(n) { const t = cat && cat.spawnTags && cat.spawnTags[0]; return !!t && nodeTags(n).includes(t); }
 function descendants(s, id) { const r = new Set([id]); let g = true; while (g) { g = false; for (const n of s.nodes) if (n.parent && r.has(n.parent) && !r.has(n.id)) { r.add(n.id); g = true; } } return r; }
+function catFamily(n) {
+  const t = cat && (cat.trenchSystems || []).find(x => x.name === n.copyFamily.system);
+  return t && (t.families || []).find(f => f.name === n.copyFamily.family);
+}
 
 function refreshSystemPanel() {
   const s = sys(); if (!s) return;
   $('sysTitle').textContent = s.name;
+  s.nodes = s.nodes || [];
+  const sel = selNode ? nodeById(s, selNode) : null;
+  if (sel) selFam = famOf(s, sel).id;
+  const tops = s.nodes.filter(n => !n.parent);
+  if (!tops.some(n => n.id === selFam)) selFam = tops.length ? tops[0].id : null;
+  if (selFam !== fitFam) { fitFam = selFam; fitCam(); }
+  const fl = $('famList'); fl.textContent = '';
+  if (!tops.length) fl.append(el('li', { class: 'muted' }, 'No families yet.'));
+  for (const f of tops)
+    fl.append(el('li', { class: f.id === selFam ? 'sel' : '', onclick: () => { selNode = f.id; selFam = f.id; refreshSystemPanel(); draw(); } },
+      f.name || f.id, isCopy(f) ? el('small', null, 'copy of ' + dispName(f.copyFamily.system) + ' / ' + f.copyFamily.family)
+        : f.prefab === FAMILY ? el('small', null, 'family') : el('small', { class: 'warn' }, 'not a family')));
   const ul = $('nodeList'); ul.textContent = '';
-  const order = depthOrder(s);
-  if (!order.length) ul.append(el('li', { class: 'muted' }, 'No nodes yet: pick a prefab and Add node.'));
-  for (const { n, depth } of order)
-    ul.append(el('li', { class: n.id === selNode ? 'sel' : '', style: `padding-left:${14 + depth * 14}px`, onclick: () => { selNode = n.id; refreshSystemPanel(); draw(); } },
-      (isJump(n) ? '◎ ' : '') + (n.name || n.id), el('small', null, n.prefab)));
-  const n = selNode ? nodeById(s, selNode) : null;
+  const fam = s.nodes.find(n => n.id === selFam);
+  if (fam && isCopy(fam)) {
+    const cf = catFamily(fam);
+    ul.append(el('li', { class: 'muted' }, 'A copy of the Trench family: read-only. Its POIs:'));
+    for (const p of (cf && cf.pois) || []) ul.append(el('li', { class: 'muted', style: 'padding-left:28px;cursor:default' }, dispName(p)));
+    if (!cf) ul.append(el('li', { class: 'muted' }, cat ? 'The catalogue has no such family.' : '(no catalogue: names unknown)'));
+  } else if (fam) {
+    for (const { n, depth } of depthOrder(s, fam))
+      ul.append(el('li', { class: n.id === selNode ? 'sel' : '', style: `padding-left:${14 + depth * 14}px`, onclick: () => { selNode = n.id; refreshSystemPanel(); draw(); } },
+        (isJump(n) ? '◎ ' : '') + (n.name || n.id), el('small', null, depth === 0 ? 'family' : depth === 1 ? 'POI' : depth === 2 && n.prefab === REGION ? 'region' : n.prefab)));
+  }
+  const n = sel;
   $('nodeForm').hidden = !n;
   if (!n) return;
+  const lvl = levelOf(s, n), copy = isCopy(n);
   $('nName').value = n.name || ''; $('nId').value = n.id;
+  $('copyInfo').hidden = !copy;
+  if (copy) $('copyInfo').textContent = `A copy of ${dispName(n.copyFamily.system)} / ${n.copyFamily.family}. Rename it and give it a map name or background; the rest is the Trench's.`;
+  $('mapNameRow').hidden = lvl > 1; $('bgRow').hidden = lvl !== 0; $('iconRow').hidden = lvl !== 1;
+  $('nMapName').value = n.mapName || '';
+  const bw = $('nBgWrap'); bw.textContent = ''; bw.append(spritePicker(n.familyBackground, v => setOpt(n, 'familyBackground', v), 'nBg'));
+  const iw = $('nIconWrap'); iw.textContent = ''; iw.append(spritePicker(n.mapIcon, v => setOpt(n, 'mapIcon', v), 'nIcon'));
+  $('geom').hidden = copy;
+  $('poi').hidden = copy;
+  if (copy) return;
   const pw = $('nPrefabWrap'); pw.textContent = ''; pw.append(picker(prefabOptions(), n.prefab, v => { n.prefab = v; setDirty(); refreshSystemPanel(); draw(); }, 'nPrefab'));
   const par = $('nParent'); par.textContent = ''; par.append(el('option', { value: '', textContent: '(none)' }));
   const bad = descendants(s, n.id);
-  for (const o of s.nodes) if (!bad.has(o.id)) par.append(el('option', { value: o.id, textContent: o.name || o.id }));
-  par.value = n.parent || '';
+  for (const o of s.nodes) if (!bad.has(o.id) && !isCopy(o)) par.append(el('option', { value: o.id, textContent: o.name || o.id }));
+  par.value = n.parent || ''; par.disabled = lvl === 0;
+  n.position = n.position || [0, 0, 0];
   $('nX').value = n.position[0]; $('nY').value = n.position[1]; $('nZ').value = n.position[2];
   const u = $('nUnit'); u.textContent = ''; for (const x of UNITS) u.append(el('option', { value: x, textContent: x })); u.value = n.unit || 'Kilometers';
   n.rotation = n.rotation || [0, 0, 0];
   $('nRX').value = n.rotation[0]; $('nRY').value = n.rotation[1]; $('nRZ').value = n.rotation[2];
   $('nLand').value = n.landingRadius == null ? 1000 : n.landingRadius;
   refreshPoi(n);
+  $('jumpRow').hidden = lvl < 2; $('poiKinds').hidden = lvl < 2;
 }
 
 function tagAllowed(t) { return !cat || (cat.tags || []).includes(t); }
@@ -409,7 +505,8 @@ $('tagInput').addEventListener('keydown', e => {
   e.target.value = ''; toggleTag(n, t, true);
 });
 const nodeEdit = (id, f) => $(id).addEventListener('input', e => { const n = nodeById(sys(), selNode); if (!n) return; f(n, e.target.value); setDirty(); draw(); });
-nodeEdit('nName', (n, v) => n.name = v); $('nName').addEventListener('change', refreshSystemPanel);
+nodeEdit('nName', (n, v) => n.name = v); $('nMapName').addEventListener('input', e => { const n = nodeById(sys(), selNode); if (n) setOpt(n, 'mapName', e.target.value); });
+ $('nName').addEventListener('change', refreshSystemPanel);
 nodeEdit('nX', (n, v) => n.position[0] = num(v)); nodeEdit('nY', (n, v) => n.position[1] = num(v)); nodeEdit('nZ', (n, v) => n.position[2] = num(v));
 nodeEdit('nRX', (n, v) => n.rotation[0] = num(v)); nodeEdit('nRY', (n, v) => n.rotation[1] = num(v)); nodeEdit('nRZ', (n, v) => n.rotation[2] = num(v));
 nodeEdit('nLand', (n, v) => n.landingRadius = num(v));
@@ -418,8 +515,9 @@ $('nParent').addEventListener('change', e => { const n = nodeById(sys(), selNode
 $('nDelete').addEventListener('click', deleteNode);
 function deleteNode() {
   const s = sys(), n = s && nodeById(s, selNode); if (!n) return;
-  for (const o of s.nodes) if (o.parent === n.id) o.parent = n.parent || null;   // its children move up a level
-  s.nodes.splice(s.nodes.indexOf(n), 1); selNode = null; setDirty(); refreshSystemPanel(); draw();
+  const gone = descendants(s, n.id);
+  if (gone.size > 1 && !confirm(`Delete ${n.name || n.id} and the ${gone.size - 1} node(s) inside it?`)) return;
+  s.nodes = s.nodes.filter(o => !gone.has(o.id)); selNode = n.parent || null; setDirty(); refreshSystemPanel(); draw();
 }
 
 addEventListener('keydown', e => {
@@ -451,7 +549,7 @@ async function openFile(name) {
   if (!confirmLeave()) return;
   try {
     const g = await (await api('/api/galaxy/' + encodeURIComponent(name))).json();
-    g.systems = g.systems || []; for (const s of g.systems) { s.nodes = s.nodes || []; for (const n of s.nodes) { n.position = n.position || [0, 0, 0]; n.tags = n.tags || []; n.rotation = n.rotation || [0, 0, 0]; if (n.parent === undefined) n.parent = null; } }
+    g.systems = g.systems || []; for (const s of g.systems) { s.nodes = s.nodes || []; for (const n of s.nodes) { if (n.parent === undefined) n.parent = null; if (n.copyFamily) continue; n.position = n.position || [0, 0, 0]; n.tags = n.tags || []; n.rotation = n.rotation || [0, 0, 0]; } }
     g.page = g.page || { label: g.name || '', background: 'trench-darkened' };
     gal = g; fileName = name; $('fileName').value = name; selSys = -1; selNode = null; setDirty(false); closeProblems(); $('openList').hidden = true;
     if (view === 'system') backToGalaxy(); else { refreshGalaxyPanel(); draw(); }
