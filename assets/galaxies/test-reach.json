@@ -16,7 +16,7 @@
     {
       "id": "halvar",
       "name": "Halvar",
-      "position": [240, -20],
+      "position": [190, -20],
       "template": "Silva",
       "nodes": [
         { "id": "family", "name": "Halvar", "prefab": "Family Group", "tags": ["FAMILY"], "unit": "Lightseconds",
