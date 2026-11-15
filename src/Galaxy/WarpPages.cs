@@ -429,7 +429,7 @@ namespace StbcRevival.Galaxy
 
             foreach (var c in button.GetComponentsInChildren<Component>(true))
                 if (c is TMPro.TMP_Text || c is UnityEngine.UI.Text) s.Texts.Add(c);
-            SetLabel(s, PageName(2));
+            SetLabel(s, PageName(s.Page == 2 ? 1 : 2)); // a retry can come after the first page was shown
             var kinds = new List<string>();
             foreach (var c in button.GetComponentsInChildren<Component>(true))
                 if (c != null && !kinds.Contains(c.GetType().Name)) kinds.Add(c.GetType().Name);
@@ -493,7 +493,7 @@ namespace StbcRevival.Galaxy
             var small = new List<string>();
             foreach (var g in panel.GetComponentsInChildren<UnityEngine.UI.Image>(true))
             {
-                if (g == null || g.sprite == null || g == s.Art) continue;
+                if (g == null || g.sprite == null || g == s.Art || !g.gameObject.activeSelf) continue; // hidden ones stay as they are
                 bool skipped = false;
                 foreach (var t in skip) if (g.transform.IsChildOf(t)) { skipped = true; break; }
                 if (skipped || g.GetComponentInChildren<HandInteraction>(true) != null || g.GetComponent<UnityEngine.UI.Selectable>() != null) continue;
