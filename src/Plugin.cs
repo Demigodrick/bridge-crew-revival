@@ -74,6 +74,7 @@ namespace StbcRevival
         internal static ConfigEntry<bool> NamePlates;
         internal static ConfigEntry<int> KlingonHeadChoice;
         internal static ConfigEntry<string> MapOverride;
+        internal static ConfigEntry<UnityEngine.KeyCode> CatalogueKey;
         internal static ConfigEntry<int> FleetBattleSize;
         internal static ConfigEntry<string> TestPatrolAssignment;
         internal static ConfigEntry<int> EvacuationMinutes;
@@ -253,6 +254,10 @@ namespace StbcRevival
                 "Testing only: the sector map Free Roam and Ongoing Voyages load, as a path in the game's Resources, e.g. \"Mission Data/Maps/Sector - E3\" "
                 + "or \"Mission Data/Maps/Sector - SpaceStationRescue\". Applies to your whole crew when you host. Off the Trench there are no "
                 + "mission encounters: you start in one of the map's systems and can warp to its others. Empty: the game's own map.");
+            CatalogueKey = Config.Bind("Galaxy", "CatalogueKey", UnityEngine.KeyCode.None,
+                "For the galaxy designer: this key writes what the game has (the Trench's systems, prefabs and tags) to "
+                + "BepInEx/galaxies/catalogue.json. Press it on the bridge to include the warp map's size and background "
+                + "(trench-map.png). None: off.");
             TestPatrolAssignment = Config.Bind("Debug", "TestPatrolAssignment", "",
                 new BepInEx.Configuration.ConfigDescription(
                     "Testing only: every assignment Patrol offers is this one, when you host. Empty: Starfleet's usual mix "
@@ -435,6 +440,7 @@ namespace StbcRevival
             Safely("loading screen label", LoadingScreenLabel.Update);
             Safely("stellar evacuation", StbcRevival.Missions.StellarEvacuationObjective.Update);
             Safely("mission maps", StbcRevival.Missions.MissionMaps.Update);
+            Safely("galaxy catalogue", StbcRevival.Galaxy.GalaxyCatalogue.Update);
             Safely("restock sync", StbcRevival.Missions.RestockSync.Update);
             Safely("excelsior", Excelsior.Update);
             Safely("ships", CustomShip.Update);
