@@ -46,6 +46,9 @@ namespace StbcRevival.Galaxy
             var sprites = new Dictionary<string, bool>();
             foreach (var x in catalogue.Sprites) sprites[x] = true;
 
+            var stationPrefabs = new Dictionary<string, bool>();
+            foreach (var x in catalogue.Prefabs) if (x.Kind == "station") stationPrefabs[x.Name] = true;
+
             bool anyStation = false;
             foreach (var sys in file.Systems)
             {
@@ -91,6 +94,7 @@ namespace StbcRevival.Galaxy
                                 p.Add(at + ": no family '" + n.CopyFamily.Family + "' in Trench system '" + n.CopyFamily.System + "'");
                         }
                         if (!known || famsUnknown || (fam != null && fam.Pois.Count > 0)) anyPoi = true;
+                        if (famsUnknown) { jump = true; anyStation = true; }
                         if (fam != null && fam.HasSpawn) jump = true;
                         if (fam != null && fam.HasStation) anyStation = true;
                     }
@@ -102,6 +106,8 @@ namespace StbcRevival.Galaxy
                             p.Add(at + ": no sprite '" + n.MapIcon + "' in the game");
                     }
                     if (known && n.CopyFamily == null && (n.Prefab == null || !prefabs.ContainsKey(n.Prefab))) p.Add(at + ": no prefab '" + n.Prefab + "' in the game");
+                    // Real station bodies carry the tag on their prefab, not on the node.
+                    if (n.Prefab != null && stationPrefabs.ContainsKey(n.Prefab)) anyStation = true;
                     foreach (var t in n.Tags)
                     {
                         if (known && !tags.ContainsKey(t)) p.Add(at + ": no tag '" + t + "' in the game");

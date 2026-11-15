@@ -173,7 +173,7 @@ namespace StbcRevival.Galaxy
                         SystemTags = TagNames(rt.Field("SystemTags").GetValue()),
                     };
                     system.Nodes = Nodes(root, name, bodies, order, nodeTags, c.Sprites);
-                    system.Families = Families(system.Nodes, c.SpawnTags, prefab => PrefabTags(prefab, bodies, prefabTags));
+                    system.Families = CatalogueFamilies.From(system.Nodes, prefab => PrefabTags(prefab, bodies, prefabTags), c.SpawnTags);
                     c.TrenchSystems.Add(system);
                 }
                 catch (Exception e) { Plugin.Log.LogWarning($"Galaxy: system {name}: {e.Message}"); }
@@ -283,61 +283,6 @@ namespace StbcRevival.Galaxy
             if (sprite == null || string.IsNullOrEmpty(sprite.name)) return null;
             if (!sprites.Contains(sprite.name)) sprites.Add(sprite.name);
             return sprite.name;
-        }
-
-        // The system's families: the nodes directly under its ROOT node(s) that are tagged FAMILY or are a
-        // "Family Group" (some Trench families lack the tag), with the names of their Points of Interest. A family
-        // has a spawn or a station when any node under it carries a spawn tag or SpaceStation, counting the tags its
-        // prefab adds as the game does.
-        internal static List<CatalogueFamily> Families(List<GalaxyNode> nodes, List<string> spawnTags, Func<string, List<string>> prefabTags)
-        {
-            var result = new List<CatalogueFamily>();
-            var children = new Dictionary<string, List<GalaxyNode>>();
-            var roots = new HashSet<string>();
-            foreach (var n in nodes)
-            {
-                if (n.Parent == null)
-                {
-                    if (n.Tags.Contains("ROOT")) roots.Add(n.Id);
-                    continue;
-                }
-                if (!children.TryGetValue(n.Parent, out var list)) children[n.Parent] = list = new List<GalaxyNode>();
-                list.Add(n);
-            }
-            if (roots.Count == 0) // no node tagged ROOT: take the top-level nodes as roots
-                foreach (var n in nodes) if (n.Parent == null) roots.Add(n.Id);
-            foreach (var n in nodes)
-            {
-                if (n.Parent == null || !roots.Contains(n.Parent)) continue;
-                if (!n.Tags.Contains("FAMILY") && n.Prefab != "Family Group") continue;
-                var family = new CatalogueFamily { Name = n.Name };
-                if (children.TryGetValue(n.Id, out var kids))
-                    foreach (var kid in kids)
-                        if (kid.Prefab == "Point of Interest") family.Pois.Add(kid.Name);
-                // Everything under the family, breadth first.
-                var queue = new Queue<GalaxyNode>();
-                queue.Enqueue(n);
-                var seen = new HashSet<string> { n.Id };
-                while (queue.Count > 0)
-                {
-                    var node = queue.Dequeue();
-                    if (node != n)
-                    {
-                        var tags = new List<string>(node.Tags);
-                        if (!string.IsNullOrEmpty(node.Prefab)) tags.AddRange(prefabTags(node.Prefab));
-                        foreach (var tag in tags)
-                        {
-                            if (spawnTags.Contains(tag)) family.HasSpawn = true;
-                            if (tag == nameof(Tag.SpaceStation)) family.HasStation = true;
-                        }
-                    }
-                    if (children.TryGetValue(node.Id, out var below))
-                        foreach (var b in below)
-                            if (seen.Add(b.Id)) queue.Enqueue(b);
-                }
-                result.Add(family);
-            }
-            return result;
         }
 
         private static List<string> PrefabTags(string prefab, Dictionary<string, Sector.SectorBody> bodies, Dictionary<string, List<string>> cache)

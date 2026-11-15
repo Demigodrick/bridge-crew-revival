@@ -256,6 +256,35 @@ public class GalaxyCheckTests
         var f = Valid(); f.Systems.Clear();
         Assert.Contains("The region has no systems", GalaxyCheck.Problems(f, Cat()));
     }
+
+    [Fact]
+    public void Station_FromPrefabKind_Counts()
+    {
+        var c = Cat(); c.Prefabs.Add(new CataloguePrefab { Name = "Station_X", Kind = "station", Radius = 1 });
+        var f = Valid(); var st = f.Systems[0].Nodes[4]; st.Prefab = "Station_X"; st.Tags.Clear();
+        Assert.Empty(GalaxyCheck.Problems(f, c));
+    }
+
+    [Fact]
+    public void Station_FromPrefabKind_IgnoredWithoutCatalogue_ButNodeTagStillCounts()
+    {
+        var f = Valid(); var st = f.Systems[0].Nodes[4]; st.Prefab = "Station_X"; st.Tags.Clear();
+        Assert.Contains("No station anywhere in the region: Patrol can't restock there", GalaxyCheck.Problems(f, null));
+        st.Tags.Add("SpaceStation");
+        Assert.Empty(GalaxyCheck.Problems(f, null));
+    }
+
+    [Fact]
+    public void CopiedFamily_UnknownFamilies_ExcusesJumpAndStation()
+    {
+        var c = Cat(); c.TrenchSystems[0].Families.Clear();
+        var f = new GalaxyFile
+        {
+            Format = 1, Name = "R", Page = new Page { Label = "R", Background = "trench-darkened" },
+            Systems = new List<GalaxySystem> { System("kessar", 100, 100, Copy("c", "Venov", "FAMILY Venov III")) },
+        };
+        Assert.Empty(GalaxyCheck.Problems(f, c));
+    }
 }
 
 public class CatalogueTests
