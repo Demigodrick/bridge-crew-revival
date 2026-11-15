@@ -14,12 +14,19 @@ namespace StbcRevival.Galaxy
     /// [Galaxy] CatalogueKey (off by default): write what the game has to offer a galaxy file to
     /// BepInEx/galaxies/catalogue.json, for the galaxy designer and the check: the Trench's systems and node trees,
     /// the SectorBody prefabs, the tag names, the player spawn tags and, with a warp panel in the scene (on the
-    /// bridge), the warp map's universe bounds and background (trench-map.png). Never breaks the game: anything
-    /// that fails is logged and left out.
+    /// bridge), the warp map's universe bounds and background (trench-map.png), each system's families with their
+    /// Points of Interest, and the sprite names nodes use. Never breaks the game: anything that fails is logged and
+    /// left out.
     /// </summary>
     internal static class GalaxyCatalogue
     {
         private static float lastWritten = -10f;
+
+        /// <summary>
+        /// The Trench's own system count while a region's systems are appended to its list (set by the region code);
+        /// null lists every system. Only the first that many are written, so appended systems never become templates.
+        /// </summary>
+        internal static int? TrenchCountOverride { get; set; }
 
         internal static string Folder => Path.Combine(Paths.BepInExRootPath, "galaxies");
 
@@ -44,12 +51,18 @@ namespace StbcRevival.Galaxy
                 Directory.CreateDirectory(Folder);
                 var catalogue = Build(trench, panel);
                 File.WriteAllText(Path.Combine(Folder, "catalogue.json"), catalogue.ToJson(), new UTF8Encoding(false));
-                Plugin.Log.LogInfo($"Galaxy: catalogue written ({catalogue.TrenchSystems.Count} systems, {catalogue.Prefabs.Count} prefabs) to {Folder}");
+                int families = 0;
+                foreach (var s in catalogue.TrenchSystems) families += s.Families.Count;
+                Plugin.Log.LogInfo($"Galaxy: catalogue written ({catalogue.TrenchSystems.Count} systems, {families} families, " +
+                    $"{catalogue.Prefabs.Count} prefabs, {catalogue.Sprites.Count} sprites) to {Folder}");
             }
             catch (Exception e)
             {
                 Plugin.Log.LogError("Galaxy: catalogue failed: " + e);
             }
+            // LoadAll("Sector") loaded every prefab under it; let go of the ones the scene doesn't use.
+            try { Resources.UnloadUnusedAssets(); }
+            catch (Exception e) { Plugin.Log.LogWarning("Galaxy: unloading the loaded prefabs: " + e.Message); }
         }
 
         /// <summary>The loaded map if it's the Trench, else the Trench from the game's Resources.</summary>
@@ -85,6 +98,15 @@ namespace StbcRevival.Galaxy
             // Tags the Trench's nodes put on each prefab, for its kind when the prefab's own tags don't say.
             var nodeTags = new Dictionary<string, List<string>>();
 
+            try
+            {
+                foreach (var list in new[] { MissionManager.NovaPlayerSpawnDefaultTags, MissionManager.NovaPlayerSpawnAlternateTags })
+                    if (list != null)
+                        foreach (var t in list)
+                            if (!c.SpawnTags.Contains(t.ToString())) c.SpawnTags.Add(t.ToString());
+            }
+            catch (Exception e) { Plugin.Log.LogWarning("Galaxy: spawn tags: " + e.Message); }
+
             Systems(c, trench, bodies, order, nodeTags);
             ResourcePrefabs(bodies, order);
             foreach (var name in order)
@@ -105,14 +127,6 @@ namespace StbcRevival.Galaxy
 
             try { c.Tags.AddRange(Enum.GetNames(typeof(Tag))); }
             catch (Exception e) { Plugin.Log.LogWarning("Galaxy: tag names: " + e.Message); }
-            try
-            {
-                foreach (var list in new[] { MissionManager.NovaPlayerSpawnDefaultTags, MissionManager.NovaPlayerSpawnAlternateTags })
-                    if (list != null)
-                        foreach (var t in list)
-                            if (!c.SpawnTags.Contains(t.ToString())) c.SpawnTags.Add(t.ToString());
-            }
-            catch (Exception e) { Plugin.Log.LogWarning("Galaxy: spawn tags: " + e.Message); }
             foreach (var s in c.TrenchSystems)
                 if (!string.IsNullOrEmpty(s.Skybox) && !c.Skyboxes.Contains(s.Skybox)) c.Skyboxes.Add(s.Skybox);
 
@@ -129,8 +143,17 @@ namespace StbcRevival.Galaxy
                 Plugin.Log.LogWarning("Galaxy: the Trench has no system list");
                 return;
             }
-            foreach (var link in links)
+            int count = links.Count;
+            if (TrenchCountOverride.HasValue && TrenchCountOverride.Value < count)
             {
+                Plugin.Log.LogInfo($"Galaxy: listing the Trench's own {TrenchCountOverride.Value} of {count} systems");
+                count = Math.Max(0, TrenchCountOverride.Value);
+            }
+            // Prefab name -> the prefab's own tags, which the game adds to its nodes' tags.
+            var prefabTags = new Dictionary<string, List<string>>();
+            for (int li = 0; li < count; li++)
+            {
+                var link = links[li];
                 string name = "?";
                 try
                 {
@@ -149,7 +172,8 @@ namespace StbcRevival.Galaxy
                         Skybox = rt.Field("_skyboxPath").GetValue() as string,
                         SystemTags = TagNames(rt.Field("SystemTags").GetValue()),
                     };
-                    system.Nodes = Nodes(root, name, bodies, order, nodeTags);
+                    system.Nodes = Nodes(root, name, bodies, order, nodeTags, c.Sprites);
+                    system.Families = Families(system.Nodes, c.SpawnTags, prefab => PrefabTags(prefab, bodies, prefabTags));
                     c.TrenchSystems.Add(system);
                 }
                 catch (Exception e) { Plugin.Log.LogWarning($"Galaxy: system {name}: {e.Message}"); }
@@ -158,7 +182,7 @@ namespace StbcRevival.Galaxy
 
         // The system's node tree, parents before children: the nodes of its SystemTransforms, and their children.
         private static List<GalaxyNode> Nodes(Map.SystemRoot root, string systemName, Dictionary<string, Sector.SectorBody> bodies,
-            List<string> order, Dictionary<string, List<string>> nodeTags)
+            List<string> order, Dictionary<string, List<string>> nodeTags, List<string> sprites)
         {
             var all = new List<Map.SystemNode>();
             var transforms = Traverse.Create(root).Field("SystemTransforms").GetValue() as System.Collections.IList;
@@ -176,7 +200,12 @@ namespace StbcRevival.Galaxy
             for (int i = 0; i < all.Count; i++)
             {
                 string id = Slug(all[i].name);
-                if (id == "" || usedIds.Contains(id)) id = (id == "" ? "node" : id) + "-" + i;
+                if (id == "" || usedIds.Contains(id))
+                {
+                    string stem = id == "" ? "node" : id;
+                    int k = i;
+                    do id = stem + "-" + k++; while (usedIds.Contains(id));
+                }
                 usedIds.Add(id);
                 ids[all[i]] = id;
             }
@@ -219,6 +248,9 @@ namespace StbcRevival.Galaxy
                     if (string.IsNullOrEmpty(name)) name = t.Field("SystemMapName").GetValue() as string;
                     if (string.IsNullOrEmpty(name)) name = prefabName;
                     float landing = (float)t.Field("ImpulseLandingRadius").GetValue();
+                    string mapName = t.Field("SystemMapName").GetValue() as string;
+                    string background = SpriteName(t.Field("FamilyMapBackground").GetValue() as Sprite, sprites);
+                    string icon = SpriteName(t.Field("SystemMapIconSprite").GetValue() as Sprite, sprites);
                     result.Add(new GalaxyNode
                     {
                         Id = ids[n],
@@ -230,6 +262,9 @@ namespace StbcRevival.Galaxy
                         RotX = rot.x, RotY = rot.y, RotZ = rot.z,
                         Tags = tags,
                         LandingRadius = float.IsNaN(landing) || float.IsInfinity(landing) ? 0 : landing,
+                        MapName = string.IsNullOrEmpty(mapName) ? null : mapName,
+                        FamilyBackground = background,
+                        MapIcon = icon,
                     });
                 }
                 catch (Exception e)
@@ -240,6 +275,83 @@ namespace StbcRevival.Galaxy
                 foreach (var child in Children(n))
                     if (ids.ContainsKey(child)) Add(child, ids[n]);
             }
+        }
+
+        // The sprite's name, added to the catalogue's sprite list; null for none.
+        private static string SpriteName(Sprite sprite, List<string> sprites)
+        {
+            if (sprite == null || string.IsNullOrEmpty(sprite.name)) return null;
+            if (!sprites.Contains(sprite.name)) sprites.Add(sprite.name);
+            return sprite.name;
+        }
+
+        // The system's families: the nodes directly under its ROOT node(s) that are tagged FAMILY or are a
+        // "Family Group" (some Trench families lack the tag), with the names of their Points of Interest. A family
+        // has a spawn or a station when any node under it carries a spawn tag or SpaceStation, counting the tags its
+        // prefab adds as the game does.
+        internal static List<CatalogueFamily> Families(List<GalaxyNode> nodes, List<string> spawnTags, Func<string, List<string>> prefabTags)
+        {
+            var result = new List<CatalogueFamily>();
+            var children = new Dictionary<string, List<GalaxyNode>>();
+            var roots = new HashSet<string>();
+            foreach (var n in nodes)
+            {
+                if (n.Parent == null)
+                {
+                    if (n.Tags.Contains("ROOT")) roots.Add(n.Id);
+                    continue;
+                }
+                if (!children.TryGetValue(n.Parent, out var list)) children[n.Parent] = list = new List<GalaxyNode>();
+                list.Add(n);
+            }
+            if (roots.Count == 0) // no node tagged ROOT: take the top-level nodes as roots
+                foreach (var n in nodes) if (n.Parent == null) roots.Add(n.Id);
+            foreach (var n in nodes)
+            {
+                if (n.Parent == null || !roots.Contains(n.Parent)) continue;
+                if (!n.Tags.Contains("FAMILY") && n.Prefab != "Family Group") continue;
+                var family = new CatalogueFamily { Name = n.Name };
+                if (children.TryGetValue(n.Id, out var kids))
+                    foreach (var kid in kids)
+                        if (kid.Prefab == "Point of Interest") family.Pois.Add(kid.Name);
+                // Everything under the family, breadth first.
+                var queue = new Queue<GalaxyNode>();
+                queue.Enqueue(n);
+                var seen = new HashSet<string> { n.Id };
+                while (queue.Count > 0)
+                {
+                    var node = queue.Dequeue();
+                    if (node != n)
+                    {
+                        var tags = new List<string>(node.Tags);
+                        if (!string.IsNullOrEmpty(node.Prefab)) tags.AddRange(prefabTags(node.Prefab));
+                        foreach (var tag in tags)
+                        {
+                            if (spawnTags.Contains(tag)) family.HasSpawn = true;
+                            if (tag == nameof(Tag.SpaceStation)) family.HasStation = true;
+                        }
+                    }
+                    if (children.TryGetValue(node.Id, out var below))
+                        foreach (var b in below)
+                            if (seen.Add(b.Id)) queue.Enqueue(b);
+                }
+                result.Add(family);
+            }
+            return result;
+        }
+
+        private static List<string> PrefabTags(string prefab, Dictionary<string, Sector.SectorBody> bodies, Dictionary<string, List<string>> cache)
+        {
+            if (cache.TryGetValue(prefab, out var tags)) return tags;
+            tags = new List<string>();
+            try
+            {
+                if (bodies.TryGetValue(prefab, out var body) && body != null)
+                    tags = TagNames(Traverse.Create(body).Field("PrefabTags").GetValue());
+            }
+            catch (Exception e) { Plugin.Log.LogWarning($"Galaxy: tags of prefab {prefab}: {e.Message}"); }
+            cache[prefab] = tags;
+            return tags;
         }
 
         private static Map.SystemNode Parent(Map.SystemNode n) => Traverse.Create(n).Field("_parent").GetValue() as Map.SystemNode;
@@ -325,28 +437,128 @@ namespace StbcRevival.Galaxy
             catch (Exception e) { Plugin.Log.LogWarning("Galaxy: universe bounds: " + e.Message); }
             try
             {
-                var mapBase = Traverse.Create(panel).Field("_mapBase").GetValue() as GameObject;
-                var image = mapBase != null ? mapBase.GetComponent<UnityEngine.UI.Image>() : null;
-                var sprite = image != null ? image.sprite : null;
-                if (sprite == null || sprite.texture == null)
+                var art = FindMapArt(panel);
+                if (art == null)
                 {
-                    Plugin.Log.LogWarning("Galaxy: the warp map has no background sprite; no trench-map.png");
+                    Plugin.Log.LogWarning("Galaxy: no image with a sprite or texture covers the warp map; no trench-map.png");
                     return;
                 }
-                var png = SpritePng(sprite);
+                byte[] png;
+                string what;
+                if (art is UnityEngine.UI.Image image)
+                {
+                    png = TexturePng(image.sprite.texture, image.sprite.textureRect);
+                    what = "sprite " + image.sprite.name;
+                }
+                else
+                {
+                    var raw = (UnityEngine.UI.RawImage)art;
+                    var tex = raw.texture;
+                    var uv = raw.uvRect;
+                    // uvRect is in 0..1 of the texture; anything outside (tiling) is clamped by TexturePng.
+                    png = TexturePng(tex, new Rect(uv.x * tex.width, uv.y * tex.height, uv.width * tex.width, uv.height * tex.height));
+                    what = $"texture {tex.name} ({tex.GetType().Name}), uv {uv}";
+                }
                 File.WriteAllBytes(Path.Combine(Folder, "trench-map.png"), png);
                 c.Background = "trench-map.png";
-                Plugin.Log.LogInfo($"Galaxy: warp map background written ({sprite.name}, {png.Length} bytes)");
+                Plugin.Log.LogInfo($"Galaxy: warp map background written from {PathOf(art.transform)}: {what}, {png.Length} bytes");
             }
             catch (Exception e) { Plugin.Log.LogWarning("Galaxy: no trench-map.png: " + e.Message); }
         }
 
-        // The texture may not be readable: copy it through a RenderTexture, then crop to the sprite's rect.
-        private static byte[] SpritePng(Sprite sprite)
+        // The warp map's art: of every Image (with a sprite) and RawImage (with a texture) in the warp panel and its
+        // canvas, inactive ones too, the one whose rectangle best matches _mapRect. Matching is the overlap's share
+        // of both rectangles together (intersection over union), so a full-screen frame that also covers the map
+        // loses to a picture the size of the map; it must cover at least half of the map. Every candidate is logged.
+        private static UnityEngine.UI.Graphic FindMapArt(WarpPanel panel)
         {
-            var texture = sprite.texture;
-            var rect = sprite.textureRect;
-            var rt = RenderTexture.GetTemporary(texture.width, texture.height, 0, RenderTextureFormat.ARGB32);
+            var mapRect = Traverse.Create(panel).Field("_mapRect").GetValue() as RectTransform;
+            if (mapRect == null)
+            {
+                Plugin.Log.LogWarning("Galaxy: the warp panel has no _mapRect");
+                return null;
+            }
+            var map = WorldRectIn(mapRect, mapRect);
+            Plugin.Log.LogInfo($"Galaxy: warp map rect {PathOf(mapRect)}, {map.width:0.#} x {map.height:0.#}");
+            if (map.width <= 0 || map.height <= 0) return null;
+
+            var searched = new List<Transform> { panel.transform };
+            try
+            {
+                var canvas = panel.GetComponentInParent<Canvas>();
+                if (canvas != null) searched.Add(canvas.rootCanvas != null ? canvas.rootCanvas.transform : canvas.transform);
+            }
+            catch (Exception e) { Plugin.Log.LogWarning("Galaxy: the warp panel's canvas: " + e.Message); }
+
+            var seen = new HashSet<UnityEngine.UI.Graphic>();
+            UnityEngine.UI.Graphic best = null;
+            float bestScore = 0;
+            foreach (var root in searched)
+                foreach (var g in root.GetComponentsInChildren<UnityEngine.UI.Graphic>(true))
+                {
+                    if (g == null || !seen.Add(g)) continue;
+                    string art;
+                    if (g is UnityEngine.UI.Image img)
+                    {
+                        if (img.sprite == null || img.sprite.texture == null) continue;
+                        art = $"sprite {img.sprite.name} ({img.sprite.texture.width}x{img.sprite.texture.height})";
+                    }
+                    else if (g is UnityEngine.UI.RawImage raw)
+                    {
+                        if (raw.texture == null) continue;
+                        art = $"texture {raw.texture.name} ({raw.texture.GetType().Name} {raw.texture.width}x{raw.texture.height}), uv {raw.uvRect}";
+                    }
+                    else continue;
+                    var r = WorldRectIn(g.rectTransform, mapRect);
+                    float overlap = Overlap(r, map);
+                    float union = r.width * r.height + map.width * map.height - overlap;
+                    float covers = overlap / (map.width * map.height);
+                    float score = union > 0 ? overlap / union : 0;
+                    Plugin.Log.LogInfo($"Galaxy: warp map candidate {PathOf(g.transform)}: {r.width:0.#} x {r.height:0.#}, " +
+                        $"covers {covers:P0} of the map, match {score:0.00}, {(g.gameObject.activeInHierarchy ? "active" : "inactive")}, {art}");
+                    if (covers >= 0.5f && score > bestScore)
+                    {
+                        best = g;
+                        bestScore = score;
+                    }
+                }
+            return best;
+        }
+
+        // A RectTransform's rectangle in another's local space (the bounds of its four corners).
+        private static Rect WorldRectIn(RectTransform rect, RectTransform space)
+        {
+            var corners = new Vector3[4];
+            rect.GetWorldCorners(corners);
+            float minX = float.MaxValue, minY = float.MaxValue, maxX = float.MinValue, maxY = float.MinValue;
+            foreach (var corner in corners)
+            {
+                var p = space.InverseTransformPoint(corner);
+                minX = Math.Min(minX, p.x); maxX = Math.Max(maxX, p.x);
+                minY = Math.Min(minY, p.y); maxY = Math.Max(maxY, p.y);
+            }
+            return Rect.MinMaxRect(minX, minY, maxX, maxY);
+        }
+
+        private static float Overlap(Rect a, Rect b)
+        {
+            float w = Math.Min(a.xMax, b.xMax) - Math.Max(a.xMin, b.xMin);
+            float h = Math.Min(a.yMax, b.yMax) - Math.Max(a.yMin, b.yMin);
+            return w > 0 && h > 0 ? w * h : 0;
+        }
+
+        private static string PathOf(Transform t)
+        {
+            var parts = new List<string>();
+            for (; t != null && parts.Count < 12; t = t.parent) parts.Insert(0, t.name);
+            return string.Join("/", parts.ToArray());
+        }
+
+        // The texture may not be readable: copy it through an sRGB RenderTexture (so colours come out as stored),
+        // then crop to the given rectangle in pixels.
+        private static byte[] TexturePng(Texture texture, Rect rect)
+        {
+            var rt = RenderTexture.GetTemporary(texture.width, texture.height, 0, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB);
             var previous = RenderTexture.active;
             Texture2D copy = null;
             try
