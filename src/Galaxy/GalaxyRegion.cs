@@ -43,6 +43,9 @@ namespace StbcRevival.Galaxy
         /// <summary>The region's name from its file, else the config value.</summary>
         internal static string RegionName => GalaxyRoom.OwnName ?? (!string.IsNullOrEmpty(builtName) ? builtName : ConfigName);
 
+        /// <summary>Off the bridge: no mission is flown, so nothing is active until the next hook decides.</summary>
+        internal static void MissionOver() => Active = false;
+
         internal static string ConfigName => (Plugin.GalaxyRegionName?.Value ?? "").Trim();
 
         // The Trench asset seen, its own links (captured before anything was appended) and the region built for it.
@@ -54,6 +57,7 @@ namespace StbcRevival.Galaxy
         private static string failedHash;    // a file that failed the check or the build: not tried again
         private static object decidedFor;    // the SectorMap the last decision was made for
         private static bool decidedOn;
+        private static bool crewOn;          // the crew's decision for that mission, before our own build
 
         internal static void Patch(Harmony harmony)
         {
@@ -119,11 +123,29 @@ namespace StbcRevival.Galaxy
                 if (ReferenceEquals(decidedFor, sectorMap)) on = decidedOn; // the fallback hook for the same mission: same answer
                 else
                 {
-                    on = Decide();
-                    if (on && !EnsureBuilt(map)) on = false;
                     decidedFor = sectorMap;
+                    decidedOn = false;
+                    crewOn = false;
+                    // One read of the file, for both the check against what the crew was told and the build.
+                    string hash = GalaxyRoom.Snapshot(out var json);
+                    on = crewOn = Decide(hash, out string expected);
+                    string published = GalaxyRoom.PublishedHash();
+                    if (on && published != null && published != hash)
+                    {
+                        Plugin.Log.LogWarning(P + $"our galaxy file changed since the crew was told ({Short(published)} then, {Short(hash)} now); "
+                            + "not built this mission");
+                        on = false;
+                    }
+                    else if (on && hash != expected)
+                    {
+                        Plugin.Log.LogWarning(P + $"the crew's region is {Short(expected)}, our file is {Short(hash)}; not built");
+                        on = false;
+                    }
+                    if (on && !EnsureBuilt(map, json, hash)) on = false;
                     decidedOn = on;
+                    // What the host actually built, never what it meant to.
                     if (GalaxyRoom.IsHost) GalaxyRoom.PublishDecision(on ? builtHash : GalaxyRoom.Off, on ? RegionName : "");
+                    else if (crewOn && !on) CantFollow("the crew has the region on but we couldn't build it.");
                 }
 
                 RegionLinks.Apply(map.Systems, trenchOwn, regionLinks ?? new List<Map.SystemLink>(), on);
@@ -146,33 +168,43 @@ namespace StbcRevival.Galaxy
                     for (int i = 0; i < map.Systems.Count; i++) map.Systems[i].System.SystemID = i;
                 }
                 catch (Exception e2) { Plugin.Log.LogError(P + "restoring the list: " + e2.Message); }
+                bool crewHadItOn = crewOn && ReferenceEquals(decidedFor, sectorMap); // this mission's decision, not a stale one
                 Active = false;
                 GalaxyCatalogue.TrenchCountOverride = null;
                 decidedFor = sectorMap;
                 decidedOn = false;
                 if (GalaxyRoom.IsHost) GalaxyRoom.PublishDecision(GalaxyRoom.Off, "");
+                else if (crewHadItOn) CantFollow("the crew has the region on but building it failed.");
             }
+        }
+
+        // A crew member flying the Trench alone while the crew has the region would be out of sync (system ids and
+        // SectorIds past the Trench missing): leave, as a joiner without the file does.
+        private static void CantFollow(string why)
+        {
+            string region = !string.IsNullOrEmpty(GalaxyRoom.HostRegionName) ? GalaxyRoom.HostRegionName : RegionName;
+            GalaxyRoom.LeaveCrew(why, GalaxyRoom.CantBuildMessage(region));
         }
 
         // ---- The decision ----------------------------------------------------------------------------------------
 
-        private static bool Decide()
+        /// <summary>The crew's decision for this mission; <paramref name="expected"/> is the file hash "on" means.</summary>
+        private static bool Decide(string own, out string expected)
         {
             var mission = RevivalMissions.Selected;
             bool wants = mission == typeof(PatrolSequence) || mission == typeof(Mission.DebugExplorationMode.DebugExplorationModeSequence);
-            string own = GalaxyRoom.OwnHash;
+            expected = null;
             string missionName = mission != null ? mission.Name : "not a Revival mission";
 
             // Joining a mission already under way: the host decided at its start; follow that.
             string running = GalaxyRoom.RunningDecision();
             if (!GalaxyRoom.IsHost && running != null)
             {
-                bool follow = running != GalaxyRoom.Off && running == own;
                 Plugin.Log.LogInfo(P + $"joining a mission under way ({missionName}): the host has the region "
-                    + (running == GalaxyRoom.Off ? "off" : $"on ({Short(running)})") + $", ours {Short(own)}: {(follow ? "on" : "off")}");
-                if (running != GalaxyRoom.Off && !follow)
-                    Plugin.Log.LogWarning(P + "the crew flies with a region we can't build; leaving the crew (GalaxyRoom)");
-                return follow;
+                    + (running == GalaxyRoom.Off ? "off" : $"on ({Short(running)})") + $", ours {Short(own)}");
+                if (running == GalaxyRoom.Off) return false;
+                expected = running;
+                return true; // the crew's "on": Ensure builds it if our file matches, else leaves
             }
 
             string hostHash = GalaxyRoom.HostHash;
@@ -187,13 +219,8 @@ namespace StbcRevival.Galaxy
             foreach (var p in players) list.Add(p.Key + " " + Short(p.Value));
             Plugin.Log.LogInfo(P + $"decision for {missionName}: host's file {Short(hostHash)}, ours {Short(own)}, crew [{string.Join(", ", list.ToArray())}]"
                 + $" -> {(result.On ? "on" : "off")}{(result.Reason != null ? " (" + result.Reason + ")" : "")}");
-            if (result.On && own != hostHash)
-            {
-                // Can't happen through GalaxyGate (we're among the players compared), but never build someone else's region.
-                Plugin.Log.LogWarning(P + "on for the crew but our file differs from the host's; off here");
-                return false;
-            }
             if (result.Reason != null && GalaxyRoom.IsHost) Notify(result.Reason);
+            expected = hostHash;
             return result.On;
         }
 
@@ -202,16 +229,14 @@ namespace StbcRevival.Galaxy
         // ---- Building --------------------------------------------------------------------------------------------
 
         /// <summary>The region's links, built for this Trench from the file as it is now; false if there's no usable file.</summary>
-        private static bool EnsureBuilt(Map.SectorRoot map)
+        private static bool EnsureBuilt(Map.SectorRoot map, string json, string hash)
         {
-            var path = FilePath();
-            if (path == null || !File.Exists(path))
+            var path = FilePath() ?? "galaxy file";
+            if (json == null || hash == "")
             {
-                Plugin.Log.LogWarning(P + $"no galaxy file at {path ?? "(none set)"}");
+                Plugin.Log.LogWarning(P + $"no galaxy file at {path}");
                 return false;
             }
-            string json = File.ReadAllText(path);
-            string hash = GalaxyFile.Hash(json);
             if (regionLinks != null && builtHash == hash) return true;
             if (failedHash == hash)
             {
