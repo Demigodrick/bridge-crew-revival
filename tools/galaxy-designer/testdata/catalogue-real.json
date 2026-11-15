@@ -1,2436 +1,2456 @@
 {
- "trenchSystems": [
-  {
-   "name": "2824|Venov",
-   "position": [
-    -66.4,
-    89
-   ],
-   "skybox": "Sector/SkyboxMaterials/Venov Skybox",
-   "systemTags": [
-    "LabelSystemVenov"
-   ],
-   "families": [
+  "trenchSystems": [
     {
-     "name": "FAMILY Cloud",
-     "pois": [
-      "POI Gas Cloud",
-      "POI debris field"
-     ],
-     "hasSpawn": false,
-     "hasStation": true
+      "name": "2824|Venov",
+      "position": [
+        -66.4,
+        89
+      ],
+      "skybox": "Sector/SkyboxMaterials/Venov Skybox",
+      "systemTags": [
+        "LabelSystemVenov"
+      ],
+      "families": [
+        {
+          "name": "FAMILY Cloud",
+          "pois": [
+            "POI Gas Cloud",
+            "POI debris field"
+          ],
+          "hasSpawn": false,
+          "hasStation": true
+        },
+        {
+          "name": "FAMILY Venov III",
+          "pois": [
+            "POI Start Planet",
+            "POI Moon A",
+            "POI Moon B"
+          ],
+          "hasSpawn": true,
+          "hasStation": false
+        },
+        {
+          "name": "FAMILY Venov Major",
+          "pois": [
+            "POI Main Star",
+            "POI Planet 1"
+          ],
+          "hasSpawn": false,
+          "hasStation": false
+        },
+        {
+          "name": "FAMILY Venov II",
+          "pois": [
+            "POI Orbit",
+            "POI moon"
+          ],
+          "hasSpawn": false,
+          "hasStation": false
+        },
+        {
+          "name": "FAMILY Venov IV",
+          "pois": [
+            "POI Planetary orbit",
+            "POI MR-401",
+            "POI MR-402"
+          ],
+          "hasSpawn": false,
+          "hasStation": false
+        }
+      ],
+      "nodes": []
     },
     {
-     "name": "FAMILY Venov III",
-     "pois": [
-      "POI Start Planet",
-      "POI Moon A",
-      "POI Moon B"
-     ],
-     "hasSpawn": true,
-     "hasStation": false
+      "name": "2813|Toth",
+      "position": [
+        196.6,
+        85.6
+      ],
+      "skybox": "Sector/SkyboxMaterials/Toth Skybox",
+      "systemTags": [
+        "LabelSystemToth"
+      ],
+      "families": [
+        {
+          "name": "Nebula Core",
+          "pois": [
+            "POI- Klingon Main Fleet"
+          ],
+          "hasSpawn": false,
+          "hasStation": false
+        },
+        {
+          "name": "Nebula Outskirts",
+          "pois": [
+            "POI- Klingon Flagship Location"
+          ],
+          "hasSpawn": false,
+          "hasStation": false
+        },
+        {
+          "name": "Nebula Edge",
+          "pois": [
+            "POI- Nebula Edge"
+          ],
+          "hasSpawn": true,
+          "hasStation": false
+        },
+        {
+          "name": "Nebula Terminus",
+          "pois": [
+            "POI - Weapon Point"
+          ],
+          "hasSpawn": false,
+          "hasStation": false
+        },
+        {
+          "name": "FAMILY - Coroth Belt",
+          "pois": [
+            "POI - Planetary Remains",
+            "POI - Debris Field",
+            "POI - Parigee Point"
+          ],
+          "hasSpawn": false,
+          "hasStation": true
+        }
+      ],
+      "nodes": []
     },
     {
-     "name": "FAMILY Venov Major",
-     "pois": [
-      "POI Main Star",
-      "POI Planet 1"
-     ],
-     "hasSpawn": false,
-     "hasStation": false
+      "name": "Silva",
+      "position": [
+        -133.3,
+        40
+      ],
+      "skybox": "Sector/SkyboxMaterials/Silva Skybox",
+      "systemTags": [
+        "LabelSystemSilva"
+      ],
+      "families": [
+        {
+          "name": "FAMILY Silva IV",
+          "pois": [
+            "POI2_silvaIV",
+            "POI1_silvaIV_debrisCloud"
+          ],
+          "hasSpawn": true,
+          "hasStation": false
+        },
+        {
+          "name": "FAMILY Silva VI",
+          "pois": [
+            "POI - Silva VI Planet",
+            "POI - Silva VI Nebula",
+            "POI - Silva VI Asteroid Field",
+            "POI - Silva VI Moon"
+          ],
+          "hasSpawn": false,
+          "hasStation": false
+        },
+        {
+          "name": "FAMILY Star",
+          "pois": [
+            "POI Star Major",
+            "POI Asteroids",
+            "POI Nebula",
+            "POI - Star Minor"
+          ],
+          "hasSpawn": false,
+          "hasStation": false
+        }
+      ],
+      "nodes": []
     },
     {
-     "name": "FAMILY Venov II",
-     "pois": [
-      "POI Orbit",
-      "POI moon"
-     ],
-     "hasSpawn": false,
-     "hasStation": false
-    },
-    {
-     "name": "FAMILY Venov IV",
-     "pois": [
-      "POI Planetary orbit",
-      "POI MR-401",
-      "POI MR-402"
-     ],
-     "hasSpawn": false,
-     "hasStation": false
+      "name": "5533|Arna",
+      "position": [
+        92.9,
+        53
+      ],
+      "skybox": "Sector/SkyboxMaterials/Arna Skybox",
+      "systemTags": [
+        "LabelSystemArna"
+      ],
+      "families": [
+        {
+          "name": "FAMILY Klingon Zone",
+          "pois": [
+            "Hack Network"
+          ],
+          "hasSpawn": true,
+          "hasStation": false
+        },
+        {
+          "name": "FAMILY Storm",
+          "pois": [
+            "Storm",
+            "Cluster of Debris",
+            "Nebula"
+          ],
+          "hasSpawn": false,
+          "hasStation": false
+        },
+        {
+          "name": "FAMILY Grave Yard",
+          "pois": [
+            "Transport",
+            "Ancient Ship",
+            "Asteroids"
+          ],
+          "hasSpawn": false,
+          "hasStation": false
+        },
+        {
+          "name": "FAMILY Sun",
+          "pois": [
+            "POI - planet",
+            "POI - Sun"
+          ],
+          "hasSpawn": false,
+          "hasStation": false
+        },
+        {
+          "name": "FAMILY Twin Planets",
+          "pois": [
+            "POI Orbiting Space Station",
+            "POI Twin Planets"
+          ],
+          "hasSpawn": false,
+          "hasStation": true
+        }
+      ],
+      "nodes": []
     }
-   ],
-   "nodes": []
-  },
-  {
-   "name": "2813|Toth",
-   "position": [
-    196.6,
-    85.6
-   ],
-   "skybox": "Sector/SkyboxMaterials/Toth Skybox",
-   "systemTags": [
-    "LabelSystemToth"
-   ],
-   "families": [
+  ],
+  "prefabs": [
     {
-     "name": "Nebula Core",
-     "pois": [
-      "POI- Klingon Main Fleet"
-     ],
-     "hasSpawn": false,
-     "hasStation": false
+      "name": "Family Group",
+      "kind": "other",
+      "radius": 0
     },
     {
-     "name": "Nebula Outskirts",
-     "pois": [
-      "POI- Klingon Flagship Location"
-     ],
-     "hasSpawn": false,
-     "hasStation": false
+      "name": "Point of Interest",
+      "kind": "other",
+      "radius": 0
     },
     {
-     "name": "Nebula Edge",
-     "pois": [
-      "POI- Nebula Edge"
-     ],
-     "hasSpawn": true,
-     "hasStation": false
+      "name": "Nebula_Skybox_BlueA",
+      "kind": "other",
+      "radius": 3000000
     },
     {
-     "name": "Nebula Terminus",
-     "pois": [
-      "POI - Weapon Point"
-     ],
-     "hasSpawn": false,
-     "hasStation": false
+      "name": "Region",
+      "kind": "asteroids",
+      "radius": 0
     },
     {
-     "name": "FAMILY - Coroth Belt",
-     "pois": [
-      "POI - Planetary Remains",
-      "POI - Debris Field",
-      "POI - Parigee Point"
-     ],
-     "hasSpawn": false,
-     "hasStation": true
+      "name": "AnomalyCloudCone_Alt3",
+      "kind": "other",
+      "radius": 20000
+    },
+    {
+      "name": "AnomalyCloudCapsule_Alt4",
+      "kind": "other",
+      "radius": 20000
+    },
+    {
+      "name": "AnomalyCloudCone_Alt4",
+      "kind": "other",
+      "radius": 20000
+    },
+    {
+      "name": "Impulse Destination",
+      "kind": "star",
+      "radius": 0
+    },
+    {
+      "name": "AnomalyCloudSpherical_Alt3",
+      "kind": "other",
+      "radius": 20000
+    },
+    {
+      "name": "Exploding Barrel",
+      "kind": "other",
+      "radius": 1.5
+    },
+    {
+      "name": "Venov_Large Nebula 03",
+      "kind": "other",
+      "radius": 500000000
+    },
+    {
+      "name": "DebrisFieldGenerator",
+      "kind": "other",
+      "radius": 12000
+    },
+    {
+      "name": "Debris - Medium 02",
+      "kind": "other",
+      "radius": 50
+    },
+    {
+      "name": "Debris - Medium 03",
+      "kind": "other",
+      "radius": 94
+    },
+    {
+      "name": "Debris - Medium 04",
+      "kind": "other",
+      "radius": 63
+    },
+    {
+      "name": "DebrisFieldSmall_01",
+      "kind": "other",
+      "radius": 10
+    },
+    {
+      "name": "Spectacle_Star_spinning",
+      "kind": "star",
+      "radius": 40000000
+    },
+    {
+      "name": "Ship - SpaceStationProcedural 22",
+      "kind": "station",
+      "radius": 1000
+    },
+    {
+      "name": "Solar_Array_Structure",
+      "kind": "other",
+      "radius": 4
+    },
+    {
+      "name": "Venov_Set2ClassJ026",
+      "kind": "planet",
+      "radius": 11211116.827392578
+    },
+    {
+      "name": "AsteroidCluster Particles",
+      "kind": "asteroids",
+      "radius": 0
+    },
+    {
+      "name": "AnomalyCloudCone_Alt2",
+      "kind": "other",
+      "radius": 20000
+    },
+    {
+      "name": "Anomaly_Sphere_01_Faint_c",
+      "kind": "other",
+      "radius": 20000
+    },
+    {
+      "name": "AsteroidCluster Thin",
+      "kind": "asteroids",
+      "radius": 5
+    },
+    {
+      "name": "AsteroidCluster Small",
+      "kind": "asteroids",
+      "radius": 5
+    },
+    {
+      "name": "AsteroidClusterNew",
+      "kind": "asteroids",
+      "radius": 10
+    },
+    {
+      "name": "Set2ClassL006",
+      "kind": "planet",
+      "radius": 2108271.4524269104
+    },
+    {
+      "name": "AnomalyOpaqueCloud",
+      "kind": "other",
+      "radius": 8000
+    },
+    {
+      "name": "MoonClassD002",
+      "kind": "planet",
+      "radius": 719551
+    },
+    {
+      "name": "DyingStarA",
+      "kind": "star",
+      "radius": 40000000
+    },
+    {
+      "name": "DyingStarA_Light",
+      "kind": "star",
+      "radius": 40000000
+    },
+    {
+      "name": "SimpleStarNoSystemLight",
+      "kind": "star",
+      "radius": 10000000
+    },
+    {
+      "name": "Set2ClassY014",
+      "kind": "planet",
+      "radius": 3133715.453147888
+    },
+    {
+      "name": "Venov_Set2ClassP020",
+      "kind": "planet",
+      "radius": 15353252.331733704
+    },
+    {
+      "name": "AnomalyCloudSpherical_Alt4",
+      "kind": "other",
+      "radius": 20000
+    },
+    {
+      "name": "M04-PlanetoidBetaMoonB",
+      "kind": "planet",
+      "radius": 1018031
+    },
+    {
+      "name": "AnomalyOpaqueCloud_NonTargetable",
+      "kind": "other",
+      "radius": 8000
+    },
+    {
+      "name": "Anomaly_Sphere_02_c",
+      "kind": "other",
+      "radius": 20000
+    },
+    {
+      "name": "Anomaly_Sphere_03_c",
+      "kind": "other",
+      "radius": 20000
+    },
+    {
+      "name": "Set1ClassM005",
+      "kind": "planet",
+      "radius": 16354587.323665619
+    },
+    {
+      "name": "AsteroidField_Massive",
+      "kind": "asteroids",
+      "radius": 5
+    },
+    {
+      "name": "SmallAsteroidBits",
+      "kind": "other",
+      "radius": 10
+    },
+    {
+      "name": "AnomalyOpaqueCloud_Medium",
+      "kind": "other",
+      "radius": 12000
+    },
+    {
+      "name": "AnomalyCloudCapsule",
+      "kind": "other",
+      "radius": 20000
+    },
+    {
+      "name": "AdaptableClassL2003",
+      "kind": "planet",
+      "radius": 5542563.451170921
+    },
+    {
+      "name": "AnomalyCloudCone",
+      "kind": "other",
+      "radius": 20000
+    },
+    {
+      "name": "TothPrimaryStar_NoLight",
+      "kind": "star",
+      "radius": 75000000
+    },
+    {
+      "name": "TothPrimaryStar_Light",
+      "kind": "star",
+      "radius": 39550000
+    },
+    {
+      "name": "TothSecondaryStar_NoLight",
+      "kind": "star",
+      "radius": 50000000
+    },
+    {
+      "name": "TothTertiaryStar_NoLight",
+      "kind": "star",
+      "radius": 40000000
+    },
+    {
+      "name": "AnomalyCloudSpherical_Alt2_M05b",
+      "kind": "other",
+      "radius": 20000
+    },
+    {
+      "name": "AsteroidFieldGenerator_Large",
+      "kind": "asteroids",
+      "radius": 12000
+    },
+    {
+      "name": "AsteroidFieldGenerator_1800x300",
+      "kind": "asteroids",
+      "radius": 18000
+    },
+    {
+      "name": "WarpBlocking_Nebula",
+      "kind": "other",
+      "radius": 75000
+    },
+    {
+      "name": "AnomalyOpaqueCloud_Large_M05b",
+      "kind": "other",
+      "radius": 20000
+    },
+    {
+      "name": "AsteroidFieldGenerator_Large_1800x700",
+      "kind": "asteroids",
+      "radius": 18000
+    },
+    {
+      "name": "AsteroidFieldGenerator_Med_1800x400",
+      "kind": "asteroids",
+      "radius": 18000
+    },
+    {
+      "name": "Spectacle_BlackHole",
+      "kind": "other",
+      "radius": 31000000
+    },
+    {
+      "name": "AsteroidField_Massive Skybox BG",
+      "kind": "other",
+      "radius": 1000000
+    },
+    {
+      "name": "AsteroidClusterNew-Alt",
+      "kind": "asteroids",
+      "radius": 10
+    },
+    {
+      "name": "SmallDebrisBits",
+      "kind": "other",
+      "radius": 10
+    },
+    {
+      "name": "Debris - SpaceStation 04",
+      "kind": "other",
+      "radius": 6
+    },
+    {
+      "name": "Debris - Medium 01",
+      "kind": "other",
+      "radius": 44
+    },
+    {
+      "name": "Prop - Indy_SolarArrayWide Untargetable",
+      "kind": "other",
+      "radius": 1
+    },
+    {
+      "name": "Prop - Indy_SolarHub Untargetable",
+      "kind": "other",
+      "radius": 1200
+    },
+    {
+      "name": "Debris - Big 01",
+      "kind": "other",
+      "radius": 44
+    },
+    {
+      "name": "Debris - Big 02",
+      "kind": "other",
+      "radius": 44
+    },
+    {
+      "name": "Ship - SpaceStationProcedural 06",
+      "kind": "station",
+      "radius": 1000
+    },
+    {
+      "name": "AnomalyOpaqueCloud_Large-m01b-Silva",
+      "kind": "other",
+      "radius": 20000
+    },
+    {
+      "name": "AnomalyOpaqueCloud_Medium-m01b-Silva",
+      "kind": "other",
+      "radius": 12000
+    },
+    {
+      "name": "Anomaly_Sphere_01_Faint_e-m01b-Silva",
+      "kind": "other",
+      "radius": 20000
+    },
+    {
+      "name": "M01-Planetoid_SilvaIV",
+      "kind": "planet",
+      "radius": 12400000
+    },
+    {
+      "name": "MoonClassD003",
+      "kind": "planet",
+      "radius": 580338
+    },
+    {
+      "name": "MoonClassD000",
+      "kind": "planet",
+      "radius": 418031
+    },
+    {
+      "name": "AnomalyOpaqueCloud_NonTargetable-m01b-Silva",
+      "kind": "other",
+      "radius": 8000
+    },
+    {
+      "name": "AnomalyCloudSpherical_Alt2-m01b-Silva",
+      "kind": "other",
+      "radius": 20000
+    },
+    {
+      "name": "M01-PlanetoidSilvaVI",
+      "kind": "planet",
+      "radius": 11211116.827392578
+    },
+    {
+      "name": "AnomalyCloudSpherical_Alt3-m01b-Silva",
+      "kind": "other",
+      "radius": 20000
+    },
+    {
+      "name": "AnomalyCloudCapsule_Alt3-VisualOnly",
+      "kind": "other",
+      "radius": 20000
+    },
+    {
+      "name": "NebulaA",
+      "kind": "other",
+      "radius": 10000
+    },
+    {
+      "name": "AnomalyCloudSpherical_Alt1-m01b-Silva",
+      "kind": "other",
+      "radius": 20000
+    },
+    {
+      "name": "M01-PlanetoidMoon",
+      "kind": "planet",
+      "radius": 580338
+    },
+    {
+      "name": "SilvaStarMajor_NoLight",
+      "kind": "star",
+      "radius": 7000000
+    },
+    {
+      "name": "SilvaStarMajor_Light",
+      "kind": "star",
+      "radius": 39550000
+    },
+    {
+      "name": "AsteroidFieldGenerator_MedAsteroids",
+      "kind": "asteroids",
+      "radius": 12000
+    },
+    {
+      "name": "SilvaStarMinor_NoLight",
+      "kind": "star",
+      "radius": 4000000
+    },
+    {
+      "name": "Ship_Derelict_Debris_lg_02",
+      "kind": "other",
+      "radius": 1600
+    },
+    {
+      "name": "Ship_Derelict_Debris_lg",
+      "kind": "other",
+      "radius": 1750
+    },
+    {
+      "name": "Ship_Derelict_Debris_med",
+      "kind": "other",
+      "radius": 675
+    },
+    {
+      "name": "DerelictDebrisFieldGenerator",
+      "kind": "other",
+      "radius": 12000
+    },
+    {
+      "name": "Ship_Derelict_Debris_med_02",
+      "kind": "other",
+      "radius": 75
+    },
+    {
+      "name": "Ship_Derelict_Debris_mas_02",
+      "kind": "other",
+      "radius": 10000
+    },
+    {
+      "name": "Ship_Derelict_Debris_mas",
+      "kind": "other",
+      "radius": 15500
+    },
+    {
+      "name": "Ship_Derelict_Debris_mas-VisOnly",
+      "kind": "other",
+      "radius": 15500
+    },
+    {
+      "name": "Prop - Derelict_Ship_02",
+      "kind": "other",
+      "radius": 8200
+    },
+    {
+      "name": "AlienDebrisCluster",
+      "kind": "asteroids",
+      "radius": 10
+    },
+    {
+      "name": "AnomalyCloudSpherical_Alt2_M03b_Cheaper",
+      "kind": "other",
+      "radius": 20000
+    },
+    {
+      "name": "AnomalyOpaqueCloud_Large_M03b",
+      "kind": "other",
+      "radius": 20000
+    },
+    {
+      "name": "Set2ClassJ023",
+      "kind": "planet",
+      "radius": 11856895.584487915
+    },
+    {
+      "name": "PlanetRings_Arna",
+      "kind": "planet",
+      "radius": 21762692
+    },
+    {
+      "name": "Ship_Derelict_Debris_lg-VisOnly",
+      "kind": "other",
+      "radius": 1750
+    },
+    {
+      "name": "AlienDebrisCluster-VisOnly",
+      "kind": "asteroids",
+      "radius": 10
+    },
+    {
+      "name": "AnomalyCloudSpherical_Alt2_M03b 1",
+      "kind": "other",
+      "radius": 20000
+    },
+    {
+      "name": "AnomalyCloudSpherical_Alt2_M03b 2",
+      "kind": "other",
+      "radius": 20000
+    },
+    {
+      "name": "Ship_Derelict_Debris_mas_02-VisOnly",
+      "kind": "other",
+      "radius": 10000
+    },
+    {
+      "name": "AnomalyCloudSpherical01_M03b 1",
+      "kind": "other",
+      "radius": 20000
+    },
+    {
+      "name": "Mission03_DerelictDebrisFieldGenerator_Dense",
+      "kind": "other",
+      "radius": 1800
+    },
+    {
+      "name": "Planet Eater - Not Detectable",
+      "kind": "other",
+      "radius": 200
+    },
+    {
+      "name": "Ship_Derelict_Debris_sm",
+      "kind": "other",
+      "radius": 154
+    },
+    {
+      "name": "AnomalyCloudSpherical_Alt2_M03b",
+      "kind": "nebula",
+      "radius": 20000
+    },
+    {
+      "name": "Ship_Derelict_Debris_med-VisOnly",
+      "kind": "other",
+      "radius": 675
+    },
+    {
+      "name": "DerelictDebrisFieldGenerator_1800x400",
+      "kind": "other",
+      "radius": 18000
+    },
+    {
+      "name": "Mission03_Ring_Nebula",
+      "kind": "other",
+      "radius": 30000000
+    },
+    {
+      "name": "Prop - Derelict_Ship_02-VisOnly",
+      "kind": "other",
+      "radius": 8200
+    },
+    {
+      "name": "Prop - Derelict_Ship",
+      "kind": "other",
+      "radius": 8600
+    },
+    {
+      "name": "Ship_Derelict_Debris_lg_02-VisOnly",
+      "kind": "other",
+      "radius": 1600
+    },
+    {
+      "name": "AnomalyCloudSpherical",
+      "kind": "other",
+      "radius": 20000
+    },
+    {
+      "name": "MoonClassD004",
+      "kind": "planet",
+      "radius": 1080338
+    },
+    {
+      "name": "Set2ClassP020",
+      "kind": "planet",
+      "radius": 15353252.331733704
+    },
+    {
+      "name": "ArnaStar_NoLight",
+      "kind": "star",
+      "radius": 99550000
+    },
+    {
+      "name": "ArnaStar_Light",
+      "kind": "star",
+      "radius": 99550000
+    },
+    {
+      "name": "Ship - SpaceStationProcedural 36",
+      "kind": "station",
+      "radius": 1000
+    },
+    {
+      "name": "Prop - Indy_Midas_array",
+      "kind": "station",
+      "radius": 1
+    },
+    {
+      "name": "Set1ClassM006",
+      "kind": "planet",
+      "radius": 4065762.107729912
+    },
+    {
+      "name": "Set1ClassM002",
+      "kind": "planet",
+      "radius": 5707213.156104088
+    },
+    {
+      "name": "MoonClassD001",
+      "kind": "planet",
+      "radius": 653392
+    },
+    {
+      "name": "Anomaly_Sphere_01_Faint_Large",
+      "kind": "other",
+      "radius": 80000
+    },
+    {
+      "name": "AsteroidField_Massive-Alt",
+      "kind": "asteroids",
+      "radius": 5
+    },
+    {
+      "name": "Nebula_Skybox_B",
+      "kind": "other",
+      "radius": 11888811
+    },
+    {
+      "name": "EdinovStar_Light",
+      "kind": "star",
+      "radius": 39550000
+    },
+    {
+      "name": "Ship - SpaceStationProcedural M01",
+      "kind": "station",
+      "radius": 4000
+    },
+    {
+      "name": "Ship - SpaceStationProcedural M01b",
+      "kind": "station",
+      "radius": 4000
+    },
+    {
+      "name": "Ship - SpaceStationProcedural M01d",
+      "kind": "station",
+      "radius": 8000
+    },
+    {
+      "name": "Ship - SpaceStationProcedural M01c",
+      "kind": "station",
+      "radius": 8000
+    },
+    {
+      "name": "EdinovStar_NoLight",
+      "kind": "star",
+      "radius": 39550000
+    },
+    {
+      "name": "AnomalyCloudSpherical_Alt2",
+      "kind": "other",
+      "radius": 20000
+    },
+    {
+      "name": "AsteroidCluster Thin-Alt",
+      "kind": "asteroids",
+      "radius": 5
+    },
+    {
+      "name": "SmallDerelictDebrisBits",
+      "kind": "other",
+      "radius": 10
+    },
+    {
+      "name": "DistantNebula01 faint",
+      "kind": "other",
+      "radius": 7000000
+    },
+    {
+      "name": "DemoMoonA",
+      "kind": "moon",
+      "radius": 437000
+    },
+    {
+      "name": "Debris - SpaceStation 01",
+      "kind": "other",
+      "radius": 4
+    },
+    {
+      "name": "Debris - SpaceStation 02",
+      "kind": "other",
+      "radius": 4
+    },
+    {
+      "name": "Debris - SpaceStation 03",
+      "kind": "other",
+      "radius": 6
+    },
+    {
+      "name": "Ship - SpaceStation 01",
+      "kind": "other",
+      "radius": 1000
+    },
+    {
+      "name": "Set2ClassD009",
+      "kind": "planet",
+      "radius": 5100305.087149143
+    },
+    {
+      "name": "AsteroidClusterNew-Crystal",
+      "kind": "asteroids",
+      "radius": 10
+    },
+    {
+      "name": "AsteroidCluster Thin-Crystal",
+      "kind": "asteroids",
+      "radius": 10
+    },
+    {
+      "name": "AsteroidClusterCrystal",
+      "kind": "asteroids",
+      "radius": 10
+    },
+    {
+      "name": "SmallAsteroidBits larger",
+      "kind": "other",
+      "radius": 20
+    },
+    {
+      "name": "AnomalyCloudSpherical_Alt2_M03b_Cheaper2",
+      "kind": "other",
+      "radius": 20000
+    },
+    {
+      "name": "Nebula_Skybox_Blue_Perseph",
+      "kind": "other",
+      "radius": 1000000
+    },
+    {
+      "name": "VerteronCluster Thin",
+      "kind": "asteroids",
+      "radius": 5
+    },
+    {
+      "name": "SmallDerelictDebrisBits larger",
+      "kind": "other",
+      "radius": 20
+    },
+    {
+      "name": "Perseph_Light",
+      "kind": "star",
+      "radius": 39550000
+    },
+    {
+      "name": "e3SecondStar",
+      "kind": "star",
+      "radius": 39550000
+    },
+    {
+      "name": "GasCloud large",
+      "kind": "other",
+      "radius": 200000000
+    },
+    {
+      "name": "DyingStarA Large",
+      "kind": "star",
+      "radius": 100000000
+    },
+    {
+      "name": "Perseph BG elements",
+      "kind": "other",
+      "radius": 20000000
+    },
+    {
+      "name": "GasCloud",
+      "kind": "other",
+      "radius": 10000000
+    },
+    {
+      "name": "ProtoPlanetDisk",
+      "kind": "other",
+      "radius": 10000000
+    },
+    {
+      "name": "Ship - SpaceStationProcedural 32",
+      "kind": "station",
+      "radius": 1000
+    },
+    {
+      "name": "Prop - Indy_SolarHub",
+      "kind": "other",
+      "radius": 1200
+    },
+    {
+      "name": "Prop - GraviticMine",
+      "kind": "other",
+      "radius": 3.5
+    },
+    {
+      "name": "GasGiantClassJ007",
+      "kind": "planet",
+      "radius": 17692535.84461212
+    },
+    {
+      "name": "Set2ClassD008",
+      "kind": "planet",
+      "radius": 3471189.171910286
+    },
+    {
+      "name": "Ship - SpaceStationProcedural 23",
+      "kind": "station",
+      "radius": 1000
+    },
+    {
+      "name": "Anomaly_Sphere_01_e",
+      "kind": "other",
+      "radius": 20000
+    },
+    {
+      "name": "Anomaly_Sphere_03_e",
+      "kind": "other",
+      "radius": 20000
+    },
+    {
+      "name": "DevinStar_NoLight",
+      "kind": "star",
+      "radius": 18440000
+    },
+    {
+      "name": "DevinStar_Light",
+      "kind": "star",
+      "radius": 99550000
+    },
+    {
+      "name": "Ship - SpaceStationProcedural 08",
+      "kind": "station",
+      "radius": 1000
+    },
+    {
+      "name": "Ship - SpaceStation 02",
+      "kind": "station",
+      "radius": 1000
+    },
+    {
+      "name": "Prop - Indy_SolarArray",
+      "kind": "other",
+      "radius": 1
+    },
+    {
+      "name": "ElgarStar_NoLight",
+      "kind": "star",
+      "radius": 39550000
+    },
+    {
+      "name": "ElgarStar_Light",
+      "kind": "star",
+      "radius": 99550000
+    },
+    {
+      "name": "M05-GasGiantClassJ009",
+      "kind": "planet",
+      "radius": 14418096
+    },
+    {
+      "name": "SimpleStarBright50",
+      "kind": "star",
+      "radius": 10000000
+    },
+    {
+      "name": "DistantNebula02_Elgar",
+      "kind": "other",
+      "radius": 700000000
+    },
+    {
+      "name": "Ship - SpaceStation_Gardenza",
+      "kind": "station",
+      "radius": 1000
+    },
+    {
+      "name": "GasGiantClassJ010",
+      "kind": "planet",
+      "radius": 14361831.31904602
+    },
+    {
+      "name": "PlanetRings_Elgar3",
+      "kind": "planet",
+      "radius": 36762692
+    },
+    {
+      "name": "PlanetRings_Elgar2",
+      "kind": "planet",
+      "radius": 31762692
+    },
+    {
+      "name": "M04-PlanetoidBetaB",
+      "kind": "planet",
+      "radius": 10157447.1
+    },
+    {
+      "name": "Set2ClassP018",
+      "kind": "planet",
+      "radius": 7816656.489849091
+    },
+    {
+      "name": "AsteroidClusterColumnsMix",
+      "kind": "asteroids",
+      "radius": 10
+    },
+    {
+      "name": "AsteroidClusterColumns",
+      "kind": "asteroids",
+      "radius": 10
+    },
+    {
+      "name": "AsteroidClusterNew-Ice",
+      "kind": "asteroids",
+      "radius": 10
+    },
+    {
+      "name": "IceAsteroidFieldGenerator_Med_Spherical_1800",
+      "kind": "asteroids",
+      "radius": 18000
+    },
+    {
+      "name": "AsteroidField_Massive-Ice",
+      "kind": "asteroids",
+      "radius": 5
+    },
+    {
+      "name": "M02-Tyris-GasGiantClassJ007",
+      "kind": "planet",
+      "radius": 17692535.84461212
+    },
+    {
+      "name": "Set2ClassY011",
+      "kind": "planet",
+      "radius": 16233126.34396553
+    },
+    {
+      "name": "TyrisStar_Light",
+      "kind": "star",
+      "radius": 39550000
+    },
+    {
+      "name": "Prop - Indy_SolarArrayWide",
+      "kind": "other",
+      "radius": 1
+    },
+    {
+      "name": "AnomalyCloudSpherical_Alt2_M03b 2-Tyris",
+      "kind": "other",
+      "radius": 20000
+    },
+    {
+      "name": "PlanetRing_Gas_Blue Cheap",
+      "kind": "other",
+      "radius": 2500000
+    },
+    {
+      "name": "FrozenClassP016",
+      "kind": "planet",
+      "radius": 6135546.790361404
+    },
+    {
+      "name": "DistantNebula01 faint small",
+      "kind": "other",
+      "radius": 700000
+    },
+    {
+      "name": "AsteroidFieldGenerator_Med_Spherical_1200",
+      "kind": "asteroids",
+      "radius": 12000
+    },
+    {
+      "name": "AsteroidClusterNew-VisOnly",
+      "kind": "asteroids",
+      "radius": 10
+    },
+    {
+      "name": "AsteroidCluster Small-Ice",
+      "kind": "asteroids",
+      "radius": 5
+    },
+    {
+      "name": "Spectacle_Pulsar",
+      "kind": "star",
+      "radius": 40000000
+    },
+    {
+      "name": "MelkevStar_Light",
+      "kind": "star",
+      "radius": 99550000
+    },
+    {
+      "name": "Set1ClassM000",
+      "kind": "planet",
+      "radius": 4958224.540472031
+    },
+    {
+      "name": "AnomalyOpaqueCloud_Large",
+      "kind": "other",
+      "radius": 20000
+    },
+    {
+      "name": "ColumnFieldGenerator_1800x400",
+      "kind": "asteroids",
+      "radius": 18000
+    },
+    {
+      "name": "Ship - SpaceStationProcedural 17",
+      "kind": "station",
+      "radius": 1000
+    },
+    {
+      "name": "GasGiantClassJ003",
+      "kind": "planet",
+      "radius": 11694322.608184814
+    },
+    {
+      "name": "Anomaly_Sphere_01_a",
+      "kind": "other",
+      "radius": 20000
+    },
+    {
+      "name": "Anomaly_Sphere_02_a",
+      "kind": "other",
+      "radius": 20000
+    },
+    {
+      "name": "Anomaly_Sphere_03_a",
+      "kind": "other",
+      "radius": 20000
+    },
+    {
+      "name": "AsteroidFieldGenerator",
+      "kind": "asteroids",
+      "radius": 12000
+    },
+    {
+      "name": "Ship - SpaceStation 03",
+      "kind": "station",
+      "radius": 1000
+    },
+    {
+      "name": "YanoraStar_NoLight",
+      "kind": "star",
+      "radius": 49550000
+    },
+    {
+      "name": "YanoraStar_Light",
+      "kind": "star",
+      "radius": 99550000
+    },
+    {
+      "name": "Ship - SpaceStationProcedural 18",
+      "kind": "station",
+      "radius": 1000
+    },
+    {
+      "name": "Ship - SpaceStationProcedural 19",
+      "kind": "station",
+      "radius": 1000
+    },
+    {
+      "name": "AnomalyCloudSpherical_Alt1",
+      "kind": "other",
+      "radius": 20000
+    },
+    {
+      "name": "Set2ClassL005",
+      "kind": "planet",
+      "radius": 7326748.580813408
+    },
+    {
+      "name": "Spectacle_Binary_Stars",
+      "kind": "star",
+      "radius": 40000000
+    },
+    {
+      "name": "GasGiantClassJ002",
+      "kind": "planet",
+      "radius": 20124771.495056152
+    },
+    {
+      "name": "Prop - SubspaceRelayStation",
+      "kind": "other",
+      "radius": 50
+    },
+    {
+      "name": "Ship - SpaceStationProcedural 24",
+      "kind": "station",
+      "radius": 1000
+    },
+    {
+      "name": "Ship - SpaceStationProcedural 27",
+      "kind": "station",
+      "radius": 1000
+    },
+    {
+      "name": "DebrisFieldGeneratorNoGlow",
+      "kind": "other",
+      "radius": 10000
+    },
+    {
+      "name": "DysonSphere_NoLight",
+      "kind": "star",
+      "radius": 10000000
+    },
+    {
+      "name": "AnomalyOpaqueCloud_Large_M04a",
+      "kind": "other",
+      "radius": 20000
+    },
+    {
+      "name": "AnomalyOpaqueCloud_Medium_M04a",
+      "kind": "other",
+      "radius": 12000
+    },
+    {
+      "name": "M04-PlanetoidAlpha",
+      "kind": "planet",
+      "radius": 7816656.489849091
+    },
+    {
+      "name": "AnomalyCloudSpherical01_M04a",
+      "kind": "other",
+      "radius": 20000
+    },
+    {
+      "name": "PlanetChunks",
+      "kind": "other",
+      "radius": 6754485
+    },
+    {
+      "name": "DistantNebula02_DS-4219",
+      "kind": "other",
+      "radius": 700000000
+    },
+    {
+      "name": "AnomalyCloudSpherical01_M04a Cloud",
+      "kind": "other",
+      "radius": 20000
+    },
+    {
+      "name": "DS4219_DarkStar",
+      "kind": "star",
+      "radius": 59550000
+    },
+    {
+      "name": "DS4219_PrimaryStar_Light",
+      "kind": "star",
+      "radius": 39550000
+    },
+    {
+      "name": "AsteroidCluster Small-Crystal",
+      "kind": "asteroids",
+      "radius": 5
+    },
+    {
+      "name": "AsteroidFieldGenerator_Med_1800x400-200",
+      "kind": "asteroids",
+      "radius": 18000
+    },
+    {
+      "name": "Planet Eater",
+      "kind": "other",
+      "radius": 40000
+    },
+    {
+      "name": "SarzaStar_NoLight",
+      "kind": "star",
+      "radius": 5550000
+    },
+    {
+      "name": "SarzaStar_light",
+      "kind": "star",
+      "radius": 39550000
+    },
+    {
+      "name": "Venov_Solar_Farm",
+      "kind": "other",
+      "radius": 2
+    },
+    {
+      "name": "Ship - SpaceStationProcedural 29",
+      "kind": "station",
+      "radius": 1000
+    },
+    {
+      "name": "AsteroidFieldGenerator_Med_1800x400-Crystal",
+      "kind": "asteroids",
+      "radius": 18000
+    },
+    {
+      "name": "Set2ClassJ020",
+      "kind": "planet",
+      "radius": 12806735.84804535
+    },
+    {
+      "name": "AdaptableClassL2001",
+      "kind": "planet",
+      "radius": 13488072.962760925
+    },
+    {
+      "name": "Ship - SpaceStationProcedural 09",
+      "kind": "station",
+      "radius": 1000
+    },
+    {
+      "name": "Spectacle_Vortex",
+      "kind": "other",
+      "radius": 40000000
+    },
+    {
+      "name": "Set2ClassJ021",
+      "kind": "planet",
+      "radius": 19530036.03000641
+    },
+    {
+      "name": "PlanetRings 02",
+      "kind": "planet",
+      "radius": 35762692
+    },
+    {
+      "name": "Ship_Derelict_Debris_sm_02",
+      "kind": "other",
+      "radius": 84
+    },
+    {
+      "name": "AnomalyOpaqueCloud_Large_Alt1",
+      "kind": "other",
+      "radius": 20000
+    },
+    {
+      "name": "AnomalyOpaqueCloud_alt1",
+      "kind": "other",
+      "radius": 8000
+    },
+    {
+      "name": "Set1ClassM004",
+      "kind": "planet",
+      "radius": 2883648.8530933857
+    },
+    {
+      "name": "Kethstar_NoLight",
+      "kind": "other",
+      "radius": 30000000
+    },
+    {
+      "name": "KethStar_Light",
+      "kind": "star",
+      "radius": 39550000
+    },
+    {
+      "name": "DistantNebula02",
+      "kind": "other",
+      "radius": 700000000
+    },
+    {
+      "name": "DistantNebula03",
+      "kind": "other",
+      "radius": 700000000
+    },
+    {
+      "name": "Ship - SpaceStationProcedural 11",
+      "kind": "station",
+      "radius": 1000
+    },
+    {
+      "name": "FrozenClassP012",
+      "kind": "planet",
+      "radius": 8569160.749435425
+    },
+    {
+      "name": "PlanetRings 03",
+      "kind": "planet",
+      "radius": 21762692
+    },
+    {
+      "name": "Spectacle_Wormhole",
+      "kind": "other",
+      "radius": 40000000
+    },
+    {
+      "name": "IceAsteroidFieldGenerator_Med",
+      "kind": "asteroids",
+      "radius": 12000
+    },
+    {
+      "name": "RyburnStar",
+      "kind": "star",
+      "radius": 39550000
+    },
+    {
+      "name": "RyburnStar_Light",
+      "kind": "star",
+      "radius": 39550000
+    },
+    {
+      "name": "Set2ClassJ022",
+      "kind": "planet",
+      "radius": 11211116.827392578
+    },
+    {
+      "name": "Anomaly_Sphere_01_Faint_e",
+      "kind": "other",
+      "radius": 20000
+    },
+    {
+      "name": "AnomalyCloudCapsule_Alt1",
+      "kind": "other",
+      "radius": 20000
+    },
+    {
+      "name": "AI Marker",
+      "kind": "other",
+      "radius": 0
+    },
+    {
+      "name": "Klingon_Sensor",
+      "kind": "other",
+      "radius": 3821.9604856622936
+    },
+    {
+      "name": "Nav Point",
+      "kind": "other",
+      "radius": 0
+    },
+    {
+      "name": "Ship - Aegis",
+      "kind": "other",
+      "radius": 414.21401705630615
+    },
+    {
+      "name": "Ship - Alarm Bouy",
+      "kind": "other",
+      "radius": 0
+    },
+    {
+      "name": "Ship - Bird Of Prey",
+      "kind": "other",
+      "radius": 184.06536386841594
+    },
+    {
+      "name": "Ship - Bird Of Prey Alarm",
+      "kind": "other",
+      "radius": 184.06536386841594
+    },
+    {
+      "name": "Ship - Borg Cube",
+      "kind": "other",
+      "radius": 0
+    },
+    {
+      "name": "Ship - Class J",
+      "kind": "other",
+      "radius": 118.99210088960558
+    },
+    {
+      "name": "Ship - D5 Cruiser",
+      "kind": "other",
+      "radius": 209.15323835512254
+    },
+    {
+      "name": "Ship - D5 Cruiser Alarm",
+      "kind": "other",
+      "radius": 209.15323835512254
+    },
+    {
+      "name": "Ship - Enterprise",
+      "kind": "other",
+      "radius": 441.6972142718214
+    },
+    {
+      "name": "Ship - Enterprise 1701D",
+      "kind": "other",
+      "radius": 492.57287129443284
+    },
+    {
+      "name": "Ship - EscapePodEmpty",
+      "kind": "other",
+      "radius": 5
+    },
+    {
+      "name": "Ship - EscapePodFull",
+      "kind": "other",
+      "radius": 5
+    },
+    {
+      "name": "Ship - EscapePodFull CARGO",
+      "kind": "other",
+      "radius": 5
+    },
+    {
+      "name": "Ship - FakePirate",
+      "kind": "other",
+      "radius": 367.78395612037457
+    },
+    {
+      "name": "Ship - Freighter A",
+      "kind": "other",
+      "radius": 121.01677724745855
+    },
+    {
+      "name": "Ship - Freighter A CARGO",
+      "kind": "other",
+      "radius": 121.01677724745855
+    },
+    {
+      "name": "Ship - Freighter A LIFE",
+      "kind": "other",
+      "radius": 121.01677724745855
+    },
+    {
+      "name": "Ship - Freighter B",
+      "kind": "other",
+      "radius": 194.61564509596428
+    },
+    {
+      "name": "Ship - Freighter B CARGO",
+      "kind": "other",
+      "radius": 194.61564509596428
+    },
+    {
+      "name": "Ship - Freighter B LIFE",
+      "kind": "other",
+      "radius": 194.61564509596428
+    },
+    {
+      "name": "Ship - Freighter C",
+      "kind": "other",
+      "radius": 285.4662015101985
+    },
+    {
+      "name": "Ship - Freighter C CARGO",
+      "kind": "other",
+      "radius": 285.4662015101985
+    },
+    {
+      "name": "Ship - Freighter C LIFE",
+      "kind": "other",
+      "radius": 285.4662015101985
+    },
+    {
+      "name": "Ship - Freighter D",
+      "kind": "other",
+      "radius": 344.9931697588636
+    },
+    {
+      "name": "Ship - Freighter D Cargo",
+      "kind": "other",
+      "radius": 344.9931697588636
+    },
+    {
+      "name": "Ship - Freighter D LIFE",
+      "kind": "other",
+      "radius": 344.9931697588636
+    },
+    {
+      "name": "Ship - Freighter E",
+      "kind": "other",
+      "radius": 441.3318738067255
+    },
+    {
+      "name": "Ship - Freighter E CARGO",
+      "kind": "other",
+      "radius": 441.3318738067255
+    },
+    {
+      "name": "Ship - Freighter E LIFE",
+      "kind": "other",
+      "radius": 441.3318738067255
+    },
+    {
+      "name": "Ship - Huxley",
+      "kind": "other",
+      "radius": 333.52380840623937
+    },
+    {
+      "name": "Ship - Huxley Cargo",
+      "kind": "other",
+      "radius": 333.52380840623937
+    },
+    {
+      "name": "Ship - Huxley TNG",
+      "kind": "other",
+      "radius": 363.67441135056197
+    },
+    {
+      "name": "Ship - Huxley TNG Cargo",
+      "kind": "other",
+      "radius": 363.67441135056197
+    },
+    {
+      "name": "Ship - Klingon Flagship",
+      "kind": "other",
+      "radius": 613.2549676658527
+    },
+    {
+      "name": "Ship - Klingon Flagship CARGO",
+      "kind": "other",
+      "radius": 613.2549676658527
+    },
+    {
+      "name": "Ship - Kobayashi Maru",
+      "kind": "other",
+      "radius": 382.419644165534
+    },
+    {
+      "name": "Ship - Kobayashi Maru Cargo",
+      "kind": "other",
+      "radius": 382.419644165534
+    },
+    {
+      "name": "Ship - Pirate A",
+      "kind": "other",
+      "radius": 221.7979406519862
+    },
+    {
+      "name": "Ship - Pirate A CARGO",
+      "kind": "other",
+      "radius": 221.7979406519862
+    },
+    {
+      "name": "Ship - Pirate A Tutorial",
+      "kind": "other",
+      "radius": 221.7979406519862
+    },
+    {
+      "name": "Ship - Pirate B",
+      "kind": "other",
+      "radius": 367.78395612037457
+    },
+    {
+      "name": "Ship - Pirate B CAPT",
+      "kind": "other",
+      "radius": 367.78395612037457
+    },
+    {
+      "name": "Ship - Planet Killer",
+      "kind": "other",
+      "radius": 2550.2325415028827
+    },
+    {
+      "name": "Ship - Raleigh",
+      "kind": "other",
+      "radius": 382.419644165534
+    },
+    {
+      "name": "Ship - Raleigh Cargo",
+      "kind": "other",
+      "radius": 382.419644165534
+    },
+    {
+      "name": "Ship - Raleigh TNG",
+      "kind": "other",
+      "radius": 304.0966003075664
+    },
+    {
+      "name": "Ship - Raleigh TNG Cargo",
+      "kind": "other",
+      "radius": 304.0966003075664
+    },
+    {
+      "name": "Ship - Romulan DDeridex",
+      "kind": "other",
+      "radius": 1000.5356385864161
+    },
+    {
+      "name": "Ship - Romulan DDeridex CARGO",
+      "kind": "other",
+      "radius": 1000.5356385864161
+    },
+    {
+      "name": "Ship - Romulan Medium",
+      "kind": "other",
+      "radius": 785.3779632657734
+    },
+    {
+      "name": "Ship - Romulan Scout",
+      "kind": "other",
+      "radius": 171.30430415199953
+    },
+    {
+      "name": "Ship - Saladin",
+      "kind": "other",
+      "radius": 336.1434181375171
+    },
+    {
+      "name": "Ship - Saladin Cargo",
+      "kind": "other",
+      "radius": 336.1434181375171
+    },
+    {
+      "name": "Ship - Saladin TNG",
+      "kind": "other",
+      "radius": 485.58667754787166
+    },
+    {
+      "name": "Ship - Saladin TNG Cargo",
+      "kind": "other",
+      "radius": 485.58667754787166
+    },
+    {
+      "name": "Ship - Science A",
+      "kind": "other",
+      "radius": 226.67947659653237
+    },
+    {
+      "name": "Ship - Science B",
+      "kind": "other",
+      "radius": 339.3193914161111
+    },
+    {
+      "name": "Ship - Science C",
+      "kind": "other",
+      "radius": 443.67533349394307
+    },
+    {
+      "name": "Ship - Science D",
+      "kind": "other",
+      "radius": 424.5757207863244
+    },
+    {
+      "name": "Ship - Science Training",
+      "kind": "other",
+      "radius": 226.67947659653237
+    },
+    {
+      "name": "Ship - SpaceStation K-7",
+      "kind": "other",
+      "radius": 1000
+    },
+    {
+      "name": "Ship - SpaceStationProcedural",
+      "kind": "station",
+      "radius": 1000
+    },
+    {
+      "name": "Ship - SpaceStationProcedural 01",
+      "kind": "station",
+      "radius": 1000
+    },
+    {
+      "name": "Ship - SpaceStationProcedural 02",
+      "kind": "station",
+      "radius": 1000
+    },
+    {
+      "name": "Ship - SpaceStationProcedural 03",
+      "kind": "station",
+      "radius": 1000
+    },
+    {
+      "name": "Ship - SpaceStationProcedural 04",
+      "kind": "station",
+      "radius": 1000
+    },
+    {
+      "name": "Ship - SpaceStationProcedural 05",
+      "kind": "station",
+      "radius": 1000
+    },
+    {
+      "name": "Ship - SpaceStationProcedural 07",
+      "kind": "station",
+      "radius": 1000
+    },
+    {
+      "name": "Ship - SpaceStationProcedural 10",
+      "kind": "station",
+      "radius": 1000
+    },
+    {
+      "name": "Ship - SpaceStationProcedural 12",
+      "kind": "station",
+      "radius": 1000
+    },
+    {
+      "name": "Ship - SpaceStationProcedural 13",
+      "kind": "station",
+      "radius": 1000
+    },
+    {
+      "name": "Ship - SpaceStationProcedural 14",
+      "kind": "station",
+      "radius": 1000
+    },
+    {
+      "name": "Ship - SpaceStationProcedural 15",
+      "kind": "station",
+      "radius": 1000
+    },
+    {
+      "name": "Ship - SpaceStationProcedural 16",
+      "kind": "station",
+      "radius": 1000
+    },
+    {
+      "name": "Ship - SpaceStationProcedural 20",
+      "kind": "station",
+      "radius": 1000
+    },
+    {
+      "name": "Ship - SpaceStationProcedural 21",
+      "kind": "station",
+      "radius": 1000
+    },
+    {
+      "name": "Ship - SpaceStationProcedural 25",
+      "kind": "station",
+      "radius": 1000
+    },
+    {
+      "name": "Ship - SpaceStationProcedural 26",
+      "kind": "station",
+      "radius": 1000
+    },
+    {
+      "name": "Ship - SpaceStationProcedural 28",
+      "kind": "station",
+      "radius": 1000
+    },
+    {
+      "name": "Ship - SpaceStationProcedural 30",
+      "kind": "station",
+      "radius": 1000
+    },
+    {
+      "name": "Ship - SpaceStationProcedural 31",
+      "kind": "station",
+      "radius": 1000
+    },
+    {
+      "name": "Ship - SpaceStationProcedural 33",
+      "kind": "station",
+      "radius": 1000
+    },
+    {
+      "name": "Ship - SpaceStationProcedural 34",
+      "kind": "station",
+      "radius": 1000
+    },
+    {
+      "name": "Ship - SpaceStationProcedural 35",
+      "kind": "station",
+      "radius": 1000
+    },
+    {
+      "name": "Ship - Warbird",
+      "kind": "other",
+      "radius": 451.8305792041292
+    },
+    {
+      "name": "Ship - WarpDriven A",
+      "kind": "other",
+      "radius": 161.1993424081993
+    },
+    {
+      "name": "Ship - WarpDriven A Explore",
+      "kind": "other",
+      "radius": 161.1993424081993
+    },
+    {
+      "name": "Ship - WarpDriven B",
+      "kind": "other",
+      "radius": 302.98413750296277
+    },
+    {
+      "name": "Ship - WarpDriven B CARGO",
+      "kind": "other",
+      "radius": 302.98413750296277
+    },
+    {
+      "name": "Ship - WarpDriven C",
+      "kind": "other",
+      "radius": 301.1584550188263
+    },
+    {
+      "name": "Ship - WarpDriven D",
+      "kind": "other",
+      "radius": 459.3460804014603
+    },
+    {
+      "name": "Anomaly01",
+      "kind": "nebula",
+      "radius": 50
+    },
+    {
+      "name": "AnomalyNoVisual_90km",
+      "kind": "other",
+      "radius": 30000
+    },
+    {
+      "name": "Debris - Big 03",
+      "kind": "other",
+      "radius": 44
+    },
+    {
+      "name": "Debris - Big 04",
+      "kind": "other",
+      "radius": 44
+    },
+    {
+      "name": "EnergyWaveFX",
+      "kind": "other",
+      "radius": 10000000
+    },
+    {
+      "name": "Explore Asteroid Targetable",
+      "kind": "asteroids",
+      "radius": 575
+    },
+    {
+      "name": "Explore Asteroid Targetable Match",
+      "kind": "asteroids",
+      "radius": 575
+    },
+    {
+      "name": "LongRangeScanObject_Buoy",
+      "kind": "other",
+      "radius": 1
+    },
+    {
+      "name": "Mission00_PlasmaCoolant_01",
+      "kind": "other",
+      "radius": 1
+    },
+    {
+      "name": "Mission00_PlasmaCoolant_02",
+      "kind": "other",
+      "radius": 1
+    },
+    {
+      "name": "Mission00_WarpCoreBreach",
+      "kind": "other",
+      "radius": 1
+    },
+    {
+      "name": "Mission00_WarpCoreBreach_Delayed",
+      "kind": "other",
+      "radius": 1
+    },
+    {
+      "name": "Prop - BeaconBuoy",
+      "kind": "other",
+      "radius": 3
+    },
+    {
+      "name": "TerroristBomb",
+      "kind": "other",
+      "radius": 1
+    },
+    {
+      "name": "StarExplosion",
+      "kind": "other",
+      "radius": 1000000
+    },
+    {
+      "name": "StarExplosion_02",
+      "kind": "other",
+      "radius": 1000000
+    },
+    {
+      "name": "Mission03_Arna_Cloud",
+      "kind": "other",
+      "radius": 7500
+    },
+    {
+      "name": "Mission03_Arna_Cloud_Large",
+      "kind": "other",
+      "radius": 12500
+    },
+    {
+      "name": "Mission03_Arna_Cloud_Small",
+      "kind": "other",
+      "radius": 7500
+    },
+    {
+      "name": "Mission03_ProtoMatterExplosion",
+      "kind": "other",
+      "radius": 1
+    },
+    {
+      "name": "Mission03_WarpInEffect",
+      "kind": "other",
+      "radius": 1
+    },
+    {
+      "name": "Ship_Derelict_Debris_mas Skybox",
+      "kind": "other",
+      "radius": 31000
+    },
+    {
+      "name": "Ship_Derelict_Debris_mas_02 Skybox",
+      "kind": "other",
+      "radius": 19800
+    },
+    {
+      "name": "M05_weapon_disposal_target",
+      "kind": "other",
+      "radius": 1
+    },
+    {
+      "name": "Mission03_ProbeTarget",
+      "kind": "other",
+      "radius": 1
+    },
+    {
+      "name": "Mission05_ProtomatterExplosion",
+      "kind": "other",
+      "radius": 100
+    },
+    {
+      "name": "Mission01_aegisBait_explodingBarrel",
+      "kind": "other",
+      "radius": 0.5
+    },
+    {
+      "name": "Mission01_asteroidFieldScanTarget",
+      "kind": "other",
+      "radius": 1
+    },
+    {
+      "name": "Mission01_ExplodingBarrel_Copy",
+      "kind": "other",
+      "radius": 1.5
+    },
+    {
+      "name": "Mission01_LongRangeScanObject_nebulaScanTarget",
+      "kind": "other",
+      "radius": 1
+    },
+    {
+      "name": "Mission01_LongRangeScanObject_silvaMoon",
+      "kind": "other",
+      "radius": 1
+    },
+    {
+      "name": "Mission01_LongRangeScanObject_silvaPlanet",
+      "kind": "other",
+      "radius": 1
+    },
+    {
+      "name": "Mission01_planetScanTarget",
+      "kind": "other",
+      "radius": 1
+    },
+    {
+      "name": "Mission_01_AnomalyCloudCapsule_Alt5_Safe",
+      "kind": "other",
+      "radius": 20000
+    },
+    {
+      "name": "Mission_01_AnomalyCloudSpherical_Alt4_Lightning",
+      "kind": "other",
+      "radius": 20000
+    },
+    {
+      "name": "Mission_01_AnomalyCloudSpherical_Alt4_Safe",
+      "kind": "other",
+      "radius": 20000
+    },
+    {
+      "name": "Mission_01_AnomalyOpaqueCloud_Medium_Shield_Drain",
+      "kind": "other",
+      "radius": 12000
+    },
+    {
+      "name": "Mission_01_asteroidObjectiveScanTarget",
+      "kind": "other",
+      "radius": 3
+    },
+    {
+      "name": "PM-DebrisParticles18x18",
+      "kind": "other",
+      "radius": 10
+    },
+    {
+      "name": "Prop - Buoy",
+      "kind": "other",
+      "radius": 3
+    },
+    {
+      "name": "Prop - Buoy Hostile",
+      "kind": "other",
+      "radius": 1
+    },
+    {
+      "name": "Prop - NavPoint",
+      "kind": "other",
+      "radius": 3
+    },
+    {
+      "name": "Prop - NavPoint Explore",
+      "kind": "other",
+      "radius": 3
+    },
+    {
+      "name": "Prop - Probe_Federation",
+      "kind": "other",
+      "radius": 3
+    },
+    {
+      "name": "Prop - ScannableObjectA",
+      "kind": "other",
+      "radius": 3
+    },
+    {
+      "name": "Prop - ScannableObjectB",
+      "kind": "other",
+      "radius": 3
+    },
+    {
+      "name": "Prop - ScannableObjectC",
+      "kind": "other",
+      "radius": 3
+    },
+    {
+      "name": "Prop - ScannableObjectD",
+      "kind": "other",
+      "radius": 3
+    },
+    {
+      "name": "ProtomatterBulbs",
+      "kind": "other",
+      "radius": 50
+    },
+    {
+      "name": "Script Aid - LongRange Detectable",
+      "kind": "other",
+      "radius": 0
+    },
+    {
+      "name": "Script Aid - Spawnable Reference Point",
+      "kind": "other",
+      "radius": 0
     }
-   ],
-   "nodes": []
-  },
-  {
-   "name": "Silva",
-   "position": [
-    -133.3,
-    40
-   ],
-   "skybox": "Sector/SkyboxMaterials/Silva Skybox",
-   "systemTags": [
-    "LabelSystemSilva"
-   ],
-   "families": [
-    {
-     "name": "FAMILY Silva IV",
-     "pois": [
-      "POI2_silvaIV",
-      "POI1_silvaIV_debrisCloud"
-     ],
-     "hasSpawn": true,
-     "hasStation": false
-    },
-    {
-     "name": "FAMILY Silva VI",
-     "pois": [
-      "POI - Silva VI Planet",
-      "POI - Silva VI Nebula",
-      "POI - Silva VI Asteroid Field",
-      "POI - Silva VI Moon"
-     ],
-     "hasSpawn": false,
-     "hasStation": false
-    },
-    {
-     "name": "FAMILY Star",
-     "pois": [
-      "POI Star Major",
-      "POI Asteroids",
-      "POI Nebula",
-      "POI - Star Minor"
-     ],
-     "hasSpawn": false,
-     "hasStation": false
-    }
-   ],
-   "nodes": []
-  },
-  {
-   "name": "5533|Arna",
-   "position": [
-    92.9,
-    53
-   ],
-   "skybox": "Sector/SkyboxMaterials/Arna Skybox",
-   "systemTags": [
-    "LabelSystemArna"
-   ],
-   "families": [
-    {
-     "name": "FAMILY Klingon Zone",
-     "pois": [
-      "Hack Network"
-     ],
-     "hasSpawn": true,
-     "hasStation": false
-    },
-    {
-     "name": "FAMILY Storm",
-     "pois": [
-      "Storm",
-      "Cluster of Debris",
-      "Nebula"
-     ],
-     "hasSpawn": false,
-     "hasStation": false
-    },
-    {
-     "name": "FAMILY Grave Yard",
-     "pois": [
-      "Transport",
-      "Ancient Ship",
-      "Asteroids"
-     ],
-     "hasSpawn": false,
-     "hasStation": false
-    },
-    {
-     "name": "FAMILY Sun",
-     "pois": [
-      "POI - planet",
-      "POI - Sun"
-     ],
-     "hasSpawn": false,
-     "hasStation": false
-    },
-    {
-     "name": "FAMILY Twin Planets",
-     "pois": [
-      "POI Orbiting Space Station",
-      "POI Twin Planets"
-     ],
-     "hasSpawn": false,
-     "hasStation": true
-    }
-   ],
-   "nodes": []
-  }
- ],
- "prefabs": [
-  {
-   "name": "Family Group",
-   "kind": "other",
-   "radius": 0
-  },
-  {
-   "name": "Point of Interest",
-   "kind": "other",
-   "radius": 0
-  },
-  {
-   "name": "Nebula_Skybox_BlueA",
-   "kind": "other",
-   "radius": 3000000
-  },
-  {
-   "name": "Region",
-   "kind": "asteroids",
-   "radius": 0
-  },
-  {
-   "name": "AnomalyCloudCone_Alt3",
-   "kind": "other",
-   "radius": 20000
-  },
-  {
-   "name": "AnomalyCloudCapsule_Alt4",
-   "kind": "other",
-   "radius": 20000
-  },
-  {
-   "name": "AnomalyCloudCone_Alt4",
-   "kind": "other",
-   "radius": 20000
-  },
-  {
-   "name": "Impulse Destination",
-   "kind": "star",
-   "radius": 0
-  },
-  {
-   "name": "AnomalyCloudSpherical_Alt3",
-   "kind": "other",
-   "radius": 20000
-  },
-  {
-   "name": "Exploding Barrel",
-   "kind": "other",
-   "radius": 1.5
-  },
-  {
-   "name": "Venov_Large Nebula 03",
-   "kind": "other",
-   "radius": 500000000
-  },
-  {
-   "name": "DebrisFieldGenerator",
-   "kind": "other",
-   "radius": 12000
-  },
-  {
-   "name": "Debris - Medium 02",
-   "kind": "other",
-   "radius": 50
-  },
-  {
-   "name": "Debris - Medium 03",
-   "kind": "other",
-   "radius": 94
-  },
-  {
-   "name": "Debris - Medium 04",
-   "kind": "other",
-   "radius": 63
-  },
-  {
-   "name": "DebrisFieldSmall_01",
-   "kind": "other",
-   "radius": 10
-  },
-  {
-   "name": "Spectacle_Star_spinning",
-   "kind": "star",
-   "radius": 40000000
-  },
-  {
-   "name": "Ship - SpaceStationProcedural 22",
-   "kind": "station",
-   "radius": 1000
-  },
-  {
-   "name": "Solar_Array_Structure",
-   "kind": "other",
-   "radius": 4
-  },
-  {
-   "name": "Venov_Set2ClassJ026",
-   "kind": "planet",
-   "radius": 11211116.827392578
-  },
-  {
-   "name": "AsteroidCluster Particles",
-   "kind": "asteroids",
-   "radius": 0
-  },
-  {
-   "name": "AnomalyCloudCone_Alt2",
-   "kind": "other",
-   "radius": 20000
-  },
-  {
-   "name": "Anomaly_Sphere_01_Faint_c",
-   "kind": "other",
-   "radius": 20000
-  },
-  {
-   "name": "AsteroidCluster Thin",
-   "kind": "asteroids",
-   "radius": 5
-  },
-  {
-   "name": "AsteroidCluster Small",
-   "kind": "asteroids",
-   "radius": 5
-  },
-  {
-   "name": "AsteroidClusterNew",
-   "kind": "asteroids",
-   "radius": 10
-  },
-  {
-   "name": "Set2ClassL006",
-   "kind": "planet",
-   "radius": 2108271.4524269104
-  },
-  {
-   "name": "AnomalyOpaqueCloud",
-   "kind": "other",
-   "radius": 8000
-  },
-  {
-   "name": "MoonClassD002",
-   "kind": "planet",
-   "radius": 719551
-  },
-  {
-   "name": "DyingStarA",
-   "kind": "star",
-   "radius": 40000000
-  },
-  {
-   "name": "DyingStarA_Light",
-   "kind": "star",
-   "radius": 40000000
-  },
-  {
-   "name": "SimpleStarNoSystemLight",
-   "kind": "star",
-   "radius": 10000000
-  },
-  {
-   "name": "Set2ClassY014",
-   "kind": "planet",
-   "radius": 3133715.453147888
-  },
-  {
-   "name": "Venov_Set2ClassP020",
-   "kind": "planet",
-   "radius": 15353252.331733704
-  },
-  {
-   "name": "AnomalyCloudSpherical_Alt4",
-   "kind": "other",
-   "radius": 20000
-  },
-  {
-   "name": "M04-PlanetoidBetaMoonB",
-   "kind": "planet",
-   "radius": 1018031
-  },
-  {
-   "name": "AnomalyOpaqueCloud_NonTargetable",
-   "kind": "other",
-   "radius": 8000
-  },
-  {
-   "name": "Anomaly_Sphere_02_c",
-   "kind": "other",
-   "radius": 20000
-  },
-  {
-   "name": "Anomaly_Sphere_03_c",
-   "kind": "other",
-   "radius": 20000
-  },
-  {
-   "name": "Set1ClassM005",
-   "kind": "planet",
-   "radius": 16354587.323665619
-  },
-  {
-   "name": "AsteroidField_Massive",
-   "kind": "asteroids",
-   "radius": 5
-  },
-  {
-   "name": "SmallAsteroidBits",
-   "kind": "other",
-   "radius": 10
-  },
-  {
-   "name": "AnomalyOpaqueCloud_Medium",
-   "kind": "other",
-   "radius": 12000
-  },
-  {
-   "name": "AnomalyCloudCapsule",
-   "kind": "other",
-   "radius": 20000
-  },
-  {
-   "name": "AdaptableClassL2003",
-   "kind": "planet",
-   "radius": 5542563.451170921
-  },
-  {
-   "name": "AnomalyCloudCone",
-   "kind": "other",
-   "radius": 20000
-  },
-  {
-   "name": "TothPrimaryStar_NoLight",
-   "kind": "star",
-   "radius": 75000000
-  },
-  {
-   "name": "TothPrimaryStar_Light",
-   "kind": "star",
-   "radius": 39550000
-  },
-  {
-   "name": "TothSecondaryStar_NoLight",
-   "kind": "star",
-   "radius": 50000000
-  },
-  {
-   "name": "TothTertiaryStar_NoLight",
-   "kind": "star",
-   "radius": 40000000
-  },
-  {
-   "name": "AnomalyCloudSpherical_Alt2_M05b",
-   "kind": "other",
-   "radius": 20000
-  },
-  {
-   "name": "AsteroidFieldGenerator_Large",
-   "kind": "asteroids",
-   "radius": 12000
-  },
-  {
-   "name": "AsteroidFieldGenerator_1800x300",
-   "kind": "asteroids",
-   "radius": 18000
-  },
-  {
-   "name": "WarpBlocking_Nebula",
-   "kind": "other",
-   "radius": 75000
-  },
-  {
-   "name": "AnomalyOpaqueCloud_Large_M05b",
-   "kind": "other",
-   "radius": 20000
-  },
-  {
-   "name": "AsteroidFieldGenerator_Large_1800x700",
-   "kind": "asteroids",
-   "radius": 18000
-  },
-  {
-   "name": "AsteroidFieldGenerator_Med_1800x400",
-   "kind": "asteroids",
-   "radius": 18000
-  },
-  {
-   "name": "Spectacle_BlackHole",
-   "kind": "other",
-   "radius": 31000000
-  },
-  {
-   "name": "AsteroidField_Massive Skybox BG",
-   "kind": "other",
-   "radius": 1000000
-  },
-  {
-   "name": "AsteroidClusterNew-Alt",
-   "kind": "asteroids",
-   "radius": 10
-  },
-  {
-   "name": "SmallDebrisBits",
-   "kind": "other",
-   "radius": 10
-  },
-  {
-   "name": "Debris - SpaceStation 04",
-   "kind": "other",
-   "radius": 6
-  },
-  {
-   "name": "Debris - Medium 01",
-   "kind": "other",
-   "radius": 44
-  },
-  {
-   "name": "Prop - Indy_SolarArrayWide Untargetable",
-   "kind": "other",
-   "radius": 1
-  },
-  {
-   "name": "Prop - Indy_SolarHub Untargetable",
-   "kind": "other",
-   "radius": 1200
-  },
-  {
-   "name": "Debris - Big 01",
-   "kind": "other",
-   "radius": 44
-  },
-  {
-   "name": "Debris - Big 02",
-   "kind": "other",
-   "radius": 44
-  },
-  {
-   "name": "Ship - SpaceStationProcedural 06",
-   "kind": "station",
-   "radius": 1000
-  },
-  {
-   "name": "AnomalyOpaqueCloud_Large-m01b-Silva",
-   "kind": "other",
-   "radius": 20000
-  },
-  {
-   "name": "AnomalyOpaqueCloud_Medium-m01b-Silva",
-   "kind": "other",
-   "radius": 12000
-  },
-  {
-   "name": "Anomaly_Sphere_01_Faint_e-m01b-Silva",
-   "kind": "other",
-   "radius": 20000
-  },
-  {
-   "name": "M01-Planetoid_SilvaIV",
-   "kind": "planet",
-   "radius": 12400000
-  },
-  {
-   "name": "MoonClassD003",
-   "kind": "planet",
-   "radius": 580338
-  },
-  {
-   "name": "MoonClassD000",
-   "kind": "planet",
-   "radius": 418031
-  },
-  {
-   "name": "AnomalyOpaqueCloud_NonTargetable-m01b-Silva",
-   "kind": "other",
-   "radius": 8000
-  },
-  {
-   "name": "AnomalyCloudSpherical_Alt2-m01b-Silva",
-   "kind": "other",
-   "radius": 20000
-  },
-  {
-   "name": "M01-PlanetoidSilvaVI",
-   "kind": "planet",
-   "radius": 11211116.827392578
-  },
-  {
-   "name": "AnomalyCloudSpherical_Alt3-m01b-Silva",
-   "kind": "other",
-   "radius": 20000
-  },
-  {
-   "name": "AnomalyCloudCapsule_Alt3-VisualOnly",
-   "kind": "other",
-   "radius": 20000
-  },
-  {
-   "name": "NebulaA",
-   "kind": "other",
-   "radius": 10000
-  },
-  {
-   "name": "AnomalyCloudSpherical_Alt1-m01b-Silva",
-   "kind": "other",
-   "radius": 20000
-  },
-  {
-   "name": "M01-PlanetoidMoon",
-   "kind": "planet",
-   "radius": 580338
-  },
-  {
-   "name": "SilvaStarMajor_NoLight",
-   "kind": "star",
-   "radius": 7000000
-  },
-  {
-   "name": "SilvaStarMajor_Light",
-   "kind": "star",
-   "radius": 39550000
-  },
-  {
-   "name": "AsteroidFieldGenerator_MedAsteroids",
-   "kind": "asteroids",
-   "radius": 12000
-  },
-  {
-   "name": "SilvaStarMinor_NoLight",
-   "kind": "star",
-   "radius": 4000000
-  },
-  {
-   "name": "Ship_Derelict_Debris_lg_02",
-   "kind": "other",
-   "radius": 1600
-  },
-  {
-   "name": "Ship_Derelict_Debris_lg",
-   "kind": "other",
-   "radius": 1750
-  },
-  {
-   "name": "Ship_Derelict_Debris_med",
-   "kind": "other",
-   "radius": 675
-  },
-  {
-   "name": "DerelictDebrisFieldGenerator",
-   "kind": "other",
-   "radius": 12000
-  },
-  {
-   "name": "Ship_Derelict_Debris_med_02",
-   "kind": "other",
-   "radius": 75
-  },
-  {
-   "name": "Ship_Derelict_Debris_mas_02",
-   "kind": "other",
-   "radius": 10000
-  },
-  {
-   "name": "Ship_Derelict_Debris_mas",
-   "kind": "other",
-   "radius": 15500
-  },
-  {
-   "name": "Ship_Derelict_Debris_mas-VisOnly",
-   "kind": "other",
-   "radius": 15500
-  },
-  {
-   "name": "Prop - Derelict_Ship_02",
-   "kind": "other",
-   "radius": 8200
-  },
-  {
-   "name": "AlienDebrisCluster",
-   "kind": "asteroids",
-   "radius": 10
-  },
-  {
-   "name": "AnomalyCloudSpherical_Alt2_M03b_Cheaper",
-   "kind": "other",
-   "radius": 20000
-  },
-  {
-   "name": "AnomalyOpaqueCloud_Large_M03b",
-   "kind": "other",
-   "radius": 20000
-  },
-  {
-   "name": "Set2ClassJ023",
-   "kind": "planet",
-   "radius": 11856895.584487915
-  },
-  {
-   "name": "PlanetRings_Arna",
-   "kind": "planet",
-   "radius": 21762692
-  },
-  {
-   "name": "Ship_Derelict_Debris_lg-VisOnly",
-   "kind": "other",
-   "radius": 1750
-  },
-  {
-   "name": "AlienDebrisCluster-VisOnly",
-   "kind": "asteroids",
-   "radius": 10
-  },
-  {
-   "name": "AnomalyCloudSpherical_Alt2_M03b 1",
-   "kind": "other",
-   "radius": 20000
-  },
-  {
-   "name": "AnomalyCloudSpherical_Alt2_M03b 2",
-   "kind": "other",
-   "radius": 20000
-  },
-  {
-   "name": "Ship_Derelict_Debris_mas_02-VisOnly",
-   "kind": "other",
-   "radius": 10000
-  },
-  {
-   "name": "AnomalyCloudSpherical01_M03b 1",
-   "kind": "other",
-   "radius": 20000
-  },
-  {
-   "name": "Mission03_DerelictDebrisFieldGenerator_Dense",
-   "kind": "other",
-   "radius": 1800
-  },
-  {
-   "name": "Planet Eater - Not Detectable",
-   "kind": "other",
-   "radius": 200
-  },
-  {
-   "name": "Ship_Derelict_Debris_sm",
-   "kind": "other",
-   "radius": 154
-  },
-  {
-   "name": "AnomalyCloudSpherical_Alt2_M03b",
-   "kind": "nebula",
-   "radius": 20000
-  },
-  {
-   "name": "Ship_Derelict_Debris_med-VisOnly",
-   "kind": "other",
-   "radius": 675
-  },
-  {
-   "name": "DerelictDebrisFieldGenerator_1800x400",
-   "kind": "other",
-   "radius": 18000
-  },
-  {
-   "name": "Mission03_Ring_Nebula",
-   "kind": "other",
-   "radius": 30000000
-  },
-  {
-   "name": "Prop - Derelict_Ship_02-VisOnly",
-   "kind": "other",
-   "radius": 8200
-  },
-  {
-   "name": "Prop - Derelict_Ship",
-   "kind": "other",
-   "radius": 8600
-  },
-  {
-   "name": "Ship_Derelict_Debris_lg_02-VisOnly",
-   "kind": "other",
-   "radius": 1600
-  },
-  {
-   "name": "AnomalyCloudSpherical",
-   "kind": "other",
-   "radius": 20000
-  },
-  {
-   "name": "MoonClassD004",
-   "kind": "planet",
-   "radius": 1080338
-  },
-  {
-   "name": "Set2ClassP020",
-   "kind": "planet",
-   "radius": 15353252.331733704
-  },
-  {
-   "name": "ArnaStar_NoLight",
-   "kind": "star",
-   "radius": 99550000
-  },
-  {
-   "name": "ArnaStar_Light",
-   "kind": "star",
-   "radius": 99550000
-  },
-  {
-   "name": "Ship - SpaceStationProcedural 36",
-   "kind": "station",
-   "radius": 1000
-  },
-  {
-   "name": "Prop - Indy_Midas_array",
-   "kind": "station",
-   "radius": 1
-  },
-  {
-   "name": "Set1ClassM006",
-   "kind": "planet",
-   "radius": 4065762.107729912
-  },
-  {
-   "name": "Set1ClassM002",
-   "kind": "planet",
-   "radius": 5707213.156104088
-  },
-  {
-   "name": "MoonClassD001",
-   "kind": "planet",
-   "radius": 653392
-  },
-  {
-   "name": "Anomaly_Sphere_01_Faint_Large",
-   "kind": "other",
-   "radius": 80000
-  },
-  {
-   "name": "AsteroidField_Massive-Alt",
-   "kind": "asteroids",
-   "radius": 5
-  },
-  {
-   "name": "Nebula_Skybox_B",
-   "kind": "other",
-   "radius": 11888811
-  },
-  {
-   "name": "EdinovStar_Light",
-   "kind": "star",
-   "radius": 39550000
-  },
-  {
-   "name": "Ship - SpaceStationProcedural M01",
-   "kind": "station",
-   "radius": 4000
-  },
-  {
-   "name": "Ship - SpaceStationProcedural M01b",
-   "kind": "station",
-   "radius": 4000
-  },
-  {
-   "name": "Ship - SpaceStationProcedural M01d",
-   "kind": "station",
-   "radius": 8000
-  },
-  {
-   "name": "Ship - SpaceStationProcedural M01c",
-   "kind": "station",
-   "radius": 8000
-  },
-  {
-   "name": "EdinovStar_NoLight",
-   "kind": "star",
-   "radius": 39550000
-  },
-  {
-   "name": "AnomalyCloudSpherical_Alt2",
-   "kind": "other",
-   "radius": 20000
-  },
-  {
-   "name": "AsteroidCluster Thin-Alt",
-   "kind": "asteroids",
-   "radius": 5
-  },
-  {
-   "name": "SmallDerelictDebrisBits",
-   "kind": "other",
-   "radius": 10
-  },
-  {
-   "name": "DistantNebula01 faint",
-   "kind": "other",
-   "radius": 7000000
-  },
-  {
-   "name": "DemoMoonA",
-   "kind": "moon",
-   "radius": 437000
-  },
-  {
-   "name": "Debris - SpaceStation 01",
-   "kind": "other",
-   "radius": 4
-  },
-  {
-   "name": "Debris - SpaceStation 02",
-   "kind": "other",
-   "radius": 4
-  },
-  {
-   "name": "Debris - SpaceStation 03",
-   "kind": "other",
-   "radius": 6
-  },
-  {
-   "name": "Ship - SpaceStation 01",
-   "kind": "other",
-   "radius": 1000
-  },
-  {
-   "name": "Set2ClassD009",
-   "kind": "planet",
-   "radius": 5100305.087149143
-  },
-  {
-   "name": "AsteroidClusterNew-Crystal",
-   "kind": "asteroids",
-   "radius": 10
-  },
-  {
-   "name": "AsteroidCluster Thin-Crystal",
-   "kind": "asteroids",
-   "radius": 10
-  },
-  {
-   "name": "AsteroidClusterCrystal",
-   "kind": "asteroids",
-   "radius": 10
-  },
-  {
-   "name": "SmallAsteroidBits larger",
-   "kind": "other",
-   "radius": 20
-  },
-  {
-   "name": "AnomalyCloudSpherical_Alt2_M03b_Cheaper2",
-   "kind": "other",
-   "radius": 20000
-  },
-  {
-   "name": "Nebula_Skybox_Blue_Perseph",
-   "kind": "other",
-   "radius": 1000000
-  },
-  {
-   "name": "VerteronCluster Thin",
-   "kind": "asteroids",
-   "radius": 5
-  },
-  {
-   "name": "SmallDerelictDebrisBits larger",
-   "kind": "other",
-   "radius": 20
-  },
-  {
-   "name": "Perseph_Light",
-   "kind": "star",
-   "radius": 39550000
-  },
-  {
-   "name": "e3SecondStar",
-   "kind": "star",
-   "radius": 39550000
-  },
-  {
-   "name": "GasCloud large",
-   "kind": "other",
-   "radius": 200000000
-  },
-  {
-   "name": "DyingStarA Large",
-   "kind": "star",
-   "radius": 100000000
-  },
-  {
-   "name": "Perseph BG elements",
-   "kind": "other",
-   "radius": 20000000
-  },
-  {
-   "name": "GasCloud",
-   "kind": "other",
-   "radius": 10000000
-  },
-  {
-   "name": "ProtoPlanetDisk",
-   "kind": "other",
-   "radius": 10000000
-  },
-  {
-   "name": "Ship - SpaceStationProcedural 32",
-   "kind": "station",
-   "radius": 1000
-  },
-  {
-   "name": "Prop - Indy_SolarHub",
-   "kind": "other",
-   "radius": 1200
-  },
-  {
-   "name": "Prop - GraviticMine",
-   "kind": "other",
-   "radius": 3.5
-  },
-  {
-   "name": "GasGiantClassJ007",
-   "kind": "planet",
-   "radius": 17692535.84461212
-  },
-  {
-   "name": "Set2ClassD008",
-   "kind": "planet",
-   "radius": 3471189.171910286
-  },
-  {
-   "name": "Ship - SpaceStationProcedural 23",
-   "kind": "station",
-   "radius": 1000
-  },
-  {
-   "name": "Anomaly_Sphere_01_e",
-   "kind": "other",
-   "radius": 20000
-  },
-  {
-   "name": "Anomaly_Sphere_03_e",
-   "kind": "other",
-   "radius": 20000
-  },
-  {
-   "name": "DevinStar_NoLight",
-   "kind": "star",
-   "radius": 18440000
-  },
-  {
-   "name": "DevinStar_Light",
-   "kind": "star",
-   "radius": 99550000
-  },
-  {
-   "name": "Ship - SpaceStationProcedural 08",
-   "kind": "station",
-   "radius": 1000
-  },
-  {
-   "name": "Ship - SpaceStation 02",
-   "kind": "station",
-   "radius": 1000
-  },
-  {
-   "name": "Prop - Indy_SolarArray",
-   "kind": "other",
-   "radius": 1
-  },
-  {
-   "name": "ElgarStar_NoLight",
-   "kind": "star",
-   "radius": 39550000
-  },
-  {
-   "name": "ElgarStar_Light",
-   "kind": "star",
-   "radius": 99550000
-  },
-  {
-   "name": "M05-GasGiantClassJ009",
-   "kind": "planet",
-   "radius": 14418096
-  },
-  {
-   "name": "SimpleStarBright50",
-   "kind": "star",
-   "radius": 10000000
-  },
-  {
-   "name": "DistantNebula02_Elgar",
-   "kind": "other",
-   "radius": 700000000
-  },
-  {
-   "name": "Ship - SpaceStation_Gardenza",
-   "kind": "station",
-   "radius": 1000
-  },
-  {
-   "name": "GasGiantClassJ010",
-   "kind": "planet",
-   "radius": 14361831.31904602
-  },
-  {
-   "name": "PlanetRings_Elgar3",
-   "kind": "planet",
-   "radius": 36762692
-  },
-  {
-   "name": "PlanetRings_Elgar2",
-   "kind": "planet",
-   "radius": 31762692
-  },
-  {
-   "name": "M04-PlanetoidBetaB",
-   "kind": "planet",
-   "radius": 10157447.1
-  },
-  {
-   "name": "Set2ClassP018",
-   "kind": "planet",
-   "radius": 7816656.489849091
-  },
-  {
-   "name": "AsteroidClusterColumnsMix",
-   "kind": "asteroids",
-   "radius": 10
-  },
-  {
-   "name": "AsteroidClusterColumns",
-   "kind": "asteroids",
-   "radius": 10
-  },
-  {
-   "name": "AsteroidClusterNew-Ice",
-   "kind": "asteroids",
-   "radius": 10
-  },
-  {
-   "name": "IceAsteroidFieldGenerator_Med_Spherical_1800",
-   "kind": "asteroids",
-   "radius": 18000
-  },
-  {
-   "name": "AsteroidField_Massive-Ice",
-   "kind": "asteroids",
-   "radius": 5
-  },
-  {
-   "name": "M02-Tyris-GasGiantClassJ007",
-   "kind": "planet",
-   "radius": 17692535.84461212
-  },
-  {
-   "name": "Set2ClassY011",
-   "kind": "planet",
-   "radius": 16233126.34396553
-  },
-  {
-   "name": "TyrisStar_Light",
-   "kind": "star",
-   "radius": 39550000
-  },
-  {
-   "name": "Prop - Indy_SolarArrayWide",
-   "kind": "other",
-   "radius": 1
-  },
-  {
-   "name": "AnomalyCloudSpherical_Alt2_M03b 2-Tyris",
-   "kind": "other",
-   "radius": 20000
-  },
-  {
-   "name": "PlanetRing_Gas_Blue Cheap",
-   "kind": "other",
-   "radius": 2500000
-  },
-  {
-   "name": "FrozenClassP016",
-   "kind": "planet",
-   "radius": 6135546.790361404
-  },
-  {
-   "name": "DistantNebula01 faint small",
-   "kind": "other",
-   "radius": 700000
-  },
-  {
-   "name": "AsteroidFieldGenerator_Med_Spherical_1200",
-   "kind": "asteroids",
-   "radius": 12000
-  },
-  {
-   "name": "AsteroidClusterNew-VisOnly",
-   "kind": "asteroids",
-   "radius": 10
-  },
-  {
-   "name": "AsteroidCluster Small-Ice",
-   "kind": "asteroids",
-   "radius": 5
-  },
-  {
-   "name": "Spectacle_Pulsar",
-   "kind": "star",
-   "radius": 40000000
-  },
-  {
-   "name": "MelkevStar_Light",
-   "kind": "star",
-   "radius": 99550000
-  },
-  {
-   "name": "Set1ClassM000",
-   "kind": "planet",
-   "radius": 4958224.540472031
-  },
-  {
-   "name": "AnomalyOpaqueCloud_Large",
-   "kind": "other",
-   "radius": 20000
-  },
-  {
-   "name": "ColumnFieldGenerator_1800x400",
-   "kind": "asteroids",
-   "radius": 18000
-  },
-  {
-   "name": "Ship - SpaceStationProcedural 17",
-   "kind": "station",
-   "radius": 1000
-  },
-  {
-   "name": "GasGiantClassJ003",
-   "kind": "planet",
-   "radius": 11694322.608184814
-  },
-  {
-   "name": "Anomaly_Sphere_01_a",
-   "kind": "other",
-   "radius": 20000
-  },
-  {
-   "name": "Anomaly_Sphere_02_a",
-   "kind": "other",
-   "radius": 20000
-  },
-  {
-   "name": "Anomaly_Sphere_03_a",
-   "kind": "other",
-   "radius": 20000
-  },
-  {
-   "name": "AsteroidFieldGenerator",
-   "kind": "asteroids",
-   "radius": 12000
-  },
-  {
-   "name": "Ship - SpaceStation 03",
-   "kind": "station",
-   "radius": 1000
-  },
-  {
-   "name": "YanoraStar_NoLight",
-   "kind": "star",
-   "radius": 49550000
-  },
-  {
-   "name": "YanoraStar_Light",
-   "kind": "star",
-   "radius": 99550000
-  },
-  {
-   "name": "Ship - SpaceStationProcedural 18",
-   "kind": "station",
-   "radius": 1000
-  },
-  {
-   "name": "Ship - SpaceStationProcedural 19",
-   "kind": "station",
-   "radius": 1000
-  },
-  {
-   "name": "AnomalyCloudSpherical_Alt1",
-   "kind": "other",
-   "radius": 20000
-  },
-  {
-   "name": "Set2ClassL005",
-   "kind": "planet",
-   "radius": 7326748.580813408
-  },
-  {
-   "name": "Spectacle_Binary_Stars",
-   "kind": "star",
-   "radius": 40000000
-  },
-  {
-   "name": "GasGiantClassJ002",
-   "kind": "planet",
-   "radius": 20124771.495056152
-  },
-  {
-   "name": "Prop - SubspaceRelayStation",
-   "kind": "other",
-   "radius": 50
-  },
-  {
-   "name": "Ship - SpaceStationProcedural 24",
-   "kind": "station",
-   "radius": 1000
-  },
-  {
-   "name": "Ship - SpaceStationProcedural 27",
-   "kind": "station",
-   "radius": 1000
-  },
-  {
-   "name": "DebrisFieldGeneratorNoGlow",
-   "kind": "other",
-   "radius": 10000
-  },
-  {
-   "name": "DysonSphere_NoLight",
-   "kind": "star",
-   "radius": 10000000
-  },
-  {
-   "name": "AnomalyOpaqueCloud_Large_M04a",
-   "kind": "other",
-   "radius": 20000
-  },
-  {
-   "name": "AnomalyOpaqueCloud_Medium_M04a",
-   "kind": "other",
-   "radius": 12000
-  },
-  {
-   "name": "M04-PlanetoidAlpha",
-   "kind": "planet",
-   "radius": 7816656.489849091
-  },
-  {
-   "name": "AnomalyCloudSpherical01_M04a",
-   "kind": "other",
-   "radius": 20000
-  },
-  {
-   "name": "PlanetChunks",
-   "kind": "other",
-   "radius": 6754485
-  },
-  {
-   "name": "DistantNebula02_DS-4219",
-   "kind": "other",
-   "radius": 700000000
-  },
-  {
-   "name": "AnomalyCloudSpherical01_M04a Cloud",
-   "kind": "other",
-   "radius": 20000
-  },
-  {
-   "name": "DS4219_DarkStar",
-   "kind": "star",
-   "radius": 59550000
-  },
-  {
-   "name": "DS4219_PrimaryStar_Light",
-   "kind": "star",
-   "radius": 39550000
-  },
-  {
-   "name": "AsteroidCluster Small-Crystal",
-   "kind": "asteroids",
-   "radius": 5
-  },
-  {
-   "name": "AsteroidFieldGenerator_Med_1800x400-200",
-   "kind": "asteroids",
-   "radius": 18000
-  },
-  {
-   "name": "Planet Eater",
-   "kind": "other",
-   "radius": 40000
-  },
-  {
-   "name": "SarzaStar_NoLight",
-   "kind": "star",
-   "radius": 5550000
-  },
-  {
-   "name": "SarzaStar_light",
-   "kind": "star",
-   "radius": 39550000
-  },
-  {
-   "name": "Venov_Solar_Farm",
-   "kind": "other",
-   "radius": 2
-  },
-  {
-   "name": "Ship - SpaceStationProcedural 29",
-   "kind": "station",
-   "radius": 1000
-  },
-  {
-   "name": "AsteroidFieldGenerator_Med_1800x400-Crystal",
-   "kind": "asteroids",
-   "radius": 18000
-  },
-  {
-   "name": "Set2ClassJ020",
-   "kind": "planet",
-   "radius": 12806735.84804535
-  },
-  {
-   "name": "AdaptableClassL2001",
-   "kind": "planet",
-   "radius": 13488072.962760925
-  },
-  {
-   "name": "Ship - SpaceStationProcedural 09",
-   "kind": "station",
-   "radius": 1000
-  },
-  {
-   "name": "Spectacle_Vortex",
-   "kind": "other",
-   "radius": 40000000
-  },
-  {
-   "name": "Set2ClassJ021",
-   "kind": "planet",
-   "radius": 19530036.03000641
-  },
-  {
-   "name": "PlanetRings 02",
-   "kind": "planet",
-   "radius": 35762692
-  },
-  {
-   "name": "Ship_Derelict_Debris_sm_02",
-   "kind": "other",
-   "radius": 84
-  },
-  {
-   "name": "AnomalyOpaqueCloud_Large_Alt1",
-   "kind": "other",
-   "radius": 20000
-  },
-  {
-   "name": "AnomalyOpaqueCloud_alt1",
-   "kind": "other",
-   "radius": 8000
-  },
-  {
-   "name": "Set1ClassM004",
-   "kind": "planet",
-   "radius": 2883648.8530933857
-  },
-  {
-   "name": "Kethstar_NoLight",
-   "kind": "other",
-   "radius": 30000000
-  },
-  {
-   "name": "KethStar_Light",
-   "kind": "star",
-   "radius": 39550000
-  },
-  {
-   "name": "DistantNebula02",
-   "kind": "other",
-   "radius": 700000000
-  },
-  {
-   "name": "DistantNebula03",
-   "kind": "other",
-   "radius": 700000000
-  },
-  {
-   "name": "Ship - SpaceStationProcedural 11",
-   "kind": "station",
-   "radius": 1000
-  },
-  {
-   "name": "FrozenClassP012",
-   "kind": "planet",
-   "radius": 8569160.749435425
-  },
-  {
-   "name": "PlanetRings 03",
-   "kind": "planet",
-   "radius": 21762692
-  },
-  {
-   "name": "Spectacle_Wormhole",
-   "kind": "other",
-   "radius": 40000000
-  },
-  {
-   "name": "IceAsteroidFieldGenerator_Med",
-   "kind": "asteroids",
-   "radius": 12000
-  },
-  {
-   "name": "RyburnStar",
-   "kind": "star",
-   "radius": 39550000
-  },
-  {
-   "name": "RyburnStar_Light",
-   "kind": "star",
-   "radius": 39550000
-  },
-  {
-   "name": "Set2ClassJ022",
-   "kind": "planet",
-   "radius": 11211116.827392578
-  },
-  {
-   "name": "Anomaly_Sphere_01_Faint_e",
-   "kind": "other",
-   "radius": 20000
-  },
-  {
-   "name": "AnomalyCloudCapsule_Alt1",
-   "kind": "other",
-   "radius": 20000
-  },
-  {
-   "name": "AI Marker",
-   "kind": "other",
-   "radius": 0
-  },
-  {
-   "name": "Klingon_Sensor",
-   "kind": "other",
-   "radius": 3821.9604856622936
-  },
-  {
-   "name": "Nav Point",
-   "kind": "other",
-   "radius": 0
-  },
-  {
-   "name": "Ship - Aegis",
-   "kind": "other",
-   "radius": 414.21401705630615
-  },
-  {
-   "name": "Ship - Alarm Bouy",
-   "kind": "other",
-   "radius": 0
-  },
-  {
-   "name": "Ship - Bird Of Prey",
-   "kind": "other",
-   "radius": 184.06536386841594
-  },
-  {
-   "name": "Ship - Bird Of Prey Alarm",
-   "kind": "other",
-   "radius": 184.06536386841594
-  },
-  {
-   "name": "Ship - Borg Cube",
-   "kind": "other",
-   "radius": 0
-  },
-  {
-   "name": "Ship - Class J",
-   "kind": "other",
-   "radius": 118.99210088960558
-  },
-  {
-   "name": "Ship - D5 Cruiser",
-   "kind": "other",
-   "radius": 209.15323835512254
-  },
-  {
-   "name": "Ship - D5 Cruiser Alarm",
-   "kind": "other",
-   "radius": 209.15323835512254
-  },
-  {
-   "name": "Ship - Enterprise",
-   "kind": "other",
-   "radius": 441.6972142718214
-  },
-  {
-   "name": "Ship - Enterprise 1701D",
-   "kind": "other",
-   "radius": 492.57287129443284
-  },
-  {
-   "name": "Ship - EscapePodEmpty",
-   "kind": "other",
-   "radius": 5
-  },
-  {
-   "name": "Ship - EscapePodFull",
-   "kind": "other",
-   "radius": 5
-  },
-  {
-   "name": "Ship - EscapePodFull CARGO",
-   "kind": "other",
-   "radius": 5
-  },
-  {
-   "name": "Ship - FakePirate",
-   "kind": "other",
-   "radius": 367.78395612037457
-  },
-  {
-   "name": "Ship - Freighter A",
-   "kind": "other",
-   "radius": 121.01677724745855
-  },
-  {
-   "name": "Ship - Freighter A CARGO",
-   "kind": "other",
-   "radius": 121.01677724745855
-  },
-  {
-   "name": "Ship - Freighter A LIFE",
-   "kind": "other",
-   "radius": 121.01677724745855
-  },
-  {
-   "name": "Ship - Freighter B",
-   "kind": "other",
-   "radius": 194.61564509596428
-  },
-  {
-   "name": "Ship - Freighter B CARGO",
-   "kind": "other",
-   "radius": 194.61564509596428
-  },
-  {
-   "name": "Ship - Freighter B LIFE",
-   "kind": "other",
-   "radius": 194.61564509596428
-  },
-  {
-   "name": "Ship - Freighter C",
-   "kind": "other",
-   "radius": 285.4662015101985
-  },
-  {
-   "name": "Ship - Freighter C CARGO",
-   "kind": "other",
-   "radius": 285.4662015101985
-  },
-  {
-   "name": "Ship - Freighter C LIFE",
-   "kind": "other",
-   "radius": 285.4662015101985
-  },
-  {
-   "name": "Ship - Freighter D",
-   "kind": "other",
-   "radius": 344.9931697588636
-  },
-  {
-   "name": "Ship - Freighter D Cargo",
-   "kind": "other",
-   "radius": 344.9931697588636
-  },
-  {
-   "name": "Ship - Freighter D LIFE",
-   "kind": "other",
-   "radius": 344.9931697588636
-  },
-  {
-   "name": "Ship - Freighter E",
-   "kind": "other",
-   "radius": 441.3318738067255
-  },
-  {
-   "name": "Ship - Freighter E CARGO",
-   "kind": "other",
-   "radius": 441.3318738067255
-  },
-  {
-   "name": "Ship - Freighter E LIFE",
-   "kind": "other",
-   "radius": 441.3318738067255
-  },
-  {
-   "name": "Ship - Huxley",
-   "kind": "other",
-   "radius": 333.52380840623937
-  },
-  {
-   "name": "Ship - Huxley Cargo",
-   "kind": "other",
-   "radius": 333.52380840623937
-  },
-  {
-   "name": "Ship - Huxley TNG",
-   "kind": "other",
-   "radius": 363.67441135056197
-  },
-  {
-   "name": "Ship - Huxley TNG Cargo",
-   "kind": "other",
-   "radius": 363.67441135056197
-  },
-  {
-   "name": "Ship - Klingon Flagship",
-   "kind": "other",
-   "radius": 613.2549676658527
-  },
-  {
-   "name": "Ship - Klingon Flagship CARGO",
-   "kind": "other",
-   "radius": 613.2549676658527
-  },
-  {
-   "name": "Ship - Kobayashi Maru",
-   "kind": "other",
-   "radius": 382.419644165534
-  },
-  {
-   "name": "Ship - Kobayashi Maru Cargo",
-   "kind": "other",
-   "radius": 382.419644165534
-  },
-  {
-   "name": "Ship - Pirate A",
-   "kind": "other",
-   "radius": 221.7979406519862
-  },
-  {
-   "name": "Ship - Pirate A CARGO",
-   "kind": "other",
-   "radius": 221.7979406519862
-  },
-  {
-   "name": "Ship - Pirate A Tutorial",
-   "kind": "other",
-   "radius": 221.7979406519862
-  },
-  {
-   "name": "Ship - Pirate B",
-   "kind": "other",
-   "radius": 367.78395612037457
-  },
-  {
-   "name": "Ship - Pirate B CAPT",
-   "kind": "other",
-   "radius": 367.78395612037457
-  },
-  {
-   "name": "Ship - Planet Killer",
-   "kind": "other",
-   "radius": 2550.2325415028827
-  },
-  {
-   "name": "Ship - Raleigh",
-   "kind": "other",
-   "radius": 382.419644165534
-  },
-  {
-   "name": "Ship - Raleigh Cargo",
-   "kind": "other",
-   "radius": 382.419644165534
-  },
-  {
-   "name": "Ship - Raleigh TNG",
-   "kind": "other",
-   "radius": 304.0966003075664
-  },
-  {
-   "name": "Ship - Raleigh TNG Cargo",
-   "kind": "other",
-   "radius": 304.0966003075664
-  },
-  {
-   "name": "Ship - Romulan DDeridex",
-   "kind": "other",
-   "radius": 1000.5356385864161
-  },
-  {
-   "name": "Ship - Romulan DDeridex CARGO",
-   "kind": "other",
-   "radius": 1000.5356385864161
-  },
-  {
-   "name": "Ship - Romulan Medium",
-   "kind": "other",
-   "radius": 785.3779632657734
-  },
-  {
-   "name": "Ship - Romulan Scout",
-   "kind": "other",
-   "radius": 171.30430415199953
-  },
-  {
-   "name": "Ship - Saladin",
-   "kind": "other",
-   "radius": 336.1434181375171
-  },
-  {
-   "name": "Ship - Saladin Cargo",
-   "kind": "other",
-   "radius": 336.1434181375171
-  },
-  {
-   "name": "Ship - Saladin TNG",
-   "kind": "other",
-   "radius": 485.58667754787166
-  },
-  {
-   "name": "Ship - Saladin TNG Cargo",
-   "kind": "other",
-   "radius": 485.58667754787166
-  },
-  {
-   "name": "Ship - Science A",
-   "kind": "other",
-   "radius": 226.67947659653237
-  },
-  {
-   "name": "Ship - Science B",
-   "kind": "other",
-   "radius": 339.3193914161111
-  },
-  {
-   "name": "Ship - Science C",
-   "kind": "other",
-   "radius": 443.67533349394307
-  },
-  {
-   "name": "Ship - Science D",
-   "kind": "other",
-   "radius": 424.5757207863244
-  },
-  {
-   "name": "Ship - Science Training",
-   "kind": "other",
-   "radius": 226.67947659653237
-  },
-  {
-   "name": "Ship - SpaceStation K-7",
-   "kind": "other",
-   "radius": 1000
-  },
-  {
-   "name": "Ship - SpaceStationProcedural",
-   "kind": "station",
-   "radius": 1000
-  },
-  {
-   "name": "Ship - SpaceStationProcedural 01",
-   "kind": "station",
-   "radius": 1000
-  },
-  {
-   "name": "Ship - SpaceStationProcedural 02",
-   "kind": "station",
-   "radius": 1000
-  },
-  {
-   "name": "Ship - SpaceStationProcedural 03",
-   "kind": "station",
-   "radius": 1000
-  },
-  {
-   "name": "Ship - SpaceStationProcedural 04",
-   "kind": "station",
-   "radius": 1000
-  },
-  {
-   "name": "Ship - SpaceStationProcedural 05",
-   "kind": "station",
-   "radius": 1000
-  },
-  {
-   "name": "Ship - SpaceStationProcedural 07",
-   "kind": "station",
-   "radius": 1000
-  },
-  {
-   "name": "Ship - SpaceStationProcedural 10",
-   "kind": "station",
-   "radius": 1000
-  },
-  {
-   "name": "Ship - SpaceStationProcedural 12",
-   "kind": "station",
-   "radius": 1000
-  },
-  {
-   "name": "Ship - SpaceStationProcedural 13",
-   "kind": "station",
-   "radius": 1000
-  },
-  {
-   "name": "Ship - SpaceStationProcedural 14",
-   "kind": "station",
-   "radius": 1000
-  },
-  {
-   "name": "Ship - SpaceStationProcedural 15",
-   "kind": "station",
-   "radius": 1000
-  },
-  {
-   "name": "Ship - SpaceStationProcedural 16",
-   "kind": "station",
-   "radius": 1000
-  },
-  {
-   "name": "Ship - SpaceStationProcedural 20",
-   "kind": "station",
-   "radius": 1000
-  },
-  {
-   "name": "Ship - SpaceStationProcedural 21",
-   "kind": "station",
-   "radius": 1000
-  },
-  {
-   "name": "Ship - SpaceStationProcedural 25",
-   "kind": "station",
-   "radius": 1000
-  },
-  {
-   "name": "Ship - SpaceStationProcedural 26",
-   "kind": "station",
-   "radius": 1000
-  },
-  {
-   "name": "Ship - SpaceStationProcedural 28",
-   "kind": "station",
-   "radius": 1000
-  },
-  {
-   "name": "Ship - SpaceStationProcedural 30",
-   "kind": "station",
-   "radius": 1000
-  },
-  {
-   "name": "Ship - SpaceStationProcedural 31",
-   "kind": "station",
-   "radius": 1000
-  },
-  {
-   "name": "Ship - SpaceStationProcedural 33",
-   "kind": "station",
-   "radius": 1000
-  },
-  {
-   "name": "Ship - SpaceStationProcedural 34",
-   "kind": "station",
-   "radius": 1000
-  },
-  {
-   "name": "Ship - SpaceStationProcedural 35",
-   "kind": "station",
-   "radius": 1000
-  },
-  {
-   "name": "Ship - Warbird",
-   "kind": "other",
-   "radius": 451.8305792041292
-  },
-  {
-   "name": "Ship - WarpDriven A",
-   "kind": "other",
-   "radius": 161.1993424081993
-  },
-  {
-   "name": "Ship - WarpDriven A Explore",
-   "kind": "other",
-   "radius": 161.1993424081993
-  },
-  {
-   "name": "Ship - WarpDriven B",
-   "kind": "other",
-   "radius": 302.98413750296277
-  },
-  {
-   "name": "Ship - WarpDriven B CARGO",
-   "kind": "other",
-   "radius": 302.98413750296277
-  },
-  {
-   "name": "Ship - WarpDriven C",
-   "kind": "other",
-   "radius": 301.1584550188263
-  },
-  {
-   "name": "Ship - WarpDriven D",
-   "kind": "other",
-   "radius": 459.3460804014603
-  },
-  {
-   "name": "Anomaly01",
-   "kind": "nebula",
-   "radius": 50
-  },
-  {
-   "name": "AnomalyNoVisual_90km",
-   "kind": "other",
-   "radius": 30000
-  },
-  {
-   "name": "Debris - Big 03",
-   "kind": "other",
-   "radius": 44
-  },
-  {
-   "name": "Debris - Big 04",
-   "kind": "other",
-   "radius": 44
-  },
-  {
-   "name": "EnergyWaveFX",
-   "kind": "other",
-   "radius": 10000000
-  },
-  {
-   "name": "Explore Asteroid Targetable",
-   "kind": "asteroids",
-   "radius": 575
-  },
-  {
-   "name": "Explore Asteroid Targetable Match",
-   "kind": "asteroids",
-   "radius": 575
-  },
-  {
-   "name": "LongRangeScanObject_Buoy",
-   "kind": "other",
-   "radius": 1
-  },
-  {
-   "name": "Mission00_PlasmaCoolant_01",
-   "kind": "other",
-   "radius": 1
-  },
-  {
-   "name": "Mission00_PlasmaCoolant_02",
-   "kind": "other",
-   "radius": 1
-  },
-  {
-   "name": "Mission00_WarpCoreBreach",
-   "kind": "other",
-   "radius": 1
-  },
-  {
-   "name": "Mission00_WarpCoreBreach_Delayed",
-   "kind": "other",
-   "radius": 1
-  },
-  {
-   "name": "Prop - BeaconBuoy",
-   "kind": "other",
-   "radius": 3
-  },
-  {
-   "name": "TerroristBomb",
-   "kind": "other",
-   "radius": 1
-  },
-  {
-   "name": "StarExplosion",
-   "kind": "other",
-   "radius": 1000000
-  },
-  {
-   "name": "StarExplosion_02",
-   "kind": "other",
-   "radius": 1000000
-  },
-  {
-   "name": "Mission03_Arna_Cloud",
-   "kind": "other",
-   "radius": 7500
-  },
-  {
-   "name": "Mission03_Arna_Cloud_Large",
-   "kind": "other",
-   "radius": 12500
-  },
-  {
-   "name": "Mission03_Arna_Cloud_Small",
-   "kind": "other",
-   "radius": 7500
-  },
-  {
-   "name": "Mission03_ProtoMatterExplosion",
-   "kind": "other",
-   "radius": 1
-  },
-  {
-   "name": "Mission03_WarpInEffect",
-   "kind": "other",
-   "radius": 1
-  },
-  {
-   "name": "Ship_Derelict_Debris_mas Skybox",
-   "kind": "other",
-   "radius": 31000
-  },
-  {
-   "name": "Ship_Derelict_Debris_mas_02 Skybox",
-   "kind": "other",
-   "radius": 19800
-  },
-  {
-   "name": "M05_weapon_disposal_target",
-   "kind": "other",
-   "radius": 1
-  },
-  {
-   "name": "Mission03_ProbeTarget",
-   "kind": "other",
-   "radius": 1
-  },
-  {
-   "name": "Mission05_ProtomatterExplosion",
-   "kind": "other",
-   "radius": 100
-  },
-  {
-   "name": "Mission01_aegisBait_explodingBarrel",
-   "kind": "other",
-   "radius": 0.5
-  },
-  {
-   "name": "Mission01_asteroidFieldScanTarget",
-   "kind": "other",
-   "radius": 1
-  },
-  {
-   "name": "Mission01_ExplodingBarrel_Copy",
-   "kind": "other",
-   "radius": 1.5
-  },
-  {
-   "name": "Mission01_LongRangeScanObject_nebulaScanTarget",
-   "kind": "other",
-   "radius": 1
-  },
-  {
-   "name": "Mission01_LongRangeScanObject_silvaMoon",
-   "kind": "other",
-   "radius": 1
-  },
-  {
-   "name": "Mission01_LongRangeScanObject_silvaPlanet",
-   "kind": "other",
-   "radius": 1
-  },
-  {
-   "name": "Mission01_planetScanTarget",
-   "kind": "other",
-   "radius": 1
-  },
-  {
-   "name": "Mission_01_AnomalyCloudCapsule_Alt5_Safe",
-   "kind": "other",
-   "radius": 20000
-  },
-  {
-   "name": "Mission_01_AnomalyCloudSpherical_Alt4_Lightning",
-   "kind": "other",
-   "radius": 20000
-  },
-  {
-   "name": "Mission_01_AnomalyCloudSpherical_Alt4_Safe",
-   "kind": "other",
-   "radius": 20000
-  },
-  {
-   "name": "Mission_01_AnomalyOpaqueCloud_Medium_Shield_Drain",
-   "kind": "other",
-   "radius": 12000
-  },
-  {
-   "name": "Mission_01_asteroidObjectiveScanTarget",
-   "kind": "other",
-   "radius": 3
-  },
-  {
-   "name": "PM-DebrisParticles18x18",
-   "kind": "other",
-   "radius": 10
-  },
-  {
-   "name": "Prop - Buoy",
-   "kind": "other",
-   "radius": 3
-  },
-  {
-   "name": "Prop - Buoy Hostile",
-   "kind": "other",
-   "radius": 1
-  },
-  {
-   "name": "Prop - NavPoint",
-   "kind": "other",
-   "radius": 3
-  },
-  {
-   "name": "Prop - NavPoint Explore",
-   "kind": "other",
-   "radius": 3
-  },
-  {
-   "name": "Prop - Probe_Federation",
-   "kind": "other",
-   "radius": 3
-  },
-  {
-   "name": "Prop - ScannableObjectA",
-   "kind": "other",
-   "radius": 3
-  },
-  {
-   "name": "Prop - ScannableObjectB",
-   "kind": "other",
-   "radius": 3
-  },
-  {
-   "name": "Prop - ScannableObjectC",
-   "kind": "other",
-   "radius": 3
-  },
-  {
-   "name": "Prop - ScannableObjectD",
-   "kind": "other",
-   "radius": 3
-  },
-  {
-   "name": "ProtomatterBulbs",
-   "kind": "other",
-   "radius": 50
-  },
-  {
-   "name": "Script Aid - LongRange Detectable",
-   "kind": "other",
-   "radius": 0
-  },
-  {
-   "name": "Script Aid - Spawnable Reference Point",
-   "kind": "other",
-   "radius": 0
-  }
- ],
- "tags": [
-  "SpawnPoint",
-  "WarpDestination",
-  "ImpulseDestination",
-  "Spawned",
-  "Player",
-  "Neutral",
-  "Enemy",
-  "Friendly",
-  "Patrol",
-  "Ship",
-  "SpaceStation",
-  "Star",
-  "StarEruption",
-  "Planet",
-  "Moon",
-  "Satellite",
-  "EscapePod",
-  "Buoy",
-  "GasCloud",
-  "Asteroid",
-  "Anomaly",
-  "Mission",
-  "RegionAnomaly",
-  "RegionSpaceStation",
-  "RegionAsteroid",
-  "RegionDeepSpace",
-  "RegionNebula",
-  "RegionPlanet",
-  "RegionMoon",
-  "RegionStar",
-  "RegionHidden",
-  "RegionStart",
-  "Nebula",
-  "DebrisBig",
-  "DebrisMed",
-  "DebrisSmall",
-  "ROOT",
-  "FAMILY",
-  "POI",
-  "REGION",
-  "Alpha",
-  "Beta",
-  "Gamma",
-  "Delta",
-  "Epsilon",
-  "Zero",
-  "One",
-  "Two",
-  "Three",
-  "Four",
-  "Five",
-  "Six",
-  "Seven",
-  "Eight",
-  "Nine",
-  "Ten",
-  "A",
-  "B",
-  "C",
-  "D",
-  "E",
-  "F",
-  "G",
-  "H",
-  "I",
-  "J",
-  "K",
-  "L",
-  "M",
-  "N",
-  "O",
-  "P",
-  "Q",
-  "R",
-  "S",
-  "T",
-  "U",
-  "V",
-  "W",
-  "X",
-  "Y",
-  "Z",
-  "LabelSystemAmian",
-  "LabelSystemArna",
-  "LabelSystemDevin",
-  "LabelSystemDonatu",
-  "LabelSystemDS4219",
-  "LabelSystemEdinov",
-  "LabelSystemElgar",
-  "LabelSystemGammaHydra",
-  "LabelSystemKeth",
-  "LabelSystemMalkev",
-  "LabelSystemMaratus",
-  "LabelSystemNari",
-  "LabelSystemOrr",
-  "LabelSystemPerseph",
-  "LabelSystemRogana",
-  "LabelSystemRyburn",
-  "LabelSystemSalwan",
-  "LabelSystemSarza",
-  "LabelSystemShioc",
-  "LabelSystemSilva",
-  "LabelSystemTalsa",
-  "LabelSystemToth",
-  "LabelSystemTyris",
-  "LabelSystemVanister",
-  "LabelSystemVenov",
-  "LabelSystemYanora",
-  "LabelSystemMohan",
-  "LabelSystemTraining",
-  "LabelPOIJM325",
-  "KobayashiMaru",
-  "AltPlayerSpawn",
-  "AltWarpDestination",
-  "BorgSpawnPoint",
-  "OnlyCampaign",
-  "OnlyProcedural"
- ],
- "skyboxes": [
-  "Sector/SkyboxMaterials/Venov Skybox",
-  "Sector/SkyboxMaterials/Toth Skybox",
-  "Sector/SkyboxMaterials/Silva Skybox",
-  "Sector/SkyboxMaterials/Arna Skybox",
-  "Sector/SkyboxMaterials/Edinov Skybox",
-  "Sector/SkyboxMaterials/Skybox Perseph",
-  "Sector/SkyboxMaterials/Devin Skybox",
-  "Sector/SkyboxMaterials/Elgar Skybox",
-  "Sector/SkyboxMaterials/Tyris Skybox",
-  "Sector/SkyboxMaterials/Melkev Skybox",
-  "Sector/SkyboxMaterials/Yanora Skybox",
-  "Sector/SkyboxMaterials/DS-4219 Skybox",
-  "Sector/SkyboxMaterials/Sarza Skybox 1",
-  "Sector/SkyboxMaterials/Keth_Skybox",
-  "Sector/SkyboxMaterials/Ryburn Skybox"
- ],
- "spawnTags": [
-  "Player",
-  "AltPlayerSpawn"
- ],
- "universe": {
-  "minX": -265,
-  "minZ": -115,
-  "width": 530,
-  "height": 230
- },
- "background": null,
- "sprites": [
-  "FamilyMapBackground_Nebula",
-  "FamilyMapBackground_Deep",
-  "SystemMapIcon_Planet",
-  "SystemMapIcon_Station"
- ]
+  ],
+  "tags": [
+    "SpawnPoint",
+    "WarpDestination",
+    "ImpulseDestination",
+    "Spawned",
+    "Player",
+    "Neutral",
+    "Enemy",
+    "Friendly",
+    "Patrol",
+    "Ship",
+    "SpaceStation",
+    "Star",
+    "StarEruption",
+    "Planet",
+    "Moon",
+    "Satellite",
+    "EscapePod",
+    "Buoy",
+    "GasCloud",
+    "Asteroid",
+    "Anomaly",
+    "Mission",
+    "RegionAnomaly",
+    "RegionSpaceStation",
+    "RegionAsteroid",
+    "RegionDeepSpace",
+    "RegionNebula",
+    "RegionPlanet",
+    "RegionMoon",
+    "RegionStar",
+    "RegionHidden",
+    "RegionStart",
+    "Nebula",
+    "DebrisBig",
+    "DebrisMed",
+    "DebrisSmall",
+    "ROOT",
+    "FAMILY",
+    "POI",
+    "REGION",
+    "Alpha",
+    "Beta",
+    "Gamma",
+    "Delta",
+    "Epsilon",
+    "Zero",
+    "One",
+    "Two",
+    "Three",
+    "Four",
+    "Five",
+    "Six",
+    "Seven",
+    "Eight",
+    "Nine",
+    "Ten",
+    "A",
+    "B",
+    "C",
+    "D",
+    "E",
+    "F",
+    "G",
+    "H",
+    "I",
+    "J",
+    "K",
+    "L",
+    "M",
+    "N",
+    "O",
+    "P",
+    "Q",
+    "R",
+    "S",
+    "T",
+    "U",
+    "V",
+    "W",
+    "X",
+    "Y",
+    "Z",
+    "LabelSystemAmian",
+    "LabelSystemArna",
+    "LabelSystemDevin",
+    "LabelSystemDonatu",
+    "LabelSystemDS4219",
+    "LabelSystemEdinov",
+    "LabelSystemElgar",
+    "LabelSystemGammaHydra",
+    "LabelSystemKeth",
+    "LabelSystemMalkev",
+    "LabelSystemMaratus",
+    "LabelSystemNari",
+    "LabelSystemOrr",
+    "LabelSystemPerseph",
+    "LabelSystemRogana",
+    "LabelSystemRyburn",
+    "LabelSystemSalwan",
+    "LabelSystemSarza",
+    "LabelSystemShioc",
+    "LabelSystemSilva",
+    "LabelSystemTalsa",
+    "LabelSystemToth",
+    "LabelSystemTyris",
+    "LabelSystemVanister",
+    "LabelSystemVenov",
+    "LabelSystemYanora",
+    "LabelSystemMohan",
+    "LabelSystemTraining",
+    "LabelPOIJM325",
+    "KobayashiMaru",
+    "AltPlayerSpawn",
+    "AltWarpDestination",
+    "BorgSpawnPoint",
+    "OnlyCampaign",
+    "OnlyProcedural"
+  ],
+  "skyboxes": [
+    "Sector/SkyboxMaterials/Venov Skybox",
+    "Sector/SkyboxMaterials/Toth Skybox",
+    "Sector/SkyboxMaterials/Silva Skybox",
+    "Sector/SkyboxMaterials/Arna Skybox",
+    "Sector/SkyboxMaterials/Edinov Skybox",
+    "Sector/SkyboxMaterials/Skybox Perseph",
+    "Sector/SkyboxMaterials/Devin Skybox",
+    "Sector/SkyboxMaterials/Elgar Skybox",
+    "Sector/SkyboxMaterials/Tyris Skybox",
+    "Sector/SkyboxMaterials/Melkev Skybox",
+    "Sector/SkyboxMaterials/Yanora Skybox",
+    "Sector/SkyboxMaterials/DS-4219 Skybox",
+    "Sector/SkyboxMaterials/Sarza Skybox 1",
+    "Sector/SkyboxMaterials/Keth_Skybox",
+    "Sector/SkyboxMaterials/Ryburn Skybox"
+  ],
+  "spawnTags": [
+    "Player",
+    "AltPlayerSpawn"
+  ],
+  "universe": {
+    "minX": -265,
+    "minZ": -115,
+    "width": 530,
+    "height": 230
+  },
+  "background": null,
+  "sprites": [
+    "FamilyMapBG_2",
+    "spr_sys_map_icon_nebula",
+    "spr_sys_map_icon_debris_field",
+    "FamilyMapBG_3",
+    "spr_sys_map_icon_planet",
+    "spr_sys_map_icon_moon",
+    "FamilyMapBG_4",
+    "spr_sys_map_icon_star",
+    "FamilyMapBG_5",
+    "FamilyMapBG_6",
+    "spr_sys_map_icon_anomaly",
+    "spr_sys_map_icon_blackhole",
+    "FamilyMapBG_1",
+    "spr_sys_map_icon_asteroid_field",
+    "spr_sys_map_icon_space_station",
+    "spr_sys_map_icon_star_binary",
+    "spr_sys_map_icon_ship_debris",
+    "spr_sys_map_icon_storm",
+    "spr_sys_map_icon_twin_planets",
+    "SystemMapBG_3",
+    "Nav_2dicon_SpaceStation",
+    "spr_map_icon_star",
+    "SPR__SpaceStation_icon",
+    "spr_sys_map_icon_moon_twin"
+  ]
 }
