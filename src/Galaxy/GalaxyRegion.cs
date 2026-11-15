@@ -44,7 +44,14 @@ namespace StbcRevival.Galaxy
         internal static string RegionName => GalaxyRoom.OwnName ?? (!string.IsNullOrEmpty(builtName) ? builtName : ConfigName);
 
         /// <summary>Off the bridge: no mission is flown, so nothing is active until the next hook decides.</summary>
-        internal static void MissionOver() => Active = false;
+        internal static void MissionOver()
+        {
+            Active = false;
+            DecidedThisMission = false;
+        }
+
+        /// <summary>The map hook has decided for the mission being flown (cleared off the bridge).</summary>
+        internal static bool DecidedThisMission { get; private set; }
 
         internal static string ConfigName => (Plugin.GalaxyRegionName?.Value ?? "").Trim();
 
@@ -126,6 +133,7 @@ namespace StbcRevival.Galaxy
                     decidedFor = sectorMap;
                     decidedOn = false;
                     crewOn = false;
+                    DecidedThisMission = false; // set once this decision is complete
                     // One read of the file, for both the check against what the crew was told and the build.
                     string hash = GalaxyRoom.Snapshot(out var json);
                     on = crewOn = Decide(hash, out string expected);
@@ -141,11 +149,17 @@ namespace StbcRevival.Galaxy
                         Plugin.Log.LogWarning(P + $"the crew's region is {Short(expected)}, our file is {Short(hash)}; not built");
                         on = false;
                     }
+                    bool fileMatches = on; // still on here: the crew's and our file agree, unchanged
                     if (on && !EnsureBuilt(map, json, hash)) on = false;
                     decidedOn = on;
+                    DecidedThisMission = true;
                     // What the host actually built, never what it meant to.
                     if (GalaxyRoom.IsHost) GalaxyRoom.PublishDecision(on ? builtHash : GalaxyRoom.Off, on ? RegionName : "");
-                    else if (crewOn && !on) CantFollow("the crew has the region on but we couldn't build it.");
+                    else if (crewOn && !on)
+                    {
+                        if (fileMatches) CantFollow("the crew has the region on and our file matches, but building it failed.", GalaxyRoom.DidntLoadMessage(HostName()));
+                        else CantFollow("the crew has the region on but our file isn't the crew's.", GalaxyRoom.CantBuildMessage(HostName()));
+                    }
                 }
 
                 RegionLinks.Apply(map.Systems, trenchOwn, regionLinks ?? new List<Map.SystemLink>(), on);
@@ -173,17 +187,28 @@ namespace StbcRevival.Galaxy
                 GalaxyCatalogue.TrenchCountOverride = null;
                 decidedFor = sectorMap;
                 decidedOn = false;
+                DecidedThisMission = true;
                 if (GalaxyRoom.IsHost) GalaxyRoom.PublishDecision(GalaxyRoom.Off, "");
-                else if (crewHadItOn) CantFollow("the crew has the region on but building it failed.");
+                else
+                {
+                    // Whether or not we got as far as deciding: if the host has the region on, we're out of sync.
+                    string running = null;
+                    try { running = GalaxyRoom.RunningDecision(); }
+                    catch (Exception e3) { Plugin.Log.LogWarning(P + "the host's decision: " + e3.Message); }
+                    if (crewHadItOn || (running != null && running != GalaxyRoom.Off))
+                        CantFollow("the crew has the region on but it failed to load here.", GalaxyRoom.DidntLoadMessage(HostName()));
+                }
             }
         }
 
         // A crew member flying the Trench alone while the crew has the region would be out of sync (system ids and
         // SectorIds past the Trench missing): leave, as a joiner without the file does.
-        private static void CantFollow(string why)
+        private static void CantFollow(string why, string message) => GalaxyRoom.LeaveCrew(why, message);
+
+        private static string HostName()
         {
-            string region = !string.IsNullOrEmpty(GalaxyRoom.HostRegionName) ? GalaxyRoom.HostRegionName : RegionName;
-            GalaxyRoom.LeaveCrew(why, GalaxyRoom.CantBuildMessage(region));
+            try { return !string.IsNullOrEmpty(GalaxyRoom.HostRegionName) ? GalaxyRoom.HostRegionName : RegionName; }
+            catch (Exception) { return RegionName; }
         }
 
         // ---- The decision ----------------------------------------------------------------------------------------

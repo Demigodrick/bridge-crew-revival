@@ -119,6 +119,17 @@ namespace StbcRevival.Galaxy
             pendingLeave = message;
         }
 
+        private static string Named(string region) => string.IsNullOrEmpty(region) ? "" : region + " ";
+
+        /// <summary>The host has the region off for this mission, but it's in our map.</summary>
+        internal static string RegionOffMessage(string region) =>
+            $"The host's galaxy region {Named(region)}is off for this mission and yours was on; rejoin to fly together.";
+
+        /// <summary>The host has the region on, and it didn't load here (our build failed, or we decided before the
+        /// crew's information arrived).</summary>
+        internal static string DidntLoadMessage(string region) =>
+            $"The host has galaxy region {Named(region)}on and it didn't load here; rejoin to fly together.";
+
         internal static string CantBuildMessage(string region) =>
             $"This crew is on a mission in {(string.IsNullOrEmpty(region) ? "a galaxy region" : region)}, a galaxy region you don't have "
             + "(or yours is a different version). Get the host's galaxy file into BepInEx/galaxies and set [Galaxy] Region to it, "
@@ -178,11 +189,13 @@ namespace StbcRevival.Galaxy
             {
                 var message = pendingLeave;
                 pendingLeave = null;
+                GalaxyRegion.MissionOver(); // nothing for the checks below until a new mission decides
                 if (Room() != null)
                 {
                     Leave(photon);
                     RoomBrowser.Show(message);
                 }
+                return; // PUN is leaving: no second leave from the checks below
             }
 
             // Our hash in our player properties: kept locally out of a room, sent with the next join.
@@ -212,10 +225,20 @@ namespace StbcRevival.Galaxy
 
             // On the bridge with the region in our list while the host has it off (its build failed, or its file changed
             // after the crew was told): we're out of sync with the crew, so leave as a joiner without the file does.
-            if (GalaxyRegion.Active && pendingLeave == null && OnBridge() && RunningDecision() == Off)
+            if (pendingLeave == null && OnBridge() && GalaxyRegion.DecidedThisMission)
             {
-                LeaveCrew("the host has the region off for this mission but it's in our map.", CantBuildMessage(RoomString(NameKey)));
-                return;
+                var hostDecision = RunningDecision();
+                if (GalaxyRegion.Active && hostDecision == Off)
+                {
+                    LeaveCrew("the host has the region off for this mission but it's in our map.", RegionOffMessage(RoomString(NameKey)));
+                    return;
+                }
+                // The reverse: the host has it on, we decided off (e.g. before a crewmate's GH arrived).
+                if (!GalaxyRegion.Active && hostDecision != null && hostDecision != Off)
+                {
+                    LeaveCrew("the host has the region on for this mission but it isn't in our map.", DidntLoadMessage(RoomString(NameKey)));
+                    return;
+                }
             }
 
             // Joined someone else's crew: give the room's properties a moment, then check once.
