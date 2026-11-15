@@ -75,6 +75,7 @@ namespace StbcRevival
         internal static ConfigEntry<int> KlingonHeadChoice;
         internal static ConfigEntry<string> MapOverride;
         internal static ConfigEntry<UnityEngine.KeyCode> CatalogueKey;
+        internal static ConfigEntry<string> GalaxyRegionName;
         internal static ConfigEntry<int> FleetBattleSize;
         internal static ConfigEntry<string> TestPatrolAssignment;
         internal static ConfigEntry<int> EvacuationMinutes;
@@ -258,6 +259,10 @@ namespace StbcRevival
                 "For the galaxy designer: this key writes what the game has (the Trench's systems, prefabs and tags) to "
                 + "BepInEx/galaxies/catalogue.json. Press it on the bridge to include the warp map's size and background "
                 + "(trench-map.png). None: off.");
+            GalaxyRegionName = Config.Bind("Galaxy", "Region", "",
+                "A galaxy region made with the galaxy designer: the name of its file in BepInEx/galaxies (\"test-reach\" for "
+                + "test-reach.json). Its systems are added after the Trench's for Revival Patrol and Free Roam, when everyone in the "
+                + "crew has the same file (the host is told who hasn't). Empty: off.");
             TestPatrolAssignment = Config.Bind("Debug", "TestPatrolAssignment", "",
                 new BepInEx.Configuration.ConfigDescription(
                     "Testing only: every assignment Patrol offers is this one, when you host. Empty: Starfleet's usual mix "
@@ -384,6 +389,7 @@ namespace StbcRevival
             Safely("revival voice playback patches", () => RevivalPlayback.Patch(harmony));
             Safely("quest controls", () => StbcRevival.QuestControls.Patch(harmony));
             Safely("seat warning", () => Walking.SeatWarning.Patch(harmony));
+            Safely("galaxy region", () => StbcRevival.Galaxy.GalaxyRegion.Patch(harmony));
             SteamMode.Install(harmony);
             ShuttleControls.Install();
 
@@ -441,6 +447,7 @@ namespace StbcRevival
             Safely("stellar evacuation", StbcRevival.Missions.StellarEvacuationObjective.Update);
             Safely("mission maps", StbcRevival.Missions.MissionMaps.Update);
             Safely("galaxy catalogue", StbcRevival.Galaxy.GalaxyCatalogue.Update);
+            Safely("galaxy room", StbcRevival.Galaxy.GalaxyRoom.Update);
             Safely("restock sync", StbcRevival.Missions.RestockSync.Update);
             Safely("excelsior", Excelsior.Update);
             Safely("ships", CustomShip.Update);
