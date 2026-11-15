@@ -73,7 +73,8 @@ public sealed class DesignerApi
         GalaxyFile file;
         try { file = GalaxyFile.Parse(text); }
         catch (FormatException e) { problems.Add(e.Message); return problems; }
-        Catalogue cat = new Catalogue();
+        // No catalogue yet: null, so only the checks that need no game data are made.
+        Catalogue cat = null;
         string cf = Path.Combine(dir, "catalogue.json");
         if (File.Exists(cf))
             try { cat = Catalogue.Parse(File.ReadAllText(cf)); }

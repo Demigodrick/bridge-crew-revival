@@ -144,11 +144,15 @@ public class DesignerApiTests : IDisposable
     }
 
     [Fact]
-    public void Check_WithoutCatalogue_StillAnswers()
+    public void Check_WithoutCatalogue_OnlyStructuralProblems()
     {
-        var (status, _, body) = api.Handle("POST", "/api/check", B(GalaxyJson()));
+        var f = GalaxyFile.Parse(GalaxyJson("Nope"));
+        f.Systems[0].Nodes[1].Parent = "ghost";
+        var (status, _, body) = api.Handle("POST", "/api/check", B(f.ToJson()));
         Assert.Equal(200, status);
-        Assert.NotNull(Problems(body));
+        var p = Problems(body).Cast<string>().ToList();
+        Assert.Contains("kessar/stn: parent 'ghost' isn't in this system", p);
+        Assert.Single(p);
     }
 
     [Fact]

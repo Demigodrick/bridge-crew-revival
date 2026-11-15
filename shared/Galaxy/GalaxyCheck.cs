@@ -15,6 +15,7 @@ namespace StbcRevival.Galaxy
         /// <summary>Two systems closer than this share of the universe width sit on top of each other on the map.</summary>
         private const float OverlapShare = 0.02f;
 
+        /// <summary>A null catalogue means no game data: only the checks that need none are made.</summary>
         public static List<string> Problems(GalaxyFile file, Catalogue catalogue)
         {
             var p = new List<string>();
@@ -25,6 +26,8 @@ namespace StbcRevival.Galaxy
             }
 
             var prefabs = new Dictionary<string, bool>();
+            bool known = catalogue != null;
+            if (!known) catalogue = new Catalogue();
             foreach (var x in catalogue.Prefabs) prefabs[x.Name] = true;
             var tags = new Dictionary<string, bool>();
             foreach (var t in catalogue.Tags) tags[t] = true;
@@ -35,9 +38,9 @@ namespace StbcRevival.Galaxy
             bool anyStation = false;
             foreach (var sys in file.Systems)
             {
-                if (sys.Template == null || !templates.ContainsKey(sys.Template))
+                if (known && (sys.Template == null || !templates.ContainsKey(sys.Template)))
                     p.Add(sys.Id + ": no Trench system '" + sys.Template + "' to copy");
-                if (sys.Name != null && trenchNames.ContainsKey(sys.Name))
+                if (known && sys.Name != null && trenchNames.ContainsKey(sys.Name))
                     p.Add(sys.Id + ": '" + sys.Name + "' is already a Trench system");
 
                 var ids = new Dictionary<string, GalaxyNode>();
@@ -47,10 +50,10 @@ namespace StbcRevival.Galaxy
                 foreach (var n in sys.Nodes)
                 {
                     string at = sys.Id + "/" + n.Id;
-                    if (n.Prefab == null || !prefabs.ContainsKey(n.Prefab)) p.Add(at + ": no prefab '" + n.Prefab + "' in the game");
+                    if (known && (n.Prefab == null || !prefabs.ContainsKey(n.Prefab))) p.Add(at + ": no prefab '" + n.Prefab + "' in the game");
                     foreach (var t in n.Tags)
                     {
-                        if (!tags.ContainsKey(t)) p.Add(at + ": no tag '" + t + "' in the game");
+                        if (known && !tags.ContainsKey(t)) p.Add(at + ": no tag '" + t + "' in the game");
                         if (t == StationTag) anyStation = true;
                         if (catalogue.SpawnTags.Contains(t)) jump = true;
                     }
@@ -67,7 +70,7 @@ namespace StbcRevival.Galaxy
 
             if (!anyStation) p.Add("No station anywhere in the region: Patrol can't restock there");
 
-            if (catalogue.UniverseWidth > 0)
+            if (known && catalogue.UniverseWidth > 0)
             {
                 float min = catalogue.UniverseWidth * OverlapShare;
                 for (int i = 0; i < file.Systems.Count; i++)

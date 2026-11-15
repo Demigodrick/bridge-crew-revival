@@ -42,6 +42,16 @@ public class GalaxyCheckTests
     public void Valid_NoProblems() => Assert.Empty(GalaxyCheck.Problems(Valid(), Cat()));
 
     [Fact]
+    public void NullCatalogue_OnlyStructuralProblems()
+    {
+        var f = Valid(); f.Systems[0].Nodes[0].Prefab = "X"; f.Systems[0].Nodes[0].Tags.Add("Y");
+        f.Systems[0].Nodes[1].Parent = "ghost";
+        var p = GalaxyCheck.Problems(f, null);
+        Assert.Contains("kessar/kessar-station: parent 'ghost' isn't in this system", p);
+        Assert.Single(p);
+    }
+
+    [Fact]
     public void UnknownPrefab()
     {
         var f = Valid(); f.Systems[0].Nodes[0].Prefab = "X";
