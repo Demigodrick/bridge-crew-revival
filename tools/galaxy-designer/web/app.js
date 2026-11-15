@@ -77,8 +77,7 @@ function bounds() {
   if (cat && cat.universe && cat.universe.width > 0 && cat.universe.height > 0)
     return { minX: cat.universe.minX || 0, minZ: cat.universe.minZ || 0, w: cat.universe.width, h: cat.universe.height };
   const pts = (cat ? cat.trenchSystems || [] : []).map(s => s.position);
-  for (const s of gal.systems) pts.push(s.position);
-  if (!pts.length) return { minX: -500, minZ: -500, w: 1000, h: 1000 };
+  if (pts.length < 2) return { minX: -500, minZ: -500, w: 1000, h: 1000 };
   let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
   for (const p of pts) { x0 = Math.min(x0, p[0]); x1 = Math.max(x1, p[0]); z0 = Math.min(z0, p[1]); z1 = Math.max(z1, p[1]); }
   const w = Math.max(x1 - x0, 1), h = Math.max(z1 - z0, 1);
@@ -424,7 +423,7 @@ function deleteNode() {
 }
 
 addEventListener('keydown', e => {
-  const typing = /^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement.tagName);
+  const typing = /^(INPUT|SELECT|TEXTAREA|BUTTON)$/.test(document.activeElement.tagName);
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); save(); return; }
   if (typing) return;
   if (e.key === 'Delete' || e.key === 'Backspace') { view === 'galaxy' ? deleteSystem() : deleteNode(); }
