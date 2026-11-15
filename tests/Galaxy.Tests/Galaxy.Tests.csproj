@@ -19,6 +19,7 @@
 
   <!-- The galaxy code the mod shares, compiled here for net8. -->
   <ItemGroup>
+    <Compile Include="../../tools/galaxy-designer/DesignerApi.cs" Link="Designer/DesignerApi.cs" />
     <Compile Include="../../shared/MiniJson.cs" Link="Shared/MiniJson.cs" />
     <Compile Include="../../shared/Galaxy/*.cs" Link="Shared/Galaxy/%(Filename).cs" />
   </ItemGroup>
