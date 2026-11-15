@@ -232,3 +232,28 @@ a region with no station for restocking, duplicate ids, systems overlapping on t
 - How to build `SystemTransform`s for new nodes (the spike will show).
 - The page button's look and placement on each warp panel.
 - The named POI choices in the tool, from what Patrol does with each tag.
+
+## Revision after the spike (2026-11-15)
+
+The spike (`specs/2026-11-15-galaxy-spike-notes.md`) proved the approach in game: an appended system shows on
+the warp map, warps there and back work, Patrol gives jobs in it, other missions see the Trench untouched. It
+also showed one thing this design missed:
+
+**Every system is ROOT → FAMILY → POI → REGION → bodies.** The impulse map is built from families (an impulse
+map page, with its backdrop sprite) and the POIs inside them (named, clickable spots); regions hold the bodies,
+spawn points and warp destinations. That is the user's own "system → jump location/POI → what's in it", with
+the family as the page that groups POIs. So:
+
+- **Galaxy file:** nodes stay one tree per system, plus three optional node fields: `mapName` (the label on the
+  impulse map), `familyBackground` and `mapIcon` (sprite names from the catalogue). And a node may be
+  `{ "copyFamily": { "system": "<Trench system>", "family": "<family node name>" }, "id": ..., "name": ... }`:
+  a whole Trench family copied as new nodes (proven in the spike) and renamed.
+- **Check:** top-level nodes are families (prefab "Family Group" or a copyFamily); POIs (prefab "Point of
+  Interest") sit directly under a family; each system has at least one family with a POI; the jump-point
+  check counts copied families' spawn points. The mod adds the ROOT node itself.
+- **Catalogue:** only the Trench's own systems; each family listed by system and name with its POIs (for
+  copyFamily); the sprite names nodes use (`FamilyMapBackground`, `SystemMapIconSprite`); the warp map art from
+  wherever it really is.
+- **Designer, system view:** organised as families → POIs → regions → bodies. "Add family" makes an empty one or
+  copies a Trench family. The plan view shows one family at a time, like the impulse map.
+- **Names:** plain names everywhere (a `"2824|..."` text key shows as the original's name).
