@@ -193,6 +193,76 @@ A test build on a throwaway branch `spike/galaxy` (off `galaxy-designer`), never
 
 ---
 
+### Task 4b: Families and POIs in the galaxy file and its check
+
+From the spike (design: "Revision after the spike"). Every system is ROOT → FAMILY → POI → REGION → bodies.
+
+**Files:**
+- Modify: `shared/Galaxy/GalaxyFile.cs`, `shared/Galaxy/GalaxyCheck.cs`, `shared/Galaxy/Catalogue.cs`
+- Test: `tests/Galaxy.Tests/GalaxyFileTests.cs`, `tests/Galaxy.Tests/GalaxyCheckTests.cs`
+
+**Interfaces:**
+- `GalaxyNode` gains `string MapName; string FamilyBackground; string MapIcon; CopyFamily CopyFamily;` (JSON
+  `mapName`, `familyBackground`, `mapIcon`, `copyFamily`; all optional, null when absent, not written when null).
+- `public sealed class CopyFamily { public string System; public string Family; }` (JSON `{ "system", "family" }`).
+  A node with `copyFamily` needs only `id`, `name`, `parent` (must be null) and optional `position`/`unit`; `prefab`
+  is not required for it.
+- `CatalogueSystem` gains `List<CatalogueFamily> Families`; `public sealed class CatalogueFamily { public string Name;
+  public List<string> Pois; public bool HasSpawn; }` (`HasSpawn`: any node under it carries a `SpawnTags` tag).
+- `Catalogue` gains `List<string> Sprites` (names usable as `familyBackground` / `mapIcon`).
+- Constants in `GalaxyCheck`: `FamilyPrefab = "Family Group"`, `PoiPrefab = "Point of Interest"`.
+
+- [ ] **Step 1: Failing tests** (messages exact):
+  - `RoundTrip_KeepsMapFieldsAndCopyFamily`; `Parse_CopyFamilyWithoutPrefab_Ok`; `Parse_CopyFamilyWithParent_Throws` naming the node.
+  - `TopLevelNotFamily` → `"kessar/x: top-level nodes must be families (Family Group) or a copied family"`
+  - `PoiNotUnderFamily` → `"kessar/x: a Point of Interest must sit directly under a family"`
+  - `NoPoi` → `"kessar: no family with a Point of Interest: the impulse map would be empty"`
+  - `UnknownCopyFamily` → `"kessar/x: no family 'F' in Trench system 'S'"` (catalogue present)
+  - `UnknownSprite` → `"kessar/x: no sprite 'X' in the game"` (for `familyBackground` or `mapIcon`; catalogue present)
+  - `JumpPoint_FromCopiedFamily_Counts` (copied family with `HasSpawn` true satisfies the jump-point check)
+  - `KeyedName` → `"kessar: use a plain name, not a text key ('2824|...')"` (system or node name containing `|`)
+  - `NullCatalogue_SkipsCopyFamilyAndSprites` (structure checks still run)
+  - `Valid_NoProblems` updated to a valid family → POI → region tree.
+- [ ] **Step 2:** `dotnet test tests/Galaxy.Tests` → FAIL; implement; → PASS. `dotnet build src -c Release` builds.
+- [ ] **Step 3: Commit** `Galaxy file: families, Points of Interest and copied families`.
+
+### Task 4c: Catalogue fixes from the spike (mod)
+
+**Files:** Modify `src/Galaxy/GalaxyCatalogue.cs`.
+**Interfaces:** Consumes Task 4b's `CatalogueFamily`, `Catalogue.Sprites`.
+
+- [ ] **Step 1:** List only the Trench's own systems: add `internal static int? TrenchCountOverride` (Task 5 sets it
+  to the Trench's own count while a region is appended); when set, take only the first that many systems.
+- [ ] **Step 2:** For each system, `Families`: every node tagged FAMILY (or prefab "Family Group") under ROOT, its POI
+  children's names, and `HasSpawn`.
+- [ ] **Step 3:** `Sprites`: distinct names of every `FamilyMapBackground` and `SystemMapIconSprite` on Trench nodes.
+- [ ] **Step 4:** Warp map art: find where the warp panel's background image really is (search `WarpPanel`'s children
+  for an `Image`/`RawImage` with a sprite/texture covering `_mapRect`; log what was found) and export it.
+- [ ] **Step 5:** Fix the deferred minors: node id suffix collisions; `Resources.UnloadUnusedAssets()` after
+  `LoadAll("Sector")`; sRGB blit.
+- [ ] **Step 6:** Build; in-game check for the user: F5 on the bridge gives 15 systems, families with POIs, sprites,
+  and `trench-map.png`.
+- [ ] **Step 7: Commit** `Galaxy catalogue: families, sprites and the warp map art`.
+
+### Task 4d: The designer's system view in families and POIs
+
+**Files:** Modify `tools/galaxy-designer/web/app.js`, `index.html`, `style.css`.
+**Interfaces:** Consumes Task 4b's file fields and catalogue `Families`/`Sprites`.
+
+- [ ] **Step 1:** System view: a family list (tabs or a list) above the node tree; "Add family" → empty (prefab
+  "Family Group", unit Lightseconds) or "Copy a Trench family" (picker of catalogue families by system, writes a
+  `copyFamily` node). The plan shows one family at a time.
+- [ ] **Step 2:** Inside a family: "Add POI" (prefab "Point of Interest", with `mapName` and `mapIcon` fields),
+  inside a POI: "Add region", inside a region: bodies as before (the POI view's kind choices stay on bodies and
+  regions). A copied family shows read-only with its POI names from the catalogue.
+- [ ] **Step 3:** Family fields: name, `mapName`, `familyBackground` (sprite picker).
+- [ ] **Step 4:** Verify with Playwright against the real catalogue (copy `BepInEx/galaxies/catalogue.json` from the
+  game into the testdata folder first): a system with one copied family and one hand-made family → POI →
+  region → planet + jump point; Check passes; save; reopen.
+- [ ] **Step 5: Commit** `Galaxy designer: families and Points of Interest`.
+
+---
+
 ### Task 5: Building the region into the Trench (revise from spike notes first)
 
 **Files:**
@@ -202,7 +272,7 @@ A test build on a throwaway branch `spike/galaxy` (off `galaxy-designer`), never
 - Create: `tests/Galaxy.Tests/RegionLinksTests.cs` with `shared/Galaxy/RegionLinks.cs`
 
 **Interfaces:**
-- Consumes: `GalaxyFile`, `GalaxyCheck`, `GalaxyGate` (Tasks 2, 4); the hook and node-building recipe from the spike notes.
+- Consumes: `GalaxyFile`, `GalaxyCheck`, `GalaxyGate` (Tasks 2, 4, 4b); the hook and node-building recipe from the spike notes (`specs/2026-11-15-galaxy-spike-notes.md`, "Changes implied" 1–4: AssignSystemIds prefix; Instantiate + rewire for copied families; `_position = node.SystemPosition` for new nodes; ROOT node added by the mod; plain names). Sets `GalaxyCatalogue.TrenchCountOverride`.
 - Produces:
   - `internal static class GalaxyRegion { static int TrenchCount { get; } static bool Active { get; } static string RegionName { get; } static void Patch(Harmony h); }`
   - `public static class RegionLinks { static void Apply<T>(IList<T> sectorList, IList<T> trench, IList<T> region, bool on); }`: makes `sectorList` exactly `trench` followed by `region` when on, exactly `trench` when off, whatever it held before (generic so it's tested with ints).
