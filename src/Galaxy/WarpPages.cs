@@ -30,7 +30,7 @@ namespace StbcRevival.Galaxy
     ///   flips to it.
     ///
     /// Every piece is in try/catch; a failure on a panel puts that panel back as the game made it (all buttons
-    /// active, art and ship icon restored, our button removed).
+    /// active, art and ship icon restored, our button hidden and inert; never destroyed, as the game holds references).
     /// </summary>
     internal static class WarpPages
     {
@@ -48,6 +48,7 @@ namespace StbcRevival.Galaxy
             public bool Warping;             // between the Flying phase and Deactivated
             public int WarpFromPage;
             public int LastFlipFrame = -1;
+            public bool Failed;              // restored to the vanilla map: the (hidden) button does nothing
             public UnityEngine.UI.Graphic Art;
             public Color ArtColor;
             public Sprite ArtSprite;
@@ -344,7 +345,7 @@ namespace StbcRevival.Galaxy
         {
             try
             {
-                if (s.Panel == null || s.LastFlipFrame == Time.frameCount) return;
+                if (s.Failed || s.Panel == null || s.LastFlipFrame == Time.frameCount) return;
                 ShowPage(s, s.Page == 2 ? 1 : 2, how);
             }
             catch (Exception e) { Fail(s, "flipping the page", e); }
@@ -515,6 +516,7 @@ namespace StbcRevival.Galaxy
         private static void Departing(PanelState s)
         {
             int from = ShipPage(s);
+            if (from == 0) from = s.Page; // no current location known: the page being shown
             s.WarpFromPage = from;
             s.Warping = true;
             if (from == 0 || fLerpTarget == null) return;
@@ -560,19 +562,19 @@ namespace StbcRevival.Galaxy
 
         private static void Cycle_Postfix() => lastCycle = Time.time;
 
-        // The viewscreen's cycling picked a system: show its page (on every panel when the crew cycled just now, so
-        // the helm's own map follows too; otherwise only on the panel that picked it, as when the map is first shown).
+        // The viewscreen's cycling picked a system after a CycleTargetEvent: show its page on every panel, so the
+        // helm's own map follows too. The automatic pick when the viewscreen map opens (OnShowWarpPanel sets the
+        // same cycle flags without an event) flips nothing: the map stays on the ship's page.
         private static void TrySelect_Postfix(WarpPanel __instance, int __0, bool __result)
         {
             if (!__result || panels.Count == 0) return;
             try
             {
                 int page = PageOf(__0);
-                bool cycled = Time.time - lastCycle < 1f;
+                if (Time.time - lastCycle >= 1f) return;
                 foreach (var s in new List<PanelState>(panels.Values))
                 {
                     if (s.Panel == null || s.Warping || s.Page == page) continue;
-                    if (s.Panel != __instance && !cycled) continue;
                     try { ShowPage(s, page, "a cycled warp target is there"); }
                     catch (Exception e) { Fail(s, "showing a cycled target's page", e); }
                 }
@@ -597,7 +599,7 @@ namespace StbcRevival.Galaxy
             if (s != null) Restore(s.Panel);
         }
 
-        // Back to the panel as the game made it: every location active, art and ship icon as they were, our button gone.
+        // Back to the panel as the game made it: every location active, art and ship icon as they were, our button hidden.
         private static void Restore(WarpPanel panel)
         {
             if (panel == null) return;
@@ -622,13 +624,17 @@ namespace StbcRevival.Galaxy
             catch (Exception e) { Plugin.Log.LogError(P + "restoring the map art: " + e.Message); }
             try
             {
+                // Hidden, never destroyed: the console's HandAnimator and the panel's UIVisibilityController hold
+                // references to it, and a destroyed one makes them throw. Inactive objects are skipped by the former and
+                // safe for the latter. It stays in `buttons` so the OnClicked prefix still swallows any press.
+                s.Failed = true;
                 if (s.Button != null)
                 {
-                    buttons.Remove(s.Button);
-                    UnityEngine.Object.Destroy(s.Button.gameObject);
+                    s.Button.SetVisible(false);
+                    s.Button.gameObject.SetActive(false);
                 }
             }
-            catch (Exception e) { Plugin.Log.LogError(P + "removing the page button: " + e.Message); }
+            catch (Exception e) { Plugin.Log.LogError(P + "hiding the page button: " + e.Message); }
         }
     }
 }
