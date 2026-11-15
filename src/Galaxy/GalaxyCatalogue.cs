@@ -416,7 +416,8 @@ namespace StbcRevival.Galaxy
         // of both rectangles together (intersection over union), so a full-screen frame that also covers the map
         // loses to a picture the size of the map; it must cover at least half of the map. Every candidate is logged.
         // Also used by the warp map's second page (WarpPages) to darken the art, with log off.
-        internal static UnityEngine.UI.Graphic FindMapArt(WarpPanel panel, bool log = true)
+        // panelOnly: only the warp panel's own subtree, not its canvas (a console canvas can hold other maps' art).
+        internal static UnityEngine.UI.Graphic FindMapArt(WarpPanel panel, bool log = true, bool panelOnly = false)
         {
             var mapRect = Traverse.Create(panel).Field("_mapRect").GetValue() as RectTransform;
             if (mapRect == null)
@@ -429,12 +430,15 @@ namespace StbcRevival.Galaxy
             if (map.width <= 0 || map.height <= 0) return null;
 
             var searched = new List<Transform> { panel.transform };
-            try
+            if (!panelOnly)
             {
-                var canvas = panel.GetComponentInParent<Canvas>();
-                if (canvas != null) searched.Add(canvas.rootCanvas != null ? canvas.rootCanvas.transform : canvas.transform);
+                try
+                {
+                    var canvas = panel.GetComponentInParent<Canvas>();
+                    if (canvas != null) searched.Add(canvas.rootCanvas != null ? canvas.rootCanvas.transform : canvas.transform);
+                }
+                catch (Exception e) { Plugin.Log.LogWarning("Galaxy: the warp panel's canvas: " + e.Message); }
             }
-            catch (Exception e) { Plugin.Log.LogWarning("Galaxy: the warp panel's canvas: " + e.Message); }
 
             var seen = new HashSet<UnityEngine.UI.Graphic>();
             UnityEngine.UI.Graphic best = null;

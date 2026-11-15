@@ -191,7 +191,8 @@ namespace StbcRevival.Missions
             if (StbcRevival.Galaxy.GalaxyRegion.Active)
             {
                 int trench = StbcRevival.Galaxy.GalaxyRegion.TrenchCount;
-                int before = systems.Count;
+                // Counted by id: the chosen system can be the asset while AllSystems holds its runtime copy (same id).
+                int leftOut = systems.Where(s => StbcRevival.Galaxy.GalaxyGate.IsRegionSystem(s.SystemID, trench)).Select(s => s.SystemID).Distinct().Count();
                 systems = systems.Where(s => !StbcRevival.Galaxy.GalaxyGate.IsRegionSystem(s.SystemID, trench)).ToList();
                 if (systems.Count == 0) throw new InvalidOperationException("no Trench system to start in");
                 if (systems[0] != system)
@@ -199,7 +200,7 @@ namespace StbcRevival.Missions
                     Plugin.Log.LogInfo($"Mission maps: {system.SystemName} is a galaxy region system; starting in the Trench instead");
                     system = systems[0];
                 }
-                if (before != systems.Count) Plugin.Log.LogInfo($"Mission maps: {before - systems.Count} galaxy region systems left out of the starting choices");
+                if (leftOut > 0) Plugin.Log.LogInfo($"Mission maps: {leftOut} galaxy region systems left out of the starting choices");
             }
             if (anywhere)
             {
