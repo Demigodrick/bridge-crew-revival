@@ -1,0 +1,56 @@
+newmtl HullMainShip
+Kd 1.000 1.000 1.000
+d 1.00
+map_Kd HullMainShip_DIFF.png
+map_Bump HullMainShip_NRM.png
+map_Ns HullMainShip_MG.png
+
+newmtl Details
+Kd 1.000 1.000 1.000
+d 1.00
+map_Kd Details_DIFF.png
+map_Bump Details_NRM.png
+map_Ns Details_MG.png
+
+newmtl Nacelles
+Kd 1.000 1.000 1.000
+d 1.00
+map_Kd Nacelles_DIFF.png
+map_Bump Nacelles_NRM.png
+map_Ns Nacelles_MG.png
+
+newmtl GlassWindows
+Kd 1.000 0.920 0.700
+Ke 1.000 0.900 0.620
+d 1.00
+
+newmtl glowred
+Kd 1.000 0.200 0.100
+Ke 1.000 0.250 0.100
+d 1.00
+
+newmtl glowblue
+Kd 0.400 0.700 1.000
+Ke 0.450 0.750 1.000
+d 1.00
+
+newmtl deflectorblue
+Kd 0.400 0.700 1.000
+Ke 0.500 0.800 1.000
+d 1.00
+
+newmtl glowwhiteyellow
+Kd 1.000 0.950 0.800
+Ke 1.000 0.950 0.800
+d 1.00
+
+newmtl LIGHT_red
+Kd 1.000 0.100 0.100
+Ke 1.000 0.100 0.050
+d 1.00
+
+newmtl LIGHT_green
+Kd 0.100 1.000 0.200
+Ke 0.100 1.000 0.250
+d 1.00
+
