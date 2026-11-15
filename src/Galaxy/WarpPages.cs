@@ -57,6 +57,15 @@ namespace StbcRevival.Galaxy
             public float LastPress = -10f;
             public bool LabelResetLogged;
             public bool Failed;              // restored to the vanilla map: the (hidden) button does nothing
+            public bool NoButton;            // the pages work, but this panel has no button (logged why)
+            public bool TogglesReset;        // the copy's Toggles set off once it is awake
+            public bool Resetting;           // our own isOn = false, not a press
+            public readonly List<UnityEngine.UI.Toggle> Toggles = new List<UnityEngine.UI.Toggle>();
+            public bool ButtonPending;       // no helm to copy from yet: tried again from Update
+            public int ButtonTries;
+            public bool MapShown;            // the map's last ShowMap state: follow the ship only on hidden -> shown
+            public readonly List<GameObject> TrenchMarks = new List<GameObject>();  // the Trench's system rings
+            public readonly List<GameObject> RegionMarks = new List<GameObject>();  // our copies for region systems
             public UnityEngine.UI.Graphic Art;
             public Color ArtColor;
             public Sprite ArtSprite;
@@ -181,7 +190,7 @@ namespace StbcRevival.Galaxy
             }
             catch (Exception e)
             {
-                Plugin.Log.LogError(P + "setting up a warp panel failed; it stays as the game made it: " + e);
+                Plugin.Log.LogError(P + $"{NameOf(__instance)}: setting up failed; it stays as the game made it: " + e);
                 Restore(__instance);
             }
         }
@@ -208,8 +217,56 @@ namespace StbcRevival.Galaxy
             var mapRect = fMapRect.GetValue(panel) as RectTransform;
             if (mapRect == null) throw new InvalidOperationException("no _mapRect");
 
+            Plugin.Log.LogInfo(P + $"{s.Name}: {trench} Trench and {region} region buttons");
             panels[panel] = s; // from here on Restore() can undo it
-            MakeButton(s, mapRect);
+            FindArt(s);
+            s.MapShown = panel.KNPHKBGGHOC; // WarpPanel.IsVisible
+            TryButton(s);
+            try { Marks(s, mapRect); }
+            catch (Exception e)
+            {
+                Plugin.Log.LogWarning(P + $"{s.Name}: system rings: {e.Message}; region systems keep their plain dots");
+                foreach (var g in s.TrenchMarks) if (g != null && !g.activeSelf) g.SetActive(true);
+                foreach (var g in s.RegionMarks) if (g != null && g.activeSelf) g.SetActive(false);
+                s.TrenchMarks.Clear();
+                s.RegionMarks.Clear();
+            }
+        }
+
+        private sealed class NoHelmYet : Exception
+        {
+            public NoHelmYet() : base("no helm console in the scene yet") { }
+        }
+
+        // Make the page button; without a helm in the scene yet, try again later (from Update, every 30 frames, for
+        // about 20 s). The pages work without the button either way (they follow the ship and the crew's cycling).
+        private static void TryButton(PanelState s)
+        {
+            var panel = s.Panel;
+            var mapRect = fMapRect.GetValue(panel) as RectTransform;
+            try
+            {
+                s.ButtonTries++;
+                MakeButton(s, mapRect);
+                s.ButtonPending = false;
+            }
+            catch (NoHelmYet)
+            {
+                s.ButtonPending = s.ButtonTries < 40;
+                if (s.ButtonTries == 1 || !s.ButtonPending)
+                    Plugin.Log.LogWarning(P + $"{s.Name}: no helm console to copy the page button from"
+                        + (s.ButtonPending ? "; trying again" : "; this map has no page button (it still follows the ship)"));
+                return;
+            }
+            catch (Exception e)
+            {
+                s.ButtonPending = false;
+                s.NoButton = true;
+                Plugin.Log.LogError(P + $"{s.Name}: making the page button failed; this map has no page button (it still follows the ship): {e}");
+                if (s.Button != null && s.Button.activeSelf) s.Button.SetActive(false); // never destroyed
+                s.Button = null;
+                return;
+            }
 
             try
             {
@@ -221,7 +278,11 @@ namespace StbcRevival.Galaxy
                 if (hands is UnityEngine.Object o && o != null && console != null && notify != null) notify.Invoke(hands, new[] { console });
             }
             catch (Exception e) { Plugin.Log.LogWarning(P + $"{s.Name}: telling the hand animators about the page button: {e.Message}"); }
+        }
 
+        private static void FindArt(PanelState s)
+        {
+            var panel = s.Panel;
             try
             {
                 s.Art = GalaxyCatalogue.FindMapArt(panel, false, true);
@@ -236,7 +297,7 @@ namespace StbcRevival.Galaxy
             }
             catch (Exception e) { Plugin.Log.LogWarning(P + $"{s.Name}: finding the map art: {e.Message}"); s.Art = null; }
 
-            Plugin.Log.LogInfo(P + $"{s.Name}: {trench} Trench and {region} region buttons; map art "
+            Plugin.Log.LogInfo(P + $"{s.Name}: map art "
                 + (s.Art != null ? GalaxyCatalogue.PathOf(s.Art.transform) : "not found under the panel (page 2 keeps the Trench art)"));
         }
 
@@ -258,9 +319,8 @@ namespace StbcRevival.Galaxy
         {
             var panel = s.Panel;
             var ownConsole = Member(panel, "KHDENOMKIJE", "Console") as Component;
-            var helm = ownConsole as ConsoleHelm;
-            if (helm == null) helm = UnityEngine.Object.FindObjectOfType<ConsoleHelm>();
-            if (helm == null) throw new InvalidOperationException("no helm console to take the button's look from");
+            var helm = ownConsole as ConsoleHelm ?? FindHelm();
+            if (helm == null) throw new NoHelmYet();
             var impulse = ModeRoot(helm, "_impulseButton", "_systemToggle", "_localButton", "_warpButton");
             var warp = ModeRoot(helm, "_warpButton", "_warpToggle", "_localButton", "_impulseButton");
             if (impulse == null) throw new InvalidOperationException("the helm's IMPULSE button wasn't found");
@@ -269,7 +329,11 @@ namespace StbcRevival.Galaxy
 
             // Our own frame, the size of the original button, holds the copy: a HandInteraction whose trigger box
             // follows its parent's rectangle then gets the button's size, wherever the copy goes.
-            Transform parent = onHelm ? impulse.transform.parent : (Transform)mapRect;
+            // On the helm: under the object holding all three mode buttons (each sits in its own layout group, which
+            // would move ours onto it), kept out of that object's layout.
+            Transform parent = !onHelm ? (Transform)mapRect
+                : warp != null && Common(impulse.transform, warp.transform) is Transform both && both != impulse.transform && both != warp.transform
+                    ? both : impulse.transform.parent;
             var source = impulse.transform as RectTransform;
             Vector2 size = source != null ? source.rect.size : new Vector2(100f, 30f);
             var frame = new GameObject("Galaxy Page Button", typeof(RectTransform));
@@ -278,8 +342,10 @@ namespace StbcRevival.Galaxy
             frameRect.SetParent(parent, false);
             frameRect.anchorMin = frameRect.anchorMax = frameRect.pivot = new Vector2(0.5f, 0.5f);
             frameRect.sizeDelta = size;
-            frameRect.localRotation = impulse.transform.localRotation;
-            frameRect.localScale = impulse.transform.localScale;
+            frameRect.rotation = impulse.transform.rotation;
+            var ps = parent.lossyScale;
+            var ls = impulse.transform.lossyScale;
+            frameRect.localScale = new Vector3(ps.x != 0f ? ls.x / ps.x : 1f, ps.y != 0f ? ls.y / ps.y : 1f, ps.z != 0f ? ls.z / ps.z : 1f);
             s.Button = frame;
 
             var button = UnityEngine.Object.Instantiate(impulse, frameRect, false) as GameObject;
@@ -294,7 +360,27 @@ namespace StbcRevival.Galaxy
             else button.transform.localPosition = Vector3.zero;
             button.transform.localRotation = Quaternion.identity;
             button.transform.localScale = Vector3.one;
-            Neutralise(s, button, sameConsole: onHelm);
+            if (!Neutralise(s, button, sameConsole: onHelm))
+            {
+                // Never woken (the frame is inactive), so nothing in the game knows about it.
+                s.Button = null;
+                s.NoButton = true;
+                Plugin.Log.LogWarning(P + $"{s.Name}: no page button here (see above); its map still follows the ship");
+                return;
+            }
+            var layout = parent.GetComponent<UnityEngine.UI.LayoutGroup>();
+            if (onHelm)
+            {
+                var parts = new List<string>();
+                foreach (var c in parent.GetComponents<Component>()) if (c != null) parts.Add(c.GetType().Name);
+                Plugin.Log.LogInfo(P + $"{s.Name}: mode buttons' parent {GalaxyCatalogue.PathOf(parent)}: {string.Join(", ", parts.ToArray())}");
+            }
+            if (layout != null)
+            {
+                // Out of the parent's layout, so the real buttons stay where they are.
+                frame.AddComponent<UnityEngine.UI.LayoutElement>().ignoreLayout = true;
+                Plugin.Log.LogInfo(P + $"{s.Name}: {layout.GetType().Name} on the parent; the page button ignores it");
+            }
 
             if (onHelm)
             {
@@ -318,12 +404,17 @@ namespace StbcRevival.Galaxy
                     y = mapRect.InverseTransformPoint(label.transform.position).y;
                 frameRect.localPosition = new Vector3(r.xMax - halfW, y, 0f);
             }
-            frame.SetActive(true); // the copy wakes up here
             foreach (var toggle in button.GetComponentsInChildren<UnityEngine.UI.Toggle>(true))
             {
+                // Any change is a press; it's then set off again (TogglesReset sets it off once awake, not a press).
                 var t = toggle;
-                t.isOn = false;
-                t.onValueChanged.AddListener(on => { if (on) { Pressed(s, "toggle"); t.isOn = false; } });
+                s.Toggles.Add(t);
+                t.onValueChanged.AddListener(on =>
+                {
+                    if (s.Resetting) return;
+                    Pressed(s, "toggle");
+                    ResetToggles(s);
+                });
             }
             foreach (var b in button.GetComponentsInChildren<UnityEngine.UI.Button>(true))
                 b.onClick.AddListener(() => Pressed(s, "button"));
@@ -344,6 +435,125 @@ namespace StbcRevival.Galaxy
                 if (c != null && !kinds.Contains(c.GetType().Name)) kinds.Add(c.GetType().Name);
             Plugin.Log.LogInfo(P + $"{s.Name}: page button at {frameRect.localPosition}, scale {frameRect.localScale.x:0.###}, under {GalaxyCatalogue.PathOf(parent)}, "
                 + $"{handlers} hand interaction(s), {s.Texts.Count} text(s) reading '{ReadLabel(s)}'; parts: {string.Join(", ", kinds.ToArray())}");
+            // Woken only if the map is showing (the helm's mode buttons stay in every mode, our button only in WARP).
+            ShowButton(s, panel.KNPHKBGGHOC); // WarpPanel.IsVisible
+        }
+
+        private static void ShowButton(PanelState s, bool shown)
+        {
+            if (s.Button == null || s.Button.activeSelf == shown) return;
+            s.Button.SetActive(shown);
+            if (shown && !s.TogglesReset)
+            {
+                s.TogglesReset = true;
+                ResetToggles(s);
+            }
+        }
+
+        private static void ResetToggles(PanelState s)
+        {
+            s.Resetting = true;
+            try { foreach (var t in s.Toggles) if (t != null && t.isOn) t.isOn = false; }
+            finally { s.Resetting = false; }
+        }
+
+        // The scene's helm console (inactive ones too: a panel can be built before the helm is switched on).
+        private static ConsoleHelm FindHelm()
+        {
+            var found = UnityEngine.Object.FindObjectOfType<ConsoleHelm>();
+            if (found != null) return found;
+            foreach (var h in Resources.FindObjectsOfTypeAll<ConsoleHelm>())
+                if (h != null && h.hideFlags == HideFlags.None && h.gameObject.scene.IsValid()) return h;
+            return null;
+        }
+
+        // The Trench's systems wear a ring under their dot that isn't part of the location button (a region system,
+        // and the spike's copy, showed a bare dot). Look for Images in the panel, outside the location buttons, the
+        // ship icon and the page button, centred on at least half of the Trench's buttons: those are the rings. Each
+        // region system gets copies of one Trench system's set; page 1 shows the Trench's, page 2 the copies. Nothing
+        // found: logged, with the panel's small images for the next look.
+        private static void Marks(PanelState s, RectTransform mapRect)
+        {
+            var panel = s.Panel;
+            var locations = Locations(panel);
+            var ship = fPlayerShip.GetValue(panel) as GameObject;
+            var skip = new List<Transform>();
+            foreach (var l in locations.Values) if (l != null) skip.Add(l.transform);
+            if (ship != null) skip.Add(ship.transform);
+            if (s.Button != null) skip.Add(s.Button.transform);
+            var template = fTemplate?.GetValue(panel) as Component;
+            if (template != null) skip.Add(template.transform);
+
+            var at = new Dictionary<int, Vector2>();
+            foreach (var kv in locations)
+                if (kv.Value != null) at[kv.Key] = mapRect.InverseTransformPoint(kv.Value.transform.position);
+            float mapWidth = mapRect.rect.width, near = mapWidth * 0.015f;
+
+            var byTrench = new Dictionary<int, List<GameObject>>();
+            var small = new List<string>();
+            foreach (var g in panel.GetComponentsInChildren<UnityEngine.UI.Image>(true))
+            {
+                if (g == null || g.sprite == null || g == s.Art) continue;
+                bool skipped = false;
+                foreach (var t in skip) if (g.transform.IsChildOf(t)) { skipped = true; break; }
+                if (skipped || g.GetComponentInChildren<HandInteraction>(true) != null || g.GetComponent<UnityEngine.UI.Selectable>() != null) continue;
+                var r = g.rectTransform;
+                float w = WorldWidth(r) / Math.Max(1e-6f, mapRect.lossyScale.x);
+                if (w <= 0f || w > mapWidth * 0.2f) continue;
+                Vector2 c = mapRect.InverseTransformPoint(Centre(g.gameObject));
+                if (small.Count < 60) small.Add($"{GalaxyCatalogue.PathOf(g.transform)} ({g.sprite.name}, {w:0} wide, at {c.x:0},{c.y:0})");
+                int best = -1;
+                float bestD = near;
+                foreach (var kv in at)
+                {
+                    if (PageOf(kv.Key) != 1) continue;
+                    float d = (kv.Value - c).magnitude;
+                    if (d <= bestD) { bestD = d; best = kv.Key; }
+                }
+                if (best < 0) continue;
+                if (!byTrench.TryGetValue(best, out var list)) byTrench[best] = list = new List<GameObject>();
+                if (!list.Contains(g.gameObject)) list.Add(g.gameObject);
+            }
+
+            int trench = 0;
+            foreach (var kv in at) if (PageOf(kv.Key) == 1) trench++;
+            if (byTrench.Count < Math.Max(1, trench / 2))
+            {
+                Plugin.Log.LogInfo(P + $"{s.Name}: no system rings outside the location buttons ({byTrench.Count} of {trench} Trench systems "
+                    + "matched); region systems keep their plain dots. The panel's small images:");
+                foreach (var line in small) Plugin.Log.LogInfo(P + "  " + line);
+                return;
+            }
+
+            // The fullest set as the model for the copies.
+            int model = -1;
+            foreach (var kv in byTrench) if (model < 0 || kv.Value.Count > byTrench[model].Count) model = kv.Key;
+            foreach (var list in byTrench.Values) s.TrenchMarks.AddRange(list);
+            var modelAt = locations[model].transform.position;
+            foreach (var kv in locations)
+            {
+                if (kv.Value == null || PageOf(kv.Key) != 2) continue;
+                foreach (var source in byTrench[model])
+                {
+                    var copy = UnityEngine.Object.Instantiate(source, source.transform.parent, false) as GameObject;
+                    if (copy == null) continue;
+                    copy.name = "Galaxy Region Ring";
+                    copy.transform.position = source.transform.position + (kv.Value.transform.position - modelAt);
+                    copy.transform.SetSiblingIndex(source.transform.GetSiblingIndex() + 1);
+                    copy.SetActive(false);
+                    s.RegionMarks.Add(copy);
+                }
+            }
+            var names = new List<string>();
+            foreach (var g in byTrench[model]) names.Add(GalaxyCatalogue.PathOf(g.transform));
+            Plugin.Log.LogInfo(P + $"{s.Name}: system rings found at {byTrench.Count} of {trench} Trench systems ({s.TrenchMarks.Count} images); "
+                + $"{s.RegionMarks.Count} copies for the region, modelled on {string.Join(", ", names.ToArray())}");
+        }
+
+        private static void ShowMarks(PanelState s, int page)
+        {
+            foreach (var g in s.TrenchMarks) if (g != null && g.activeSelf != (page == 1)) g.SetActive(page == 1);
+            foreach (var g in s.RegionMarks) if (g != null && g.activeSelf != (page == 2)) g.SetActive(page == 2);
         }
 
         // A helm map-mode button's root: its HandInteraction's object, or the smallest object holding both it and its
@@ -378,7 +588,7 @@ namespace StbcRevival.Galaxy
         // Before the copy wakes up: no UnityEvent of the original (they set the map mode), out of the mode buttons'
         // toggle group, no copied HandInteraction helpers; away from the helm, no helm hand grid and the panel's own
         // hand restriction (the captain's console is left-hand).
-        private static void Neutralise(PanelState s, GameObject button, bool sameConsole)
+        private static bool Neutralise(PanelState s, GameObject button, bool sameConsole)
         {
             foreach (var t in button.GetComponentsInChildren<Transform>(true))
                 if (t != null && t != button.transform && t.name.EndsWith(Helper, StringComparison.Ordinal))
@@ -399,19 +609,33 @@ namespace StbcRevival.Galaxy
             }
             foreach (var toggle in button.GetComponentsInChildren<UnityEngine.UI.Toggle>(true)) toggle.group = null;
 
-            if (!sameConsole)
+            // HandAnimator asks each HandInteraction for wrist poses: from its grid when it has one, else from _poses[0]
+            // (no bounds check). Away from the helm, the helm's grid is wrong: take the grid of this panel's own location
+            // template; without one the copy needs poses of its own. With neither, no button.
+            var gridField = AccessTools.Field(typeof(HandInteraction), "_grid");
+            var posesField = AccessTools.Field(typeof(HandInteraction), "_poses");
+            var side = AccessTools.Field(typeof(HandInteraction), "_sideRestriction");
+            if (gridField == null || posesField == null) { Plugin.Log.LogWarning(P + $"{s.Name}: HandInteraction._grid/_poses not found"); return false; }
+            var template = fTemplate?.GetValue(s.Panel) as Component;
+            var templateHand = template != null ? template.GetComponentInChildren<HandInteraction>(true) : null;
+            var templateGrid = templateHand != null ? gridField.GetValue(templateHand) as UnityEngine.Object : null;
+            bool usable = true;
+            foreach (var hand in button.GetComponentsInChildren<HandInteraction>(true))
             {
-                var template = fTemplate?.GetValue(s.Panel) as Component;
-                var templateHand = template != null ? template.GetComponentInChildren<HandInteraction>(true) : null;
-                var side = AccessTools.Field(typeof(HandInteraction), "_sideRestriction");
-                var grid = AccessTools.Field(typeof(HandInteraction), "_grid");
-                foreach (var hand in button.GetComponentsInChildren<HandInteraction>(true))
+                if (!sameConsole)
                 {
-                    if (grid != null) grid.SetValue(hand, null);
+                    gridField.SetValue(hand, templateGrid != null ? templateGrid : null);
                     if (side != null && templateHand != null) side.SetValue(hand, side.GetValue(templateHand));
                 }
+                var grid = gridField.GetValue(hand) as UnityEngine.Object;
+                int poses = posesField.GetValue(hand) is Array a ? a.Length : 0;
+                bool ok = grid != null || poses > 0;
+                Plugin.Log.LogInfo(P + $"{s.Name}: page button hand interaction {hand.name}: grid {(grid != null ? grid.name : "none")}, "
+                    + $"{poses} pose(s){(sameConsole ? "" : $", template grid {(templateGrid != null ? templateGrid.name : "none")}")}{(ok ? "" : ": no pose source")}");
+                if (!ok) usable = false;
             }
             Plugin.Log.LogInfo(P + $"{s.Name}: page button: {events} copied event(s) emptied");
+            return usable;
         }
 
         private static float WorldWidth(GameObject g) => g != null && g.transform is RectTransform r ? WorldWidth(r) : 0f;
@@ -463,8 +687,8 @@ namespace StbcRevival.Galaxy
         {
             try
             {
-                if (s.Failed || s.Panel == null || Time.time - s.LastPress < 0.3f) return;
-                s.LastPress = Time.time;
+                if (s.Failed || s.Panel == null || Time.unscaledTime - s.LastPress < 0.3f) return;
+                s.LastPress = Time.unscaledTime;
                 ShowPage(s, s.Page == 2 ? 1 : 2, how);
             }
             catch (Exception e) { Fail(s, "flipping the page", e); }
@@ -484,6 +708,7 @@ namespace StbcRevival.Galaxy
                 if (kv.Value.gameObject.activeSelf != on) kv.Value.gameObject.SetActive(on);
             }
             Background(s, page);
+            ShowMarks(s, page);
             SetLabel(s, PageName(page == 2 ? 1 : 2));
             bool changed = s.Page != page;
             s.Page = page;
@@ -582,8 +807,11 @@ namespace StbcRevival.Galaxy
             if (s == null) return;
             try
             {
-                if (s.Button != null && s.Button.activeSelf != __0) s.Button.SetActive(__0);
-                if (__0) ShowPage(s, Follow(s), "the map was shown");
+                bool wasShown = s.MapShown;
+                s.MapShown = __0;
+                ShowButton(s, __0);
+                // Only when the map comes up, and never right after a press (pressing can make the game show it again).
+                if (__0 && !wasShown && Time.unscaledTime - s.LastPress >= 0.5f) ShowPage(s, Follow(s), "the map was shown");
             }
             catch (Exception e) { Fail(s, "showing the map", e); }
         }
@@ -600,14 +828,15 @@ namespace StbcRevival.Galaxy
             if (s == null) return;
             try
             {
-                if (s.Button == null) { Fail(s, "the page button is gone", null); return; }
+                if (s.ButtonPending && Time.frameCount % 30 == 0) TryButton(s);
                 // The game shows and hides its system buttons together (ShowMap, and two frames after building);
                 // the page button follows them.
                 var locations = Locations(__instance);
                 WarpMapLocation any = null;
                 if (locations != null) foreach (var l in locations.Values) { any = l; break; }
-                bool shown = any != null && any.KNPHKBGGHOC; // IsVisible
-                if (s.Button.activeSelf != shown) s.Button.SetActive(shown);
+                bool shown = __instance.KNPHKBGGHOC && any != null && any.KNPHKBGGHOC; // panel and buttons IsVisible
+                s.MapShown = __instance.KNPHKBGGHOC;
+                ShowButton(s, shown);
                 // Something may set the text after us (a localiser, the button's own state): keep ours.
                 if (shown && Time.frameCount % 15 == 0 && s.Texts.Count > 0 && ReadLabel(s) != s.Label)
                 {
@@ -739,6 +968,8 @@ namespace StbcRevival.Galaxy
             }
             catch (Exception e) { Plugin.Log.LogError(P + "restoring the ship icon: " + e.Message); }
             if (s == null) return;
+            try { ShowMarks(s, 1); }
+            catch (Exception e) { Plugin.Log.LogError(P + "restoring the system rings: " + e.Message); }
             try { if (s.Art != null) Background(s, 1); }
             catch (Exception e) { Plugin.Log.LogError(P + "restoring the map art: " + e.Message); }
             try
