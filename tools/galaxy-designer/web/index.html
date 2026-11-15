@@ -67,6 +67,7 @@
       <div class="row">
         <button id="addPoi" type="button" title="A Point of Interest in the selected family">Add POI</button>
         <button id="addRegion" type="button" title="A region in the selected POI">Add region</button>
+        <button id="addJump" type="button" title="Where players arrive: a Warp in node in the selected region">Add jump point</button>
       </div>
       <div class="row">
         <span id="prefabWrap" class="grow"></span>
@@ -82,7 +83,7 @@
       <label id="bgRow">Family background (sprite) <span id="nBgWrap"></span></label>
       <label id="iconRow">Map icon (sprite) <span id="nIconWrap"></span></label>
       <div id="geom" class="tools nested">
-        <label>Prefab <span id="nPrefabWrap"></span></label>
+        <label id="prefabRow">Prefab <span id="nPrefabWrap"></span></label>
         <label>Parent <select id="nParent"></select></label>
         <div class="three">
           <label>X <input id="nX" type="number" step="any"></label>
@@ -99,7 +100,6 @@
       </div>
       <fieldset id="poi">
         <legend>What it is for Patrol</legend>
-        <label class="check" id="jumpRow"><input id="poiJump" type="checkbox"> <span>Jump point <small class="muted" id="jumpTag"></small></span></label>
         <div id="poiKinds"></div>
         <div class="muted">Tags</div>
         <div id="tagChips" class="chips"></div>

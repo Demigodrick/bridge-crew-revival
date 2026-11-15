@@ -105,7 +105,7 @@ namespace StbcRevival.Galaxy
                         if (n.MapIcon != null && !sprites.ContainsKey(n.MapIcon))
                             p.Add(at + ": no sprite '" + n.MapIcon + "' in the game");
                     }
-                    if (known && n.CopyFamily == null && (n.Prefab == null || !prefabs.ContainsKey(n.Prefab))) p.Add(at + ": no prefab '" + n.Prefab + "' in the game");
+                    if (known && n.CopyFamily == null && (n.Prefab == null || (n.Prefab != "" && !prefabs.ContainsKey(n.Prefab)))) p.Add(at + ": no prefab '" + n.Prefab + "' in the game");
                     // Real station bodies carry the tag on their prefab, not on the node.
                     if (n.Prefab != null && stationPrefabs.ContainsKey(n.Prefab)) anyStation = true;
                     foreach (var t in n.Tags)

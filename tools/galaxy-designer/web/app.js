@@ -190,7 +190,7 @@ function drawSystem() {
     const px = L[n.id].x, py = L[n.id].y, k = kindOf(n), sel = n.id === selNode;
     const big = k === 'star' ? 9 : k === 'planet' ? 6 : 4.5;
     ctx.fillStyle = KIND_COLOR[k] || KIND_COLOR.other;
-    ctx.beginPath(); if (k === 'station') ctx.rect(px - big * d, py - big * d, big * 2 * d, big * 2 * d); else ctx.arc(px, py, big * d, 0, 7);
+    ctx.beginPath(); if (isWarp(n)) { ctx.fillStyle = '#f2c14e'; ctx.moveTo(px, py - 7 * d); ctx.lineTo(px + 7 * d, py); ctx.lineTo(px, py + 7 * d); ctx.lineTo(px - 7 * d, py); ctx.closePath(); } else if (k === 'station') ctx.rect(px - big * d, py - big * d, big * 2 * d, big * 2 * d); else ctx.arc(px, py, big * d, 0, 7);
     ctx.fill(); ctx.lineWidth = (sel ? 3 : 1.5) * d; ctx.strokeStyle = sel ? '#f2c14e' : '#000'; ctx.stroke();
     if (isJump(n)) { ctx.strokeStyle = '#f2c14e'; ctx.lineWidth = d; ctx.beginPath(); ctx.arc(px, py, (big + 5) * d, 0, 7); ctx.stroke(); }
     ctx.fillStyle = sel ? '#f2c14e' : '#e6edf3'; ctx.fillText(n.name || n.id, px + (big + 5) * d, py);
@@ -398,6 +398,12 @@ $('addRegion').addEventListener('click', () => {
   addChild(poi.id, { name: 'New region', prefab: REGION, unit: 'Kilometers' });
   $('nName').focus(); $('nName').select();
 });
+$('addJump').addEventListener('click', () => {
+  const region = selectedAt(2);
+  if (!region || region.prefab !== REGION) return toast('Select a region to put the jump point in');
+  const spawn = (cat && cat.spawnTags && cat.spawnTags[0]) || 'Player';
+  addChild(region.id, { name: 'Warp in', prefab: '', unit: 'Kilometers', tags: ['WarpDestination', spawn] });
+});
 $('addNode').addEventListener('click', () => {
   const s = sys(), parent = selNode && nodeById(s, selNode);
   if (!parent || levelOf(s, parent) < 1 || isCopy(parent)) return toast('Select a POI, region or body to put it in');
@@ -413,6 +419,7 @@ function depthOrder(s, root) {
   walk(root, 0);
   return out;
 }
+const isWarp = n => n.prefab === '' && nodeTags(n).includes('WarpDestination');   // the game's jump point: no prefab, in a region
 function isJump(n) { const t = cat && cat.spawnTags && cat.spawnTags[0]; return !!t && nodeTags(n).includes(t); }
 function descendants(s, id) { const r = new Set([id]); let g = true; while (g) { g = false; for (const n of s.nodes) if (n.parent && r.has(n.parent) && !r.has(n.id)) { r.add(n.id); g = true; } } return r; }
 function catFamily(n) {
@@ -445,7 +452,7 @@ function refreshSystemPanel() {
   } else if (fam) {
     for (const { n, depth } of depthOrder(s, fam))
       ul.append(el('li', { class: n.id === selNode ? 'sel' : '', style: `padding-left:${14 + depth * 14}px`, onclick: () => { selNode = n.id; refreshSystemPanel(); draw(); } },
-        (isJump(n) ? '◎ ' : '') + (n.name || n.id), el('small', null, depth === 0 ? 'family' : depth === 1 ? 'POI' : depth === 2 && n.prefab === REGION ? 'region' : n.prefab)));
+        (isJump(n) ? '◎ ' : '') + (n.name || n.id), el('small', null, depth === 0 ? 'family' : depth === 1 ? 'POI' : isWarp(n) ? 'jump point' : depth === 2 && n.prefab === REGION ? 'region' : n.prefab)));
   }
   const n = sel;
   $('nodeForm').hidden = !n;
@@ -461,10 +468,15 @@ function refreshSystemPanel() {
   $('geom').hidden = copy;
   $('poi').hidden = copy;
   if (copy) return;
-  const pw = $('nPrefabWrap'); pw.textContent = ''; pw.append(picker(prefabOptions(), n.prefab, v => { n.prefab = v; setDirty(); refreshSystemPanel(); draw(); }, 'nPrefab'));
-  const par = $('nParent'); par.textContent = ''; par.append(el('option', { value: '', textContent: '(none)' }));
+  $('prefabRow').hidden = lvl < 2 && (n.prefab === FAMILY || n.prefab === POI);
+  const pw = $('nPrefabWrap'); pw.textContent = '';
+  if (n.prefab === '') pw.append(el('input', { type: 'text', value: '(none)', disabled: true }));
+  else pw.append(picker(prefabOptions(), n.prefab, v => { n.prefab = v; setDirty(); refreshSystemPanel(); draw(); }, 'nPrefab'));
+  const par = $('nParent'); par.textContent = ''; if (lvl === 0) par.append(el('option', { value: '', textContent: '(none)' }));
   const bad = descendants(s, n.id);
-  for (const o of s.nodes) if (!bad.has(o.id) && !isCopy(o)) par.append(el('option', { value: o.id, textContent: o.name || o.id }));
+  // Only one level up: a POI sits in a family, a region in a POI, anything else in a region or body (and never in a copied family).
+  const okParent = o => o.id === n.parent || (!isCopy(o) && (n.prefab === POI ? o.prefab === FAMILY : n.prefab === REGION ? o.prefab === POI : levelOf(s, o) >= 2));
+  for (const o of s.nodes) if (!bad.has(o.id) && okParent(o)) par.append(el('option', { value: o.id, textContent: o.name || o.id }));
   par.value = n.parent || ''; par.disabled = lvl === 0;
   n.position = n.position || [0, 0, 0];
   $('nX').value = n.position[0]; $('nY').value = n.position[1]; $('nZ').value = n.position[2];
@@ -473,14 +485,12 @@ function refreshSystemPanel() {
   $('nRX').value = n.rotation[0]; $('nRY').value = n.rotation[1]; $('nRZ').value = n.rotation[2];
   $('nLand').value = n.landingRadius == null ? 1000 : n.landingRadius;
   refreshPoi(n);
-  $('jumpRow').hidden = lvl < 2; $('poiKinds').hidden = lvl < 2;
+  $('poiKinds').hidden = lvl < 2 || isWarp(n);
 }
 
 function tagAllowed(t) { return !cat || (cat.tags || []).includes(t); }
 function refreshPoi(n) {
   const spawn = cat && cat.spawnTags && cat.spawnTags[0];
-  $('poiJump').disabled = !spawn; $('jumpTag').textContent = spawn ? `(tag ${spawn})` : '(needs the catalogue)';
-  $('poiJump').checked = !!spawn && nodeTags(n).includes(spawn);
   const k = $('poiKinds'); k.textContent = '';
   for (const kd of KINDS) {
     const cb = el('input', { type: 'checkbox', checked: nodeTags(n).includes(kd.tag), disabled: !tagAllowed(kd.tag) });
@@ -497,7 +507,6 @@ function toggleTag(n, t, on) {
   if (on && i < 0) tags.push(t); else if (!on && i >= 0) tags.splice(i, 1);
   setDirty(); refreshSystemPanel(); draw();
 }
-$('poiJump').addEventListener('change', e => { const n = nodeById(sys(), selNode), t = cat && cat.spawnTags[0]; if (n && t) toggleTag(n, t, e.target.checked); });
 $('tagInput').addEventListener('keydown', e => {
   if (e.key !== 'Enter') return;
   const t = e.target.value.trim(), n = nodeById(sys(), selNode); if (!t || !n) return;

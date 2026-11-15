@@ -73,6 +73,16 @@ public class GalaxyCheckTests
     }
 
     [Fact]
+    public void PrefablessJumpPointIsFine()
+    {
+        // The game's warp-in is a node with no prefab, tagged WarpDestination and Player, inside a region.
+        var f = Valid(); f.Systems[0].Nodes[3].Tags.Clear();
+        f.Systems[0].Nodes.Add(Node("kessar-warp", "kessar-region", "", "Player", "WarpDestination"));
+        var c = Cat(); c.Tags.Add("WarpDestination");
+        Assert.DoesNotContain(GalaxyCheck.Problems(f, c), x => x.Contains("no prefab") || x.Contains("no jump point"));
+    }
+
+    [Fact]
     public void UnknownTag()
     {
         var f = Valid(); f.Systems[0].Nodes[3].Tags.Add("X");
