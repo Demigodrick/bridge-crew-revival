@@ -225,6 +225,32 @@ public class GalaxyCheckTests
     }
 
     [Fact]
+    public void NoStation_CopiedFamilyWithStation_Counts()
+    {
+        var c = Cat(); c.TrenchSystems[0].Families[0].HasStation = true;
+        var f = Valid(); f.Systems[0].Nodes.RemoveAt(4);
+        Assert.Contains("No station anywhere in the region: Patrol can't restock there", GalaxyCheck.Problems(f, c));
+        f.Systems[0].Nodes.Add(Copy("c", "Venov", "FAMILY Venov III"));
+        Assert.DoesNotContain("No station anywhere in the region: Patrol can't restock there", GalaxyCheck.Problems(f, c));
+    }
+
+    [Fact]
+    public void EmptySprites_SkipsSpriteCheck()
+    {
+        var c = Cat(); c.Sprites.Clear();
+        var f = Valid(); f.Systems[0].Nodes[0].MapIcon = "Nope";
+        Assert.Empty(GalaxyCheck.Problems(f, c));
+    }
+
+    [Fact]
+    public void TrenchSystemWithoutFamilies_SkipsCopyFamilyCheck()
+    {
+        var c = Cat(); c.TrenchSystems[0].Families.Clear();
+        var f = Valid(); f.Systems[0].Nodes.Add(Copy("x", "Venov", "Anything"));
+        Assert.Empty(GalaxyCheck.Problems(f, c));
+    }
+
+    [Fact]
     public void NoSystems()
     {
         var f = Valid(); f.Systems.Clear();

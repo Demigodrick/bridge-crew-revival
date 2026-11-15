@@ -78,18 +78,23 @@ namespace StbcRevival.Galaxy
                     if (n.CopyFamily != null)
                     {
                         CatalogueFamily fam = null;
-                        CatalogueSystem ts;
+                        CatalogueSystem ts = null;
+                        bool famsUnknown = false;
                         if (known)
                         {
                             if (trench.TryGetValue(n.CopyFamily.System ?? "", out ts))
+                            {
+                                famsUnknown = ts.Families.Count == 0;
                                 foreach (var cf in ts.Families) if (cf.Name == n.CopyFamily.Family) fam = cf;
-                            if (fam == null)
+                            }
+                            if (fam == null && !famsUnknown)
                                 p.Add(at + ": no family '" + n.CopyFamily.Family + "' in Trench system '" + n.CopyFamily.System + "'");
                         }
-                        if (!known || (fam != null && fam.Pois.Count > 0)) anyPoi = true;
+                        if (!known || famsUnknown || (fam != null && fam.Pois.Count > 0)) anyPoi = true;
                         if (fam != null && fam.HasSpawn) jump = true;
+                        if (fam != null && fam.HasStation) anyStation = true;
                     }
-                    if (known)
+                    if (known && sprites.Count > 0)
                     {
                         if (n.FamilyBackground != null && !sprites.ContainsKey(n.FamilyBackground))
                             p.Add(at + ": no sprite '" + n.FamilyBackground + "' in the game");

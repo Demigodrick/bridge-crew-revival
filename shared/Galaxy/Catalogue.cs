@@ -10,6 +10,8 @@ namespace StbcRevival.Galaxy
         public List<string> Pois = new List<string>();
         /// <summary>Any node under the family carries a SpawnTags tag.</summary>
         public bool HasSpawn;
+        /// <summary>Any node under the family is tagged SpaceStation.</summary>
+        public bool HasStation;
     }
 
     /// <summary>A Trench system as the game has it, offered to the designer for reference and as a template.</summary>
@@ -78,6 +80,7 @@ namespace StbcRevival.Galaxy
                             Name = fname,
                             Pois = Json.Strings(fd, "pois", "family '" + fname + "'"),
                             HasSpawn = fd.TryGetValue("hasSpawn", out hs) && hs is bool && (bool)hs,
+                            HasStation = fd.TryGetValue("hasStation", out hs) && hs is bool && (bool)hs,
                         });
                     }
                     c.TrenchSystems.Add(s);
@@ -144,7 +147,7 @@ namespace StbcRevival.Galaxy
                 d["nodes"] = nodes;
                 var fams = new List<object>();
                 foreach (var f in s.Families)
-                    fams.Add(new Dictionary<string, object> { { "name", f.Name }, { "pois", Json.StringList(f.Pois) }, { "hasSpawn", f.HasSpawn } });
+                    fams.Add(new Dictionary<string, object> { { "name", f.Name }, { "pois", Json.StringList(f.Pois) }, { "hasSpawn", f.HasSpawn }, { "hasStation", f.HasStation } });
                 d["families"] = fams;
                 systems.Add(d);
             }
