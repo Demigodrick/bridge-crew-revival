@@ -106,6 +106,17 @@ namespace StbcRevival.Galaxy
                             p.Add(at + ": no sprite '" + n.MapIcon + "' in the game");
                     }
                     if (known && n.CopyFamily == null && (n.Prefab == null || (n.Prefab != "" && !prefabs.ContainsKey(n.Prefab)))) p.Add(at + ": no prefab '" + n.Prefab + "' in the game");
+                    if (n.CopyFamily == null && n.Prefab == "")
+                    {
+                        // The game has prefab-less nodes only as jump points / markers and as regions under a POI.
+                        bool marker = false;
+                        foreach (var t in n.Tags)
+                            if (t == "WarpDestination" || catalogue.SpawnTags.Contains(t)
+                                || (catalogue.SpawnTags.Count == 0 && (t == "Player" || t == "AltPlayerSpawn"))) marker = true;
+                        GalaxyNode par;
+                        bool underPoi = n.Parent != null && ids.TryGetValue(n.Parent, out par) && par.Prefab == PoiPrefab;
+                        if (!marker && !underPoi) p.Add(at + ": no model chosen");
+                    }
                     // Real station bodies carry the tag on their prefab, not on the node.
                     if (n.Prefab != null && stationPrefabs.ContainsKey(n.Prefab)) anyStation = true;
                     foreach (var t in n.Tags)

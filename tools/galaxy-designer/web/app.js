@@ -61,7 +61,8 @@ function picker(options, value, onChange, id) {
     (grp || s).append(op);
   }
   if (!has && value) s.prepend(el('option', { value, textContent: value + ' (not in the game)' }));
-  s.value = value || options[0].value;
+  if (!has && value === '') s.prepend(el('option', { value: '', textContent: '(no model chosen)' }));
+  s.value = value || value === '' ? value : options[0].value;
   s.addEventListener('change', () => onChange(s.value));
   return s;
 }
@@ -403,6 +404,7 @@ $('addJump').addEventListener('click', () => {
   if (!region || region.prefab !== REGION) return toast('Select a region to put the jump point in');
   const spawn = (cat && cat.spawnTags && cat.spawnTags[0]) || 'Player';
   addChild(region.id, { name: 'Warp in', prefab: '', unit: 'Kilometers', tags: ['WarpDestination', spawn] });
+  $('nName').focus(); $('nName').select();
 });
 $('addNode').addEventListener('click', () => {
   const s = sys(), parent = selNode && nodeById(s, selNode);
@@ -419,6 +421,7 @@ function depthOrder(s, root) {
   walk(root, 0);
   return out;
 }
+const underPoi = (s, n) => { const p = n.parent && nodeById(s, n.parent); return !!p && p.prefab === POI; };
 const isWarp = n => n.prefab === '' && nodeTags(n).includes('WarpDestination');   // the game's jump point: no prefab, in a region
 function isJump(n) { const t = cat && cat.spawnTags && cat.spawnTags[0]; return !!t && nodeTags(n).includes(t); }
 function descendants(s, id) { const r = new Set([id]); let g = true; while (g) { g = false; for (const n of s.nodes) if (n.parent && r.has(n.parent) && !r.has(n.id)) { r.add(n.id); g = true; } } return r; }
@@ -470,12 +473,12 @@ function refreshSystemPanel() {
   if (copy) return;
   $('prefabRow').hidden = lvl < 2 && (n.prefab === FAMILY || n.prefab === POI);
   const pw = $('nPrefabWrap'); pw.textContent = '';
-  if (n.prefab === '') pw.append(el('input', { type: 'text', value: '(none)', disabled: true }));
-  else pw.append(picker(prefabOptions(), n.prefab, v => { n.prefab = v; setDirty(); refreshSystemPanel(); draw(); }, 'nPrefab'));
+  if (isWarp(n)) pw.append(el('input', { type: 'text', value: '(none)', disabled: true }));
+  else pw.append(picker((n.prefab === REGION || underPoi(s, n)) ? [{ value: '', label: '(none)' }, ...prefabOptions()] : prefabOptions(), n.prefab, v => { n.prefab = v; setDirty(); refreshSystemPanel(); draw(); }, 'nPrefab'));
   const par = $('nParent'); par.textContent = ''; if (lvl === 0) par.append(el('option', { value: '', textContent: '(none)' }));
   const bad = descendants(s, n.id);
   // Only one level up: a POI sits in a family, a region in a POI, anything else in a region or body (and never in a copied family).
-  const okParent = o => o.id === n.parent || (!isCopy(o) && (n.prefab === POI ? o.prefab === FAMILY : n.prefab === REGION ? o.prefab === POI : levelOf(s, o) >= 2));
+  const okParent = o => o.id === n.parent || (!isCopy(o) && !isWarp(o) && (n.prefab === POI ? o.prefab === FAMILY : n.prefab === REGION ? o.prefab === POI : levelOf(s, o) >= 2));
   for (const o of s.nodes) if (!bad.has(o.id) && okParent(o)) par.append(el('option', { value: o.id, textContent: o.name || o.id }));
   par.value = n.parent || ''; par.disabled = lvl === 0;
   n.position = n.position || [0, 0, 0];

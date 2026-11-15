@@ -72,14 +72,33 @@ public class GalaxyCheckTests
         Assert.Contains("kessar/kessar-star: no prefab 'X' in the game", GalaxyCheck.Problems(f, Cat()));
     }
 
-    [Fact]
-    public void PrefablessJumpPointIsFine()
+    static List<string> EmptyPrefabProblems(string parent, params string[] tags)
     {
-        // The game's warp-in is a node with no prefab, tagged WarpDestination and Player, inside a region.
         var f = Valid(); f.Systems[0].Nodes[3].Tags.Clear();
-        f.Systems[0].Nodes.Add(Node("kessar-warp", "kessar-region", "", "Player", "WarpDestination"));
+        f.Systems[0].Nodes[4].Tags.Clear(); f.Systems[0].Nodes[4].Tags.Add("SpaceStation");
+        f.Systems[0].Nodes.Add(Node("kessar-x", parent, "", tags));
         var c = Cat(); c.Tags.Add("WarpDestination");
-        Assert.DoesNotContain(GalaxyCheck.Problems(f, c), x => x.Contains("no prefab") || x.Contains("no jump point"));
+        return GalaxyCheck.Problems(f, c);
+    }
+
+    [Fact]
+    public void EmptyPrefab_OnJumpPoint_Ok()
+        => Assert.DoesNotContain(EmptyPrefabProblems("kessar-region", "WarpDestination", "Player"), x => x.Contains("kessar-x"));
+
+    [Fact]
+    public void EmptyPrefab_OnRegionUnderPoi_Ok()
+        => Assert.DoesNotContain(EmptyPrefabProblems("kessar-poi"), x => x.Contains("kessar-x"));
+
+    [Fact]
+    public void EmptyPrefab_OnBody_Reported()
+        => Assert.Contains("kessar/kessar-x: no model chosen", EmptyPrefabProblems("kessar-region", "Planet"));
+
+    [Fact]
+    public void Parse_EmptyPrefab_Ok()
+    {
+        var f = GalaxyFile.Parse(@"{ ""format"": 1, ""name"": ""R"", ""systems"": [ { ""id"": ""a"", ""name"": ""A"", ""position"": [0,0], ""template"": ""V"",
+          ""nodes"": [ { ""id"": ""w"", ""parent"": null, ""name"": ""Warp"", ""prefab"": """", ""position"": [0,0,0] } ] } ] }");
+        Assert.Equal("", f.Systems[0].Nodes[0].Prefab);
     }
 
     [Fact]
