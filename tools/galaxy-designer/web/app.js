@@ -139,7 +139,7 @@ function drawGalaxy() {
     ctx.lineWidth = 2 * d; ctx.strokeStyle = '#000'; ctx.stroke();
     ctx.fillStyle = sel ? '#f2c14e' : '#e6edf3'; ctx.fillText(s.name, px + 11 * d, py);
   });
-  $('help').textContent = 'Click empty space: add a system · drag: move · double-click: edit its nodes · Delete: remove the selected system · Ctrl+S: save';
+  $('help').textContent = 'Click empty space: add one system · drag: move · double-click: edit its nodes · Delete: remove the selected system · Ctrl+S: save';
 }
 
 // ----- system plan: world positions in km, centred and zoomed by `cam`
@@ -167,17 +167,17 @@ function drawSystem() {
   ctx.font = `${11 * d}px system-ui, sans-serif`; ctx.textBaseline = 'middle';
   const [ox, oy] = toS(0, 0);
   ctx.strokeStyle = '#1b2430'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(0, oy); ctx.lineTo(w, oy); ctx.moveTo(ox, 0); ctx.lineTo(ox, h); ctx.stroke();
-  const items = (s.nodes || []).map(n => ({ n, p: worldPos(s, n) }));
-  for (const { n, p } of items) {
+  const L = layout(s), items = (s.nodes || []).map(n => ({ n }));
+  for (const { n } of items) {
     if (!n.parent) continue; const par = nodeById(s, n.parent); if (!par) continue;
-    const pp = worldPos(s, par), [qx, qy] = toS(pp[0], pp[2]), [nx, ny] = toS(p[0], p[2]);
-    const rad = Math.hypot(nx - qx, ny - qy);
-    ctx.strokeStyle = 'rgba(133,146,160,0.25)'; ctx.beginPath(); ctx.arc(qx, qy, rad, 0, 7); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(qx, qy); ctx.lineTo(nx, ny); ctx.stroke();
+    const a = L[par.id], b = L[n.id], rad = Math.hypot(b.x - a.x, b.y - a.y);
+    ctx.strokeStyle = 'rgba(133,146,160,0.25)'; ctx.beginPath();
+    if (!b.off) ctx.arc(a.x, a.y, rad, 0, 7);
+    ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
   }
   jumpHit = null;
-  for (const { n, p } of items) {
-    const [px, py] = toS(p[0], p[2]), k = kindOf(n), sel = n.id === selNode;
+  for (const { n } of items) {
+    const px = L[n.id].x, py = L[n.id].y, k = kindOf(n), sel = n.id === selNode;
     const big = k === 'star' ? 9 : k === 'planet' ? 6 : 4.5;
     ctx.fillStyle = KIND_COLOR[k] || KIND_COLOR.other;
     ctx.beginPath(); if (k === 'station') ctx.rect(px - big * d, py - big * d, big * 2 * d, big * 2 * d); else ctx.arc(px, py, big * d, 0, 7);
@@ -185,11 +185,32 @@ function drawSystem() {
     if (isJump(n)) { ctx.strokeStyle = '#f2c14e'; ctx.lineWidth = d; ctx.beginPath(); ctx.arc(px, py, (big + 5) * d, 0, 7); ctx.stroke(); }
     ctx.fillStyle = sel ? '#f2c14e' : '#e6edf3'; ctx.fillText(n.name || n.id, px + (big + 5) * d, py);
   }
-  $('help').textContent = 'Click: select a node · drag it: set X/Z (Y is a field) · drag empty space: pan · wheel: zoom · F: fit · Delete: remove the node';
+  $('help').textContent = 'Click: select a node · drag it: set X/Z (Y is a field; a node drawn stacked above its parent is too close to drag: use the fields) · drag empty space: pan · wheel: zoom · F: fit · Delete: remove the node';
+}
+// Where each node is drawn. A child that would land within ~12 px of its parent is stacked in a short column
+// above it (purely visual; stored positions don't change), so dots and labels stay readable. off=true for those.
+function layout(s) {
+  const d = dpr(), pos = {}, count = {};
+  const place = (n, depth) => {
+    if (pos[n.id]) return pos[n.id];
+    const w = worldPos(s, n), [x, y] = toS(w[0], w[2]);
+    const par = n.parent && depth < 50 ? nodeById(s, n.parent) : null;
+    if (par) {
+      const pp = place(par, depth + 1), pw = worldPos(s, par), [qx, qy] = toS(pw[0], pw[2]);
+      if (Math.hypot(x - qx, y - qy) < 12 * d) {
+        const i = count[par.id] = (count[par.id] || 0) + 1;
+        return pos[n.id] = { x: pp.x, y: pp.y - (8 + 15 * i) * d, off: true };
+      }
+    }
+    return pos[n.id] = { x, y, off: false };
+  };
+  for (const n of s.nodes || []) place(n, 0);
+  return pos;
 }
 function hitNode(px, py) {
   const s = sys(), d = dpr(); let best = null, bd = 14 * d;
-  for (const n of s.nodes || []) { const p = worldPos(s, n), [x, y] = toS(p[0], p[2]); const dd = Math.hypot(x - px, y - py); if (dd <= bd) { bd = dd; best = n; } }
+  const L = layout(s);
+  for (const n of s.nodes || []) { const dd = Math.hypot(L[n.id].x - px, L[n.id].y - py); if (dd <= bd) { bd = dd; best = n; } }
   return best;
 }
 function hitSystem(px, py) {
@@ -209,7 +230,7 @@ canvas.addEventListener('pointerdown', e => {
     else drag = { kind: 'empty', px, py, moved: false };
   } else {
     const n = hitNode(px, py);
-    if (n) { selNode = n.id; drag = { kind: 'node', moved: false }; refreshSystemPanel(); }
+    if (n) { selNode = n.id; drag = layout(sys())[n.id].off ? { kind: 'none' } : { kind: 'node', moved: false }; refreshSystemPanel(); }
     else drag = { kind: 'pan', px, py, cx: cam.x, cz: cam.z, moved: false };
   }
   draw();
@@ -235,11 +256,13 @@ canvas.addEventListener('pointermove', e => {
   } else if (drag.kind === 'empty' && Math.hypot(px - drag.px, py - drag.py) > 3) drag.moved = true;
   draw();
 });
+let emptyClick = null;
 canvas.addEventListener('pointerup', e => {
-  const d0 = drag; drag = null; if (!d0) return;
-  if (d0.kind === 'empty' && !d0.moved && view === 'galaxy') addSystemAt(d0.px, d0.py);
+  const d0 = drag; drag = null; emptyClick = d0 && d0.kind === 'empty' && !d0.moved && view === 'galaxy' ? d0 : null;
 });
-canvas.addEventListener('dblclick', e => { if (view === 'galaxy' && selSys >= 0) { const rc = canvas.getBoundingClientRect(), d = dpr(); if (hitSystem((e.clientX - rc.left) * d, (e.clientY - rc.top) * d) >= 0) openSystem(selSys); } });
+// Add on the first click only (detail 1): the second click of a double-click adds nothing.
+canvas.addEventListener('click', e => { const c = emptyClick; emptyClick = null; if (c && e.detail === 1) addSystemAt(c.px, c.py); });
+canvas.addEventListener('dblclick', e => { if (view === 'galaxy' && selSys >= 0 && Date.now() - addedAt > 600) { const rc = canvas.getBoundingClientRect(), d = dpr(); if (hitSystem((e.clientX - rc.left) * d, (e.clientY - rc.top) * d) >= 0) openSystem(selSys); } });
 canvas.addEventListener('wheel', e => {
   if (view !== 'system') return; e.preventDefault();
   const rc = canvas.getBoundingClientRect(), d = dpr(), px = (e.clientX - rc.left) * d, py = (e.clientY - rc.top) * d;
@@ -250,6 +273,7 @@ canvas.addEventListener('wheel', e => {
 // ---------- galaxy view
 function trenchTemplates() { return cat ? (cat.trenchSystems || []).map(s => ({ value: s.name })) : []; }
 
+let addedAt = 0;   // a double-click on empty space adds one system and doesn't then open it
 function addSystemAt(px, py) {
   const [x, z] = fromPx(mapRect(), px, py), r = mapRect();
   if (px < r.x || px > r.x + r.w || py < r.y || py > r.y + r.h) return;
@@ -257,7 +281,7 @@ function addSystemAt(px, py) {
   let n = gal.systems.length + 1, name = 'New system ' + n; while (gal.systems.some(s => s.name === name)) name = 'New system ' + (++n);
   const tpl = cat && cat.trenchSystems && cat.trenchSystems.length ? cat.trenchSystems[0].name : '';
   gal.systems.push({ id: uniqueId(name, ids), name, position: [Math.round(x * 10) / 10, Math.round(z * 10) / 10], template: tpl, skybox: null, systemTags: null, nodes: [] });
-  selSys = gal.systems.length - 1; setDirty(); refreshGalaxyPanel(true); draw();
+  addedAt = Date.now(); selSys = gal.systems.length - 1; setDirty(); refreshGalaxyPanel(true); draw();
   const nm = $('sName'); nm.focus(); nm.select();
 }
 
