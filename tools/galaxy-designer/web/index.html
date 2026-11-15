@@ -1,3 +1,107 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><title>Galaxy Designer</title></head>
-<body><h1>Galaxy Designer</h1><p>The page comes next.</p></body></html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Galaxy Designer</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<aside id="side">
+  <header>
+    <h1>Galaxy Designer <span id="version" class="version"></span></h1>
+    <div id="banner" hidden></div>
+    <div class="row">
+      <button id="btnNew" type="button">New</button>
+      <button id="btnOpen" type="button">Open…</button>
+      <button id="btnCheck" type="button">Check</button>
+      <button id="btnSave" type="button" class="primary" title="Save (Ctrl+S)">Save</button>
+    </div>
+    <div class="row">
+      <label class="grow">File <input id="fileName" type="text" placeholder="my-region" spellcheck="false" title="Lower-case letters, digits and dashes"></label>
+      <span id="dirtyMark" class="muted" hidden>unsaved</span>
+    </div>
+    <ul id="openList" hidden></ul>
+  </header>
+
+  <section id="galaxyPanel" class="panel">
+    <div class="tools">
+      <label>Region name <input id="regName" type="text"></label>
+      <label title="The text on the page button">Page label <input id="pageLabel" type="text"></label>
+      <label title="trench-darkened, or the name of a PNG next to the file (the PNG option comes later; for now the darkened Trench map is shown)">Background <input id="pageBg" type="text"></label>
+      <label class="check"><input id="showTrench" type="checkbox" checked> Show the Trench systems</label>
+    </div>
+    <ul id="sysList" class="list" role="listbox" aria-label="Systems"></ul>
+    <div class="tools" id="sysForm" hidden>
+      <label>Name <input id="sName" type="text"></label>
+      <div class="row">
+        <label class="grow">Id <input id="sId" type="text" readonly></label>
+      </div>
+      <label>Template (Trench system) <span id="sTemplateWrap"></span></label>
+      <div class="two">
+        <label>X <input id="sX" type="number" step="1"></label>
+        <label>Z <input id="sZ" type="number" step="1"></label>
+      </div>
+      <div class="row">
+        <button id="sOpen" type="button" class="primary">Edit its nodes</button>
+        <button id="sDelete" type="button">Delete</button>
+      </div>
+    </div>
+    <div class="muted pad">Click an empty spot on the map to add a system. Drag one to move it. Double-click to edit its nodes.</div>
+  </section>
+
+  <section id="systemPanel" class="panel" hidden>
+    <div class="tools">
+      <div class="row"><button id="backBtn" type="button">&larr; Galaxy</button><strong id="sysTitle" class="grow"></strong></div>
+      <div class="row">
+        <span id="prefabWrap" class="grow"></span>
+        <button id="addNode" type="button">Add node</button>
+      </div>
+      <label class="check"><input id="underSel" type="checkbox"> Under the selected node</label>
+    </div>
+    <ul id="nodeList" class="list" role="listbox" aria-label="Nodes"></ul>
+    <div class="tools" id="nodeForm" hidden>
+      <label>Name <input id="nName" type="text"></label>
+      <label>Id <input id="nId" type="text" readonly></label>
+      <label>Prefab <span id="nPrefabWrap"></span></label>
+      <label>Parent <select id="nParent"></select></label>
+      <div class="three">
+        <label>X <input id="nX" type="number" step="any"></label>
+        <label title="Elevation">Y <input id="nY" type="number" step="any"></label>
+        <label>Z <input id="nZ" type="number" step="any"></label>
+      </div>
+      <label>Unit <select id="nUnit"></select></label>
+      <div class="three">
+        <label>Rot X <input id="nRX" type="number" step="any"></label>
+        <label>Rot Y <input id="nRY" type="number" step="any"></label>
+        <label>Rot Z <input id="nRZ" type="number" step="any"></label>
+      </div>
+      <label>Landing radius <input id="nLand" type="number" step="any" min="0"></label>
+      <fieldset id="poi">
+        <legend>What it is for Patrol</legend>
+        <label class="check"><input id="poiJump" type="checkbox"> <span>Jump point <small class="muted" id="jumpTag"></small></span></label>
+        <div id="poiKinds"></div>
+        <div class="muted">Tags</div>
+        <div id="tagChips" class="chips"></div>
+        <input id="tagInput" type="text" list="tagList" placeholder="Add a tag…" spellcheck="false">
+        <datalist id="tagList"></datalist>
+      </fieldset>
+      <button id="nDelete" type="button">Delete node</button>
+    </div>
+  </section>
+
+  <section id="problems" hidden>
+    <div class="phead"><strong id="pTitle"></strong> <button id="pClose" type="button">Close</button></div>
+    <ul id="pList"></ul>
+  </section>
+</aside>
+<main id="view">
+  <canvas id="canvas"></canvas>
+  <div id="coords" class="muted"></div>
+  <div id="toast" role="status" hidden></div>
+  <footer id="help"></footer>
+</main>
+<script src="app.js"></script>
+</body>
+</html>
