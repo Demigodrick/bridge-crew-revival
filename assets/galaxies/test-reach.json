@@ -20,7 +20,7 @@
       "template": "Silva",
       "nodes": [
         { "id": "family", "name": "Halvar", "prefab": "Family Group", "tags": ["FAMILY"], "unit": "Lightseconds",
-          "position": [0, 0, 0], "mapName": "Halvar", "familyBackground": "FamilyMapBackground_Deep" },
+          "position": [0, 0, 0], "mapName": "Halvar", "familyBackground": "FamilyMapBG_4" },
         { "id": "poi", "parent": "family", "name": "Halvar Station", "prefab": "Point of Interest", "unit": "Skybox",
           "position": [0, 0, 0], "mapName": "Halvar Station" },
         { "id": "planet", "parent": "poi", "name": "Halvar II", "prefab": "Set2ClassY014", "tags": ["Planet"], "unit": "Skybox",
@@ -44,7 +44,7 @@
         { "id": "orrin-twins", "name": "Orrin Twins", "mapName": "Orrin Twins",
           "copyFamily": { "system": "5533|Arna", "family": "FAMILY Twin Planets" } },
         { "id": "family", "name": "Orrin Gate", "prefab": "Family Group", "tags": ["FAMILY"], "unit": "Lightseconds",
-          "position": [4, 0, 4], "mapName": "Orrin Gate", "familyBackground": "FamilyMapBackground_Nebula" },
+          "position": [4, 0, 4], "mapName": "Orrin Gate", "familyBackground": "FamilyMapBG_2" },
         { "id": "poi", "parent": "family", "name": "Gate Approach", "prefab": "Point of Interest", "unit": "Skybox",
           "position": [0, 0, 0], "mapName": "Gate Approach" },
         { "id": "planet", "parent": "poi", "name": "Orrin", "prefab": "Venov_Set2ClassJ026", "tags": ["Planet"], "unit": "Skybox",
