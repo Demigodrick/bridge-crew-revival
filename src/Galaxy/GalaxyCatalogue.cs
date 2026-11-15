@@ -415,7 +415,8 @@ namespace StbcRevival.Galaxy
         // canvas, inactive ones too, the one whose rectangle best matches _mapRect. Matching is the overlap's share
         // of both rectangles together (intersection over union), so a full-screen frame that also covers the map
         // loses to a picture the size of the map; it must cover at least half of the map. Every candidate is logged.
-        private static UnityEngine.UI.Graphic FindMapArt(WarpPanel panel)
+        // Also used by the warp map's second page (WarpPages) to darken the art, with log off.
+        internal static UnityEngine.UI.Graphic FindMapArt(WarpPanel panel, bool log = true)
         {
             var mapRect = Traverse.Create(panel).Field("_mapRect").GetValue() as RectTransform;
             if (mapRect == null)
@@ -424,7 +425,7 @@ namespace StbcRevival.Galaxy
                 return null;
             }
             var map = WorldRectIn(mapRect, mapRect);
-            Plugin.Log.LogInfo($"Galaxy: warp map rect {PathOf(mapRect)}, {map.width:0.#} x {map.height:0.#}");
+            if (log) Plugin.Log.LogInfo($"Galaxy: warp map rect {PathOf(mapRect)}, {map.width:0.#} x {map.height:0.#}");
             if (map.width <= 0 || map.height <= 0) return null;
 
             var searched = new List<Transform> { panel.transform };
@@ -459,7 +460,7 @@ namespace StbcRevival.Galaxy
                     float union = r.width * r.height + map.width * map.height - overlap;
                     float covers = overlap / (map.width * map.height);
                     float score = union > 0 ? overlap / union : 0;
-                    Plugin.Log.LogInfo($"Galaxy: warp map candidate {PathOf(g.transform)}: {r.width:0.#} x {r.height:0.#}, " +
+                    if (log) Plugin.Log.LogInfo($"Galaxy: warp map candidate {PathOf(g.transform)}: {r.width:0.#} x {r.height:0.#}, " +
                         $"covers {covers:P0} of the map, match {score:0.00}, {(g.gameObject.activeInHierarchy ? "active" : "inactive")}, {art}");
                     if (covers >= 0.5f && score > bestScore)
                     {
@@ -492,7 +493,7 @@ namespace StbcRevival.Galaxy
             return w > 0 && h > 0 ? w * h : 0;
         }
 
-        private static string PathOf(Transform t)
+        internal static string PathOf(Transform t)
         {
             var parts = new List<string>();
             for (; t != null && parts.Count < 12; t = t.parent) parts.Insert(0, t.name);

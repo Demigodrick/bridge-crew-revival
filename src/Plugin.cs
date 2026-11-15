@@ -390,6 +390,7 @@ namespace StbcRevival
             Safely("quest controls", () => StbcRevival.QuestControls.Patch(harmony));
             Safely("seat warning", () => Walking.SeatWarning.Patch(harmony));
             Safely("galaxy region", () => StbcRevival.Galaxy.GalaxyRegion.Patch(harmony));
+            Safely("galaxy warp map pages", () => StbcRevival.Galaxy.WarpPages.Patch(harmony));
             SteamMode.Install(harmony);
             ShuttleControls.Install();
 

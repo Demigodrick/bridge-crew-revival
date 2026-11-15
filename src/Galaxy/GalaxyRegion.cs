@@ -43,6 +43,12 @@ namespace StbcRevival.Galaxy
         /// <summary>The region's name from its file, else the config value.</summary>
         internal static string RegionName => GalaxyRoom.OwnName ?? (!string.IsNullOrEmpty(builtName) ? builtName : ConfigName);
 
+        /// <summary>The warp map's second page (label, background) from the file the region was built from; null before a build.</summary>
+        internal static Page BuiltPage { get; private set; }
+
+        /// <summary>The folder of the file the region was built from (a page background PNG sits next to it).</summary>
+        internal static string BuiltFolder { get; private set; }
+
         /// <summary>Off the bridge: no mission is flown, so nothing is active until the next hook decides.</summary>
         internal static void MissionOver()
         {
@@ -302,6 +308,8 @@ namespace StbcRevival.Galaxy
                 return null;
             }
             builtName = !string.IsNullOrEmpty(file.Name) ? file.Name : ConfigName;
+            BuiltPage = file.Page;
+            BuiltFolder = Path.GetDirectoryName(path);
 
             // The same check the designer makes, against what this game has.
             var catalogue = GalaxyCatalogue.Build(trench, null);
