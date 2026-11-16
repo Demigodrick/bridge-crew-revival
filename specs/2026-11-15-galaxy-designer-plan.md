@@ -402,3 +402,58 @@ From the spike (design: "Revision after the spike"). Every system is ROOT → FA
   binaries; install on a clean copy with `docs/install.sh` and see `BepInEx/galaxies/` filled.
 - [ ] **Step 2:** `dotnet test tests/Galaxy.Tests` → all pass; `dotnet build src -c Release` → no warnings added.
 - [ ] **Step 3: Commit** `Galaxy: ship the designer and the region with the mod`.
+
+---
+
+## Addendum (2026-11-16): designer polish, after the user's walkthrough
+
+The user tried the designer on real data and asked for both the bugs fixed and the tool made easier to use.
+Seen: Trench names shown as text keys ("2824|Venov"); background a stretched 64×64 frame; the Open list appears
+late; a station-model body shows "Station" unticked; the model picker shows internal names ("Set2ClassY014",
+"Ship - SpaceStationProcedural 22"); the system plan mixes AU and km so circles and labels pile up.
+
+### Task 10: Catalogue: readable names, pictures, sprites, the real map art (mod)
+
+**Files:** `src/Galaxy/GalaxyCatalogue.cs` (+ a new `src/Galaxy/GalaxyThumbnails.cs` for the picture taking),
+`shared/Galaxy/Catalogue.cs`, `tests/Galaxy.Tests` (catalogue round-trip of the new fields).
+
+**Interfaces (catalogue JSON, all optional so older catalogues still parse):**
+- `CatalogueSystem.DisplayName`: the English part of the name ("2824|Venov" → "Venov"); plain names unchanged.
+- `CataloguePrefab.Label` (the body's in-game display name in English if it has one — e.g. from its
+  TargetInfoComponent / its text key "5796|Space Station" → "Space Station" — else a tidy version of the prefab
+  name), `CataloguePrefab.Thumb` (file name of its picture under `galaxies/thumbs/`, or null).
+- `Catalogue.SpriteFiles`: map of sprite name → PNG file name under `galaxies/sprites/` (family backdrops, map icons).
+- `Catalogue.Background`: the real warp map art, found with `FindMapArt(panel, panelOnly: true)` (the search the
+  pages use, which found `WarpPanel/bg_image` in game), exported to `trench-map.png`.
+
+**Pictures:** on the catalogue key, for each prefab with Kind star/planet/moon/station/asteroids/nebula/other,
+instantiate it inactive far from everything on a layer no game camera renders, frame it with a temporary camera
+(orthographic or perspective fitted to its renderer bounds, plain black background, a light), render 128×128 to a
+RenderTexture, save PNG, destroy the instance and camera. Spread over frames (a coroutine, a few per frame) with a
+progress log line; skip and log any prefab that throws; never leave an instance behind. Only from the shuttle or
+the briefing room (not on the bridge mid-mission). Sprites: export each `FamilyMapBackground` / `SystemMapIconSprite`
+through the same RenderTexture copy the map art uses.
+
+**Verify:** build, tests. In game (user): F5 in the shuttle → `galaxies/thumbs/*.png` (a few hundred), `sprites/`,
+a big `trench-map.png`; log line with counts; no hitch beyond a few seconds.
+
+### Task 11: Designer: the bugs, a picture picker, the impulse map page view
+
+**Files:** `tools/galaxy-designer/web/*`, `tools/galaxy-designer/DesignerApi.cs` (serve `galaxies/thumbs/*.png` and
+`galaxies/sprites/*.png`, names checked like galaxy names), tests for the new routes.
+
+1. Bugs: show `DisplayName` (or the part after "|") for Trench systems everywhere; background = `trench-map.png`
+   only if it's larger than 256 px wide, else the plain dark fill; the Open list shows at once (and opens on one
+   click); a body whose model is a station shows Station ticked and locked ("from its model"), likewise asteroid
+   field / nebula / planet / moon when the model's kind says so.
+2. Model picker: a panel of picture tiles grouped by kind (Stars, Planets, Moons, Stations, Asteroid fields,
+   Nebulae, Other), each tile the picture (or a kind icon if none) with the readable label and the internal name in
+   small print; a search box; recently used first.
+3. Plan view: one family at a time drawn as its impulse map page — its backdrop sprite (from `sprites/`), POIs
+   placed by their positions relative to the family's centre, scaled to fit (as the game's FamilyRegion does:
+   centre point + pixels per metre), with their map icon and map name. Clicking a POI zooms into it: its regions,
+   bodies and jump points in kilometres, with a breadcrumb back to the page. Dragging works at each level in that
+   level's unit.
+
+**Verify:** Playwright against the user's real catalogue (copy it plus thumbs/sprites into testdata, or point
+`--game` at the game folder read-only); screenshots of the picker and both plan levels.
