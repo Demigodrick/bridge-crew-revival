@@ -20,6 +20,26 @@ namespace StbcRevival.Galaxy
 
         private static bool IsFamily(GalaxyNode n) { return n.CopyFamily != null || n.Prefab == FamilyPrefab; }
 
+        /// <summary>
+        /// How far from a system's centre (its ROOT, at the origin) a family can sit, in metres on each of x and z: the
+        /// impulse map's system overview spans this either way (decompiled FamilyMap._maxOrbitRadius, 2e9) and draws a
+        /// family further out off the panel, so it can't be seen or picked. The Trench's own reach 6.45 lightseconds.
+        /// </summary>
+        public const double ImpulseMapReach = 2000000000.0;
+
+        /// <summary>Metres per unit of a node's position (decompiled UnitScale.DistanceScaleToMeters).</summary>
+        public static double MetresPer(string unit)
+        {
+            switch (unit)
+            {
+                case "Kilometers": return 1000.0;
+                case "Skybox": return 1000000.0;
+                case "Lightseconds": return 299792458.0;
+                case "AstronomicalUnits": return 149597870700.0;
+                default: return 0;
+            }
+        }
+
         /// <summary>Two systems closer than this share of the universe width sit on top of each other on the map.</summary>
         private const float OverlapShare = 0.02f;
 
@@ -76,6 +96,15 @@ namespace StbcRevival.Galaxy
                     p.Add(at + ": use a plain name, not a text key ('" + n.Name + "')");
                 if (n.Parent == null && !IsFamily(n))
                     p.Add(at + ": top-level nodes must be families (Family Group) or a copied family");
+                // A copied family keeps its Trench position; a hand-made one is placed by the file.
+                if (n.Parent == null && n.CopyFamily == null && n.Prefab == FamilyPrefab)
+                {
+                    double m = MetresPer(n.Unit);
+                    double reach = ImpulseMapReach / 299792458.0;
+                    if (Math.Abs(n.X) * m > ImpulseMapReach || Math.Abs(n.Z) * m > ImpulseMapReach)
+                        p.Add(at + ": too far out for the impulse map (it shows families within " + reach.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)
+                            + " lightseconds of the centre on each axis)");
+                }
                 if (n.Prefab == PoiPrefab)
                 {
                     GalaxyNode up;

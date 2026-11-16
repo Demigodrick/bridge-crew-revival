@@ -6,7 +6,7 @@
       "system": "Venov",
       "nodes": [
         { "id": "family", "name": "Venov Outpost", "prefab": "Family Group", "tags": ["FAMILY"], "unit": "Lightseconds",
-          "position": [25, 0, -25], "mapName": "Venov Outpost", "familyBackground": "FamilyMapBG_4" },
+          "position": [4.5, 0, -4.5], "mapName": "Venov Outpost", "familyBackground": "FamilyMapBG_4" },
         { "id": "poi", "parent": "family", "name": "Outpost Approach", "prefab": "Point of Interest", "unit": "Skybox",
           "position": [0, 0, 0], "mapName": "Outpost Approach" },
         { "id": "region", "parent": "poi", "name": "REGION Venov Outpost", "prefab": "Region", "tags": ["RegionSpaceStation"],
