@@ -99,9 +99,9 @@ public class ThumbIndexTests
         index.Pictures["Ship - SpaceStation 01"] = new ThumbIndex.Picture { File = "Ship_-_SpaceStation_01.png", Kind = "station", Label = "Space Station" };
         index.Pictures["Set2ClassY014"] = new ThumbIndex.Picture { File = "Set2ClassY014.png", Kind = "planet" };
         var json = index.ToJson();
-        Assert.StartsWith("{\n  \"thumbsFormat\": 1", json.Replace("\r", ""));
+        Assert.StartsWith("{\n  \"thumbsFormat\": " + ThumbIndex.CurrentFormat, json.Replace("\r", ""));
         var back = ThumbIndex.Parse(json);
-        Assert.Equal(1, back.Format);
+        Assert.Equal(ThumbIndex.CurrentFormat, back.Format);
         Assert.Equal("Space Station", back.Pictures["Ship - SpaceStation 01"].Label);
         Assert.Equal("station", back.Pictures["Ship - SpaceStation 01"].Kind);
         Assert.Equal("Set2 Class Y014", back.Pictures["Set2ClassY014"].Label); // no label: the tidy name
@@ -116,6 +116,7 @@ public class ThumbIndexTests
         Assert.False(ThumbIndex.IsCurrent("not json"));
         Assert.False(ThumbIndex.IsCurrent("{ }"));
         Assert.False(ThumbIndex.IsCurrent(new ThumbIndex { Format = 0 }.ToJson()));
+        Assert.False(ThumbIndex.IsCurrent(new ThumbIndex { Format = 1 }.ToJson())); // before the stations: taken again
         Assert.True(ThumbIndex.IsCurrent(new ThumbIndex().ToJson()));
         Assert.True(ThumbIndex.IsCurrent(new ThumbIndex { Format = ThumbIndex.CurrentFormat + 1 }.ToJson()));
     }

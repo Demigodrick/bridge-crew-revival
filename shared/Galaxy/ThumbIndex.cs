@@ -6,14 +6,17 @@ namespace StbcRevival.Galaxy
     /// <summary>
     /// BepInEx/galaxies/thumbs.json: the index of the pictures the mod takes of the game's SectorBody prefabs (in
     /// galaxies/thumbs/), for the galaxy designer:
-    /// <c>{ "thumbsFormat": 1, "pictures": { "&lt;prefab name&gt;": { "file": "&lt;png&gt;", "kind": "&lt;kind&gt;", "label": "&lt;readable name&gt;" } } }</c>.
+    /// <c>{ "thumbsFormat": 2, "pictures": { "&lt;prefab name&gt;": { "file": "&lt;png&gt;", "kind": "&lt;kind&gt;", "label": "&lt;readable name&gt;" } } }</c>.
     /// thumbsFormat 0: a run cut short (the player left the shuttle); the pictures listed are there, the rest are
     /// taken on the next shuttle visit.
     /// </summary>
     public sealed class ThumbIndex
     {
-        /// <summary>The format the mod writes for a finished run. An index with a lower one is taken again.</summary>
-        public const int CurrentFormat = 1;
+        /// <summary>
+        /// The format the mod writes for a finished run. An index with a lower one is taken again.
+        /// 2: procedural space stations built from their pieces (format 1 had no pictures of them).
+        /// </summary>
+        public const int CurrentFormat = 2;
 
         public sealed class Picture
         {

@@ -221,6 +221,7 @@ namespace StbcRevival.Galaxy
             Camera.CameraCallback preCull = Camera.onPreCull, preRender = Camera.onPreRender, postRender = Camera.onPostRender;
             bool activated = false;
             Transform[] before = null;
+            string station = null;
             try
             {
                 item.Prefab.Thumb = null;
@@ -232,6 +233,15 @@ namespace StbcRevival.Galaxy
                 // Under the inactive holder nothing on it wakes up.
                 instance = (GameObject)UnityEngine.Object.Instantiate(item.Source, r.Holder.transform, false);
                 instance.transform.localPosition = Vector3.zero;
+                // A procedural station's model is built from pieces by the game's Awake: built here instead, still
+                // inactive, before the strip (which then covers the pieces too).
+                try { station = GalaxyStations.Build(instance, r.Holder.transform); }
+                catch (Exception e)
+                {
+                    r.Failed++;
+                    Skip(r, item, "building the station: " + e.GetType().Name + ": " + e.Message);
+                    return false;
+                }
                 if (!Strip(instance, out string left))
                 {
                     r.Failed++;
@@ -249,17 +259,19 @@ namespace StbcRevival.Galaxy
                 ReleasePooled(before, instance.transform, r.Layer, item);
                 SetLayer(instance.transform, r.Layer); // models the scripts just made
 
+                string built = station != null ? $" (station built: {station})" : "";
                 if (!Bounds(instance, out var bounds))
                 {
-                    NoPicture(r, item, "nothing drawn (no renderer with a material and a size)");
+                    NoPicture(r, item, "nothing drawn (no renderer with a material and a size)" + built);
                     return true;
                 }
                 byte[] png = Render(r, bounds, out int lit);
                 if (png == null)
                 {
-                    NoPicture(r, item, $"the picture came out blank ({lit} lit pixels)");
+                    NoPicture(r, item, $"the picture came out blank ({lit} lit pixels)" + built);
                     return true;
                 }
+                if (station != null) Plugin.Log.LogInfo($"Galaxy: picture of {item.Prefab.Name}: station built ({station}), {lit} lit pixels");
                 File.WriteAllBytes(Path.Combine(Folder, item.File), png);
                 item.Prefab.Thumb = item.File;
                 r.Taken++;
