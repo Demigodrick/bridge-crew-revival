@@ -33,7 +33,13 @@
       <label title="trench-darkened, or the name of a PNG next to the file (the PNG option comes later; for now the darkened Trench map is shown)">Background <input id="pageBg" type="text"></label>
       <label class="check"><input id="showTrench" type="checkbox" checked> Show the Trench systems</label>
     </div>
+    <div id="trenchBox" hidden><div class="muted pad">Trench additions</div><ul id="trenchList" class="list" role="listbox" aria-label="Trench additions"></ul></div>
     <ul id="sysList" class="list" role="listbox" aria-label="Systems"></ul>
+    <div class="tools" id="tForm" hidden>
+      <strong id="tName"></strong>
+      <div id="tInfo" class="muted"></div>
+      <button id="tOpen" type="button" class="primary">Edit its families</button>
+    </div>
     <div class="tools" id="sysForm" hidden>
       <label>Name <input id="sName" type="text"></label>
       <div class="row">
@@ -50,7 +56,7 @@
         <button id="sDelete" type="button">Delete</button>
       </div>
     </div>
-    <div class="muted pad">Click an empty spot on the map to add a system. Drag one to move it. Double-click to edit its nodes.</div>
+    <div class="muted pad">Click an empty spot on the map to add a system. Double-click a Trench system (a grey dot) to add families to it. Drag one to move it. Double-click to edit its nodes.</div>
   </section>
 
   <section id="systemPanel" class="panel" hidden>
