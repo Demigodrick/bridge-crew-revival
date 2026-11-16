@@ -113,9 +113,8 @@ namespace StbcRevival.Galaxy
     public class Catalogue
     {
         /// <summary>
-        /// The catalogue format the mod writes. 2: display names, labels, pictures, sprite files, the panel's own map
-        /// art. The mod writes 2 only once the pictures are all taken; with them missing (on the bridge, or a run cut
-        /// short) it writes 1, so the shuttle fills them in later. A file without the field is 1.
+        /// The catalogue format. 2: display names, labels, pictures, sprite files. A file without the field is 1.
+        /// (The mod no longer writes catalogues; the designer reads the game files. Kept for the designer's model.)
         /// </summary>
         public const int CurrentFormat = 2;
 
@@ -212,58 +211,6 @@ namespace StbcRevival.Galaxy
             }
         }
 
-        /// <summary>
-        /// A catalogue file's format from its first few hundred characters, without parsing the (megabytes of) rest:
-        /// null if the text has no "catalogueFormat" there (an older catalogue, format 1, or not a catalogue).
-        /// </summary>
-        public static int? FormatOf(string start)
-        {
-            if (string.IsNullOrEmpty(start)) return null;
-            string head = start.Length > 400 ? start.Substring(0, 400) : start;
-            int at = head.IndexOf("\"catalogueFormat\"", StringComparison.Ordinal);
-            if (at < 0) return null;
-            int i = at + "\"catalogueFormat\"".Length;
-            while (i < head.Length && (head[i] == ' ' || head[i] == ':' || head[i] == '\t' || head[i] == '\r' || head[i] == '\n')) i++;
-            int value = 0, digits = 0;
-            while (i < head.Length && head[i] >= '0' && head[i] <= '9' && digits < 6) { value = value * 10 + (head[i] - '0'); i++; digits++; }
-            return digits > 0 ? value : (int?)null;
-        }
-
-        /// <summary>
-        /// A catalogue file's "background" from its first few hundred characters (written right after the format):
-        /// the file name, or null for none, null, or not found there.
-        /// </summary>
-        public static string BackgroundOf(string start)
-        {
-            if (string.IsNullOrEmpty(start)) return null;
-            string head = start.Length > 400 ? start.Substring(0, 400) : start;
-            int at = head.IndexOf("\"background\"", StringComparison.Ordinal);
-            if (at < 0) return null;
-            int i = at + "\"background\"".Length;
-            while (i < head.Length && (head[i] == ' ' || head[i] == ':' || head[i] == '\t' || head[i] == '\r' || head[i] == '\n')) i++;
-            if (i >= head.Length || head[i] != '"') return null;
-            int end = head.IndexOf('"', i + 1);
-            if (end < 0) return null;
-            string name = head.Substring(i + 1, end - i - 1);
-            return name.Length > 0 && name.IndexOf('\\') < 0 ? name : null;
-        }
-
-        /// <summary>
-        /// Whether a catalogue file (its start; null for none) still needs the warp map art taken on the bridge: it has a
-        /// catalogueFormat (older ones picked a small frame as the art) but no background; fileExists says whether the
-        /// named background file is there. No file at all: false (the shuttle writes the catalogue first).
-        /// </summary>
-        public static bool NeedsMapArt(string fileStart, Func<string, bool> fileExists)
-        {
-            if (fileStart == null) return false;
-            if (FormatOf(fileStart) == null) return true;
-            string background = BackgroundOf(fileStart);
-            return background == null || !fileExists(background);
-        }
-
-        /// <summary>Whether the mod should write the catalogue: no file (null), or one in an older format than CurrentFormat.</summary>
-        public static bool NeedsWrite(string fileStart) => fileStart == null || (FormatOf(fileStart) ?? 1) < CurrentFormat;
-
         private static GalaxyNode ReadNode(object o, string systemName)
         {
             // Same shape as a node in a galaxy file; reuse the file's reader through a one-node system.
@@ -280,7 +227,6 @@ namespace StbcRevival.Galaxy
         public string ToJson()
         {
             var root = new Dictionary<string, object>();
-            // First, so FormatOf and BackgroundOf find them without reading the whole file.
             root["catalogueFormat"] = Format;
             root["background"] = Background;
             root["universe"] = new Dictionary<string, object>

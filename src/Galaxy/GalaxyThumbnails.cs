@@ -9,7 +9,7 @@ namespace StbcRevival.Galaxy
 {
     /// <summary>
     /// Pictures of the catalogue's prefabs for the galaxy designer: 128×128 PNGs in BepInEx/galaxies/thumbs/, one per
-    /// frame after the catalogue is written, only on the shuttle or in the briefing room.
+    /// frame, only on the shuttle or in the briefing room; GalaxyCatalogue writes their index, thumbs.json.
     ///
     /// Without disturbing the player's view or the game:
     /// - Each prefab is instantiated under an inactive holder, so none of its scripts wake (no Awake, OnEnable,

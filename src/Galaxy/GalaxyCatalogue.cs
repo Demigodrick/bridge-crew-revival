@@ -11,17 +11,20 @@ using Tag = BLECEHNPNBH;
 namespace StbcRevival.Galaxy
 {
     /// <summary>
-    /// Writes what the game has to offer a galaxy file to BepInEx/galaxies/catalogue.json, for the galaxy designer
-    /// and the check: the Trench's systems (with readable names) and node trees, the SectorBody prefabs (with readable
-    /// labels and pictures in thumbs/, GalaxyThumbnails), the tag names, the player spawn tags, the sprites nodes use
-    /// (as PNGs in sprites/) and, with a warp panel in the scene (on the bridge), the warp map's universe bounds and
-    /// background (trench-map.png; without a panel, kept from the previous catalogue). Written by itself a few seconds
-    /// into the first shuttle visit when there's no catalogue or an older format, and again on [Galaxy] CatalogueKey.
-    /// Never breaks the game: anything that fails is logged and left out.
+    /// What the game has to offer a galaxy file, read from inside the game. Two uses:
+    /// - Build: the Trench's systems, node trees, prefabs (with kinds and readable labels) and tags, for the in-game
+    ///   check of a region file (GalaxyRegion). Nothing of it is written out: the galaxy designer reads the game files itself.
+    /// - Pictures of the SectorBody prefabs for the designer (GalaxyThumbnails): BepInEx/galaxies/thumbs/*.png and the
+    ///   index thumbs.json (ThumbIndex: prefab name → file, kind, label). Taken by itself a few seconds into the first
+    ///   shuttle visit when there's no current index, and again on [Galaxy] PictureKey (on the shuttle or in the
+    ///   briefing room). A run cut short by leaving the shuttle (or a level load) is retried on the next shuttle visit;
+    ///   any other end counts as done; at most one automatic attempt a session.
+    /// Also FindMapArt and PathOf, for the warp map's pages (WarpPages). Never breaks the game: anything that fails
+    /// is logged and left out.
     /// </summary>
     internal static class GalaxyCatalogue
     {
-        private static float lastWritten = -10f;
+        private static float lastStarted = -10f;
 
         /// <summary>
         /// The Trench's own system count while a region's systems are appended to its list (set by the region code);
@@ -31,18 +34,14 @@ namespace StbcRevival.Galaxy
 
         internal static string Folder => Path.Combine(Paths.BepInExRootPath, "galaxies");
 
-        internal static string CataloguePath => Path.Combine(Folder, "catalogue.json");
+        internal static string IndexPath => Path.Combine(Folder, "thumbs.json");
 
-        // The automatic write: checked once per shuttle visit, a few seconds in; done for the session once current.
+        // The automatic run: checked once per shuttle visit, a few seconds in; over for the session once it's done
+        // (or failed for good).
         private const float AutoDelay = 5f;
         private static bool autoDone, autoChecked;
         private static float shuttleSince = -1f, nextAutoLook;
-        // The automatic map art: looked for every few seconds on the bridge until done once this session.
-        private static bool mapDone;
-        private static float nextMapLook;
-        // A catalogue save running on a worker thread; nothing else reads or writes catalogue.json meanwhile.
-        private static volatile bool saving;
-        // Resources.UnloadUnusedAssets wanted, done once no level is loading.
+        // Resources.UnloadUnusedAssets wanted, done once no level is loading (dropped if one loads meanwhile).
         private static bool unloadWanted;
 
         internal static void Update()
@@ -50,145 +49,36 @@ namespace StbcRevival.Galaxy
             GalaxyThumbnails.Update();
             UnloadWhenSettled();
             Auto();
-            AutoMap();
-            var key = Plugin.CatalogueKey.Value;
-            if (key == KeyCode.None || !Input.GetKeyDown(key) || Time.realtimeSinceStartup - lastWritten < 3f) return;
-            if (GalaxyThumbnails.Running || saving)
+            var key = Plugin.PictureKey.Value;
+            if (key == KeyCode.None || !Input.GetKeyDown(key) || Time.realtimeSinceStartup - lastStarted < 3f) return;
+            if (GalaxyThumbnails.Running)
             {
-                Plugin.Log.LogInfo("Galaxy: still taking the catalogue's pictures or saving it; key ignored");
+                Plugin.Log.LogInfo("Galaxy: still taking the prefab pictures; key ignored");
                 return;
             }
-            Write(false);
+            TakePictures(false);
         }
 
-        // The warp map art (trench-map.png) needs a warp panel, so only the bridge has it: the first time one is
-        // there (any mission) and the catalogue lacks the art, take just that and the universe bounds into the
-        // catalogue. Once a session; no Resources.LoadAll, no pictures. Only in the first seconds after the bridge
-        // has loaded (MapWindow), before the player is busy: the GPU copy of the art is the one thing done on the
-        // main thread; the PNG (PngWriter) and the catalogue are made on a worker thread.
-        private const float MapFrom = 2f, MapUntil = 20f;
-        private static float bridgeSince = -1f;
-
-        private static void AutoMap()
+        /// <summary>
+        /// [Galaxy] CatalogueKey was this key's name: its value, once, becomes PictureKey's when that is still None.
+        /// The old entry is an orphan (no longer bound); it's dropped from the file afterwards.
+        /// </summary>
+        internal static void MigrateOldKey(BepInEx.Configuration.ConfigFile config, BepInEx.Configuration.ConfigEntry<KeyCode> pictureKey)
         {
-            if (mapDone || saving || GalaxyThumbnails.Running || Time.realtimeSinceStartup < nextMapLook) return;
-            nextMapLook = Time.realtimeSinceStartup + 0.5f;
             try
             {
-                if (GameState.Phase() != "GamePhase_Bridge" || GameState.Loading())
+                var old = new BepInEx.Configuration.ConfigDefinition("Galaxy", "CatalogueKey");
+                var orphans = Traverse.Create(config).Property("OrphanedEntries").GetValue() as Dictionary<BepInEx.Configuration.ConfigDefinition, string>;
+                if (orphans == null || !orphans.TryGetValue(old, out string value)) return;
+                orphans.Remove(old);
+                if (pictureKey.Value == KeyCode.None && Enum.IsDefined(typeof(KeyCode), value.Trim()))
                 {
-                    bridgeSince = -1f;
-                    return;
+                    pictureKey.Value = (KeyCode)Enum.Parse(typeof(KeyCode), value.Trim());
+                    Plugin.Log.LogInfo($"Galaxy: [Galaxy] CatalogueKey = {value.Trim()} carried over to PictureKey");
                 }
-                if (bridgeSince < 0) bridgeSince = Time.realtimeSinceStartup;
-                float since = Time.realtimeSinceStartup - bridgeSince;
-                if (since < MapFrom || since > MapUntil) return; // too late this visit: the next bridge
-                string start = FileStart(CataloguePath);
-                if (start == null) return; // the shuttle writes the catalogue first
-                if (!Catalogue.NeedsMapArt(start, f => File.Exists(Path.Combine(Folder, f))))
-                {
-                    mapDone = true;
-                    Plugin.Log.LogInfo("Galaxy: the catalogue has the warp map art; not taken again");
-                    return;
-                }
-                var panel = UnityEngine.Object.FindObjectOfType<WarpPanel>();
-                if (panel == null) return;
-                mapDone = true; // once, whatever happens next (logged); the key on the bridge takes it again
-                TakeMapArt(panel);
+                config.Save();
             }
-            catch (Exception e) { Plugin.Log.LogError("Galaxy: automatic warp map art: " + e); }
-        }
-
-        private static void TakeMapArt(WarpPanel panel)
-        {
-            var clock = System.Diagnostics.Stopwatch.StartNew();
-            var fresh = new Catalogue();
-            try
-            {
-                var t = Traverse.Create(panel);
-                fresh.UniverseWidth = (float)t.Field("_universeWidth").GetValue();
-                fresh.UniverseHeight = (float)t.Field("_universeHeight").GetValue();
-                fresh.UniverseMinX = (float)t.Field("NOHNHPFPNOD").GetValue();
-                fresh.UniverseMinZ = (float)t.Field("CJBBAHGEKBL").GetValue();
-            }
-            catch (Exception e) { Plugin.Log.LogWarning("Galaxy: universe bounds: " + e.Message); }
-            var art = FindMapArt(panel, false, panelOnly: true);
-            if (art == null)
-            {
-                Plugin.Log.LogWarning("Galaxy: no warp map art found in the warp panel; catalogue left as it was");
-                return;
-            }
-            Texture texture;
-            Rect rect;
-            if (art is UnityEngine.UI.Image image)
-            {
-                texture = image.sprite.texture;
-                rect = image.sprite.textureRect;
-            }
-            else
-            {
-                var raw = (UnityEngine.UI.RawImage)art;
-                texture = raw.texture;
-                var uv = raw.uvRect;
-                rect = new Rect(uv.x * texture.width, uv.y * texture.height, uv.width * texture.width, uv.height * texture.height);
-            }
-            var pixels = TexturePixels(texture, rect, out int w, out int h);
-            double mainMs = clock.Elapsed.TotalMilliseconds;
-            string from = PathOf(art.transform);
-            Plugin.Log.LogInfo($"Galaxy: warp map art copied from {from} ({texture.width}x{texture.height}, {w}x{h} used) in {mainMs:0} ms; " +
-                "the PNG and the catalogue are made on a worker thread");
-            SaveInBackground("the warp map art", () =>
-            {
-                var work = System.Diagnostics.Stopwatch.StartNew();
-                var rgba = new byte[pixels.Length * 4];
-                bool alpha = false;
-                for (int i = 0; i < pixels.Length; i++)
-                {
-                    var p = pixels[i];
-                    rgba[i * 4] = p.r; rgba[i * 4 + 1] = p.g; rgba[i * 4 + 2] = p.b; rgba[i * 4 + 3] = p.a;
-                    if (p.a != 255) alpha = true;
-                }
-                var png = PngWriter.Encode(rgba, w, h, bottomUp: true, alpha: alpha);
-                File.WriteAllBytes(Path.Combine(Folder, "trench-map.png"), png);
-                var c = Catalogue.Parse(File.ReadAllText(CataloguePath));
-                c.Background = "trench-map.png";
-                if (fresh.UniverseWidth > 0)
-                {
-                    c.UniverseMinX = fresh.UniverseMinX;
-                    c.UniverseMinZ = fresh.UniverseMinZ;
-                    c.UniverseWidth = fresh.UniverseWidth;
-                    c.UniverseHeight = fresh.UniverseHeight;
-                }
-                Plugin.Log.LogInfo($"Galaxy: trench-map.png written ({w}x{h}, {png.Length} bytes) in {work.Elapsed.TotalMilliseconds:0} ms off the main thread");
-                return c;
-            });
-        }
-
-        // Builds the catalogue to save (make) and writes it on a worker thread: megabytes of JSON, kept off the frame.
-        private static void SaveInBackground(string what, Func<Catalogue> make)
-        {
-            saving = true;
-            try
-            {
-                var thread = new System.Threading.Thread(() =>
-                {
-                    try
-                    {
-                        var c = make();
-                        Save(c);
-                        Plugin.Log.LogInfo($"Galaxy: catalogue saved with {what} (format {c.Format}, background {c.Background ?? "none"})");
-                    }
-                    catch (Exception e) { Plugin.Log.LogError($"Galaxy: saving the catalogue with {what}: {e}"); }
-                    finally { saving = false; }
-                });
-                thread.IsBackground = true;
-                thread.Start();
-            }
-            catch (Exception)
-            {
-                saving = false;
-                throw;
-            }
+            catch (Exception e) { Plugin.Log.LogWarning("Galaxy: carrying over CatalogueKey: " + e.Message); }
         }
 
         private static void UnloadWhenSettled()
@@ -208,11 +98,11 @@ namespace StbcRevival.Galaxy
             catch (Exception e) { Plugin.Log.LogWarning("Galaxy: unloading the loaded prefabs: " + e.Message); }
         }
 
-        // Writes the catalogue by itself the first time the player is on the shuttle, if there's none yet or it's
-        // in an older format than Catalogue.CurrentFormat; never on the bridge or in the briefing room.
+        // Takes the pictures by itself the first time the player is on the shuttle, if there's no current index;
+        // never on the bridge or in the briefing room.
         private static void Auto()
         {
-            if (autoDone || saving || GalaxyThumbnails.Running || Time.realtimeSinceStartup < nextAutoLook) return;
+            if (autoDone || GalaxyThumbnails.Running || Time.realtimeSinceStartup < nextAutoLook) return;
             nextAutoLook = Time.realtimeSinceStartup + 0.5f;
             bool onShuttle;
             try { onShuttle = GameState.Phase() == "GamePhase_MainMenu" && !GameState.Loading(); }
@@ -228,194 +118,114 @@ namespace StbcRevival.Galaxy
             autoChecked = true;
             try
             {
-                string start = FileStart(CataloguePath);
-                if (!Catalogue.NeedsWrite(start))
+                string index = ReadIndex();
+                if (ThumbIndex.IsCurrent(index))
                 {
                     autoDone = true;
-                    Plugin.Log.LogInfo($"Galaxy: catalogue is current (format {Catalogue.CurrentFormat}); not written again");
+                    Plugin.Log.LogInfo($"Galaxy: the prefab pictures are current (thumbs.json format {ThumbIndex.CurrentFormat}); not taken again");
                     return;
                 }
-                string why = start == null ? "there is none yet" : $"it's format {Catalogue.FormatOf(start) ?? 1}, the mod writes {Catalogue.CurrentFormat}";
-                Plugin.Log.LogInfo($"Galaxy: writing the catalogue for the galaxy designer by itself ({why})");
-                Write(true);
+                Plugin.Log.LogInfo("Galaxy: taking the prefab pictures for the galaxy designer by itself (" +
+                    (index == null ? "none yet" : "the last run was cut short or is older") + ")");
+                TakePictures(true);
             }
-            catch (Exception e) { Plugin.Log.LogError("Galaxy: automatic catalogue: " + e); }
-            // Without a picture run under way, the attempt is over, written or not; another would fail the same way
-            // (no Trench, Build throwing, pictures unable to start): not again this session (the key still works).
-            // A run under way decides in its end: only leaving the shuttle (or a load) leaves it for the next visit.
+            catch (Exception e) { Plugin.Log.LogError("Galaxy: automatic pictures: " + e); }
+            // Without a run under way the attempt is over, taken or not; another would fail the same way (no Trench,
+            // Build throwing, the run unable to start): not again this session (the key still works). A run under way
+            // decides at its end: only leaving the shuttle (or a load) leaves it for the next visit.
             if (!GalaxyThumbnails.Running && !autoDone)
             {
                 autoDone = true;
-                Plugin.Log.LogInfo("Galaxy: automatic catalogue attempt over; not tried again this session");
+                Plugin.Log.LogInfo("Galaxy: automatic picture attempt over; not tried again this session");
             }
         }
 
-        // The file's first 512 bytes as text, or null without the file.
-        private static string FileStart(string path)
+        // auto: the automatic run, which stops if the player leaves the shuttle.
+        private static void TakePictures(bool auto)
         {
-            RecoverSave();
-            if (!File.Exists(path)) return null;
-            using (var f = File.OpenRead(path))
+            lastStarted = Time.realtimeSinceStartup;
+            if (!GalaxyThumbnails.CanRun(out string why, auto))
             {
-                var buffer = new byte[512];
-                int n = f.Read(buffer, 0, buffer.Length);
-                return Encoding.UTF8.GetString(buffer, 0, n);
+                Plugin.Log.LogInfo($"Galaxy: no prefab pictures: {why}; they're taken on the shuttle or in the briefing room");
+                return;
             }
-        }
-
-        // auto: the automatic write, whose pictures stop if the player leaves the shuttle.
-        private static void Write(bool auto)
-        {
-            lastWritten = Time.realtimeSinceStartup;
-            bool picturing = false, pending = false;
+            bool pending = false;
             try
             {
                 var trench = FindTrench();
                 if (trench == null)
                 {
-                    Plugin.Log.LogWarning("Galaxy: no Trench sector map found; catalogue not written");
+                    Plugin.Log.LogWarning("Galaxy: no Trench sector map found; no prefab pictures");
                     return;
                 }
-                WarpPanel panel = null;
-                try { panel = UnityEngine.Object.FindObjectOfType<WarpPanel>(); }
-                catch (Exception e) { Plugin.Log.LogWarning("Galaxy: looking for a warp panel: " + e.Message); }
-
-                Directory.CreateDirectory(Folder);
-                Catalogue previous = null;
-                int? previousFormat = null;
-                bool hadFile = false;
-                try
-                {
-                    string start = FileStart(CataloguePath);
-                    hadFile = start != null;
-                    previousFormat = Catalogue.FormatOf(start);
-                    // Only needed without a warp panel, for what the bridge saw last time.
-                    if (hadFile && panel == null) previous = Catalogue.Parse(File.ReadAllText(CataloguePath));
-                }
-                catch (Exception e) { Plugin.Log.LogWarning("Galaxy: reading the previous catalogue: " + e.Message); }
-
-                var catalogue = Build(trench, panel, out var bodies, out var sprites);
-                if (panel == null) KeepWarpMap(catalogue, previous, previousFormat);
-                else if (catalogue.Background != null) mapDone = true;
-                ExportSprites(catalogue, sprites);
+                var catalogue = Build(trench, out var bodies);
                 var items = PictureItems(catalogue, bodies);
-
-                picturing = GalaxyThumbnails.CanRun(out string why, auto);
-                // The run starts taking pictures from the next frame, after this save.
-                if (picturing) pending = GalaxyThumbnails.Start(items, auto, (interrupted, summary) =>
+                pending = GalaxyThumbnails.Start(items, auto, (interrupted, summary) =>
                 {
                     Plugin.Log.LogInfo("Galaxy: " + summary);
                     foreach (var item in items) item.Source = null;
-                    UnloadPrefabs(); // once no level is loading
+                    unloadWanted = true; // once no level is loading
                     // Only leaving (or a load, or the scene going) leaves it for another try; any other end is as
                     // complete as it gets, failures logged above, so it isn't retried every visit.
-                    catalogue.Format = interrupted ? 1 : Catalogue.CurrentFormat;
                     if (!interrupted) autoDone = true;
-                    int thumbs = 0;
-                    foreach (var p in catalogue.Prefabs) if (p.Thumb != null) thumbs++;
-                    Plugin.Log.LogInfo($"Galaxy: writing the catalogue again with {thumbs} pictures" +
-                        (interrupted ? " (interrupted: written again on the next shuttle visit)" : $" (format {Catalogue.CurrentFormat})"));
-                    try { SaveInBackground(thumbs + " pictures", () => catalogue); }
-                    catch (Exception e) { Plugin.Log.LogError("Galaxy: writing the catalogue after the pictures: " + e); }
+                    WriteIndex(catalogue, interrupted ? 0 : ThumbIndex.CurrentFormat);
                 });
-                // Format 2 means the pictures are as done as they'll get; while the run goes (or with only an earlier
-                // run's pictures carried over) it's 1, unless the previous file had them. A run that couldn't start
-                // won't start next time either: 2, with the pictures there are (the key tries again).
-                catalogue.Format = pending ? 1
-                    : picturing ? Catalogue.CurrentFormat
-                    : previousFormat >= Catalogue.CurrentFormat ? Catalogue.CurrentFormat : 1;
-                Save(catalogue);
-                int families = 0;
-                foreach (var s in catalogue.TrenchSystems) families += s.Families.Count;
-                Plugin.Log.LogInfo($"Galaxy: catalogue written ({catalogue.TrenchSystems.Count} systems, {families} families, " +
-                    $"{catalogue.Prefabs.Count} prefabs, {catalogue.Sprites.Count} sprites, {catalogue.SpriteFiles.Count} sprite pictures, format {catalogue.Format}) to {Folder}");
-                if (!picturing)
-                    Plugin.Log.LogInfo($"Galaxy: no new pictures of the prefabs: {why}; they're taken on the shuttle or in the briefing room");
-                else if (!pending)
-                    Plugin.Log.LogWarning("Galaxy: the pictures could not start (see above); catalogue written without new ones");
+                if (!pending)
+                {
+                    // It won't start next time either: an index of the pictures already there, as done (the key tries again).
+                    Plugin.Log.LogWarning("Galaxy: the prefab pictures could not start (see above)");
+                    WriteIndex(catalogue, ThumbIndex.CurrentFormat);
+                }
             }
             catch (Exception e)
             {
-                Plugin.Log.LogError("Galaxy: catalogue failed: " + e);
+                Plugin.Log.LogError("Galaxy: prefab pictures failed: " + e);
             }
             finally
             {
                 // While pictures are taken the prefabs are still needed; the run's end unloads them.
-                if (!pending) UnloadPrefabs();
+                if (!pending) unloadWanted = true;
             }
         }
 
-        // A save cut short between removing the old file and moving the new one in: the new one is complete.
-        private static void RecoverSave()
+        // thumbs.json: every prefab with a picture. format 0: a run cut short, taken again next shuttle visit.
+        private static void WriteIndex(Catalogue c, int format)
         {
             try
             {
-                string temp = CataloguePath + ".tmp";
-                if (!File.Exists(CataloguePath) && File.Exists(temp))
+                var index = new ThumbIndex { Format = format };
+                foreach (var p in c.Prefabs)
+                    if (p.Thumb != null)
+                        index.Pictures[p.Name] = new ThumbIndex.Picture { File = p.Thumb, Kind = p.Kind, Label = p.Label };
+                Directory.CreateDirectory(Folder);
+                // Written to a temporary file and moved into place, so a save cut short (the game closing) leaves the old file.
+                string temp = IndexPath + ".tmp";
+                File.WriteAllText(temp, index.ToJson(), new UTF8Encoding(false));
+                if (File.Exists(IndexPath)) File.Delete(IndexPath);
+                File.Move(temp, IndexPath);
+                Plugin.Log.LogInfo($"Galaxy: thumbs.json written: {index.Pictures.Count} pictures of {c.Prefabs.Count} prefabs" +
+                    (format == 0 ? " (cut short: taken again on the next shuttle visit)" : $" (format {format})"));
+            }
+            catch (Exception e) { Plugin.Log.LogError("Galaxy: writing thumbs.json: " + e); }
+        }
+
+        // thumbs.json's text, or null without one. A save cut short between removing the old file and moving the new
+        // one in leaves only thumbs.json.tmp: used if it reads as an index (it was complete), else ignored.
+        private static string ReadIndex()
+        {
+            string temp = IndexPath + ".tmp";
+            try
+            {
+                if (!File.Exists(IndexPath) && File.Exists(temp))
                 {
-                    File.Move(temp, CataloguePath);
-                    Plugin.Log.LogInfo("Galaxy: catalogue.json restored from its last save (catalogue.json.tmp)");
+                    string text = File.ReadAllText(temp);
+                    ThumbIndex.Parse(text);
+                    File.Move(temp, IndexPath);
+                    Plugin.Log.LogInfo("Galaxy: thumbs.json restored from its last save (thumbs.json.tmp)");
                 }
             }
-            catch (Exception e) { Plugin.Log.LogWarning("Galaxy: restoring catalogue.json.tmp: " + e.Message); }
-        }
-
-        // Written to a temporary file and moved into place, so a save cut short (the game closing) leaves the old file.
-        private static void Save(Catalogue c)
-        {
-            string temp = CataloguePath + ".tmp";
-            File.WriteAllText(temp, c.ToJson(), new UTF8Encoding(false));
-            if (File.Exists(CataloguePath)) File.Delete(CataloguePath);
-            File.Move(temp, CataloguePath);
-        }
-
-        // LoadAll("Sector") loaded every prefab under it; let go of the ones the scene doesn't use (once no level loads).
-        private static void UnloadPrefabs() => unloadWanted = true;
-
-        // Without a warp panel (the shuttle): the previous catalogue's universe bounds, and its map art if it was
-        // found by this version's search (a file with a catalogueFormat; older ones picked a small frame).
-        private static void KeepWarpMap(Catalogue c, Catalogue previous, int? previousFormat)
-        {
-            if (previous == null)
-            {
-                Plugin.Log.LogInfo("Galaxy: no warp panel in the scene and no earlier catalogue; universe bounds and map art left out (press the key once on the bridge)");
-                return;
-            }
-            c.UniverseMinX = previous.UniverseMinX;
-            c.UniverseMinZ = previous.UniverseMinZ;
-            c.UniverseWidth = previous.UniverseWidth;
-            c.UniverseHeight = previous.UniverseHeight;
-            if (previousFormat != null && !string.IsNullOrEmpty(previous.Background) && File.Exists(Path.Combine(Folder, previous.Background)))
-                c.Background = previous.Background;
-            Plugin.Log.LogInfo("Galaxy: no warp panel in the scene; universe bounds" + (c.Background != null ? " and map art" : "") +
-                " kept from the earlier catalogue" + (c.Background == null ? "; map art left out (press the key once on the bridge)" : ""));
-        }
-
-        // Each sprite the nodes use, as a PNG in galaxies/sprites/.
-        private static void ExportSprites(Catalogue c, Dictionary<string, Sprite> sprites)
-        {
-            string folder = Path.Combine(Folder, "sprites");
-            var used = new HashSet<string>();
-            try { Directory.CreateDirectory(folder); }
-            catch (Exception e)
-            {
-                Plugin.Log.LogWarning("Galaxy: sprites folder: " + e.Message);
-                return;
-            }
-            foreach (var name in c.Sprites)
-            {
-                try
-                {
-                    if (!sprites.TryGetValue(name, out var sprite) || sprite == null || sprite.texture == null) continue;
-                    Rect rect;
-                    try { rect = sprite.textureRect; }
-                    catch (Exception) { rect = new Rect(0, 0, sprite.texture.width, sprite.texture.height); } // tightly packed in an atlas
-                    string file = CatalogueNames.UniquePngFile(name, used);
-                    File.WriteAllBytes(Path.Combine(folder, file), TexturePng(sprite.texture, rect));
-                    c.SpriteFiles[name] = file;
-                }
-                catch (Exception e) { Plugin.Log.LogWarning($"Galaxy: sprite {name}: {e.Message}"); }
-            }
+            catch (Exception e) { Plugin.Log.LogWarning("Galaxy: thumbs.json.tmp not used: " + e.Message); }
+            return File.Exists(IndexPath) ? File.ReadAllText(IndexPath) : null;
         }
 
         // A picture item per prefab, with its file name; an earlier run's picture kept until a new one is taken.
@@ -458,13 +268,11 @@ namespace StbcRevival.Galaxy
 
         private static bool IsTrench(Map.SectorRoot map) => map.name.IndexOf("Trench", StringComparison.OrdinalIgnoreCase) >= 0;
 
-        internal static Catalogue Build(Map.SectorRoot trench, WarpPanel panel, out Dictionary<string, Sector.SectorBody> bodies,
-            out Dictionary<string, Sprite> sprites)
+        internal static Catalogue Build(Map.SectorRoot trench, out Dictionary<string, Sector.SectorBody> bodies)
         {
             var c = new Catalogue();
             // Prefab name -> body, in the order met; the Trench's first, then the rest of Resources.
             bodies = new Dictionary<string, Sector.SectorBody>();
-            sprites = new Dictionary<string, Sprite>();
             var order = new List<string>();
             // Tags the Trench's nodes put on each prefab, for its kind when the prefab's own tags don't say.
             var nodeTags = new Dictionary<string, List<string>>();
@@ -478,7 +286,7 @@ namespace StbcRevival.Galaxy
             }
             catch (Exception e) { Plugin.Log.LogWarning("Galaxy: spawn tags: " + e.Message); }
 
-            Systems(c, trench, bodies, order, nodeTags, sprites);
+            Systems(c, trench, bodies, order, nodeTags);
             ResourcePrefabs(bodies, order);
             foreach (var name in order)
             {
@@ -501,12 +309,11 @@ namespace StbcRevival.Galaxy
             foreach (var s in c.TrenchSystems)
                 if (!string.IsNullOrEmpty(s.Skybox) && !c.Skyboxes.Contains(s.Skybox)) c.Skyboxes.Add(s.Skybox);
 
-            if (panel != null) WarpMap(c, panel);
             return c;
         }
 
         private static void Systems(Catalogue c, Map.SectorRoot trench, Dictionary<string, Sector.SectorBody> bodies, List<string> order,
-            Dictionary<string, List<string>> nodeTags, Dictionary<string, Sprite> sprites)
+            Dictionary<string, List<string>> nodeTags)
         {
             var links = Traverse.Create(trench).Field("Systems").GetValue() as System.Collections.IList;
             if (links == null)
@@ -544,7 +351,7 @@ namespace StbcRevival.Galaxy
                         Skybox = rt.Field("_skyboxPath").GetValue() as string,
                         SystemTags = TagNames(rt.Field("SystemTags").GetValue()),
                     };
-                    system.Nodes = Nodes(root, name, bodies, order, nodeTags, c.Sprites, sprites);
+                    system.Nodes = Nodes(root, name, bodies, order, nodeTags, c.Sprites);
                     system.Families = CatalogueFamilies.From(system.Nodes, prefab => PrefabTags(prefab, bodies, prefabTags), c.SpawnTags);
                     c.TrenchSystems.Add(system);
                 }
@@ -554,7 +361,7 @@ namespace StbcRevival.Galaxy
 
         // The system's node tree, parents before children: the nodes of its SystemTransforms, and their children.
         private static List<GalaxyNode> Nodes(Map.SystemRoot root, string systemName, Dictionary<string, Sector.SectorBody> bodies,
-            List<string> order, Dictionary<string, List<string>> nodeTags, List<string> sprites, Dictionary<string, Sprite> spriteObjects)
+            List<string> order, Dictionary<string, List<string>> nodeTags, List<string> sprites)
         {
             var all = new List<Map.SystemNode>();
             var transforms = Traverse.Create(root).Field("SystemTransforms").GetValue() as System.Collections.IList;
@@ -621,8 +428,8 @@ namespace StbcRevival.Galaxy
                     if (string.IsNullOrEmpty(name)) name = prefabName;
                     float landing = (float)t.Field("ImpulseLandingRadius").GetValue();
                     string mapName = t.Field("SystemMapName").GetValue() as string;
-                    string background = SpriteName(t.Field("FamilyMapBackground").GetValue() as Sprite, sprites, spriteObjects);
-                    string icon = SpriteName(t.Field("SystemMapIconSprite").GetValue() as Sprite, sprites, spriteObjects);
+                    string background = SpriteName(t.Field("FamilyMapBackground").GetValue() as Sprite, sprites);
+                    string icon = SpriteName(t.Field("SystemMapIconSprite").GetValue() as Sprite, sprites);
                     result.Add(new GalaxyNode
                     {
                         Id = ids[n],
@@ -649,12 +456,11 @@ namespace StbcRevival.Galaxy
             }
         }
 
-        // The sprite's name, added to the catalogue's sprite list (and the sprite kept for its picture); null for none.
-        private static string SpriteName(Sprite sprite, List<string> sprites, Dictionary<string, Sprite> spriteObjects)
+        // The sprite's name, added to the catalogue's sprite list; null for none.
+        private static string SpriteName(Sprite sprite, List<string> sprites)
         {
             if (sprite == null || string.IsNullOrEmpty(sprite.name)) return null;
             if (!sprites.Contains(sprite.name)) sprites.Add(sprite.name);
-            if (!spriteObjects.ContainsKey(sprite.name)) spriteObjects[sprite.name] = sprite;
             return sprite.name;
         }
 
@@ -756,52 +562,6 @@ namespace StbcRevival.Galaxy
             return sb.ToString().Trim('-');
         }
 
-        // The warp map's universe bounds (as UniverseToMapPosition uses them) and its background as a PNG.
-        private static void WarpMap(Catalogue c, WarpPanel panel)
-        {
-            try
-            {
-                var t = Traverse.Create(panel);
-                c.UniverseWidth = (float)t.Field("_universeWidth").GetValue();
-                c.UniverseHeight = (float)t.Field("_universeHeight").GetValue();
-                c.UniverseMinX = (float)t.Field("NOHNHPFPNOD").GetValue();
-                c.UniverseMinZ = (float)t.Field("CJBBAHGEKBL").GetValue();
-                Plugin.Log.LogInfo($"Galaxy: universe from x {c.UniverseMinX}, z {c.UniverseMinZ}, {c.UniverseWidth} x {c.UniverseHeight}");
-            }
-            catch (Exception e) { Plugin.Log.LogWarning("Galaxy: universe bounds: " + e.Message); }
-            try
-            {
-                // The panel's own subtree only, as the warp map's pages use it (found WarpPanel/bg_image in game);
-                // the whole canvas held a small frame that won.
-                var art = FindMapArt(panel, true, panelOnly: true);
-                if (art == null)
-                {
-                    Plugin.Log.LogWarning("Galaxy: no image with a sprite or texture covers the warp map; no trench-map.png");
-                    return;
-                }
-                byte[] png;
-                string what;
-                if (art is UnityEngine.UI.Image image)
-                {
-                    png = TexturePng(image.sprite.texture, image.sprite.textureRect);
-                    what = "sprite " + image.sprite.name;
-                }
-                else
-                {
-                    var raw = (UnityEngine.UI.RawImage)art;
-                    var tex = raw.texture;
-                    var uv = raw.uvRect;
-                    // uvRect is in 0..1 of the texture; anything outside (tiling) is clamped by TexturePng.
-                    png = TexturePng(tex, new Rect(uv.x * tex.width, uv.y * tex.height, uv.width * tex.width, uv.height * tex.height));
-                    what = $"texture {tex.name} ({tex.GetType().Name}), uv {uv}";
-                }
-                File.WriteAllBytes(Path.Combine(Folder, "trench-map.png"), png);
-                c.Background = "trench-map.png";
-                Plugin.Log.LogInfo($"Galaxy: warp map background written from {PathOf(art.transform)}: {what}, {png.Length} bytes");
-            }
-            catch (Exception e) { Plugin.Log.LogWarning("Galaxy: no trench-map.png: " + e.Message); }
-        }
-
         // The warp map's art: of every Image (with a sprite) and RawImage (with a texture) in the warp panel and its
         // canvas, inactive ones too, the one whose rectangle best matches _mapRect. Matching is the overlap's share
         // of both rectangles together (intersection over union), so a full-screen frame that also covers the map
@@ -893,60 +653,6 @@ namespace StbcRevival.Galaxy
             var parts = new List<string>();
             for (; t != null && parts.Count < 12; t = t.parent) parts.Insert(0, t.name);
             return string.Join("/", parts.ToArray());
-        }
-
-        // The texture's pixels in the rectangle (bottom row first), through an sRGB RenderTexture as TexturePng does.
-        private static Color32[] TexturePixels(Texture texture, Rect rect, out int w, out int h)
-        {
-            var rt = RenderTexture.GetTemporary(texture.width, texture.height, 0, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB);
-            var previous = RenderTexture.active;
-            Texture2D copy = null;
-            try
-            {
-                Graphics.Blit(texture, rt);
-                RenderTexture.active = rt;
-                int x = Mathf.Clamp(Mathf.RoundToInt(rect.x), 0, texture.width - 1);
-                int y = Mathf.Clamp(Mathf.RoundToInt(rect.y), 0, texture.height - 1);
-                w = Mathf.Clamp(Mathf.RoundToInt(rect.width), 1, texture.width - x);
-                h = Mathf.Clamp(Mathf.RoundToInt(rect.height), 1, texture.height - y);
-                copy = new Texture2D(w, h, TextureFormat.ARGB32, false);
-                copy.ReadPixels(new Rect(x, y, w, h), 0, 0, false);
-                return copy.GetPixels32();
-            }
-            finally
-            {
-                RenderTexture.active = previous;
-                RenderTexture.ReleaseTemporary(rt);
-                if (copy != null) UnityEngine.Object.Destroy(copy);
-            }
-        }
-
-        // The texture may not be readable: copy it through an sRGB RenderTexture (so colours come out as stored),
-        // then crop to the given rectangle in pixels.
-        private static byte[] TexturePng(Texture texture, Rect rect)
-        {
-            var rt = RenderTexture.GetTemporary(texture.width, texture.height, 0, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB);
-            var previous = RenderTexture.active;
-            Texture2D copy = null;
-            try
-            {
-                Graphics.Blit(texture, rt);
-                RenderTexture.active = rt;
-                int x = Mathf.Clamp(Mathf.RoundToInt(rect.x), 0, texture.width - 1);
-                int y = Mathf.Clamp(Mathf.RoundToInt(rect.y), 0, texture.height - 1);
-                int w = Mathf.Clamp(Mathf.RoundToInt(rect.width), 1, texture.width - x);
-                int h = Mathf.Clamp(Mathf.RoundToInt(rect.height), 1, texture.height - y);
-                copy = new Texture2D(w, h, TextureFormat.ARGB32, false);
-                copy.ReadPixels(new Rect(x, y, w, h), 0, 0);
-                copy.Apply();
-                return copy.EncodeToPNG();
-            }
-            finally
-            {
-                RenderTexture.active = previous;
-                RenderTexture.ReleaseTemporary(rt);
-                if (copy != null) UnityEngine.Object.Destroy(copy);
-            }
         }
     }
 }

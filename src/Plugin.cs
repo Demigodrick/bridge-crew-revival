@@ -74,7 +74,7 @@ namespace StbcRevival
         internal static ConfigEntry<bool> NamePlates;
         internal static ConfigEntry<int> KlingonHeadChoice;
         internal static ConfigEntry<string> MapOverride;
-        internal static ConfigEntry<UnityEngine.KeyCode> CatalogueKey;
+        internal static ConfigEntry<UnityEngine.KeyCode> PictureKey;
         internal static ConfigEntry<string> GalaxyRegionName;
         internal static ConfigEntry<int> FleetBattleSize;
         internal static ConfigEntry<string> TestPatrolAssignment;
@@ -255,11 +255,11 @@ namespace StbcRevival
                 "Testing only: the sector map Free Roam and Ongoing Voyages load, as a path in the game's Resources, e.g. \"Mission Data/Maps/Sector - E3\" "
                 + "or \"Mission Data/Maps/Sector - SpaceStationRescue\". Applies to your whole crew when you host. Off the Trench there are no "
                 + "mission encounters: you start in one of the map's systems and can warp to its others. Empty: the game's own map.");
-            CatalogueKey = Config.Bind("Galaxy", "CatalogueKey", UnityEngine.KeyCode.None,
-                "For the galaxy designer: the mod writes what the game has (the Trench's systems, prefabs, tags, pictures of "
-                + "the models and the map sprites) to BepInEx/galaxies/ by itself the first time you're on the shuttle. This key "
-                + "writes it again: on the shuttle or in the briefing room with new pictures, on the bridge with the warp map's "
-                + "size and background (trench-map.png). None: no key.");
+            PictureKey = Config.Bind("Galaxy", "PictureKey", UnityEngine.KeyCode.None,
+                "For the galaxy designer: the mod takes pictures of the game's planets, stars, stations and other bodies "
+                + "(BepInEx/galaxies/thumbs/ and thumbs.json) by itself the first time you're on the shuttle. This key takes "
+                + "them again, on the shuttle or in the briefing room. None: no key.");
+            StbcRevival.Galaxy.GalaxyCatalogue.MigrateOldKey(Config, PictureKey);
             GalaxyRegionName = Config.Bind("Galaxy", "Region", "",
                 "A galaxy region made with the galaxy designer: the name of its file in BepInEx/galaxies (\"test-reach\" for "
                 + "test-reach.json). Its systems are added after the Trench's for Revival Patrol and Free Roam, when everyone in the "

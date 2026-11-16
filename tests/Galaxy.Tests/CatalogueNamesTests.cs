@@ -82,26 +82,6 @@ public class CatalogueNamesTests
 public class CatalogueFormatTests
 {
     [Fact]
-    public void FormatOf_ReadsTheFieldFromTheStart()
-    {
-        Assert.Equal(2, Catalogue.FormatOf(new Catalogue().ToJson()));
-        Assert.Equal(1, Catalogue.FormatOf(new Catalogue { Format = 1 }.ToJson()));
-        Assert.Null(Catalogue.FormatOf(@"{ ""trenchSystems"": [] }"));
-        Assert.Null(Catalogue.FormatOf(""));
-        Assert.Null(Catalogue.FormatOf(@"{ ""catalogueFormat"": ""x"" }"));
-    }
-
-    [Fact]
-    public void NeedsWrite_WhenMissingOrOlder()
-    {
-        Assert.True(Catalogue.NeedsWrite(null));
-        Assert.True(Catalogue.NeedsWrite(@"{ ""trenchSystems"": [] }"));
-        Assert.True(Catalogue.NeedsWrite(new Catalogue { Format = 1 }.ToJson()));
-        Assert.False(Catalogue.NeedsWrite(new Catalogue().ToJson()));
-        Assert.False(Catalogue.NeedsWrite(new Catalogue { Format = Catalogue.CurrentFormat + 1 }.ToJson()));
-    }
-
-    [Fact]
     public void Format_RoundTrips_AndMissingIsOne()
     {
         Assert.Equal(1, Catalogue.Parse(new Catalogue { Format = 1 }.ToJson()).Format);
@@ -110,35 +90,40 @@ public class CatalogueFormatTests
     }
 }
 
-public class CatalogueMapArtTests
+public class ThumbIndexTests
 {
     [Fact]
-    public void BackgroundOf_ReadsTheFileNameFromTheStart()
+    public void RoundTrips()
     {
-        Assert.Equal("trench-map.png", Catalogue.BackgroundOf(new Catalogue { Background = "trench-map.png" }.ToJson()));
-        Assert.Null(Catalogue.BackgroundOf(new Catalogue().ToJson()));
-        Assert.Null(Catalogue.BackgroundOf(@"{ ""trenchSystems"": [] }"));
-        Assert.Null(Catalogue.BackgroundOf(null));
+        var index = new ThumbIndex();
+        index.Pictures["Ship - SpaceStation 01"] = new ThumbIndex.Picture { File = "Ship_-_SpaceStation_01.png", Kind = "station", Label = "Space Station" };
+        index.Pictures["Set2ClassY014"] = new ThumbIndex.Picture { File = "Set2ClassY014.png", Kind = "planet" };
+        var json = index.ToJson();
+        Assert.StartsWith("{\n  \"thumbsFormat\": 1", json.Replace("\r", ""));
+        var back = ThumbIndex.Parse(json);
+        Assert.Equal(1, back.Format);
+        Assert.Equal("Space Station", back.Pictures["Ship - SpaceStation 01"].Label);
+        Assert.Equal("station", back.Pictures["Ship - SpaceStation 01"].Kind);
+        Assert.Equal("Set2 Class Y014", back.Pictures["Set2ClassY014"].Label); // no label: the tidy name
+        Assert.Equal("Set2ClassY014.png", back.Pictures["Set2ClassY014"].File);
+        Assert.Equal(json, back.ToJson());
     }
 
     [Fact]
-    public void NeedsMapArt_OnlyWhenTheCatalogueLacksIt()
+    public void IsCurrent_OnlyForAFinishedRunInThisFormat()
     {
-        Func<string, bool> exists = f => f == "trench-map.png";
-        Assert.False(Catalogue.NeedsMapArt(null, exists));
-        Assert.True(Catalogue.NeedsMapArt(@"{ ""background"": ""trench-map.png"" }", exists)); // older format: the old search
-        Assert.True(Catalogue.NeedsMapArt(new Catalogue().ToJson(), exists));
-        Assert.True(Catalogue.NeedsMapArt(new Catalogue { Background = "gone.png" }.ToJson(), exists));
-        Assert.False(Catalogue.NeedsMapArt(new Catalogue { Background = "trench-map.png" }.ToJson(), exists));
+        Assert.False(ThumbIndex.IsCurrent(null));
+        Assert.False(ThumbIndex.IsCurrent("not json"));
+        Assert.False(ThumbIndex.IsCurrent("{ }"));
+        Assert.False(ThumbIndex.IsCurrent(new ThumbIndex { Format = 0 }.ToJson()));
+        Assert.True(ThumbIndex.IsCurrent(new ThumbIndex().ToJson()));
+        Assert.True(ThumbIndex.IsCurrent(new ThumbIndex { Format = ThumbIndex.CurrentFormat + 1 }.ToJson()));
     }
 
     [Fact]
-    public void BigCatalogue_FormatAndBackgroundStillAtTheStart()
+    public void Parse_BadPicture_SaysWhere()
     {
-        var c = new Catalogue { Background = "trench-map.png" };
-        for (int i = 0; i < 500; i++) c.Prefabs.Add(new CataloguePrefab { Name = "P" + i });
-        string start = c.ToJson().Substring(0, 512);
-        Assert.Equal(2, Catalogue.FormatOf(start));
-        Assert.Equal("trench-map.png", Catalogue.BackgroundOf(start));
+        var e = Assert.Throws<FormatException>(() => ThumbIndex.Parse(@"{ ""thumbsFormat"": 1, ""pictures"": { ""Star"": { ""kind"": ""star"" } } }"));
+        Assert.Contains("Star", e.Message);
     }
 }
