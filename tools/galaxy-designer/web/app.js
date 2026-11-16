@@ -212,6 +212,17 @@ const planLevel = () => zoomRegion ? 'region' : zoomPoi ? 'poi' : 'page';   // t
 const planRoot = () => zoomRegion || zoomPoi || selFam;      // the node the plan is drawn around
 const pageLevel = () => planLevel() === 'page';
 const NEAR_KM = 5e6;   // inside a POI or region, nodes farther than this (AU- and skybox-scale bodies) sit at the edge as markers instead of squashing the view
+// Far-out: past NEAR_KM, or (in a POI) a body in light-seconds, AU or skybox units. Not part of the fit; an edge marker when off-screen.
+function farOut(s, n) {
+  if (n.id === planRoot() || planLevel() === 'page') return false;
+  const p = worldPos(s, n);
+  if (Math.max(Math.abs(p[0]), Math.abs(p[2])) > NEAR_KM) return true;
+  if (planLevel() !== 'poi') return false;
+  for (let c = n, i = 0; c && c.id !== planRoot() && i++ < 50; c = c.parent ? nodeById(s, c.parent) : null)
+    if (!isRegion(s, c) && c.unit !== 'Kilometers') return true;
+  return false;
+}
+let lastSel = null;   // the selection the plan last followed (a new selection inside a region zooms into it; a press or drag doesn't)
 const isSpawn = n => nodeTags(n).includes('SpawnPoint');
 // A region: the "Region" prefab, or a prefab-less node directly under a POI (the Trench has those) that isn't a marker.
 const isRegion = (s, n) => n.prefab === REGION || (n.prefab === '' && !isWarp(n) && !isSpawn(n) && levelOf(s, n) === 2);
@@ -239,7 +250,7 @@ function fitCam() {
   for (const n of planNodes(s)) {
     if (n.id === planRoot()) continue;
     const p = worldPos(s, n), dist = Math.max(Math.abs(p[0]), Math.abs(p[2]));
-    if (lv !== 'page' && dist > NEAR_KM) continue;   // far-out bodies are edge markers, not part of the fit
+    if (farOut(s, n)) continue;   // far-out bodies are edge markers, not part of the fit
     m = Math.max(m, dist);
   }
   cam.x = 0; cam.z = 0; cam.k = (lv === 'page' ? 0.3 : 0.4) * Math.min(canvas.width, canvas.height) / Math.max(m, lv === 'page' ? 299792 : 10);   // a page of POIs at its centre still gets a sensible scale (one light-second)
@@ -355,7 +366,7 @@ function layout(s) {
   const place = (n, depth) => {
     if (pos[n.id]) return pos[n.id];
     const w = worldPos(s, n), [x, y] = toS(w[0], w[2]);
-    if (!page && n.id !== planRoot() && n.id !== dragging && (x < mg || x > W - mg || y < mg || y > H - mg)) {
+    if (!page && n.id !== planRoot() && n.id !== dragging && (x < mg || x > W - mg || y < mg || y > H - mg) && farOut(s, n)) {
       const dx = x - W / 2, dy = y - H / 2, t = Math.min((W / 2 - mg) / Math.max(Math.abs(dx), 1e-9), (H / 2 - mg) / Math.max(Math.abs(dy), 1e-9));
       const ang = Math.atan2(-dy, dx), arrow = ARROWS[Math.round(((ang + 2 * Math.PI) % (2 * Math.PI)) / (Math.PI / 4)) % 8];
       return pos[n.id] = { x: W / 2 + dx * t, y: H / 2 + dy * t, off: true, edge: true, arrow };
@@ -399,7 +410,7 @@ canvas.addEventListener('pointerdown', e => {
   } else {
     const n = hitNode(px, py);
     if (n) {
-      selNode = n.id; selFam = famOf(sys(), n).id;
+      selNode = n.id; lastSel = n.id; selFam = famOf(sys(), n).id;   // a press selects without changing the plan level
       const s0 = sys(), lay = layout(s0)[n.id];
       // A click on a POI (on the page) or a region (in a POI) goes into it; a drag moves it. Stacked markers drag too.
       const zoom = pageLevel() && n.parent === selFam ? { k: 'poi', id: n.id } : planLevel() === 'poi' && isRegion(s0, n) ? { k: 'region', id: n.id } : null;
@@ -527,7 +538,7 @@ function deleteSystem() {
 function openTrench(name) { selTrench = name; selSys = -1; enterSystem(); }
 function openSystem(i) { selTrench = null; selSys = i; enterSystem(); }
 function enterSystem() {
-  selNode = null; selFam = null; fitFam = undefined; zoomPoi = null; zoomRegion = null; view = 'system';
+  selNode = null; lastSel = null; selFam = null; fitFam = undefined; zoomPoi = null; zoomRegion = null; view = 'system';
   $('galaxyPanel').hidden = true; $('systemPanel').hidden = false;
   buildPrefabPicker(); buildCopyPicker(); refreshSystemPanel(); draw();
 }
@@ -728,10 +739,11 @@ function refreshSystemPanel() {
   const tops = s.nodes.filter(n => !n.parent);
   if (!tops.some(n => n.id === selFam)) selFam = tops.length ? tops[0].id : null;
   if (selFam !== prevFam) zoomPoi = null;
-  if (sel && levelOf(s, sel) >= 2) {   // a node inside a POI: the plan goes into the POI, and into its region if it is in one
+  if (sel && levelOf(s, sel) >= 2 && selNode !== lastSel) {   // a node inside a POI: the plan goes into the POI, and into its region if it is in one
     let a = sel; while (a.parent && levelOf(s, a) > 1) a = nodeById(s, a.parent); zoomPoi = a.id;
     const r = inRegion(s, sel); zoomRegion = r ? r.id : null;
   }
+  lastSel = selNode;
   const zp = zoomPoi && nodeById(s, zoomPoi);
   if (!zp || !under(s, zp, selFam) || isCopy(nodeById(s, selFam) || {})) { zoomPoi = null; zoomRegion = null; }
   const zr = zoomRegion && nodeById(s, zoomRegion);
@@ -754,7 +766,7 @@ function refreshSystemPanel() {
     if (!cf) ul.append(el('li', { class: 'muted' }, cat ? 'The catalogue has no such family.' : '(no catalogue: names unknown)'));
   } else if (fam) {
     for (const { n, depth } of depthOrder(s, fam))
-      ul.append(el('li', { class: n.id === selNode ? 'sel' : '', style: `padding-left:${14 + depth * 14}px`, onclick: () => { selNode = n.id; if (depth <= 1) { zoomPoi = null; zoomRegion = null; } refreshSystemPanel(); draw(); }, ondblclick: () => { if (depth === 1) { zoomPoi = n.id; zoomRegion = null; refreshSystemPanel(); draw(); } } },
+      ul.append(el('li', { class: n.id === selNode ? 'sel' : '', style: `padding-left:${14 + depth * 14}px`, onclick: () => { selNode = n.id; lastSel = null; if (depth <= 1) { zoomPoi = null; zoomRegion = null; } refreshSystemPanel(); draw(); }, ondblclick: () => { if (depth === 1) { zoomPoi = n.id; zoomRegion = null; refreshSystemPanel(); draw(); } } },
         (isJump(n) ? '◎ ' : '') + (n.name || n.id), el('small', null, depth === 0 ? 'family' : depth === 1 ? 'POI' : isWarp(n) ? 'jump point' : isSpawn(n) ? 'spawn point' : isRegion(s, n) ? 'region' : n.prefab)));
   }
   const n = sel;
