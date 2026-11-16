@@ -1,6 +1,6 @@
 namespace Galaxy.Tests;
 
-/// <summary>The hand-made test region shipped for the in-game check (assets/galaxies/test-reach.json).</summary>
+/// <summary>The hand-made test region for the in-game check (assets/galaxies/test-reach.json; a development file, not shipped).</summary>
 public class TestReachTests
 {
     static string Repo()

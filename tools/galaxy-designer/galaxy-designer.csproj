@@ -7,7 +7,8 @@
     <AssemblyName>galaxy-designer</AssemblyName>
     <RootNamespace>GalaxyDesigner</RootNamespace>
     <Product>Galaxy Designer</Product>
-    <!-- Released as one program with .NET inside (tools/package.sh): nothing to install first. -->
+    <!-- A development tool for making galaxy regions: not shipped with the mod (not in tools/package.sh or the
+         installers); run from the source with dotnet run. -->
     <InvariantGlobalization>true</InvariantGlobalization>
     <!-- The mod's version, and (below) the commit it's built from: shown on the page and at the start. -->
     <Version>$([System.Text.RegularExpressions.Regex]::Match($([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)../../src/StbcRevival.csproj')), '&lt;Version&gt;(.*?)&lt;/Version&gt;').Groups[1].Value)</Version>

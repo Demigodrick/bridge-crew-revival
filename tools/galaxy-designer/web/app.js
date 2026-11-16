@@ -21,6 +21,7 @@ const KIND_COLOR = { star: '#ffd66b', planet: '#6cb6ff', moon: '#a8b4c0', statio
 let cat = null;            // the catalogue (raw JSON) or null
 let gal = newGalaxy();     // the galaxy file (raw JSON object)
 let fileName = '';
+let openedName = '';   // the file opened or last saved ('' for a new galaxy)
 let dirty = false;
 let view = 'galaxy';       // 'galaxy' | 'system'
 let selSys = -1;           // index into gal.systems
@@ -715,7 +716,7 @@ const FILE_OK = /^[a-z0-9-]+$/;
 function confirmLeave() { return !dirty || confirm('You have unsaved changes. Throw them away?'); }
 $('btnNew').addEventListener('click', () => {
   if (!confirmLeave()) return;
-  gal = newGalaxy(); fileName = ''; $('fileName').value = ''; selSys = -1; selNode = null; setDirty(false); closeProblems();
+  gal = newGalaxy(); fileName = ''; openedName = ''; $('fileName').value = ''; selSys = -1; selNode = null; setDirty(false); closeProblems();
   if (view === 'system') backToGalaxy(); else { refreshGalaxyPanel(); draw(); }
 });
 // The galaxy files, listed at once and always; one click opens one.
@@ -734,7 +735,7 @@ async function openFile(name) {
     const g = await (await api('/api/galaxy/' + encodeURIComponent(name))).json();
     g.systems = g.systems || []; for (const s of g.systems) { s.nodes = s.nodes || []; for (const n of s.nodes) { if (n.parent === undefined) n.parent = null; if (n.copyFamily) continue; n.position = n.position || [0, 0, 0]; n.tags = n.tags || []; n.rotation = n.rotation || [0, 0, 0]; } }
     g.page = g.page || { label: g.name || '', background: 'trench-darkened' };
-    gal = g; fileName = name; $('fileName').value = name; selSys = -1; selNode = null; setDirty(false); closeProblems(); loadOpenList();
+    gal = g; fileName = name; openedName = name; $('fileName').value = name; selSys = -1; selNode = null; setDirty(false); closeProblems(); loadOpenList();
     if (view === 'system') backToGalaxy(); else { refreshGalaxyPanel(); draw(); }
     toast('Opened ' + name);
   } catch (e) { toast(e.message, 6000); }
@@ -770,14 +771,21 @@ function gotoProblem(text) {
 
 $('btnSave').addEventListener('click', save);
 async function save() {
-  let name = ($('fileName').value || '').trim() || slug(gal.name);
+  const typed = ($('fileName').value || '').trim();
+  let name = typed || slug(gal.name);
   if (!FILE_OK.test(name)) return toast('Give the file a name: lower-case letters, digits and dashes');
   if (name === 'catalogue') return toast("'catalogue' is the game's own file: pick another name");
+  if (!typed && name !== openedName) {
+    // A name made from the galaxy's: don't overwrite another galaxy's file without asking.
+    let names = [];
+    try { names = await (await api('/api/galaxies')).json(); } catch (e) { return toast(e.message, 6000); }
+    if (names.includes(name) && !confirm(`There's already a galaxy file named ${name}. Replace it?`)) return;
+  }
   const ps = await check();
   if (ps && ps.length && !confirm(`The check found ${ps.length} problem${ps.length > 1 ? 's' : ''} (listed on the left). Save anyway?`)) return;
   try {
     await api('/api/galaxy/' + encodeURIComponent(name), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: body() });
-    fileName = name; $('fileName').value = name; setDirty(false); toast('Saved ' + name); loadOpenList();
+    fileName = name; openedName = name; $('fileName').value = name; setDirty(false); toast('Saved ' + name); loadOpenList();
   } catch (e) { toast(e.message, 6000); }
 }
 addEventListener('beforeunload', e => { if (dirty) { e.preventDefault(); e.returnValue = ''; } });

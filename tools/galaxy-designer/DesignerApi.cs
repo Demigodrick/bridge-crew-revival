@@ -102,8 +102,11 @@ public sealed class DesignerApi
                 catch (FormatException e) { return Error(400, e.Message); }
                 Directory.CreateDirectory(dir);
                 if (File.Exists(file)) File.Copy(file, file + ".bak", true);
-                // As sent, not re-serialised: the mod hashes the file's text.
-                File.WriteAllBytes(file, body ?? Array.Empty<byte>());
+                // As sent, not re-serialised: the mod hashes the file's text. Written beside it and moved into place, so
+                // a crash mid-write leaves the old file (and its .bak), never a cut-short one.
+                string tmp = file + ".tmp";
+                File.WriteAllBytes(tmp, body ?? Array.Empty<byte>());
+                File.Move(tmp, file, true);
                 return Ok(MiniJson.Write(new Dictionary<string, object> { ["saved"] = name }));
             }
         }

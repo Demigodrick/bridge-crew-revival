@@ -1,16 +1,17 @@
 // galaxy-designer: designs a galaxy region (new systems on a second page of the helm's warp map) for Star Trek: Bridge Crew.
+// A development tool, not shipped with the mod (no package, no installer): run it from the source.
 //
 // It serves its page (web/, built into the program) to your browser on this PC only (127.0.0.1). What the game has
 // to offer (the Trench's systems, the prefabs, tags, sprites and the warp map art) is read from the game's own files
 // (GameCatalogue.cs), cached so later starts are quick; the pictures of the prefabs are the ones the game takes on
-// the shuttle (BepInEx/galaxies/thumbs.json and thumbs/). Galaxy files are saved to BepInEx/galaxies/<name>.json,
+// the shuttle when [Galaxy] PictureKey is set (BepInEx/galaxies/thumbs.json and thumbs/). Galaxy files are saved to BepInEx/galaxies/<name>.json,
 // the previous one kept as .json.bak.
 //
 // Usage: dotnet run -- [--game <game folder>] [--port 8771] [--no-open] [--stay] [--web <folder>] [--cache <folder>]
 //                      [--rebuild] [--catalogue-out <file>]
 //        (it stops by itself once its page is closed; --stay keeps it running until Ctrl+C)
-//        (the game folder also from $GAME_DIR; otherwise the folder this program is in, if it's in the game's folder
-//        as the installers put it, or the game in your Steam libraries. --web serves the page from a folder,
+//        (the game folder also from $GAME_DIR; otherwise the folder this program is in, if it's in the game's folder,
+//        or the game in your Steam libraries. --web serves the page from a folder,
 //        e.g. web/ in the source, to try changes to it without a rebuild. --cache: where the game data read is kept
 //        (default ~/.cache/galaxy-designer, %LOCALAPPDATA%\GalaxyDesigner\cache on Windows); --rebuild reads the
 //        game's files again; --catalogue-out writes the catalogue read to a file and stops.)

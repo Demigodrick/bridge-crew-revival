@@ -193,6 +193,28 @@ public class DesignerApiTests : IDisposable
         Assert.Equal(second, S(api.Handle("GET", "/api/galaxy/test-reach", null).body));
     }
 
+    [Fact]
+    public void Put_SavedAsSent_ThroughATmpFile()
+    {
+        // Odd spacing and a BOM-free UTF-8 body: the file is these bytes exactly, so the mod's hash is the sent text's.
+        byte[] sent = B(GalaxyJson().Replace("\n", "\r\n  "));
+        File.WriteAllText(Path.Combine(dir, "test-reach.json.tmp"), "left by a crash");
+        Assert.Equal(200, api.Handle("PUT", "/api/galaxy/test-reach", sent).status);
+        Assert.Equal(sent, File.ReadAllBytes(Path.Combine(dir, "test-reach.json")));
+        Assert.Equal(GalaxyFile.Hash(S(sent)), GalaxyFile.Hash(File.ReadAllText(Path.Combine(dir, "test-reach.json"))));
+        Assert.False(File.Exists(Path.Combine(dir, "test-reach.json.tmp")));
+    }
+
+    [Fact]
+    public void Put_FailedWrite_LeavesTheOldFile()
+    {
+        string first = GalaxyJson();
+        Assert.Equal(200, api.Handle("PUT", "/api/galaxy/test-reach", B(first)).status);
+        Directory.CreateDirectory(Path.Combine(dir, "test-reach.json.tmp")); // the write can't happen
+        Assert.Equal(500, api.Handle("PUT", "/api/galaxy/test-reach", B(GalaxyJson("Star_Other"))).status);
+        Assert.Equal(first, File.ReadAllText(Path.Combine(dir, "test-reach.json")));
+    }
+
     [Theory]
     [InlineData("..%2Fx")]
     [InlineData("A%20B")]
