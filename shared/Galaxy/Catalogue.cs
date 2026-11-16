@@ -18,6 +18,8 @@ namespace StbcRevival.Galaxy
     public class CatalogueSystem
     {
         public string Name;
+        /// <summary>The English part of the name ("2824|Venov" gives "Venov"); a plain name as it is.</summary>
+        public string DisplayName;
         public float X, Z;
         public string Skybox;
         public List<string> SystemTags = new List<string>();
@@ -32,6 +34,76 @@ namespace StbcRevival.Galaxy
         /// <summary>star, planet, moon, station, asteroids, nebula or other.</summary>
         public string Kind = "other";
         public double Radius;
+        /// <summary>The body's in-game name in English (its targeting name), else a tidy version of Name.</summary>
+        public string Label;
+        /// <summary>File name of its picture under galaxies/thumbs/, or null for none.</summary>
+        public string Thumb;
+    }
+
+    /// <summary>Names as people read them, and safe file names, for the catalogue.</summary>
+    public static class CatalogueNames
+    {
+        /// <summary>The English part of a text key ("5796|Space Station" gives "Space Station"); plain text as it is.</summary>
+        public static string Display(string name)
+        {
+            if (string.IsNullOrEmpty(name)) return name;
+            int bar = name.IndexOf('|');
+            string text = bar >= 0 ? name.Substring(bar + 1).Trim() : name;
+            return text.Length > 0 ? text : name;
+        }
+
+        /// <summary>
+        /// A prefab name made readable: "Ship - " / "Prop - " dropped, underscores as spaces, words split where a
+        /// capital follows a small letter or a digit ("DS4219_DarkStar" gives "DS4219 Dark Star").
+        /// </summary>
+        public static string Tidy(string name)
+        {
+            if (string.IsNullOrEmpty(name)) return name;
+            string s = name.Trim();
+            foreach (var prefix in new[] { "Ship - ", "Prop - " })
+                if (s.StartsWith(prefix, StringComparison.Ordinal) && s.Length > prefix.Length) s = s.Substring(prefix.Length);
+            var sb = new System.Text.StringBuilder();
+            for (int i = 0; i < s.Length; i++)
+            {
+                char ch = s[i] == '_' ? ' ' : s[i];
+                if (ch == ' ')
+                {
+                    if (sb.Length > 0 && sb[sb.Length - 1] != ' ') sb.Append(' ');
+                    continue;
+                }
+                if (char.IsUpper(ch) && sb.Length > 0 && (char.IsLower(sb[sb.Length - 1]) || char.IsDigit(sb[sb.Length - 1]))) sb.Append(' ');
+                sb.Append(ch);
+            }
+            string tidy = sb.ToString().Trim();
+            return tidy.Length > 0 ? tidy : name;
+        }
+
+        /// <summary>A file name for a name: letters, digits, '-' and '_' kept, anything else '_', then ".png".</summary>
+        public static string PngFile(string name)
+        {
+            var sb = new System.Text.StringBuilder();
+            foreach (char ch in name ?? "")
+            {
+                bool ok = (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '-' || ch == '_';
+                char c = ok ? ch : '_';
+                if (c == '_' && sb.Length > 0 && sb[sb.Length - 1] == '_') continue;
+                sb.Append(c);
+            }
+            string stem = sb.ToString().Trim('_');
+            if (stem.Length == 0) stem = "unnamed";
+            if (stem.Length > 80) stem = stem.Substring(0, 80);
+            return stem + ".png";
+        }
+
+        /// <summary>PngFile, made unique among the names already in used (case-insensitively) and added to it.</summary>
+        public static string UniquePngFile(string name, HashSet<string> used)
+        {
+            string file = PngFile(name);
+            string stem = file.Substring(0, file.Length - 4);
+            for (int k = 2; used.Contains(file.ToLowerInvariant()); k++) file = stem + "-" + k + ".png";
+            used.Add(file.ToLowerInvariant());
+            return file;
+        }
     }
 
     /// <summary>
@@ -40,6 +112,14 @@ namespace StbcRevival.Galaxy
     /// </summary>
     public class Catalogue
     {
+        /// <summary>
+        /// The catalogue format the mod writes. 2: display names, labels, pictures, sprite files, the panel's own map
+        /// art. The mod writes 2 only once the pictures are all taken; with them missing (on the bridge, or a run cut
+        /// short) it writes 1, so the shuttle fills them in later. A file without the field is 1.
+        /// </summary>
+        public const int CurrentFormat = 2;
+
+        public int Format = CurrentFormat;
         public List<CatalogueSystem> TrenchSystems = new List<CatalogueSystem>();
         public List<CataloguePrefab> Prefabs = new List<CataloguePrefab>();
         public List<string> Tags = new List<string>();
@@ -52,6 +132,8 @@ namespace StbcRevival.Galaxy
         public string Background;
         /// <summary>Sprite names usable as a family's background or map icon.</summary>
         public List<string> Sprites = new List<string>();
+        /// <summary>Sprite name to its PNG file under galaxies/sprites/ (family backdrops, map icons).</summary>
+        public Dictionary<string, string> SpriteFiles = new Dictionary<string, string>();
 
         public static Catalogue Parse(string json)
         {
@@ -59,12 +141,14 @@ namespace StbcRevival.Galaxy
             {
                 var root = Json.Obj(MiniJson.Parse(json), "the catalogue");
                 var c = new Catalogue();
+                c.Format = (int)Json.Num(root, "catalogueFormat", "the catalogue", false, 1);
                 foreach (var so in Json.List(root, "trenchSystems", "the catalogue", false))
                 {
                     var d = Json.Obj(so, "a Trench system");
                     string name = Json.Str(d, "name", "a Trench system", true, null);
                     string where = "Trench system '" + name + "'";
                     var s = new CatalogueSystem { Name = name };
+                    s.DisplayName = Json.Str(d, "displayName", where, false, null) ?? CatalogueNames.Display(name);
                     float[] pos = Json.Floats(d, "position", where, 2, true);
                     s.X = pos[0]; s.Z = pos[1];
                     s.Skybox = Json.Str(d, "skybox", where, false, null);
@@ -89,11 +173,14 @@ namespace StbcRevival.Galaxy
                 {
                     var d = Json.Obj(po, "a prefab");
                     string name = Json.Str(d, "name", "a prefab", true, null);
+                    string pwhere = "prefab '" + name + "'";
                     c.Prefabs.Add(new CataloguePrefab
                     {
                         Name = name,
-                        Kind = Json.Str(d, "kind", "prefab '" + name + "'", false, "other"),
-                        Radius = Json.Num(d, "radius", "prefab '" + name + "'", false, 0),
+                        Kind = Json.Str(d, "kind", pwhere, false, "other"),
+                        Radius = Json.Num(d, "radius", pwhere, false, 0),
+                        Label = Json.Str(d, "label", pwhere, false, null) ?? CatalogueNames.Tidy(name),
+                        Thumb = Json.Str(d, "thumb", pwhere, false, null),
                     });
                 }
                 c.Tags = Json.Strings(root, "tags", "the catalogue");
@@ -109,6 +196,13 @@ namespace StbcRevival.Galaxy
                 }
                 c.Sprites = Json.Strings(root, "sprites", "the catalogue");
                 c.Background = Json.Str(root, "background", "the catalogue", false, null);
+                if (root.ContainsKey("spriteFiles") && root["spriteFiles"] != null)
+                    foreach (var kv in Json.Obj(root["spriteFiles"], "spriteFiles"))
+                    {
+                        var file = kv.Value as string;
+                        if (file == null) throw new FormatException("spriteFiles: '" + kv.Key + "' should be text");
+                        c.SpriteFiles[kv.Key] = file;
+                    }
                 return c;
             }
             catch (FormatException) { throw; }
@@ -117,6 +211,26 @@ namespace StbcRevival.Galaxy
                 throw new FormatException("Catalogue: " + e.Message, e);
             }
         }
+
+        /// <summary>
+        /// A catalogue file's format from its first few hundred characters, without parsing the (megabytes of) rest:
+        /// null if the text has no "catalogueFormat" there (an older catalogue, format 1, or not a catalogue).
+        /// </summary>
+        public static int? FormatOf(string start)
+        {
+            if (string.IsNullOrEmpty(start)) return null;
+            string head = start.Length > 400 ? start.Substring(0, 400) : start;
+            int at = head.IndexOf("\"catalogueFormat\"", StringComparison.Ordinal);
+            if (at < 0) return null;
+            int i = at + "\"catalogueFormat\"".Length;
+            while (i < head.Length && (head[i] == ' ' || head[i] == ':' || head[i] == '\t' || head[i] == '\r' || head[i] == '\n')) i++;
+            int value = 0, digits = 0;
+            while (i < head.Length && head[i] >= '0' && head[i] <= '9' && digits < 6) { value = value * 10 + (head[i] - '0'); i++; digits++; }
+            return digits > 0 ? value : (int?)null;
+        }
+
+        /// <summary>Whether the mod should write the catalogue: no file (null), or one in an older format than CurrentFormat.</summary>
+        public static bool NeedsWrite(string fileStart) => fileStart == null || (FormatOf(fileStart) ?? 1) < CurrentFormat;
 
         private static GalaxyNode ReadNode(object o, string systemName)
         {
@@ -134,11 +248,13 @@ namespace StbcRevival.Galaxy
         public string ToJson()
         {
             var root = new Dictionary<string, object>();
+            root["catalogueFormat"] = Format; // first, so FormatOf finds it without reading the whole file
             var systems = new List<object>();
             foreach (var s in TrenchSystems)
             {
                 var d = new Dictionary<string, object>();
                 d["name"] = s.Name;
+                d["displayName"] = s.DisplayName ?? CatalogueNames.Display(s.Name);
                 d["position"] = new List<object> { s.X, s.Z };
                 d["skybox"] = s.Skybox;
                 d["systemTags"] = Json.StringList(s.SystemTags);
@@ -154,7 +270,11 @@ namespace StbcRevival.Galaxy
             root["trenchSystems"] = systems;
             var prefabs = new List<object>();
             foreach (var p in Prefabs)
-                prefabs.Add(new Dictionary<string, object> { { "name", p.Name }, { "kind", p.Kind }, { "radius", p.Radius } });
+                prefabs.Add(new Dictionary<string, object>
+                {
+                    { "name", p.Name }, { "kind", p.Kind }, { "radius", p.Radius },
+                    { "label", p.Label ?? CatalogueNames.Tidy(p.Name) }, { "thumb", p.Thumb },
+                });
             root["prefabs"] = prefabs;
             root["tags"] = Json.StringList(Tags);
             root["skyboxes"] = Json.StringList(Skyboxes);
@@ -165,6 +285,9 @@ namespace StbcRevival.Galaxy
             };
             root["sprites"] = Json.StringList(Sprites);
             root["background"] = Background;
+            var spriteFiles = new Dictionary<string, object>();
+            foreach (var kv in SpriteFiles) spriteFiles[kv.Key] = kv.Value;
+            root["spriteFiles"] = spriteFiles;
             return MiniJson.Write(root);
         }
     }

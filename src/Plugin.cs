@@ -256,9 +256,10 @@ namespace StbcRevival
                 + "or \"Mission Data/Maps/Sector - SpaceStationRescue\". Applies to your whole crew when you host. Off the Trench there are no "
                 + "mission encounters: you start in one of the map's systems and can warp to its others. Empty: the game's own map.");
             CatalogueKey = Config.Bind("Galaxy", "CatalogueKey", UnityEngine.KeyCode.None,
-                "For the galaxy designer: this key writes what the game has (the Trench's systems, prefabs and tags) to "
-                + "BepInEx/galaxies/catalogue.json. Press it on the bridge to include the warp map's size and background "
-                + "(trench-map.png). None: off.");
+                "For the galaxy designer: the mod writes what the game has (the Trench's systems, prefabs, tags, pictures of "
+                + "the models and the map sprites) to BepInEx/galaxies/ by itself the first time you're on the shuttle. This key "
+                + "writes it again: on the shuttle or in the briefing room with new pictures, on the bridge with the warp map's "
+                + "size and background (trench-map.png). None: no key.");
             GalaxyRegionName = Config.Bind("Galaxy", "Region", "",
                 "A galaxy region made with the galaxy designer: the name of its file in BepInEx/galaxies (\"test-reach\" for "
                 + "test-reach.json). Its systems are added after the Trench's for Revival Patrol and Free Roam, when everyone in the "

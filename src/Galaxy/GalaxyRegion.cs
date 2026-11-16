@@ -312,7 +312,7 @@ namespace StbcRevival.Galaxy
             BuiltFolder = Path.GetDirectoryName(path);
 
             // The same check the designer makes, against what this game has.
-            var catalogue = GalaxyCatalogue.Build(trench, null);
+            var catalogue = GalaxyCatalogue.Build(trench, null, out _, out _);
             var problems = GalaxyCheck.Problems(file, catalogue);
             if (problems.Count > 0)
             {

@@ -11,12 +11,13 @@ using Tag = BLECEHNPNBH;
 namespace StbcRevival.Galaxy
 {
     /// <summary>
-    /// [Galaxy] CatalogueKey (off by default): write what the game has to offer a galaxy file to
-    /// BepInEx/galaxies/catalogue.json, for the galaxy designer and the check: the Trench's systems and node trees,
-    /// the SectorBody prefabs, the tag names, the player spawn tags and, with a warp panel in the scene (on the
-    /// bridge), the warp map's universe bounds and background (trench-map.png), each system's families with their
-    /// Points of Interest, and the sprite names nodes use. Never breaks the game: anything that fails is logged and
-    /// left out.
+    /// Writes what the game has to offer a galaxy file to BepInEx/galaxies/catalogue.json, for the galaxy designer
+    /// and the check: the Trench's systems (with readable names) and node trees, the SectorBody prefabs (with readable
+    /// labels and pictures in thumbs/, GalaxyThumbnails), the tag names, the player spawn tags, the sprites nodes use
+    /// (as PNGs in sprites/) and, with a warp panel in the scene (on the bridge), the warp map's universe bounds and
+    /// background (trench-map.png; without a panel, kept from the previous catalogue). Written by itself a few seconds
+    /// into the first shuttle visit when there's no catalogue or an older format, and again on [Galaxy] CatalogueKey.
+    /// Never breaks the game: anything that fails is logged and left out.
     /// </summary>
     internal static class GalaxyCatalogue
     {
@@ -30,11 +31,78 @@ namespace StbcRevival.Galaxy
 
         internal static string Folder => Path.Combine(Paths.BepInExRootPath, "galaxies");
 
+        internal static string CataloguePath => Path.Combine(Folder, "catalogue.json");
+
+        // The automatic write: checked once per shuttle visit, a few seconds in; done for the session once current.
+        private const float AutoDelay = 5f;
+        private static bool autoDone, autoChecked;
+        private static float shuttleSince = -1f, nextAutoLook;
+
         internal static void Update()
         {
+            GalaxyThumbnails.Update();
+            Auto();
             var key = Plugin.CatalogueKey.Value;
             if (key == KeyCode.None || !Input.GetKeyDown(key) || Time.realtimeSinceStartup - lastWritten < 3f) return;
+            if (GalaxyThumbnails.Running)
+            {
+                Plugin.Log.LogInfo("Galaxy: still taking the catalogue's pictures; key ignored");
+                return;
+            }
+            Write(false);
+        }
+
+        // Writes the catalogue by itself the first time the player is on the shuttle, if there's none yet or it's
+        // in an older format than Catalogue.CurrentFormat; never on the bridge or in the briefing room.
+        private static void Auto()
+        {
+            if (autoDone || GalaxyThumbnails.Running || Time.realtimeSinceStartup < nextAutoLook) return;
+            nextAutoLook = Time.realtimeSinceStartup + 0.5f;
+            bool onShuttle;
+            try { onShuttle = GameState.Phase() == "GamePhase_MainMenu" && !GameState.Loading(); }
+            catch (Exception) { return; }
+            if (!onShuttle)
+            {
+                shuttleSince = -1f;
+                autoChecked = false;
+                return;
+            }
+            if (shuttleSince < 0) shuttleSince = Time.realtimeSinceStartup;
+            if (autoChecked || Time.realtimeSinceStartup - shuttleSince < AutoDelay) return;
+            autoChecked = true;
+            try
+            {
+                string start = FileStart(CataloguePath);
+                if (!Catalogue.NeedsWrite(start))
+                {
+                    autoDone = true;
+                    Plugin.Log.LogInfo($"Galaxy: catalogue is current (format {Catalogue.CurrentFormat}); not written again");
+                    return;
+                }
+                string why = start == null ? "there is none yet" : $"it's format {Catalogue.FormatOf(start) ?? 1}, the mod writes {Catalogue.CurrentFormat}";
+                Plugin.Log.LogInfo($"Galaxy: writing the catalogue for the galaxy designer by itself ({why})");
+                Write(true);
+            }
+            catch (Exception e) { Plugin.Log.LogError("Galaxy: automatic catalogue: " + e); }
+        }
+
+        // The file's first 512 bytes as text, or null without the file.
+        private static string FileStart(string path)
+        {
+            if (!File.Exists(path)) return null;
+            using (var f = File.OpenRead(path))
+            {
+                var buffer = new byte[512];
+                int n = f.Read(buffer, 0, buffer.Length);
+                return Encoding.UTF8.GetString(buffer, 0, n);
+            }
+        }
+
+        // auto: the automatic write, whose pictures stop if the player leaves the shuttle.
+        private static void Write(bool auto)
+        {
             lastWritten = Time.realtimeSinceStartup;
+            bool picturing = false;
             try
             {
                 var trench = FindTrench();
@@ -46,23 +114,140 @@ namespace StbcRevival.Galaxy
                 WarpPanel panel = null;
                 try { panel = UnityEngine.Object.FindObjectOfType<WarpPanel>(); }
                 catch (Exception e) { Plugin.Log.LogWarning("Galaxy: looking for a warp panel: " + e.Message); }
-                if (panel == null) Plugin.Log.LogInfo("Galaxy: no warp panel in the scene; universe bounds and background left out");
 
                 Directory.CreateDirectory(Folder);
-                var catalogue = Build(trench, panel);
-                File.WriteAllText(Path.Combine(Folder, "catalogue.json"), catalogue.ToJson(), new UTF8Encoding(false));
+                Catalogue previous = null;
+                int? previousFormat = null;
+                bool hadFile = false;
+                try
+                {
+                    string start = FileStart(CataloguePath);
+                    hadFile = start != null;
+                    previousFormat = Catalogue.FormatOf(start);
+                    // Only needed without a warp panel, for what the bridge saw last time.
+                    if (hadFile && panel == null) previous = Catalogue.Parse(File.ReadAllText(CataloguePath));
+                }
+                catch (Exception e) { Plugin.Log.LogWarning("Galaxy: reading the previous catalogue: " + e.Message); }
+
+                var catalogue = Build(trench, panel, out var bodies, out var sprites);
+                if (panel == null) KeepWarpMap(catalogue, previous, previousFormat);
+                ExportSprites(catalogue, sprites);
+                var items = PictureItems(catalogue, bodies);
+
+                picturing = GalaxyThumbnails.CanRun(out string why, auto);
+                // Format 2 means every picture taken; until the run finishes (or with only an earlier run's pictures
+                // carried over) it's 1, unless the previous file already had them all.
+                catalogue.Format = !picturing && previousFormat >= Catalogue.CurrentFormat ? Catalogue.CurrentFormat : 1;
+                Save(catalogue);
                 int families = 0;
                 foreach (var s in catalogue.TrenchSystems) families += s.Families.Count;
                 Plugin.Log.LogInfo($"Galaxy: catalogue written ({catalogue.TrenchSystems.Count} systems, {families} families, " +
-                    $"{catalogue.Prefabs.Count} prefabs, {catalogue.Sprites.Count} sprites) to {Folder}");
+                    $"{catalogue.Prefabs.Count} prefabs, {catalogue.Sprites.Count} sprites, {catalogue.SpriteFiles.Count} sprite pictures) to {Folder}");
+
+                if (!picturing)
+                {
+                    Plugin.Log.LogInfo($"Galaxy: no new pictures of the prefabs: {why}; they're taken on the shuttle or in the briefing room");
+                    return;
+                }
+                GalaxyThumbnails.Start(items, auto, (complete, summary) =>
+                {
+                    Plugin.Log.LogInfo("Galaxy: " + summary);
+                    foreach (var item in items) item.Source = null;
+                    try
+                    {
+                        catalogue.Format = complete ? Catalogue.CurrentFormat : 1;
+                        Save(catalogue);
+                        int thumbs = 0;
+                        foreach (var p in catalogue.Prefabs) if (p.Thumb != null) thumbs++;
+                        Plugin.Log.LogInfo($"Galaxy: catalogue written again with {thumbs} pictures" +
+                            (complete ? $" (format {Catalogue.CurrentFormat}, complete)" : " (incomplete: written again on the next shuttle visit)"));
+                        if (complete) autoDone = true;
+                    }
+                    catch (Exception e) { Plugin.Log.LogError("Galaxy: writing the catalogue after the pictures: " + e); }
+                    UnloadPrefabs();
+                });
+                picturing = GalaxyThumbnails.Running;
             }
             catch (Exception e)
             {
                 Plugin.Log.LogError("Galaxy: catalogue failed: " + e);
             }
-            // LoadAll("Sector") loaded every prefab under it; let go of the ones the scene doesn't use.
+            finally
+            {
+                // While pictures are taken the prefabs are still needed; the run's end unloads them.
+                if (!picturing) UnloadPrefabs();
+            }
+        }
+
+        private static void Save(Catalogue c) => File.WriteAllText(CataloguePath, c.ToJson(), new UTF8Encoding(false));
+
+        // LoadAll("Sector") loaded every prefab under it; let go of the ones the scene doesn't use.
+        private static void UnloadPrefabs()
+        {
             try { Resources.UnloadUnusedAssets(); }
             catch (Exception e) { Plugin.Log.LogWarning("Galaxy: unloading the loaded prefabs: " + e.Message); }
+        }
+
+        // Without a warp panel (the shuttle): the previous catalogue's universe bounds, and its map art if it was
+        // found by this version's search (a file with a catalogueFormat; older ones picked a small frame).
+        private static void KeepWarpMap(Catalogue c, Catalogue previous, int? previousFormat)
+        {
+            if (previous == null)
+            {
+                Plugin.Log.LogInfo("Galaxy: no warp panel in the scene and no earlier catalogue; universe bounds and map art left out (press the key once on the bridge)");
+                return;
+            }
+            c.UniverseMinX = previous.UniverseMinX;
+            c.UniverseMinZ = previous.UniverseMinZ;
+            c.UniverseWidth = previous.UniverseWidth;
+            c.UniverseHeight = previous.UniverseHeight;
+            if (previousFormat != null && !string.IsNullOrEmpty(previous.Background) && File.Exists(Path.Combine(Folder, previous.Background)))
+                c.Background = previous.Background;
+            Plugin.Log.LogInfo("Galaxy: no warp panel in the scene; universe bounds" + (c.Background != null ? " and map art" : "") +
+                " kept from the earlier catalogue" + (c.Background == null ? "; map art left out (press the key once on the bridge)" : ""));
+        }
+
+        // Each sprite the nodes use, as a PNG in galaxies/sprites/.
+        private static void ExportSprites(Catalogue c, Dictionary<string, Sprite> sprites)
+        {
+            string folder = Path.Combine(Folder, "sprites");
+            var used = new HashSet<string>();
+            try { Directory.CreateDirectory(folder); }
+            catch (Exception e)
+            {
+                Plugin.Log.LogWarning("Galaxy: sprites folder: " + e.Message);
+                return;
+            }
+            foreach (var name in c.Sprites)
+            {
+                try
+                {
+                    if (!sprites.TryGetValue(name, out var sprite) || sprite == null || sprite.texture == null) continue;
+                    Rect rect;
+                    try { rect = sprite.textureRect; }
+                    catch (Exception) { rect = new Rect(0, 0, sprite.texture.width, sprite.texture.height); } // tightly packed in an atlas
+                    string file = CatalogueNames.UniquePngFile(name, used);
+                    File.WriteAllBytes(Path.Combine(folder, file), TexturePng(sprite.texture, rect));
+                    c.SpriteFiles[name] = file;
+                }
+                catch (Exception e) { Plugin.Log.LogWarning($"Galaxy: sprite {name}: {e.Message}"); }
+            }
+        }
+
+        // A picture item per prefab, with its file name; an earlier run's picture kept until a new one is taken.
+        private static List<GalaxyThumbnails.Item> PictureItems(Catalogue c, Dictionary<string, Sector.SectorBody> bodies)
+        {
+            var items = new List<GalaxyThumbnails.Item>();
+            var used = new HashSet<string>();
+            foreach (var p in c.Prefabs)
+            {
+                string file = CatalogueNames.UniquePngFile(p.Name, used);
+                try { if (File.Exists(Path.Combine(GalaxyThumbnails.Folder, file))) p.Thumb = file; }
+                catch (Exception) { }
+                bodies.TryGetValue(p.Name, out var body);
+                items.Add(new GalaxyThumbnails.Item { Prefab = p, Source = body != null ? body.gameObject : null, File = file });
+            }
+            return items;
         }
 
         /// <summary>The loaded map if it's the Trench, else the Trench from the game's Resources.</summary>
@@ -89,11 +274,13 @@ namespace StbcRevival.Galaxy
 
         private static bool IsTrench(Map.SectorRoot map) => map.name.IndexOf("Trench", StringComparison.OrdinalIgnoreCase) >= 0;
 
-        internal static Catalogue Build(Map.SectorRoot trench, WarpPanel panel)
+        internal static Catalogue Build(Map.SectorRoot trench, WarpPanel panel, out Dictionary<string, Sector.SectorBody> bodies,
+            out Dictionary<string, Sprite> sprites)
         {
             var c = new Catalogue();
             // Prefab name -> body, in the order met; the Trench's first, then the rest of Resources.
-            var bodies = new Dictionary<string, Sector.SectorBody>();
+            bodies = new Dictionary<string, Sector.SectorBody>();
+            sprites = new Dictionary<string, Sprite>();
             var order = new List<string>();
             // Tags the Trench's nodes put on each prefab, for its kind when the prefab's own tags don't say.
             var nodeTags = new Dictionary<string, List<string>>();
@@ -107,7 +294,7 @@ namespace StbcRevival.Galaxy
             }
             catch (Exception e) { Plugin.Log.LogWarning("Galaxy: spawn tags: " + e.Message); }
 
-            Systems(c, trench, bodies, order, nodeTags);
+            Systems(c, trench, bodies, order, nodeTags, sprites);
             ResourcePrefabs(bodies, order);
             foreach (var name in order)
             {
@@ -120,7 +307,7 @@ namespace StbcRevival.Galaxy
                     var tags = TagNames(Traverse.Create(body).Field("PrefabTags").GetValue());
                     string kind = Kind(tags);
                     if (kind == "other" && nodeTags.TryGetValue(name, out var used)) kind = Kind(used);
-                    c.Prefabs.Add(new CataloguePrefab { Name = name, Kind = kind, Radius = radius });
+                    c.Prefabs.Add(new CataloguePrefab { Name = name, Kind = kind, Radius = radius, Label = Label(body, name) });
                 }
                 catch (Exception e) { Plugin.Log.LogWarning($"Galaxy: prefab {name}: {e.Message}"); }
             }
@@ -135,7 +322,7 @@ namespace StbcRevival.Galaxy
         }
 
         private static void Systems(Catalogue c, Map.SectorRoot trench, Dictionary<string, Sector.SectorBody> bodies, List<string> order,
-            Dictionary<string, List<string>> nodeTags)
+            Dictionary<string, List<string>> nodeTags, Dictionary<string, Sprite> sprites)
         {
             var links = Traverse.Create(trench).Field("Systems").GetValue() as System.Collections.IList;
             if (links == null)
@@ -167,12 +354,13 @@ namespace StbcRevival.Galaxy
                     var system = new CatalogueSystem
                     {
                         Name = name,
+                        DisplayName = CatalogueNames.Display(name),
                         X = pos.x,
                         Z = pos.z,
                         Skybox = rt.Field("_skyboxPath").GetValue() as string,
                         SystemTags = TagNames(rt.Field("SystemTags").GetValue()),
                     };
-                    system.Nodes = Nodes(root, name, bodies, order, nodeTags, c.Sprites);
+                    system.Nodes = Nodes(root, name, bodies, order, nodeTags, c.Sprites, sprites);
                     system.Families = CatalogueFamilies.From(system.Nodes, prefab => PrefabTags(prefab, bodies, prefabTags), c.SpawnTags);
                     c.TrenchSystems.Add(system);
                 }
@@ -182,7 +370,7 @@ namespace StbcRevival.Galaxy
 
         // The system's node tree, parents before children: the nodes of its SystemTransforms, and their children.
         private static List<GalaxyNode> Nodes(Map.SystemRoot root, string systemName, Dictionary<string, Sector.SectorBody> bodies,
-            List<string> order, Dictionary<string, List<string>> nodeTags, List<string> sprites)
+            List<string> order, Dictionary<string, List<string>> nodeTags, List<string> sprites, Dictionary<string, Sprite> spriteObjects)
         {
             var all = new List<Map.SystemNode>();
             var transforms = Traverse.Create(root).Field("SystemTransforms").GetValue() as System.Collections.IList;
@@ -249,8 +437,8 @@ namespace StbcRevival.Galaxy
                     if (string.IsNullOrEmpty(name)) name = prefabName;
                     float landing = (float)t.Field("ImpulseLandingRadius").GetValue();
                     string mapName = t.Field("SystemMapName").GetValue() as string;
-                    string background = SpriteName(t.Field("FamilyMapBackground").GetValue() as Sprite, sprites);
-                    string icon = SpriteName(t.Field("SystemMapIconSprite").GetValue() as Sprite, sprites);
+                    string background = SpriteName(t.Field("FamilyMapBackground").GetValue() as Sprite, sprites, spriteObjects);
+                    string icon = SpriteName(t.Field("SystemMapIconSprite").GetValue() as Sprite, sprites, spriteObjects);
                     result.Add(new GalaxyNode
                     {
                         Id = ids[n],
@@ -277,12 +465,29 @@ namespace StbcRevival.Galaxy
             }
         }
 
-        // The sprite's name, added to the catalogue's sprite list; null for none.
-        private static string SpriteName(Sprite sprite, List<string> sprites)
+        // The sprite's name, added to the catalogue's sprite list (and the sprite kept for its picture); null for none.
+        private static string SpriteName(Sprite sprite, List<string> sprites, Dictionary<string, Sprite> spriteObjects)
         {
             if (sprite == null || string.IsNullOrEmpty(sprite.name)) return null;
             if (!sprites.Contains(sprite.name)) sprites.Add(sprite.name);
+            if (!spriteObjects.ContainsKey(sprite.name)) spriteObjects[sprite.name] = sprite;
             return sprite.name;
+        }
+
+        // The body's name as targeting shows it, in English: its TargetableComponent's _uiName ("5796|Space Station"
+        // gives "Space Station", the text key's English part, whatever the game's language); else the tidied prefab
+        // name ("Target" is the component's default, not a name).
+        private static string Label(Sector.SectorBody body, string prefabName)
+        {
+            try
+            {
+                var targetable = body.GetComponentInChildren<Sector.TargetableComponent>(true);
+                var ui = targetable != null ? Traverse.Create(targetable).Field("_uiName").GetValue() as string : null;
+                string text = CatalogueNames.Display(ui);
+                if (!string.IsNullOrEmpty(text) && text.Trim() != "Target") return text.Trim();
+            }
+            catch (Exception e) { Plugin.Log.LogWarning($"Galaxy: name of prefab {prefabName}: {e.Message}"); }
+            return CatalogueNames.Tidy(prefabName);
         }
 
         private static List<string> PrefabTags(string prefab, Dictionary<string, Sector.SectorBody> bodies, Dictionary<string, List<string>> cache)
@@ -382,7 +587,9 @@ namespace StbcRevival.Galaxy
             catch (Exception e) { Plugin.Log.LogWarning("Galaxy: universe bounds: " + e.Message); }
             try
             {
-                var art = FindMapArt(panel);
+                // The panel's own subtree only, as the warp map's pages use it (found WarpPanel/bg_image in game);
+                // the whole canvas held a small frame that won.
+                var art = FindMapArt(panel, true, panelOnly: true);
                 if (art == null)
                 {
                     Plugin.Log.LogWarning("Galaxy: no image with a sprite or texture covers the warp map; no trench-map.png");
