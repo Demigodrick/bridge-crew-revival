@@ -38,6 +38,12 @@ namespace StbcRevival.Galaxy
         private static Dictionary<Map.SystemRoot, Map.SystemRoot> trenchCopies;
         private static Dictionary<Map.SystemRoot, Map.SystemRoot> copyOriginals;
         private static string additionsSummary; // "<n> families in <systems>"
+        private static object swapLoggedFor;     // the SectorMap the on/off line was logged for (once per mission)
+        private static bool additionsWereOn;     // the copies were linked on some mission since they were built
+
+        /// <summary>Every system's id is its list position; a swapped-out original gets the same id as its copy.</summary>
+        private static void NumberSystems(Map.SectorRoot map) =>
+            LinkSwap.Number(map.Systems, l => l.System, Original, (s, i) => s.SystemID = i);
 
         /// <summary>The Trench system as the game has it for one of our copies, else the system itself.</summary>
         internal static Map.SystemRoot Original(Map.SystemRoot root) =>
@@ -53,6 +59,7 @@ namespace StbcRevival.Galaxy
                 foreach (var kv in trenchCopies) copyOriginals[kv.Value] = kv.Key;
             }
             additionsSummary = summary;
+            additionsWereOn = false;
         }
 
         /// <summary>A new Trench asset: the originals back in whatever its list holds, the copies forgotten.</summary>
@@ -63,14 +70,17 @@ namespace StbcRevival.Galaxy
         }
 
         /// <summary>The Trench links of systems with additions: at the copies when on, else at the originals.
-        /// Logged when <paramref name="hook"/> is given and there are additions.</summary>
+        /// Logged when <paramref name="hook"/> is given (once per mission): "on", or "off" after they were on.</summary>
         private static void SwapTrench(Map.SectorRoot map, bool on, string hook)
         {
             if (trenchCopies == null || map == null || map.Systems == null) return;
             LinkSwap.Apply(map.Systems, l => l.System, (l, s) => l.System = s, trenchCopies, on);
+            bool wereOn = additionsWereOn;
+            if (on) additionsWereOn = true;
             if (hook == null) return;
+            swapLoggedFor = decidedFor; // Ensure decided for this SectorMap: the fallback hook doesn't log again
             if (on) Plugin.Log.LogInfo(P + $"Trench additions on: {additionsSummary} ({hook})");
-            else Plugin.Log.LogInfo(P + $"Trench additions off: {SystemNames(trenchCopies.Keys)} as the game has them ({hook})");
+            else if (wereOn) Plugin.Log.LogInfo(P + $"Trench additions off: {SystemNames(trenchCopies.Keys)} as the game has them ({hook})");
         }
 
         private static string SystemNames(IEnumerable<Map.SystemRoot> systems)

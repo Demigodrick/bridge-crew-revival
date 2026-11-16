@@ -32,5 +32,21 @@ namespace StbcRevival.Galaxy
                 if (from.TryGetValue(now, out var to)) set(link, to);
             }
         }
+
+        /// <summary>Numbers the systems by list position, as the game's AssignSystemIds does, and gives a swapped-in
+        /// copy's original the same number: the game keeps direct references to the original assets (the default
+        /// starting system, scripted system parameters), and those must name the same system id as the copy.</summary>
+        public static void Number<TLink, TSys>(IList<TLink> links, Func<TLink, TSys> get, Func<TSys, TSys> originalOf,
+            Action<TSys, int> setId) where TSys : class
+        {
+            for (int i = 0; i < links.Count; i++)
+            {
+                var sys = links[i] == null ? null : get(links[i]);
+                if (sys == null) continue;
+                setId(sys, i);
+                var original = originalOf != null ? originalOf(sys) : null;
+                if (original != null && !ReferenceEquals(original, sys)) setId(original, i);
+            }
+        }
     }
 }

@@ -189,8 +189,8 @@ namespace StbcRevival.Galaxy
                 }
 
                 RegionLinks.Apply(map.Systems, trenchOwn, regionLinks ?? new List<Map.SystemLink>(), on);
-                SwapTrench(map, on, hook); // the Trench's systems with additions: their copies when on, else the originals
-                for (int i = 0; i < map.Systems.Count; i++) map.Systems[i].System.SystemID = i; // as AssignSystemIds does
+                SwapTrench(map, on, ReferenceEquals(swapLoggedFor, sectorMap) ? null : hook); // the Trench's systems with additions: their copies when on, else the originals
+                NumberSystems(map); // as AssignSystemIds does, and a swapped-out original gets its copy's id
                 Active = on;
                 GalaxyCatalogue.TrenchCountOverride = on ? trenchOwn.Count : (int?)null;
                 if (on && regionLinks.Count == 0)
@@ -209,7 +209,7 @@ namespace StbcRevival.Galaxy
                     // Back to the Trench's own list if we know it, else to what it was.
                     RegionLinks.Apply(map.Systems, trenchOwn ?? before, null, false);
                     SwapTrench(map, false, null);
-                    for (int i = 0; i < map.Systems.Count; i++) map.Systems[i].System.SystemID = i;
+                    NumberSystems(map);
                 }
                 catch (Exception e2) { Plugin.Log.LogError(P + "restoring the list: " + e2.Message); }
                 bool crewHadItOn = crewOn && ReferenceEquals(decidedFor, sectorMap); // this mission's decision, not a stale one

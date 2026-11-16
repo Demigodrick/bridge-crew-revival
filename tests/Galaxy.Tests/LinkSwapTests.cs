@@ -85,3 +85,32 @@ public class LinkSwapTests
         Assert.Equal(new[] { Venov, Toth, Silva }, Now(links));
     }
 }
+
+public class SystemNumberingTests
+{
+    sealed class Sys { public int Id = -1; public Sys Original; }
+    sealed class Link { public Sys System; }
+
+    static void Number(List<Link> links) =>
+        LinkSwap.Number(links, l => l.System, s => s.Original ?? s, (s, i) => s.Id = i);
+
+    [Fact]
+    public void Number_GivesSwappedOutOriginalItsCopysId()
+    {
+        var a = new Sys(); var b = new Sys(); var bOriginal = new Sys { Id = 0 };
+        var bCopy = new Sys { Original = bOriginal };
+        var links = new List<Link> { new Link { System = a }, new Link { System = b }, new Link { System = bCopy } };
+        Number(links);
+        Assert.Equal(new[] { 0, 1, 2 }, new[] { a.Id, b.Id, bCopy.Id });
+        Assert.Equal(2, bOriginal.Id);
+    }
+
+    [Fact]
+    public void Number_PlainListAsTheGameDoes()
+    {
+        var links = new List<Link> { new Link { System = new Sys() }, new Link(), new Link { System = new Sys() } };
+        LinkSwap.Number(links, l => l.System, null, (s, i) => s.Id = i);
+        Assert.Equal(0, links[0].System.Id);
+        Assert.Equal(2, links[2].System.Id);
+    }
+}
