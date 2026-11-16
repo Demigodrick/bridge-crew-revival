@@ -493,3 +493,9 @@ reader files from `tools/xref` — share them, don't copy — and Mono.Cecil), `
 - Remove the bridge map-art capture and the worker-thread map encoding; the automatic shuttle run takes only the
   model pictures and writes `galaxies/thumbs/` plus a small index (`thumbs.json`: prefab name → file, format).
 - F5 stays as a manual re-take of the pictures. Keep every safety behaviour reviewed in Task 10.
+
+### Rescope (2026-11-16)
+
+The user: the galaxy designer is a development tool for them only — it isn't shipped (no release zip, installers or
+README for it) and needs no other-player testing. Task 9's designer packaging is dropped. Whether a region designed
+with it ships with the mod is decided separately, when there is one.
