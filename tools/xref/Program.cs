@@ -20,6 +20,13 @@
 //                                  (see SuggestByUse at the end), leaving out what names.map already has
 //   stats                          what live code still has obfuscated, and what more rules could name
 //   dump [dir]                     every type decompiled to <dir>/<namespace>/<type>.cs (default decompiled/, gitignored)
+//   layout <Type>                  how Unity 5.4 saves a script type's fields in the asset files (see Layout.cs)
+//   read <file> [Class] [name]     the script objects in an asset file (stbc_Data/<file>), decoded with those
+//                                  layouts, as JSON; only one class's, or one object's, if named
+//   objects <file> [classId]       each object in an asset file: path ID, class, size, name (see UnityAssets.cs)
+//   gameobject <file> <pathId>     a GameObject's components, and the sprites each links to
+//   sprites <file> [out dir]       every Sprite in an asset file, checked against its layout; saved as PNGs to a folder
+//   check <file>                   per script class in an asset file: do its objects read exactly with the layouts?
 //
 // names.map (next to this file) gives obfuscated names readable ones, per type; src and dump decompile with it
 // applied, so a name reads the same where it's declared and everywhere it's used. See the comment at its top.
@@ -125,6 +132,26 @@ void ApplyMap(string[] lines)
 
 switch (args[0])
 {
+    case "layout":
+    {
+        var t = T(args[1]);
+        if (t == null) { Console.WriteLine("no such type"); break; }
+        var layouts = new Layouts(asm.MainModule);
+        var text = new System.Text.StringBuilder();
+        Layouts.Print(IsScript(t) ? layouts.Script(t) : new LayoutNode { Name = t.FullName, Kind = "struct", Type = t.FullName, Fields = layouts.FieldsOf(t, 0) }, text);
+        Console.Write(text);
+        break;
+    }
+    case "read":
+        return ReadAssets.Run(Path.Combine(gameDir, "stbc_Data"), asm.MainModule, args[1], args.Length > 2 ? args[2] : null, args.Length > 3 ? args[3] : null, false);
+    case "objects":
+        return UnityAssets.Objects(Path.Combine(gameDir, "stbc_Data"), args[1], args.Length > 2 ? int.Parse(args[2]) : null);
+    case "gameobject":
+        return UnityAssets.GameObject(Path.Combine(gameDir, "stbc_Data"), args[1], long.Parse(args[2]));
+    case "sprites":
+        return UnityAssets.Sprites(Path.Combine(gameDir, "stbc_Data"), args[1], args.Length > 2 ? args[2] : null);
+    case "check":
+        return ReadAssets.Run(Path.Combine(gameDir, "stbc_Data"), asm.MainModule, args[1], null, null, true);
     case "find":
         foreach (var m in all.Where(m => m.Name == args[1])) Console.WriteLine(L(m));
         break;
@@ -328,6 +355,13 @@ static MethodDefinition? SafeResolve(MethodReference mr)
 }
 
 static IEnumerable<TypeDefinition> Nested(TypeDefinition t) => t.NestedTypes.SelectMany(n => new[] { n }.Concat(Nested(n)));
+
+static bool IsScript(TypeDefinition t)
+{
+    for (var c = t.BaseType; c != null; c = c.Resolve()?.BaseType)
+        if (c.FullName is "UnityEngine.MonoBehaviour" or "UnityEngine.ScriptableObject") return true;
+    return false;
+}
 
 static string Here([CallerFilePath] string path = "") => Path.GetDirectoryName(path)!;
 
