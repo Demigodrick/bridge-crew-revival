@@ -1,7 +1,7 @@
 // Unity's own types the map data links to, as Unity 5.4 saves them (the files carry no type trees, so these are
 // written out here and checked by every object reading exactly its stored size):
-//   `xref objects <file> [classId]`     each object: path ID, class, size and name (for types that start with one)
-//   `xref sprites <file> [out dir]`     every Sprite: name, rect, texture; with a folder, each saved as a PNG
+// a sprite's pixels as a PNG, and the Resources list (ResourceManager). Shared by xref (its commands on these are in
+// UnityAssetCommands.cs) and the galaxy designer (tools/galaxy-designer, which links this file).
 //
 // Sprite (class 213), Unity 5.4 player build (the editor's m_RenderDataKey and m_AtlasTags aren't written):
 //   string m_Name; Rectf m_Rect; Vector2f m_Offset; Vector4f m_Border; float m_PixelsToUnits; Vector2f m_Pivot;
@@ -14,7 +14,10 @@
 //   float m_MipBias; int m_WrapMode}; int m_LightmapFormat, m_ColorSpace; TypelessData image data (Int32 size,
 //   bytes, padded); StreamingInfo m_StreamData {UInt32 offset, size; string path} (the pixels are in that .resS
 //   file when size > 0).
+// ResourceManager (class 147, in globalgamemanagers), Unity 5.4: map<string, PPtr<Object>> m_Container (the path
+//   under a Resources folder, lower case, and the asset), then m_DependentAssets (not read).
 
+#nullable enable
 using System.IO.Compression;
 using System.Text;
 using StbcRevival;
@@ -110,107 +113,56 @@ static class UnityAssets
         return t;
     }
 
-    // ---- Commands ---------------------------------------------------------------------------------------------
-
-    public static int Objects(string dataDir, string file, int? classId)
+    /// <summary>The Resources list: each asset's path under a Resources folder (lower case) and its link.</summary>
+    public static List<KeyValuePair<string, PPtr>> ReadResourceContainer(BinaryReader r, AssetFile.Entry e)
     {
-        using var a = new AssetFile(Path.Combine(dataDir, file));
-        foreach (var e in a.Objects.Where(o => classId == null || o.ClassId == classId))
+        var list = new List<KeyValuePair<string, PPtr>>();
+        for (int n = Count(r), i = 0; i < n; i++)
         {
-            string? name = e.ClassId is 1 or 114 or 115 or 4 or 224 ? null : a.NameOf(e);
-            if (e.ClassId == 1) { var g = GameObjectAsset.Read(a.At(e)); name = g.Name; }
-            Console.WriteLine($"{e.PathId,8}  {ClassNames.GetValueOrDefault(e.ClassId, e.ClassId.ToString()),-14} {e.Size,9}  @{e.Offset,-11} {name}");
+            var path = Str(r, e.Offset);
+            list.Add(new KeyValuePair<string, PPtr>(path, AssetFile.ReadPPtr(r)));
         }
-        return 0;
+        return list;
     }
 
-    /// <summary>A GameObject's components, and any links to sprites in each one's data (a 12-byte PPtr that points at a
-    /// Sprite, found by scanning: for Unity's UI components, whose layouts aren't written out here).</summary>
-    public static int GameObject(string dataDir, string file, long pathId)
-    {
-        using var a = new AssetFile(Path.Combine(dataDir, file));
-        var e = a.Find(pathId);
-        if (e == null || e.ClassId != 1) { Console.WriteLine("not a GameObject"); return 1; }
-        var g = GameObjectAsset.Read(a.At(e));
-        Console.WriteLine($"GameObject {pathId} '{g.Name}'");
-        var others = new Dictionary<string, AssetFile?>();
-        AssetFile? Other(string name)
-        {
-            if (!others.TryGetValue(name, out var f)) { try { f = new AssetFile(Path.Combine(dataDir, name)); } catch { f = null; } others[name] = f; }
-            return f;
-        }
-        foreach (var c in g.Components)
-        {
-            var ce = a.Find(c.Value.PathId);
-            Console.WriteLine($"  {ClassNames.GetValueOrDefault(c.Key, c.Key.ToString())} {c.Value}");
-            if (ce == null) continue;
-            var r = a.At(ce);
-            var bytes = r.ReadBytes((int)ce.Size);
-            for (int i = 0; i + 12 <= bytes.Length; i += 4)
-            {
-                int fileId = BitConverter.ToInt32(bytes, i);
-                long target = BitConverter.ToInt64(bytes, i + 4);
-                if (fileId < 0 || fileId > a.Externals.Count || target == 0) continue;
-                var tf = fileId == 0 ? a : Other(Path.GetFileName(a.Externals[fileId - 1]));
-                var te = tf?.Find(target);
-                if (te == null || te.ClassId != SpriteClass) continue;
-                Console.WriteLine($"    links to sprite '{tf!.NameOf(te)}' ({Path.GetFileName(tf.Path)}:{target}) at byte {i}");
-            }
-        }
-        // Where it sits: its parent and children (RectTransform starts as a Transform does).
-        var tc = g.Components.FirstOrDefault(c => c.Key is 4 or 224);
-        var te2 = tc.Value.IsNull ? null : a.Find(tc.Value.PathId);
-        if (te2 != null)
-        {
-            var t = TransformAsset.Read(a.At(te2));
-            string NameOfTransform(PPtr link)
-            {
-                var x = a.Find(link.PathId);
-                if (link.FileId != 0 || x == null) return link.ToString();
-                var go = a.Find(TransformAsset.Read(a.At(x)).GameObject.PathId);
-                return go == null ? link.ToString() : $"'{GameObjectAsset.Read(a.At(go)).Name}' (GameObject {TransformAsset.Read(a.At(x)).GameObject.PathId})";
-            }
-            if (!t.Father.IsNull) Console.WriteLine($"  parent {NameOfTransform(t.Father)}");
-            foreach (var c in t.Children) Console.WriteLine($"  child {NameOfTransform(c)}");
-        }
-        foreach (var f in others.Values) f?.Dispose();
-        return 0;
-    }
+    // ---- Sprites as pictures ----------------------------------------------------------------------------------
 
-    public static int Sprites(string dataDir, string file, string? outDir)
+    /// <summary>
+    /// Cuts sprites out of their textures as PNGs. Each texture is decoded once (kept for the next sprite on it);
+    /// its file is opened through open (a file name in stbc_Data to the file, or null), its .resS beside it.
+    /// </summary>
+    public sealed class SpritePictures
     {
-        using var a = new AssetFile(Path.Combine(dataDir, file));
-        var entries = a.Objects.Where(o => o.ClassId == SpriteClass).ToList();
-        int exact = 0;
-        foreach (var e in entries)
-        {
-            try { var r = a.At(e); ReadSprite(r, e); if (r.BaseStream.Position - e.Offset == e.Size) exact++; else Console.WriteLine($"  sprite {e.PathId}: used {r.BaseStream.Position - e.Offset} of {e.Size} bytes"); }
-            catch (Exception ex) { Console.WriteLine($"  sprite {e.PathId}: {ex.Message}"); }
-        }
-        Console.WriteLine($"{file}: {entries.Count} sprites, {exact} read exactly");
-        if (exact != entries.Count) return 2;
+        readonly string dataDir;
+        readonly Func<string, AssetFile?> open;
+        readonly Dictionary<string, (Texture tex, byte[] rgba)?> textures = new();
 
-        var textures = new Dictionary<string, (Texture tex, byte[] rgba)?>();
-        if (outDir != null) Directory.CreateDirectory(outDir);
-        foreach (var e in entries)
+        /// <summary>Problems met (a texture that can't be read or decoded), for the caller to show.</summary>
+        public readonly List<string> Warnings = new();
+
+        public SpritePictures(string dataDir, Func<string, AssetFile?> open)
         {
-            var s = ReadSprite(a.At(e), e);
-            string texFile = a.FileOf(s.Texture) ?? file;
-            Console.WriteLine($"{s.PathId,8}  {s.Name,-40} rect {s.TextureRect[2]:0}x{s.TextureRect[3]:0} at {s.TextureRect[0]:0},{s.TextureRect[1]:0}  texture {texFile}:{s.Texture.PathId}");
-            if (outDir == null) continue;
+            this.dataDir = dataDir;
+            this.open = open;
+        }
+
+        /// <summary>The sprite's pixels as a PNG, or null when its texture can't be read or decoded.</summary>
+        public byte[]? Png(AssetFile spriteFile, Sprite s)
+        {
+            string texFile = spriteFile.FileOf(s.Texture) ?? Path.GetFileName(spriteFile.Path);
             var key = texFile + ":" + s.Texture.PathId;
             if (!textures.TryGetValue(key, out var decoded))
             {
                 decoded = null;
                 try
                 {
-                    using var tf = new AssetFile(Path.Combine(dataDir, texFile));
-                    var te = tf.Find(s.Texture.PathId);
-                    if (te != null && te.ClassId == Texture2DClass)
+                    var tf = open(texFile);
+                    var te = tf?.Find(s.Texture.PathId);
+                    if (tf != null && te != null && te.ClassId == Texture2DClass)
                     {
                         var r = tf.At(te);
                         var tex = ReadTexture(r, te);
-                        if (r.BaseStream.Position - te.Offset != te.Size) Console.Error.WriteLine($"  texture {key}: used {r.BaseStream.Position - te.Offset} of {te.Size} bytes");
+                        if (r.BaseStream.Position - te.Offset != te.Size) Warnings.Add($"texture {key}: used {r.BaseStream.Position - te.Offset} of {te.Size} bytes");
                         var pixels = tex.Data;
                         if (tex.StreamSize > 0)
                         {
@@ -221,29 +173,29 @@ static class UnityAssets
                         }
                         var rgba = Decode(tex.Format, tex.Width, tex.Height, pixels);
                         decoded = rgba == null ? null : (tex, rgba);
-                        if (rgba == null) Console.Error.WriteLine($"  texture {tex.Name}: format {tex.Format} not decoded");
+                        if (rgba == null) Warnings.Add($"texture {tex.Name}: format {tex.Format} not decoded");
                     }
+                    else Warnings.Add($"texture {key}: not found");
                 }
-                catch (Exception ex) { Console.Error.WriteLine($"  texture {key}: {ex.Message}"); }
+                catch (Exception ex) { Warnings.Add($"texture {key}: {ex.Message}"); }
                 textures[key] = decoded;
             }
-            if (decoded is not { } d) continue;
+            if (decoded is not { } d) return null;
             int x0 = (int)Math.Round(s.TextureRect[0]), y0 = (int)Math.Round(s.TextureRect[1]);
             int w = (int)Math.Round(s.TextureRect[2]), h = (int)Math.Round(s.TextureRect[3]);
+            x0 = Math.Clamp(x0, 0, d.tex.Width - 1); y0 = Math.Clamp(y0, 0, d.tex.Height - 1);
+            w = Math.Clamp(w, 1, d.tex.Width - x0); h = Math.Clamp(h, 1, d.tex.Height - y0);
             var crop = new byte[w * h * 4];
             for (int y = 0; y < h; y++)   // Unity's rows go bottom up; a PNG's top down
                 Buffer.BlockCopy(d.rgba, ((y0 + y) * d.tex.Width + x0) * 4, crop, (h - 1 - y) * w * 4, w * 4);
-            File.WriteAllBytes(Path.Combine(outDir, Safe(s.Name) + ".png"), Png(w, h, crop));
+            return UnityAssets.Png(w, h, crop);
         }
-        return 0;
     }
-
-    static string Safe(string name) => string.Concat(name.Select(c => Path.GetInvalidFileNameChars().Contains(c) ? '_' : c));
 
     // ---- Pixels -----------------------------------------------------------------------------------------------
 
     /// <summary>The top mip level as RGBA, rows bottom up as Unity stores them; null for a format not handled.</summary>
-    static byte[]? Decode(int format, int w, int h, byte[] src)
+    public static byte[]? Decode(int format, int w, int h, byte[] src)
     {
         var o = new byte[w * h * 4];
         switch (format)
@@ -316,7 +268,7 @@ static class UnityAssets
 
     static int[] Rgb565(ushort v) => new[] { (v >> 11 & 31) * 255 / 31, (v >> 5 & 63) * 255 / 63, (v & 31) * 255 / 31, 255 };
 
-    static byte[] Png(int w, int h, byte[] rgba)
+    public static byte[] Png(int w, int h, byte[] rgba)
     {
         using var ms = new MemoryStream();
         ms.Write(new byte[] { 137, 80, 78, 71, 13, 10, 26, 10 });

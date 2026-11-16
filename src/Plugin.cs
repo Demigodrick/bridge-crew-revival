@@ -74,6 +74,8 @@ namespace StbcRevival
         internal static ConfigEntry<bool> NamePlates;
         internal static ConfigEntry<int> KlingonHeadChoice;
         internal static ConfigEntry<string> MapOverride;
+        internal static ConfigEntry<UnityEngine.KeyCode> PictureKey;
+        internal static ConfigEntry<string> GalaxyRegionName;
         internal static ConfigEntry<int> FleetBattleSize;
         internal static ConfigEntry<string> TestPatrolAssignment;
         internal static ConfigEntry<int> EvacuationMinutes;
@@ -253,6 +255,16 @@ namespace StbcRevival
                 "Testing only: the sector map Free Roam and Ongoing Voyages load, as a path in the game's Resources, e.g. \"Mission Data/Maps/Sector - E3\" "
                 + "or \"Mission Data/Maps/Sector - SpaceStationRescue\". Applies to your whole crew when you host. Off the Trench there are no "
                 + "mission encounters: you start in one of the map's systems and can warp to its others. Empty: the game's own map.");
+            PictureKey = Config.Bind("Galaxy", "PictureKey", UnityEngine.KeyCode.None,
+                "Development only, for the galaxy designer (a tool for making galaxy regions, not part of the mod): pictures of the "
+                + "game's planets, stars, stations and other bodies (BepInEx/galaxies/thumbs/ and thumbs.json) are only ever taken "
+                + "when this is set. Set, they're taken once on your first shuttle visit if missing or out of date, and again when "
+                + "you press the key on the shuttle or in the briefing room. None (the default): no pictures.");
+            StbcRevival.Galaxy.GalaxyCatalogue.MigrateOldKey(Config, PictureKey);
+            GalaxyRegionName = Config.Bind("Galaxy", "Region", "",
+                "Testing only: a galaxy region file in BepInEx/galaxies, by name (\"test-reach\" for test-reach.json). Its systems "
+                + "are added after the Trench's for Revival Patrol and Free Roam, when everyone in the crew has the same file (the "
+                + "host is told who hasn't). Empty (the default): off, the Trench as the game has it.");
             TestPatrolAssignment = Config.Bind("Debug", "TestPatrolAssignment", "",
                 new BepInEx.Configuration.ConfigDescription(
                     "Testing only: every assignment Patrol offers is this one, when you host. Empty: Starfleet's usual mix "
@@ -379,6 +391,8 @@ namespace StbcRevival
             Safely("revival voice playback patches", () => RevivalPlayback.Patch(harmony));
             Safely("quest controls", () => StbcRevival.QuestControls.Patch(harmony));
             Safely("seat warning", () => Walking.SeatWarning.Patch(harmony));
+            Safely("galaxy region", () => StbcRevival.Galaxy.GalaxyRegion.Patch(harmony));
+            Safely("galaxy warp map pages", () => StbcRevival.Galaxy.WarpPages.Patch(harmony));
             SteamMode.Install(harmony);
             ShuttleControls.Install();
 
@@ -435,6 +449,8 @@ namespace StbcRevival
             Safely("loading screen label", LoadingScreenLabel.Update);
             Safely("stellar evacuation", StbcRevival.Missions.StellarEvacuationObjective.Update);
             Safely("mission maps", StbcRevival.Missions.MissionMaps.Update);
+            Safely("galaxy catalogue", StbcRevival.Galaxy.GalaxyCatalogue.Update);
+            Safely("galaxy room", StbcRevival.Galaxy.GalaxyRoom.Update);
             Safely("restock sync", StbcRevival.Missions.RestockSync.Update);
             Safely("excelsior", Excelsior.Update);
             Safely("ships", CustomShip.Update);

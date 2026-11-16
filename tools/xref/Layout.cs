@@ -16,6 +16,7 @@
 //   - A MonoBehaviour or ScriptableObject (class 114) starts with Unity's own header: PPtr<GameObject>
 //     m_GameObject, UInt8 m_Enabled (padded), PPtr<MonoScript> m_Script, string m_Name.
 
+#nullable enable
 using System.Text;
 using Mono.Cecil;
 

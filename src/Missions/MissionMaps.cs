@@ -187,6 +187,21 @@ namespace StbcRevival.Missions
             var systems = new System.Collections.Generic.List<Map.SystemRoot> { system };
             if (Traverse.Create(sectorMap).Property("MLHNDAEKLHO").GetValue() is System.Collections.Generic.List<Map.SystemRoot> all)
                 foreach (var other in all) if (other != null && !systems.Contains(other)) systems.Add(other);
+            // Starts stay in the Trench: a galaxy region's systems are for warping to, not starting in.
+            if (StbcRevival.Galaxy.GalaxyRegion.Active)
+            {
+                int trench = StbcRevival.Galaxy.GalaxyRegion.TrenchCount;
+                // Counted by id: the chosen system can be the asset while AllSystems holds its runtime copy (same id).
+                int leftOut = systems.Where(s => StbcRevival.Galaxy.GalaxyGate.IsRegionSystem(s.SystemID, trench)).Select(s => s.SystemID).Distinct().Count();
+                systems = systems.Where(s => !StbcRevival.Galaxy.GalaxyGate.IsRegionSystem(s.SystemID, trench)).ToList();
+                if (systems.Count == 0) throw new InvalidOperationException("no Trench system to start in");
+                if (systems[0] != system)
+                {
+                    Plugin.Log.LogInfo($"Mission maps: {system.SystemName} is a galaxy region system; starting in the Trench instead");
+                    system = systems[0];
+                }
+                if (leftOut > 0) Plugin.Log.LogInfo($"Mission maps: {leftOut} galaxy region systems left out of the starting choices");
+            }
             if (anywhere)
             {
                 var shuffle = new System.Random(Guid.NewGuid().GetHashCode());

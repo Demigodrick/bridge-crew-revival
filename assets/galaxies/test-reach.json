@@ -1,0 +1,61 @@
+{
+  "format": 1,
+  "name": "Test Reach",
+  "page": { "label": "Test Reach", "background": "trench-darkened" },
+  "systems": [
+    {
+      "id": "kessar",
+      "name": "Kessar",
+      "position": [-10, 85],
+      "template": "2824|Venov",
+      "nodes": [
+        { "id": "kessar-prime", "name": "Kessar Prime", "mapName": "Kessar Prime",
+          "copyFamily": { "system": "2824|Venov", "family": "FAMILY Venov III" } }
+      ]
+    },
+    {
+      "id": "halvar",
+      "name": "Halvar",
+      "position": [190, -20],
+      "template": "Silva",
+      "nodes": [
+        { "id": "family", "name": "Halvar", "prefab": "Family Group", "tags": ["FAMILY"], "unit": "Lightseconds",
+          "position": [0, 0, 0], "mapName": "Halvar", "familyBackground": "FamilyMapBG_4" },
+        { "id": "poi", "parent": "family", "name": "Halvar Station", "prefab": "Point of Interest", "unit": "Skybox",
+          "position": [0, 0, 0], "mapName": "Halvar Station" },
+        { "id": "planet", "parent": "poi", "name": "Halvar II", "prefab": "Set2ClassY014", "tags": ["Planet"], "unit": "Skybox",
+          "position": [0, 7.8, 0], "rotation": [350, 0, 0] },
+        { "id": "region", "parent": "poi", "name": "REGION Halvar Station", "prefab": "Region", "tags": ["RegionSpaceStation"],
+          "unit": "Skybox", "position": [15.6, 0, -7.3] },
+        { "id": "impulse", "parent": "region", "name": "Impulse Destination", "prefab": "Impulse Destination", "unit": "Kilometers",
+          "position": [0, 0, 0], "landingRadius": 30000 },
+        { "id": "station", "parent": "region", "name": "Halvar Station", "prefab": "Ship - SpaceStationProcedural 22",
+          "unit": "Kilometers", "position": [-11.2, 0, -9.8], "rotation": [354.3, 4.7, 320.6] },
+        { "id": "jump", "parent": "region", "name": "Warp", "prefab": "", "tags": ["WarpDestination", "Player"],
+          "unit": "Kilometers", "position": [25.9, 0, -14], "rotation": [0, 308.9, 0] }
+      ]
+    },
+    {
+      "id": "orrin-gate",
+      "name": "Orrin Gate",
+      "position": [85, -100],
+      "template": "5533|Arna",
+      "nodes": [
+        { "id": "orrin-twins", "name": "Orrin Twins", "mapName": "Orrin Twins",
+          "copyFamily": { "system": "5533|Arna", "family": "FAMILY Twin Planets" } },
+        { "id": "family", "name": "Orrin Gate", "prefab": "Family Group", "tags": ["FAMILY"], "unit": "Lightseconds",
+          "position": [4, 0, 4], "mapName": "Orrin Gate", "familyBackground": "FamilyMapBG_2" },
+        { "id": "poi", "parent": "family", "name": "Gate Approach", "prefab": "Point of Interest", "unit": "Skybox",
+          "position": [0, 0, 0], "mapName": "Gate Approach" },
+        { "id": "planet", "parent": "poi", "name": "Orrin", "prefab": "Venov_Set2ClassJ026", "tags": ["Planet"], "unit": "Skybox",
+          "position": [0, 7.8, 0], "rotation": [350, 0, 0] },
+        { "id": "region", "parent": "poi", "name": "REGION Gate Approach", "prefab": "Region", "tags": ["RegionStart"],
+          "unit": "Skybox", "position": [15.6, 0, -7.3] },
+        { "id": "impulse", "parent": "region", "name": "Impulse Destination", "prefab": "Impulse Destination", "unit": "Kilometers",
+          "position": [0, 0, 0], "landingRadius": 30000 },
+        { "id": "jump", "parent": "region", "name": "Warp", "prefab": "", "tags": ["WarpDestination", "Player"],
+          "unit": "Kilometers", "position": [25.9, 0, -14], "rotation": [0, 308.9, 0] }
+      ]
+    }
+  ]
+}

@@ -145,11 +145,11 @@ switch (args[0])
     case "read":
         return ReadAssets.Run(Path.Combine(gameDir, "stbc_Data"), asm.MainModule, args[1], args.Length > 2 ? args[2] : null, args.Length > 3 ? args[3] : null, false);
     case "objects":
-        return UnityAssets.Objects(Path.Combine(gameDir, "stbc_Data"), args[1], args.Length > 2 ? int.Parse(args[2]) : null);
+        return UnityAssetCommands.Objects(Path.Combine(gameDir, "stbc_Data"), args[1], args.Length > 2 ? int.Parse(args[2]) : null);
     case "gameobject":
-        return UnityAssets.GameObject(Path.Combine(gameDir, "stbc_Data"), args[1], long.Parse(args[2]));
+        return UnityAssetCommands.GameObject(Path.Combine(gameDir, "stbc_Data"), args[1], long.Parse(args[2]));
     case "sprites":
-        return UnityAssets.Sprites(Path.Combine(gameDir, "stbc_Data"), args[1], args.Length > 2 ? args[2] : null);
+        return UnityAssetCommands.Sprites(Path.Combine(gameDir, "stbc_Data"), args[1], args.Length > 2 ? args[2] : null);
     case "check":
         return ReadAssets.Run(Path.Combine(gameDir, "stbc_Data"), asm.MainModule, args[1], null, null, true);
     case "find":
