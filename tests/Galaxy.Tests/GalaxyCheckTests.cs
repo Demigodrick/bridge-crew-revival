@@ -77,13 +77,19 @@ public class GalaxyCheckTests
         var f = Valid(); f.Systems[0].Nodes[3].Tags.Clear();
         f.Systems[0].Nodes[4].Tags.Clear(); f.Systems[0].Nodes[4].Tags.Add("SpaceStation");
         f.Systems[0].Nodes.Add(Node("kessar-x", parent, "", tags));
-        var c = Cat(); c.Tags.Add("WarpDestination");
+        var c = Cat(); c.Tags.Add("WarpDestination"); c.Tags.Add("SpawnPoint"); c.Tags.Add("AltWarpDestination");
         return GalaxyCheck.Problems(f, c);
     }
 
     [Fact]
     public void EmptyPrefab_OnJumpPoint_Ok()
         => Assert.DoesNotContain(EmptyPrefabProblems("kessar-region", "WarpDestination", "Player"), x => x.Contains("kessar-x"));
+
+    [Theory]
+    [InlineData("SpawnPoint")]
+    [InlineData("AltWarpDestination")]
+    public void EmptyPrefab_OnSpawnMarker_Ok(string tag)
+        => Assert.DoesNotContain(EmptyPrefabProblems("kessar-region", tag), x => x.Contains("kessar-x"));
 
     [Fact]
     public void EmptyPrefab_OnRegionUnderPoi_Ok()

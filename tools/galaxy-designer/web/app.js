@@ -202,17 +202,30 @@ function drawGalaxy() {
 // ----- system plan: world positions in km, centred and zoomed by `cam`
 const cam = { x: 0, z: 0, k: 1e-3 };
 const FAMILY = 'Family Group', POI = 'Point of Interest', REGION = 'Region';
-let selFam = null, fitFam = undefined, zoomPoi = null;   // id of the family the plan shows (a top-level node)
+let selFam = null, fitFam = undefined, zoomPoi = null, zoomRegion = null;   // id of the family the plan shows (a top-level node)
 const tLabel = name => { const t = findTrench(name); return (t && t.displayName) || dispName(name); };   // a Trench system by its plain name
 const dispName = v => (v || '').indexOf('|') >= 0 ? v.slice(v.indexOf('|') + 1) : v;   // "2824|Venov" shows as Venov
 const isCopy = n => !!n.copyFamily;
 function famOf(s, n) { let c = n, i = 0; while (c && c.parent && i++ < 50) c = nodeById(s, c.parent); return c; }
 function levelOf(s, n) { let l = 0, c = n; while (c && c.parent && l < 50) { c = nodeById(s, c.parent); l++; } return l; }
-const planRoot = () => zoomPoi || selFam;      // the node the plan is drawn around: the family's page, or a POI zoomed into
-const pageLevel = () => !zoomPoi;
+const planLevel = () => zoomRegion ? 'region' : zoomPoi ? 'poi' : 'page';   // the family's page, a POI in it, or a region in the POI
+const planRoot = () => zoomRegion || zoomPoi || selFam;      // the node the plan is drawn around
+const pageLevel = () => planLevel() === 'page';
+const NEAR_KM = 5e6;   // inside a POI or region, nodes farther than this (AU- and skybox-scale bodies) sit at the edge as markers instead of squashing the view
+const isSpawn = n => nodeTags(n).includes('SpawnPoint');
+// A region: the "Region" prefab, or a prefab-less node directly under a POI (the Trench has those) that isn't a marker.
+const isRegion = (s, n) => n.prefab === REGION || (n.prefab === '' && !isWarp(n) && !isSpawn(n) && levelOf(s, n) === 2);
+function inRegion(s, n) { let c = n, i = 0; while (c && i++ < 50) { if (isRegion(s, c)) return c; c = c.parent ? nodeById(s, c.parent) : null; } return null; }   // the region it is (or is inside)
 function under(s, n, rootId) { let c = n, i = 0; while (c && i++ < 50) { if (c.id === rootId) return true; c = c.parent ? nodeById(s, c.parent) : null; } return false; }
-// What the plan shows: the family and its POIs (its page), or a POI with everything inside it.
-const planNodes = s => (s.nodes || []).filter(n => pageLevel() ? (n.id === selFam || n.parent === selFam) : under(s, n, zoomPoi));
+// What the plan shows: the family and its POIs (its page); a POI with its regions and bodies (not what is inside the
+// regions); or a region with everything inside it.
+const planNodes = s => (s.nodes || []).filter(n => {
+  const lv = planLevel();
+  if (lv === 'page') return n.id === selFam || n.parent === selFam;
+  if (lv === 'region') return under(s, n, zoomRegion);
+  if (!under(s, n, zoomPoi)) return false;
+  const r = inRegion(s, n); return !r || r.id === n.id;   // a region itself, but nothing inside one
+});
 function worldPos(s, n, depth = 0) {
   if (n.id === planRoot()) return [0, 0, 0];   // the plan is drawn around its root
   const u = UNIT_KM[n.unit] || 1, pos = n.position || [0, 0, 0];
@@ -222,8 +235,14 @@ function worldPos(s, n, depth = 0) {
 }
 function fitCam() {
   const s = sys(); if (!s) return;
-  let m = 0; for (const n of planNodes(s)) { const p = worldPos(s, n); m = Math.max(m, Math.abs(p[0]), Math.abs(p[2])); }
-  cam.x = 0; cam.z = 0; cam.k = (pageLevel() ? 0.3 : 0.4) * Math.min(canvas.width, canvas.height) / Math.max(m, pageLevel() ? 299792 : 1);   // a page of POIs at its centre still gets a sensible scale (one light-second)
+  const lv = planLevel(); let m = 0;
+  for (const n of planNodes(s)) {
+    if (n.id === planRoot()) continue;
+    const p = worldPos(s, n), dist = Math.max(Math.abs(p[0]), Math.abs(p[2]));
+    if (lv !== 'page' && dist > NEAR_KM) continue;   // far-out bodies are edge markers, not part of the fit
+    m = Math.max(m, dist);
+  }
+  cam.x = 0; cam.z = 0; cam.k = (lv === 'page' ? 0.3 : 0.4) * Math.min(canvas.width, canvas.height) / Math.max(m, lv === 'page' ? 299792 : 10);   // a page of POIs at its centre still gets a sensible scale (one light-second)
 }
 const toS = (x, z) => [canvas.width / 2 + (x - cam.x) * cam.k, canvas.height / 2 - (z - cam.z) * cam.k];
 const fromS = (px, py) => [cam.x + (px - canvas.width / 2) / cam.k, cam.z - (py - canvas.height / 2) / cam.k];
@@ -255,20 +274,30 @@ function drawSystem() {
   for (const { n } of items) {
     if (n.id === planRoot() || !n.parent) continue; const par = nodeById(s, n.parent); if (!par || !L[par.id]) continue;
     const a = L[par.id], b = L[n.id], rad = Math.hypot(b.x - a.x, b.y - a.y);
+    if (b.edge || a.edge) continue;
     ctx.strokeStyle = 'rgba(133,146,160,0.25)'; ctx.beginPath();
-    if (!b.off) ctx.arc(a.x, a.y, rad, 0, 7);
+    if (!b.off && rad < 4 * Math.max(w, h)) ctx.arc(a.x, a.y, rad, 0, 7);
     ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
   }
   for (const { n } of items) {
     const px = L[n.id].x, py = L[n.id].y, k = kindOf(n), sel = n.id === selNode;
-    const big = k === 'star' ? 9 : k === 'planet' ? 6 : 4.5;
+    if (L[n.id].edge) {   // far out: a marker at the edge pointing the way
+      ctx.fillStyle = sel ? '#f2c14e' : '#8592a0'; ctx.beginPath(); ctx.moveTo(px, py - 6 * d); ctx.lineTo(px + 6 * d, py + 5 * d); ctx.lineTo(px - 6 * d, py + 5 * d); ctx.closePath(); ctx.fill();
+      const txt = (n.name || n.id) + ' ' + L[n.id].arrow; ctx.textAlign = px > w / 2 ? 'right' : 'left';
+      ctx.fillText(txt, px + (px > w / 2 ? -10 : 10) * d, py + (py < h / 2 ? 12 : -12) * d); ctx.textAlign = 'left'; continue;
+    }
+    const reg = planLevel() === 'poi' && isRegion(s, n);
+    const big = reg ? 9 : k === 'star' ? 9 : k === 'planet' ? 6 : 4.5;
     ctx.fillStyle = KIND_COLOR[k] || KIND_COLOR.other;
-    ctx.beginPath(); if (isWarp(n)) { ctx.fillStyle = '#f2c14e'; ctx.moveTo(px, py - 7 * d); ctx.lineTo(px + 7 * d, py); ctx.lineTo(px, py + 7 * d); ctx.lineTo(px - 7 * d, py); ctx.closePath(); } else if (k === 'station') ctx.rect(px - big * d, py - big * d, big * 2 * d, big * 2 * d); else ctx.arc(px, py, big * d, 0, 7);
-    ctx.fill(); ctx.lineWidth = (sel ? 3 : 1.5) * d; ctx.strokeStyle = sel ? '#f2c14e' : '#000'; ctx.stroke();
+    ctx.beginPath(); if (reg) { ctx.fillStyle = '#233a55'; ctx.roundRect(px - big * d, py - big * d, big * 2 * d, big * 2 * d, 3 * d); } else if (isSpawn(n)) { ctx.fillStyle = '#0e1116'; ctx.arc(px, py, 4 * d, 0, 7); } else if (isWarp(n)) { ctx.fillStyle = '#f2c14e'; ctx.moveTo(px, py - 7 * d); ctx.lineTo(px + 7 * d, py); ctx.lineTo(px, py + 7 * d); ctx.lineTo(px - 7 * d, py); ctx.closePath(); } else if (k === 'station') ctx.rect(px - big * d, py - big * d, big * 2 * d, big * 2 * d); else ctx.arc(px, py, big * d, 0, 7);
+    ctx.fill(); ctx.lineWidth = (sel ? 3 : 1.5) * d; ctx.strokeStyle = sel ? '#f2c14e' : reg ? '#6cb6ff' : isSpawn(n) ? '#7ee787' : '#000'; ctx.stroke();
+    if (n.prefab === 'Impulse Destination') { ctx.strokeStyle = '#6cb6ff'; ctx.lineWidth = d; ctx.beginPath(); ctx.arc(px, py, (big + 4) * d, 0, 7); ctx.stroke(); }
     if (isJump(n)) { ctx.strokeStyle = '#f2c14e'; ctx.lineWidth = d; ctx.beginPath(); ctx.arc(px, py, (big + 5) * d, 0, 7); ctx.stroke(); }
-    ctx.fillStyle = sel ? '#f2c14e' : '#e6edf3'; ctx.fillText(n.name || n.id, px + (big + 5) * d, py);
+    ctx.fillStyle = sel ? '#f2c14e' : '#e6edf3'; ctx.fillText((n.name || n.id) + (reg ? ` (${(s.nodes || []).filter(x => x.id !== n.id && under(s, x, n.id)).length})` : ''), px + (big + 5) * d, py);
   }
-  $('help').textContent = 'A Point of Interest in kilometres: click: select · drag a node: set X/Z (Y is a field; a node stacked above its parent is too close to drag: use the fields) · drag empty space: pan · wheel: zoom · F: fit · Delete: remove';
+  $('help').textContent = planLevel() === 'poi'
+    ? 'A POI: click a region to go into it · drag a region or body to move it (Y is a field; far-out bodies sit at the edge as arrows: use the fields) · drag empty space: pan · wheel: zoom · F: fit · Delete: remove'
+    : 'A region, in kilometres: drag a node to move it (Y is a field) · drag empty space: pan · wheel: zoom · F: fit · Delete: remove (and what is inside it)';
 }
 
 // A family as the impulse map shows it: its backdrop, and its Points of Interest placed around the family's centre.
@@ -315,19 +344,26 @@ function drawFamilyPage(s, fam, w, h, d) {
   $('help').textContent = 'The family\'s page: click a POI to go into it · drag a POI to move it · wheel: zoom · drag empty space: pan · F: fit';
 }
 
-// Where each node is drawn. A child that would land within ~12 px of its parent is stacked in a short column
-// above it (purely visual; stored positions don't change), so dots and labels stay readable. off=true for those.
+// Where each node is drawn. Nodes that sit on their parent (all at 0,0,0 until moved) are fanned out in a short column
+// above it so each has its own marker (purely visual; stored positions don't change), and such a marker can still be dragged:
+// the node then goes to wherever it is dropped. Far-out nodes (past the view) get an edge marker: edge=true, not draggable.
 function layout(s) {
   const d = dpr(), pos = {}, count = {}, page = pageLevel();
   const dragging = drag && drag.kind === 'node' && drag.moved ? selNode : null;   // the node being dragged is drawn where it is, never stacked
-  const near = (page ? 30 : 12) * d, step = (page ? 44 : 15) * d;
+  const near = (page ? 30 : 12) * d, step = (page ? 44 : 15) * d, W = canvas.width, H = canvas.height, mg = 18 * d;
+  const ARROWS = ['\u2192', '\u2197', '\u2191', '\u2196', '\u2190', '\u2199', '\u2193', '\u2198'];
   const place = (n, depth) => {
     if (pos[n.id]) return pos[n.id];
     const w = worldPos(s, n), [x, y] = toS(w[0], w[2]);
+    if (!page && n.id !== planRoot() && n.id !== dragging && (x < mg || x > W - mg || y < mg || y > H - mg)) {
+      const dx = x - W / 2, dy = y - H / 2, t = Math.min((W / 2 - mg) / Math.max(Math.abs(dx), 1e-9), (H / 2 - mg) / Math.max(Math.abs(dy), 1e-9));
+      const ang = Math.atan2(-dy, dx), arrow = ARROWS[Math.round(((ang + 2 * Math.PI) % (2 * Math.PI)) / (Math.PI / 4)) % 8];
+      return pos[n.id] = { x: W / 2 + dx * t, y: H / 2 + dy * t, off: true, edge: true, arrow };
+    }
     const par = n.id !== planRoot() && n.id !== dragging && n.parent && depth < 50 ? nodeById(s, n.parent) : null;
     if (par) {
       const pp = place(par, depth + 1), pw = worldPos(s, par), [qx, qy] = toS(pw[0], pw[2]);
-      if (Math.hypot(x - qx, y - qy) < near) {
+      if (!pp.edge && Math.hypot(x - qx, y - qy) < near) {
         const i = count[par.id] = (count[par.id] || 0) + 1;
         return pos[n.id] = { x: pp.x, y: pp.y - (page ? 0 : 8 * d) - step * i, off: true };
       }
@@ -364,7 +400,10 @@ canvas.addEventListener('pointerdown', e => {
     const n = hitNode(px, py);
     if (n) {
       selNode = n.id; selFam = famOf(sys(), n).id;
-      drag = (layout(sys())[n.id].off || !n.parent || n.id === planRoot()) ? { kind: 'none', poi: pageLevel() && n.parent === selFam ? n.id : null } : { kind: 'node', moved: false, px, py, poi: pageLevel() ? n.id : null };
+      const s0 = sys(), lay = layout(s0)[n.id];
+      // A click on a POI (on the page) or a region (in a POI) goes into it; a drag moves it. Stacked markers drag too.
+      const zoom = pageLevel() && n.parent === selFam ? { k: 'poi', id: n.id } : planLevel() === 'poi' && isRegion(s0, n) ? { k: 'region', id: n.id } : null;
+      drag = (lay.edge || !n.parent || n.id === planRoot()) ? { kind: 'none', zoom } : { kind: 'node', moved: false, px, py, zoom };
       refreshSystemPanel();
     }
     else drag = { kind: 'pan', px, py, cx: cam.x, cz: cam.z, moved: false };
@@ -385,6 +424,14 @@ canvas.addEventListener('pointermove', e => {
     const s = sys(), n = nodeById(s, selNode), [wx, wz] = fromS(px, py);
     let ox = 0, oz = 0;
     if (n.parent) { const p = nodeById(s, n.parent); if (p) { const pp = worldPos(s, p); ox = pp[0]; oz = pp[2]; } }
+    // A unit too coarse for this view (an AU or light-second node in a km view) couldn't be placed by dragging: it becomes kilometres.
+    if (!drag.unitChecked) {
+      drag.unitChecked = true;
+      if ((UNIT_KM[n.unit] || 1) * 0.001 > 1 / cam.k && n.unit !== 'Kilometers') {
+        const f = UNIT_KM[n.unit] || 1; n.position = n.position.map(v => Math.round(v * f * 1000) / 1000); toast(`${n.name || n.id} is now in kilometres, so it can be placed here (was ${n.unit}).`); n.unit = 'Kilometers';
+        $('nUnit').value = 'Kilometers'; setField('nY', n.position[1]);
+      }
+    }
     const u = UNIT_KM[n.unit] || 1;
     n.position[0] = Math.round((wx - ox) / u * 1000) / 1000; n.position[2] = Math.round((wz - oz) / u * 1000) / 1000; drag.moved = true; setDirty();
     setField('nX', n.position[0]); setField('nZ', n.position[2]);
@@ -397,7 +444,10 @@ canvas.addEventListener('pointermove', e => {
 let emptyClick = null;
 canvas.addEventListener('pointerup', e => {
   const d0 = drag; drag = null;
-  if (d0 && d0.poi && !d0.moved) { zoomPoi = d0.poi; refreshSystemPanel(); draw(); return; }   // a click on a POI goes into it
+  if (d0 && d0.zoom && !d0.moved) {   // a click on a POI goes into it, on a region too
+    if (d0.zoom.k === 'poi') { zoomPoi = d0.zoom.id; zoomRegion = null; } else zoomRegion = d0.zoom.id;
+    refreshSystemPanel(); draw(); return;
+  }
   emptyClick = d0 && d0.kind === 'empty' && !d0.moved && view === 'galaxy' ? d0 : null;
 });
 // Add on the first click only (detail 1): the second click of a double-click adds nothing.
@@ -477,7 +527,7 @@ function deleteSystem() {
 function openTrench(name) { selTrench = name; selSys = -1; enterSystem(); }
 function openSystem(i) { selTrench = null; selSys = i; enterSystem(); }
 function enterSystem() {
-  selNode = null; selFam = null; fitFam = undefined; zoomPoi = null; view = 'system';
+  selNode = null; selFam = null; fitFam = undefined; zoomPoi = null; zoomRegion = null; view = 'system';
   $('galaxyPanel').hidden = true; $('systemPanel').hidden = false;
   buildPrefabPicker(); buildCopyPicker(); refreshSystemPanel(); draw();
 }
@@ -608,7 +658,7 @@ $('addPoi').addEventListener('click', () => {
   const fam = selectedAt(0) || nodeById(sys(), selFam);
   if (!fam) return toast('Add or select a family first');
   if (isCopy(fam)) return toast('A copied family is read-only: it keeps its own POIs');
-  zoomPoi = null;
+  zoomPoi = null; zoomRegion = null;
   const k = sys().nodes.filter(x => x.parent === fam.id).length, a = k * 2.4;   // spread new POIs so they don't pile up on the family's centre
   addChild(fam.id, { name: 'New POI', prefab: POI, unit: 'Lightseconds', ...defaultIcon('planet'), position: k ? [Math.round(Math.cos(a) * 20) / 10, 0, Math.round(Math.sin(a) * 20) / 10] : [0, 0, 0] });
   $('nName').focus(); $('nName').select();
@@ -616,7 +666,14 @@ $('addPoi').addEventListener('click', () => {
 $('addRegion').addEventListener('click', () => {
   const poi = selectedAt(1);
   if (!poi) return toast('Select a POI first');
-  addChild(poi.id, { name: 'New region', prefab: REGION, unit: 'Kilometers' });
+  // Like the game's regions: an Impulse Destination at the centre and a ring of spawn points a few km out.
+  const region = addChild(poi.id, { name: 'New region', prefab: REGION, unit: 'Kilometers' });
+  addChild(region.id, { name: 'Impulse Destination', prefab: 'Impulse Destination', unit: 'Kilometers', landingRadius: 30000 });
+  for (let i = 0; i < 6; i++) {
+    const a = i * Math.PI / 3;
+    addChild(region.id, { name: 'Spawn', prefab: '', unit: 'Kilometers', tags: ['SpawnPoint'], position: [Math.round(Math.cos(a) * 4000) / 1000, 0, Math.round(Math.sin(a) * 4000) / 1000] });
+  }
+  selNode = region.id; refreshSystemPanel(); draw();
   $('nName').focus(); $('nName').select();
 });
 $('addJump').addEventListener('click', () => {
@@ -656,9 +713,10 @@ function updateCrumb(s) {
   const fam = s.nodes.find(n => n.id === selFam);
   if (!fam) { c.hidden = true; return; }
   c.hidden = false;
-  c.append(el('button', { type: 'button', class: zoomPoi ? '' : 'on', title: "The family's page", onclick: () => { zoomPoi = null; selNode = fam.id; refreshSystemPanel(); draw(); } }, (fam.name || fam.id) + ' (page)'));
-  const zp = zoomPoi && nodeById(s, zoomPoi);
-  if (zp) c.append(el('span', { class: 'sep' }, '\u203A'), el('button', { type: 'button', class: 'on' }, zp.name || zp.id));
+  const zp = zoomPoi && nodeById(s, zoomPoi), zr = zoomRegion && nodeById(s, zoomRegion);
+  c.append(el('button', { type: 'button', class: zp ? '' : 'on', title: "The family's page", onclick: () => { zoomPoi = null; zoomRegion = null; selNode = fam.id; refreshSystemPanel(); draw(); } }, (fam.name || fam.id) + ' (page)'));
+  if (zp) c.append(el('span', { class: 'sep' }, '\u203A'), el('button', { type: 'button', class: zr ? '' : 'on', title: 'The POI', onclick: () => { zoomRegion = null; selNode = zp.id; refreshSystemPanel(); draw(); } }, zp.name || zp.id));
+  if (zr) c.append(el('span', { class: 'sep' }, '\u203A'), el('button', { type: 'button', class: 'on' }, zr.name || zr.id));
 }
 function refreshSystemPanel() {
   const s = sys(); if (!s) return;
@@ -670,16 +728,21 @@ function refreshSystemPanel() {
   const tops = s.nodes.filter(n => !n.parent);
   if (!tops.some(n => n.id === selFam)) selFam = tops.length ? tops[0].id : null;
   if (selFam !== prevFam) zoomPoi = null;
-  if (sel && levelOf(s, sel) >= 2) { let a = sel; while (a.parent && levelOf(s, a) > 1) a = nodeById(s, a.parent); zoomPoi = a.id; }   // a node inside a POI: the plan goes into it
+  if (sel && levelOf(s, sel) >= 2) {   // a node inside a POI: the plan goes into the POI, and into its region if it is in one
+    let a = sel; while (a.parent && levelOf(s, a) > 1) a = nodeById(s, a.parent); zoomPoi = a.id;
+    const r = inRegion(s, sel); zoomRegion = r ? r.id : null;
+  }
   const zp = zoomPoi && nodeById(s, zoomPoi);
-  if (!zp || !under(s, zp, selFam) || isCopy(nodeById(s, selFam) || {})) zoomPoi = null;
-  const planKey = selFam + '/' + zoomPoi + '/' + (zoomPoi ? 0 : planNodes(s).length);   // a new POI on the page refits it
+  if (!zp || !under(s, zp, selFam) || isCopy(nodeById(s, selFam) || {})) { zoomPoi = null; zoomRegion = null; }
+  const zr = zoomRegion && nodeById(s, zoomRegion);
+  if (!zr || !zoomPoi || !under(s, zr, zoomPoi)) zoomRegion = null;
+  const planKey = selFam + '/' + zoomPoi + '/' + zoomRegion + '/' + (zoomRegion ? 0 : planNodes(s).length);   // a new POI on the page refits it
   if (planKey !== fitFam) { fitFam = planKey; fitCam(); }
   updateCrumb(s);
   const fl = $('famList'); fl.textContent = '';
   if (!tops.length) fl.append(el('li', { class: 'muted' }, 'No families yet.'));
   for (const f of tops)
-    fl.append(el('li', { class: f.id === selFam ? 'sel' : '', onclick: () => { selNode = f.id; selFam = f.id; zoomPoi = null; refreshSystemPanel(); draw(); } },
+    fl.append(el('li', { class: f.id === selFam ? 'sel' : '', onclick: () => { selNode = f.id; selFam = f.id; zoomPoi = null; zoomRegion = null; refreshSystemPanel(); draw(); } },
       f.name || f.id, f._ro ? el('small', null, 'existing, read-only') : isCopy(f) ? el('small', null, 'copy of ' + tLabel(f.copyFamily.system) + ' / ' + f.copyFamily.family)
         : f.prefab === FAMILY ? el('small', null, 'family') : el('small', { class: 'warn' }, 'not a family')));
   const ul = $('nodeList'); ul.textContent = '';
@@ -691,8 +754,8 @@ function refreshSystemPanel() {
     if (!cf) ul.append(el('li', { class: 'muted' }, cat ? 'The catalogue has no such family.' : '(no catalogue: names unknown)'));
   } else if (fam) {
     for (const { n, depth } of depthOrder(s, fam))
-      ul.append(el('li', { class: n.id === selNode ? 'sel' : '', style: `padding-left:${14 + depth * 14}px`, onclick: () => { selNode = n.id; if (depth <= 1) zoomPoi = null; refreshSystemPanel(); draw(); }, ondblclick: () => { if (depth === 1) { zoomPoi = n.id; refreshSystemPanel(); draw(); } } },
-        (isJump(n) ? '◎ ' : '') + (n.name || n.id), el('small', null, depth === 0 ? 'family' : depth === 1 ? 'POI' : isWarp(n) ? 'jump point' : depth === 2 && n.prefab === REGION ? 'region' : n.prefab)));
+      ul.append(el('li', { class: n.id === selNode ? 'sel' : '', style: `padding-left:${14 + depth * 14}px`, onclick: () => { selNode = n.id; if (depth <= 1) { zoomPoi = null; zoomRegion = null; } refreshSystemPanel(); draw(); }, ondblclick: () => { if (depth === 1) { zoomPoi = n.id; zoomRegion = null; refreshSystemPanel(); draw(); } } },
+        (isJump(n) ? '◎ ' : '') + (n.name || n.id), el('small', null, depth === 0 ? 'family' : depth === 1 ? 'POI' : isWarp(n) ? 'jump point' : isSpawn(n) ? 'spawn point' : isRegion(s, n) ? 'region' : n.prefab)));
   }
   const n = sel;
   $('nodeForm').hidden = !n || !!n._ro;

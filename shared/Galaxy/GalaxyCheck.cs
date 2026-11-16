@@ -142,10 +142,10 @@ namespace StbcRevival.Galaxy
                 if (lk.Known && n.CopyFamily == null && (n.Prefab == null || (n.Prefab != "" && !lk.Prefabs.ContainsKey(n.Prefab)))) p.Add(at + ": no prefab '" + n.Prefab + "' in the game");
                 if (n.CopyFamily == null && n.Prefab == "")
                 {
-                    // The game has prefab-less nodes only as jump points / markers and as regions under a POI.
+                    // The game has prefab-less nodes only as jump points, spawn points / markers and as regions under a POI.
                     bool marker = false;
                     foreach (var t in n.Tags)
-                        if (t == "WarpDestination" || lk.Catalogue.SpawnTags.Contains(t)
+                        if (t == "WarpDestination" || t == "AltWarpDestination" || t == "SpawnPoint" || lk.Catalogue.SpawnTags.Contains(t)
                             || (lk.Catalogue.SpawnTags.Count == 0 && (t == "Player" || t == "AltPlayerSpawn"))) marker = true;
                     GalaxyNode par;
                     bool underPoi = n.Parent != null && ids.TryGetValue(n.Parent, out par) && par.Prefab == PoiPrefab;
