@@ -47,6 +47,14 @@ namespace StbcRevival.Galaxy
         public string Family;
     }
 
+    /// <summary>New families added to one of the game's own Trench systems.</summary>
+    public sealed class TrenchAddition
+    {
+        /// <summary>The Trench system, as the catalogue names it ("2824|Venov") or by its plain name ("Venov").</summary>
+        public string System;
+        public List<GalaxyNode> Nodes = new List<GalaxyNode>();
+    }
+
     /// <summary>A system of the new region, built by copying a Trench system's look and feel.</summary>
     public class GalaxySystem
     {
@@ -77,6 +85,8 @@ namespace StbcRevival.Galaxy
         public string Name;
         public Page Page = new Page { Label = "", Background = "trench-darkened" };
         public List<GalaxySystem> Systems = new List<GalaxySystem>();
+        /// <summary>Additions to the Trench's own systems (JSON key "trench", left out when empty).</summary>
+        public List<TrenchAddition> Trench = new List<TrenchAddition>();
 
         public static GalaxyFile Parse(string json)
         {
@@ -98,13 +108,17 @@ namespace StbcRevival.Galaxy
                 else f.Page = new Page { Label = f.Name, Background = "trench-darkened" };
 
                 var seen = new Dictionary<string, bool>();
-                foreach (var so in Json.List(root, "systems", "the file", true))
+                // Optional: a file may hold only additions to the Trench ("trench"); with neither, the check says
+                // "The region has no systems".
+                foreach (var so in Json.List(root, "systems", "the file", false))
                 {
                     var sys = ParseSystem(so);
                     if (seen.ContainsKey(sys.Id)) throw new FormatException("Two systems have the id '" + sys.Id + "'");
                     seen[sys.Id] = true;
                     f.Systems.Add(sys);
                 }
+                foreach (var to in Json.List(root, "trench", "the file", false))
+                    f.Trench.Add(ParseAddition(to));
                 return f;
             }
             catch (FormatException) { throw; }
@@ -138,6 +152,23 @@ namespace StbcRevival.Galaxy
                     s.Nodes.Add(n);
                 }
             return s;
+        }
+
+        private static TrenchAddition ParseAddition(object o)
+        {
+            var d = Json.Obj(o, "a trench addition");
+            var a = new TrenchAddition();
+            a.System = Json.Str(d, "system", "a trench addition", true, null);
+            string where = "trench/" + a.System;
+            var seen = new Dictionary<string, bool>();
+            foreach (var no in Json.List(d, "nodes", where, false))
+            {
+                var n = ParseNode(no, where);
+                if (seen.ContainsKey(n.Id)) throw new FormatException("Node '" + where + "/" + n.Id + "': the id is used twice in " + where);
+                seen[n.Id] = true;
+                a.Nodes.Add(n);
+            }
+            return a;
         }
 
         private static GalaxyNode ParseNode(object o, string systemId)
@@ -192,6 +223,20 @@ namespace StbcRevival.Galaxy
             var systems = new List<object>();
             foreach (var s in Systems) systems.Add(SystemToJson(s));
             root["systems"] = systems;
+            if (Trench != null && Trench.Count > 0)
+            {
+                var trench = new List<object>();
+                foreach (var a in Trench)
+                {
+                    var ad = new Dictionary<string, object>();
+                    ad["system"] = a.System;
+                    var an = new List<object>();
+                    foreach (var n in a.Nodes) an.Add(NodeToJson(n));
+                    ad["nodes"] = an;
+                    trench.Add(ad);
+                }
+                root["trench"] = trench;
+            }
             return MiniJson.Write(root);
         }
 

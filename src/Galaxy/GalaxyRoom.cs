@@ -15,8 +15,8 @@ namespace StbcRevival.Galaxy
     ///   - room "GA" (host): the decision for the mission being flown: the region's hash when it's on, "off" when off,
     ///     "" between missions (cleared off the bridge). A player joining a mission under way follows it
     ///     (GalaxyRegion.Decide), and leaves the crew with a message if the crew flies a region they can't build:
-    ///     their Trench wouldn't have the region's systems, so system ids and SectorIds past the Trench wouldn't exist
-    ///     for them (a desync), as with other mod mismatches (ModVersionCheck).
+    ///     their Trench wouldn't have the region's systems, so system ids past the Trench wouldn't exist for them, and
+    ///     SectorIds after a Trench system with additions would differ (a desync), as with other mod mismatches (ModVersionCheck).
     /// Every PC decides from the same inputs (room GH, every player's GH, the room's mission) at the map hook.
     /// </summary>
     internal static class GalaxyRoom

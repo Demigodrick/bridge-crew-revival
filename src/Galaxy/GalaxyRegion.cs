@@ -18,7 +18,8 @@ namespace StbcRevival.Galaxy
     /// map), with an InitAllSystems prefix as the fallback: the earliest point both the numbering and the system build
     /// see (spike notes, "Changes implied" 1). The Trench's SectorRoot is an asset that stays loaded between missions, so
     /// its list is set before every mission on it: the Trench's own systems, then the region's when it's on
-    /// (RegionLinks). Appending keeps every Trench system id and SectorId.
+    /// (RegionLinks). Appending keeps every Trench system id; SectorIds after a Trench system swapped for its copy with
+    /// additions shift while additions are on (TrenchAdditions.cs).
     ///
     /// Whether it's on is decided on every PC from the same inputs (GalaxyRoom: the room's GH, every player's GH, the
     /// room's mission), so every PC builds the same list. A player joining a mission already running follows the host's
@@ -28,8 +29,10 @@ namespace StbcRevival.Galaxy
     /// tree of its own: a copy of the template's ROOT node, then each file node, either a deep copy of a Trench family
     /// (copyFamily) or a new SystemNode, each with a new SystemTransform. Everything is checked first (GalaxyCheck
     /// against a catalogue of the Trench in memory); any problem and the whole file is skipped, the Trench untouched.
+    ///
+    /// The file's additions to the Trench's own systems (TrenchAdditions.cs) are on and off together with the region.
     /// </summary>
-    internal static class GalaxyRegion
+    internal static partial class GalaxyRegion
     {
         private const string P = "Galaxy region: ";
 
@@ -137,6 +140,7 @@ namespace StbcRevival.Galaxy
                     foreach (var l in map.Systems) if (l != null && (old == null || !old.Contains(l))) trenchOwn.Add(l);
                     regionLinks = null;
                     builtHash = null;
+                    ForgetTrenchCopies(map);
                     Plugin.Log.LogInfo(P + $"{map.name}: {trenchOwn.Count} systems of its own");
                 }
 
@@ -185,10 +189,13 @@ namespace StbcRevival.Galaxy
                 }
 
                 RegionLinks.Apply(map.Systems, trenchOwn, regionLinks ?? new List<Map.SystemLink>(), on);
-                for (int i = 0; i < map.Systems.Count; i++) map.Systems[i].System.SystemID = i; // as AssignSystemIds does
+                SwapTrench(map, on, ReferenceEquals(swapLoggedFor, sectorMap) ? null : hook); // the Trench's systems with additions: their copies when on, else the originals
+                NumberSystems(map); // as AssignSystemIds does, and a swapped-out original gets its copy's id
                 Active = on;
                 GalaxyCatalogue.TrenchCountOverride = on ? trenchOwn.Count : (int?)null;
-                if (on)
+                if (on && regionLinks.Count == 0)
+                    Plugin.Log.LogInfo(P + $"{hook}: {RegionName} on: no systems of its own (additions to the Trench only)");
+                else if (on)
                     Plugin.Log.LogInfo(P + $"{hook}: {RegionName} on: {regionLinks.Count} systems after the Trench's {trenchOwn.Count} "
                         + $"(ids {trenchOwn.Count}-{map.Systems.Count - 1})");
                 else if (before.Count != map.Systems.Count)
@@ -201,7 +208,8 @@ namespace StbcRevival.Galaxy
                 {
                     // Back to the Trench's own list if we know it, else to what it was.
                     RegionLinks.Apply(map.Systems, trenchOwn ?? before, null, false);
-                    for (int i = 0; i < map.Systems.Count; i++) map.Systems[i].System.SystemID = i;
+                    SwapTrench(map, false, null);
+                    NumberSystems(map);
                 }
                 catch (Exception e2) { Plugin.Log.LogError(P + "restoring the list: " + e2.Message); }
                 bool crewHadItOn = crewOn && ReferenceEquals(decidedFor, sectorMap); // this mission's decision, not a stale one
@@ -244,7 +252,7 @@ namespace StbcRevival.Galaxy
         }
 
         // A crew member flying the Trench alone while the crew has the region would be out of sync (system ids and
-        // SectorIds past the Trench missing): leave, as a joiner without the file does.
+        // SectorIds differing, past the Trench and after any system with additions): leave, as a joiner without the file does.
         private static void CantFollow(string why, string message) => GalaxyRoom.LeaveCrew(why, message);
 
         private static string HostName()
@@ -311,11 +319,13 @@ namespace StbcRevival.Galaxy
                 return false;
             }
 
-            // Build with the Trench's own list in place, so the catalogue lists only the Trench's systems.
+            // Build with the Trench's own list in place, as the game has it, so the catalogue lists only the Trench's
+            // systems and every addition is built from an original.
             RegionLinks.Apply(map.Systems, trenchOwn, null, false);
+            SwapTrench(map, false, null);
             try
             {
-                var links = Build(map, json, path);
+                var links = Build(map, json, path, out var copies, out var summary);
                 if (links == null)
                 {
                     failedHash = hash;
@@ -323,6 +333,7 @@ namespace StbcRevival.Galaxy
                     return false;
                 }
                 regionLinks = links;
+                SetTrenchCopies(copies, summary);
                 builtHash = hash;
                 everBuilt = true;
                 return true;
@@ -335,8 +346,11 @@ namespace StbcRevival.Galaxy
             }
         }
 
-        private static List<Map.SystemLink> Build(Map.SectorRoot trench, string json, string path)
+        private static List<Map.SystemLink> Build(Map.SectorRoot trench, string json, string path,
+            out Dictionary<Map.SystemRoot, Map.SystemRoot> copies, out string summary)
         {
+            copies = null;
+            summary = null;
             GalaxyFile file;
             try { file = GalaxyFile.Parse(json); }
             catch (FormatException e)
@@ -363,6 +377,7 @@ namespace StbcRevival.Galaxy
             var links = new List<Map.SystemLink>();
             var missing = new List<string>();
             foreach (var sys in file.Systems) game.Resolve(sys, missing);
+            var additions = ResolveAdditions(file, catalogue, game, missing);
             if (missing.Count > 0)
             {
                 Plugin.Log.LogError(P + $"{Path.GetFileName(path)}: not found in the game, skipped, the Trench only:");
@@ -370,7 +385,9 @@ namespace StbcRevival.Galaxy
                 return null;
             }
             foreach (var sys in file.Systems) links.Add(BuildSystem(sys, game));
-            Plugin.Log.LogInfo(P + $"built {builtName} from {Path.GetFileName(path)}: {links.Count} systems");
+            copies = BuildAdditions(additions, game, out summary);
+            Plugin.Log.LogInfo(P + $"built {builtName} from {Path.GetFileName(path)}: {links.Count} systems"
+                + (copies.Count > 0 ? $", additions to {copies.Count} Trench systems" : ""));
             return links;
         }
 
@@ -388,23 +405,7 @@ namespace StbcRevival.Galaxy
 
             // ROOT, then the file's nodes, parents first.
             var root = Node.Copy(game.Root(template), null, copy);
-            var built = new Dictionary<string, Map.SystemNode>();
-            var pending = new List<GalaxyNode>(sys.Nodes);
-            while (pending.Count > 0)
-            {
-                int done = 0;
-                for (int i = 0; i < pending.Count; i++)
-                {
-                    var n = pending[i];
-                    Map.SystemNode parent;
-                    if (n.Parent == null) parent = root;
-                    else if (!built.TryGetValue(n.Parent, out parent)) continue;
-                    built[n.Id] = n.CopyFamily != null ? CopiedFamily(n, parent, copy, game) : Node.Make(n, parent, copy, game, template);
-                    pending.RemoveAt(i--);
-                    done++;
-                }
-                if (done == 0) throw new InvalidOperationException($"{sys.Id}: nodes with no parent to hang from"); // the check rules this out
-            }
+            BuildNodes(sys.Id, sys.Nodes, root, copy, game, template);
 
             int pois = 0, families = 0;
             foreach (var t in copy.SystemTransforms)
@@ -418,6 +419,34 @@ namespace StbcRevival.Galaxy
             Plugin.Log.LogInfo(P + $"  {sys.Name} ({sys.Id}): template {template.SystemName}, at ({sys.X}, {sys.Z}), "
                 + $"{copy.SystemTransforms.Count} nodes, {families} families, {pois} Points of Interest");
             return link;
+        }
+
+        /// <summary>The file's nodes as new nodes of <paramref name="copy"/>, parents first; top-level ones under root.</summary>
+        private static void BuildNodes(string at, IList<GalaxyNode> nodes, Map.SystemNode root, Map.SystemRoot copy, GameParts game,
+            Map.SystemRoot template)
+        {
+            var built = new Dictionary<string, Map.SystemNode>();
+            var pending = new List<GalaxyNode>(nodes);
+            while (pending.Count > 0)
+            {
+                int done = 0;
+                for (int i = 0; i < pending.Count; i++)
+                {
+                    var n = pending[i];
+                    Map.SystemNode parent;
+                    if (n.Parent == null) parent = root;
+                    else if (!built.TryGetValue(n.Parent, out parent)) continue;
+                    if (n.CopyFamily == null && n.MapIcon == null && (n.Prefab == GalaxyCheck.FamilyPrefab || n.Prefab == GalaxyCheck.PoiPrefab))
+                    {
+                        n.MapIcon = MapIcons.FallbackFor(n, nodes);   // the game draws a white box for a node with no icon
+                        Plugin.Log.LogInfo(P + $"{at}: '{n.Name}' has no map icon; using {n.MapIcon}");
+                    }
+                    built[n.Id] = n.CopyFamily != null ? CopiedFamily(n, parent, copy, game) : Node.Make(n, parent, copy, game, template);
+                    pending.RemoveAt(i--);
+                    done++;
+                }
+                if (done == 0) throw new InvalidOperationException($"{at}: nodes with no parent to hang from"); // the check rules this out
+            }
         }
 
         // A whole Trench family as new nodes, renamed; the file can give it a map name, backdrop and icon.
@@ -541,9 +570,18 @@ namespace StbcRevival.Galaxy
             {
                 if (!systems.TryGetValue(sys.Template ?? "", out var template)) missing.Add($"{sys.Id}: Trench system '{sys.Template}'");
                 else if (RootOrNull(template) == null) missing.Add($"{sys.Id}: '{sys.Template}' has no ROOT node to copy");
-                foreach (var n in sys.Nodes)
+                ResolveNodes(sys.Id, sys.Nodes, missing);
+                if (sys.SystemTags != null)
+                    foreach (var t in sys.SystemTags)
+                        if (!Enum.IsDefined(typeof(Tag), t)) missing.Add($"{sys.Id}: system tag '{t}'");
+            }
+
+            /// <summary>What a list of file nodes names, found now; problems read "&lt;prefix&gt;/&lt;node id&gt;: ...".</summary>
+            internal void ResolveNodes(string prefix, IList<GalaxyNode> nodes, List<string> missing)
+            {
+                foreach (var n in nodes)
                 {
-                    string at = sys.Id + "/" + n.Id;
+                    string at = prefix + "/" + n.Id;
                     if (n.CopyFamily != null && FamilyOrNull(n.CopyFamily) == null)
                         missing.Add($"{at}: family '{n.CopyFamily.Family}' in '{n.CopyFamily.System}'");
                     if (n.CopyFamily == null && !string.IsNullOrEmpty(n.Prefab) && PrefabOrNull(n.Prefab) == null)
@@ -554,12 +592,11 @@ namespace StbcRevival.Galaxy
                         if (!Enum.IsDefined(typeof(Tag), t)) missing.Add($"{at}: tag '{t}'");
                     if (n.CopyFamily == null && Array.IndexOf(GalaxyFile.Units, n.Unit) < 0) missing.Add($"{at}: unit '{n.Unit}'");
                 }
-                if (sys.SystemTags != null)
-                    foreach (var t in sys.SystemTags)
-                        if (!Enum.IsDefined(typeof(Tag), t)) missing.Add($"{sys.Id}: system tag '{t}'");
             }
 
             internal Map.SystemRoot System(string name) => systems[name];
+
+            internal Map.SystemRoot SystemOrNull(string name) => name != null && systems.TryGetValue(name, out var s) ? s : null;
 
             internal Map.SystemNode Root(Map.SystemRoot system) => RootOrNull(system);
 
@@ -713,7 +750,9 @@ namespace StbcRevival.Galaxy
                 NodeField("Transform").SetValue(node, null);
                 var view = AccessTools.Field(typeof(Map.SystemNode), "<View>k__BackingField");
                 if (view != null) view.SetValue(node, null);
-                if (parent != null) Children(parent).Add(node);
+                // Only a parent of the system being built learns of its new child. A family added to a Trench system
+                // hangs from the original's ROOT node, which is the game's and stays as it is (TrenchAdditions.cs).
+                if (parent != null && ReferenceEquals(NodeField("Root").GetValue(parent), copy)) Children(parent).Add(node);
             }
 
             // id and sector come from InitAllSystems (AssignSector), System from Clone.

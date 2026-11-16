@@ -1,0 +1,31 @@
+{
+  "format": 1,
+  "name": "Test Additions",
+  "trench": [
+    {
+      "system": "Venov",
+      "nodes": [
+        { "id": "family", "name": "Venov Outpost", "prefab": "Family Group", "tags": ["FAMILY"], "unit": "Lightseconds",
+          "position": [4.5, 0, -4.5], "mapName": "Venov Outpost", "familyBackground": "FamilyMapBG_4",
+          "mapIcon": "spr_sys_map_icon_space_station" },
+        { "id": "poi", "parent": "family", "name": "Outpost Approach", "prefab": "Point of Interest", "unit": "Skybox",
+          "position": [0, 0, 0], "mapName": "Outpost Approach", "mapIcon": "spr_sys_map_icon_space_station" },
+        { "id": "region", "parent": "poi", "name": "REGION Venov Outpost", "prefab": "Region", "tags": ["RegionSpaceStation"],
+          "unit": "Skybox", "position": [15.6, 0, -7.3] },
+        { "id": "impulse", "parent": "region", "name": "Impulse Destination", "prefab": "Impulse Destination", "unit": "Kilometers",
+          "position": [0, 0, 0], "landingRadius": 30000 },
+        { "id": "station", "parent": "region", "name": "Venov Outpost Station", "prefab": "Ship - SpaceStationProcedural 22",
+          "unit": "Kilometers", "position": [-11.2, 0, -9.8], "rotation": [354.3, 4.7, 320.6] },
+        { "id": "jump", "parent": "region", "name": "Warp", "prefab": "", "tags": ["WarpDestination", "Player"],
+          "unit": "Kilometers", "position": [25.9, 0, -14], "rotation": [0, 308.9, 0] }
+      ]
+    },
+    {
+      "system": "Silva",
+      "nodes": [
+        { "id": "silva-twins", "name": "Silva Twins", "mapName": "Silva Twins",
+          "copyFamily": { "system": "5533|Arna", "family": "FAMILY Twin Planets" } }
+      ]
+    }
+  ]
+}

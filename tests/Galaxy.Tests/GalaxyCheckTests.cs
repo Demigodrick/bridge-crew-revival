@@ -377,6 +377,33 @@ public class GalaxyCheckTests
         foreach (var f in files)
             Assert.Equal(GalaxyCheck.Problems(f, Full()), GalaxyCheck.Problems(f, TrenchPlusFound(Cat(), f, Game())));
     }
+
+    // The impulse map's system overview spans +/-2e9 m on each axis around ROOT (FamilyMap._maxOrbitRadius); a family
+    // further out is drawn off the panel. The Trench's own reach 6.45 lightseconds (Silva VI).
+    [Fact]
+    public void Family_BeyondTheImpulseMap_IsAProblem()
+    {
+        var f = Valid(); var fam = f.Systems[0].Nodes[0];
+        fam.Unit = "Lightseconds"; fam.X = 25; fam.Z = -25;
+        Assert.Contains(GalaxyCheck.Problems(f, Cat()), x => x.StartsWith("kessar/kessar-fam: too far out for the impulse map"));
+    }
+
+    [Fact]
+    public void Family_InsideTheImpulseMap_Ok()
+    {
+        var f = Valid(); var fam = f.Systems[0].Nodes[0];
+        fam.Unit = "Lightseconds"; fam.X = 6.45f; fam.Z = -6.45f;
+        Assert.Empty(GalaxyCheck.Problems(f, Cat()));
+    }
+
+    [Fact]
+    public void TrenchAddition_FamilyBeyondTheImpulseMap_IsAProblem()
+    {
+        var fam = Node("outpost", null, "Family Group"); fam.Unit = "Lightseconds"; fam.X = 25; fam.Z = -25;
+        var f = new GalaxyFile { Format = 1, Name = "R", Systems = new List<GalaxySystem>(),
+            Trench = new List<TrenchAddition> { new TrenchAddition { System = "Venov", Nodes = new List<GalaxyNode> { fam } } } };
+        Assert.Contains(GalaxyCheck.Problems(f, Cat()), x => x.StartsWith("trench Venov/outpost: too far out for the impulse map"));
+    }
 }
 
 public class CatalogueTests
