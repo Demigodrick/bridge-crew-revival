@@ -53,7 +53,6 @@ namespace StbcRevival.Galaxy
             public int BuiltFrame;
             public bool Warping;             // between the Flying phase and Deactivated
             public int WarpFromPage;
-            public int LastFlipFrame = -1;
             public float LastPress = -10f;
             public bool LabelResetLogged;
             public bool Failed;              // restored to the vanilla map: the (hidden) button does nothing
@@ -655,14 +654,6 @@ namespace StbcRevival.Galaxy
             return Vector3.Distance(c[0], c[3]);
         }
 
-        private static float WorldHeight(GameObject g)
-        {
-            if (g == null || !(g.transform is RectTransform r)) return 0f;
-            var c = new Vector3[4];
-            r.GetWorldCorners(c);
-            return Vector3.Distance(c[0], c[1]);
-        }
-
         private static void SetLabel(PanelState s, string text)
         {
             s.Label = text.ToUpperInvariant();
@@ -712,7 +703,6 @@ namespace StbcRevival.Galaxy
             SetLabel(s, PageName(page == 2 ? 1 : 2));
             bool changed = s.Page != page;
             s.Page = page;
-            s.LastFlipFrame = Time.frameCount;
             ShipIcon(s);
             if (changed) Plugin.Log.LogInfo(P + $"{s.Name}: page {page} ({PageName(page)}), {why}; the button reads '{ReadLabel(s)}'");
         }

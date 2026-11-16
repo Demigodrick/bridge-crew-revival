@@ -15,9 +15,9 @@ namespace StbcRevival.Galaxy
     /// - Build: the Trench's systems, node trees, prefabs (with kinds and readable labels) and tags, for the in-game
     ///   check of a region file (GalaxyRegion). Nothing of it is written out: the galaxy designer reads the game files itself.
     /// - Pictures of the SectorBody prefabs for the designer (GalaxyThumbnails): BepInEx/galaxies/thumbs/*.png and the
-    ///   index thumbs.json (ThumbIndex: prefab name → file, kind, label). Taken by itself a few seconds into the first
-    ///   shuttle visit when there's no current index, and again on [Galaxy] PictureKey (on the shuttle or in the
-    ///   briefing room). A run cut short by leaving the shuttle (or a level load) is retried on the next shuttle visit;
+    ///   index thumbs.json (ThumbIndex: prefab name → file, kind, label). Only when [Galaxy] PictureKey is set (a
+    ///   development setting; None by default, and then nothing is taken): by itself a few seconds into the first
+    ///   shuttle visit when there's no current index, and again on the key (on the shuttle or in the briefing room). A run cut short by leaving the shuttle (or a level load) is retried on the next shuttle visit;
     ///   any other end counts as done; at most one automatic attempt a session.
     /// Also FindMapArt and PathOf, for the warp map's pages (WarpPages). Never breaks the game: anything that fails
     /// is logged and left out.
@@ -98,10 +98,13 @@ namespace StbcRevival.Galaxy
             catch (Exception e) { Plugin.Log.LogWarning("Galaxy: unloading the loaded prefabs: " + e.Message); }
         }
 
-        // Takes the pictures by itself the first time the player is on the shuttle, if there's no current index;
-        // never on the bridge or in the briefing room.
+        // Only with [Galaxy] PictureKey set (a development setting): takes the pictures by itself the first time the
+        // player is on the shuttle, if there's no current index; never on the bridge or in the briefing room. With
+        // the key at None (the default) nothing at all happens here: no catalogue, no file looked at.
         private static void Auto()
         {
+            var key = Plugin.PictureKey;
+            if (key == null || key.Value == KeyCode.None) return;
             if (autoDone || GalaxyThumbnails.Running || Time.realtimeSinceStartup < nextAutoLook) return;
             nextAutoLook = Time.realtimeSinceStartup + 0.5f;
             bool onShuttle;
@@ -268,7 +271,17 @@ namespace StbcRevival.Galaxy
 
         private static bool IsTrench(Map.SectorRoot map) => map.name.IndexOf("Trench", StringComparison.OrdinalIgnoreCase) >= 0;
 
-        internal static Catalogue Build(Map.SectorRoot trench, out Dictionary<string, Sector.SectorBody> bodies)
+        /// <summary>The Trench and every SectorBody prefab under Resources/Sector (the pictures).</summary>
+        internal static Catalogue Build(Map.SectorRoot trench, out Dictionary<string, Sector.SectorBody> bodies) =>
+            Build(trench, out bodies, null, null);
+
+        /// <summary>
+        /// With <paramref name="find"/>: the Trench's prefabs and, of <paramref name="wanted"/>, those the Trench doesn't
+        /// have but find does, instead of loading all of Resources/Sector (the region check: GalaxyCheck only asks
+        /// about the prefabs the file names, so it rejects the same files). Without: as above.
+        /// </summary>
+        internal static Catalogue Build(Map.SectorRoot trench, out Dictionary<string, Sector.SectorBody> bodies,
+            IEnumerable<string> wanted, Func<string, Sector.SectorBody> find)
         {
             var c = new Catalogue();
             // Prefab name -> body, in the order met; the Trench's first, then the rest of Resources.
@@ -287,7 +300,8 @@ namespace StbcRevival.Galaxy
             catch (Exception e) { Plugin.Log.LogWarning("Galaxy: spawn tags: " + e.Message); }
 
             Systems(c, trench, bodies, order, nodeTags);
-            ResourcePrefabs(bodies, order);
+            if (find == null) ResourcePrefabs(bodies, order);
+            else FoundPrefabs(bodies, order, wanted, find);
             foreach (var name in order)
             {
                 try
@@ -522,6 +536,25 @@ namespace StbcRevival.Galaxy
                 Plugin.Log.LogInfo($"Galaxy: {order.Count - before} more SectorBody prefabs under Resources/Sector");
             }
             catch (Exception e) { Plugin.Log.LogWarning("Galaxy: prefabs under Resources/Sector: " + e.Message); }
+        }
+
+        // Of the names asked for, those the Trench doesn't have, looked up one by one; a name not found stays out.
+        private static void FoundPrefabs(Dictionary<string, Sector.SectorBody> bodies, List<string> order, IEnumerable<string> wanted,
+            Func<string, Sector.SectorBody> find)
+        {
+            if (wanted == null) return;
+            foreach (var name in wanted)
+            {
+                if (string.IsNullOrEmpty(name) || bodies.ContainsKey(name)) continue;
+                try
+                {
+                    var body = find(name);
+                    if (body == null) continue;
+                    bodies[name] = body;
+                    order.Add(name);
+                }
+                catch (Exception e) { Plugin.Log.LogWarning($"Galaxy: prefab {name}: {e.Message}"); }
+            }
         }
 
         // A NovaTagList's names: the serialized names, else the parsed tags.

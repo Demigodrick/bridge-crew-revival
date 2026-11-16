@@ -256,14 +256,15 @@ namespace StbcRevival
                 + "or \"Mission Data/Maps/Sector - SpaceStationRescue\". Applies to your whole crew when you host. Off the Trench there are no "
                 + "mission encounters: you start in one of the map's systems and can warp to its others. Empty: the game's own map.");
             PictureKey = Config.Bind("Galaxy", "PictureKey", UnityEngine.KeyCode.None,
-                "For the galaxy designer: the mod takes pictures of the game's planets, stars, stations and other bodies "
-                + "(BepInEx/galaxies/thumbs/ and thumbs.json) by itself the first time you're on the shuttle. This key takes "
-                + "them again, on the shuttle or in the briefing room. None: no key.");
+                "Development only, for the galaxy designer (a tool for making galaxy regions, not part of the mod): pictures of the "
+                + "game's planets, stars, stations and other bodies (BepInEx/galaxies/thumbs/ and thumbs.json) are only ever taken "
+                + "when this is set. Set, they're taken once on your first shuttle visit if missing or out of date, and again when "
+                + "you press the key on the shuttle or in the briefing room. None (the default): no pictures.");
             StbcRevival.Galaxy.GalaxyCatalogue.MigrateOldKey(Config, PictureKey);
             GalaxyRegionName = Config.Bind("Galaxy", "Region", "",
-                "A galaxy region made with the galaxy designer: the name of its file in BepInEx/galaxies (\"test-reach\" for "
-                + "test-reach.json). Its systems are added after the Trench's for Revival Patrol and Free Roam, when everyone in the "
-                + "crew has the same file (the host is told who hasn't). Empty: off.");
+                "Testing only: a galaxy region file in BepInEx/galaxies, by name (\"test-reach\" for test-reach.json). Its systems "
+                + "are added after the Trench's for Revival Patrol and Free Roam, when everyone in the crew has the same file (the "
+                + "host is told who hasn't). Empty (the default): off, the Trench as the game has it.");
             TestPatrolAssignment = Config.Bind("Debug", "TestPatrolAssignment", "",
                 new BepInEx.Configuration.ConfigDescription(
                     "Testing only: every assignment Patrol offers is this one, when you host. Empty: Starfleet's usual mix "

@@ -75,4 +75,34 @@ public class GalaxyGateTests
         Assert.True(GalaxyGate.IsRegionSystem(14, 14));
         Assert.False(GalaxyGate.IsRegionSystem(13, 14));
     }
+
+    // ---- The map hook's quiet case (the default config) ----------------------------------------------------------
+
+    [Fact]
+    public void NothingToDecide_DefaultConfig_Hosting()
+        => Assert.True(GalaxyGate.NothingToDecide("", false, true, null, null));
+
+    [Fact]
+    public void NothingToDecide_DefaultConfig_JoiningAHostWithoutARegion()
+    {
+        Assert.True(GalaxyGate.NothingToDecide("", false, false, "", null));
+        Assert.True(GalaxyGate.NothingToDecide(null, false, false, null, ""));
+        Assert.True(GalaxyGate.NothingToDecide("  ", false, false, "", "off"));
+    }
+
+    [Fact]
+    public void NothingToDecide_NotWithARegionSetOrBuilt()
+    {
+        Assert.False(GalaxyGate.NothingToDecide("test-reach", false, true, null, null));
+        Assert.False(GalaxyGate.NothingToDecide("", true, true, null, null)); // its links may still be in the Trench's list
+    }
+
+    [Fact]
+    public void NothingToDecide_NotWhenTheHostHasARegion()
+    {
+        // A player without the file still decides, so they leave a crew flying the region.
+        Assert.False(GalaxyGate.NothingToDecide("", false, false, "abc", null));
+        Assert.False(GalaxyGate.NothingToDecide("", false, false, "", "abc"));
+        Assert.False(GalaxyGate.NothingToDecide("", false, false, "abc", "off"));
+    }
 }

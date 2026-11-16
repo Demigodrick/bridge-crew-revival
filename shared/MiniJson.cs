@@ -174,7 +174,11 @@ namespace StbcRevival
             int start = i;
             while (i < s.Length && (char.IsDigit(s[i]) || s[i] == '-' || s[i] == '+' || s[i] == '.' || s[i] == 'e' || s[i] == 'E')) i++;
             if (i == start) throw new FormatException($"JSON: unexpected '{c}' at {i}");
-            return double.Parse(s.Substring(start, i - start), NumberStyles.Float, CultureInfo.InvariantCulture);
+            string text = s.Substring(start, i - start);
+            // net35 throws on a number past double's range where net8 gives infinity: infinity on both, for the
+            // reader of the value to reject saying where it is.
+            try { return double.Parse(text, NumberStyles.Float, CultureInfo.InvariantCulture); }
+            catch (OverflowException) { return text.StartsWith("-", StringComparison.Ordinal) ? double.NegativeInfinity : double.PositiveInfinity; }
         }
 
         private static bool Word(string s, ref int i, string word)

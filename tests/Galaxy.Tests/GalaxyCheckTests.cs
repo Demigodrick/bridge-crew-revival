@@ -314,6 +314,69 @@ public class GalaxyCheckTests
         };
         Assert.Empty(GalaxyCheck.Problems(f, c));
     }
+
+    // ---- The region check without all of Resources/Sector (GalaxyCatalogue.Build with a lookup) ----------------
+
+    // The mod's catalogue for the region check: the Trench's prefabs, plus those of PrefabNames the lookup finds.
+    static Catalogue TrenchPlusFound(Catalogue trenchOnly, GalaxyFile f, Dictionary<string, CataloguePrefab> game)
+    {
+        var have = new HashSet<string>(trenchOnly.Prefabs.Select(x => x.Name));
+        foreach (var name in GalaxyCheck.PrefabNames(f))
+            if (!have.Contains(name) && game.TryGetValue(name, out var found)) { trenchOnly.Prefabs.Add(found); have.Add(name); }
+        return trenchOnly;
+    }
+
+    // Every prefab the game has (the old full catalogue), by name: the Trench's and some only under Resources/Sector.
+    static Dictionary<string, CataloguePrefab> Game()
+    {
+        var all = Cat().Prefabs.ToDictionary(x => x.Name);
+        all["Planet_Ice"] = new CataloguePrefab { Name = "Planet_Ice", Kind = "planet", Radius = 3 };
+        all["Station_X"] = new CataloguePrefab { Name = "Station_X", Kind = "station", Radius = 1 };
+        return all;
+    }
+
+    static Catalogue Full() { var c = Cat(); c.Prefabs = Game().Values.ToList(); return c; }
+
+    [Fact]
+    public void PrefabNames_OwnNodesOnce_NotCopiesOrEmpty()
+    {
+        var f = Valid();
+        f.Systems[0].Nodes.Add(Copy("kessar-copy", "Venov", "FAMILY Venov III"));
+        f.Systems[0].Nodes.Add(Node("kessar-empty", "kessar-region", "", "Player"));
+        f.Systems[0].Nodes.Add(Node("kessar-star2", "kessar-region", "Star_Yellow"));
+        Assert.Equal(new[] { "Family Group", "Point of Interest", "Region", "Star_Yellow", "Planet_Rock" }, GalaxyCheck.PrefabNames(f));
+    }
+
+    [Fact]
+    public void RegionCheck_WithoutResourcePrefabs_StillRejectsUnknownPrefab()
+    {
+        var f = Valid(); f.Systems[0].Nodes[3].Prefab = "X";
+        var p = GalaxyCheck.Problems(f, TrenchPlusFound(Cat(), f, Game()));
+        Assert.Contains("kessar/kessar-star: no prefab 'X' in the game", p);
+        Assert.Equal(GalaxyCheck.Problems(f, Full()), p);
+    }
+
+    [Fact]
+    public void RegionCheck_WithoutResourcePrefabs_AcceptsAPrefabOnlyUnderResources()
+    {
+        // Planet_Ice and the station's prefab aren't the Trench's: found by name, the file passes as with every prefab.
+        var f = Valid(); f.Systems[0].Nodes[4].Prefab = "Station_X"; f.Systems[0].Nodes[4].Tags.Clear();
+        f.Systems[0].Nodes.Add(Node("kessar-ice", "kessar-region", "Planet_Ice"));
+        Assert.Empty(GalaxyCheck.Problems(f, Full()));
+        Assert.Empty(GalaxyCheck.Problems(f, TrenchPlusFound(Cat(), f, Game())));
+    }
+
+    [Fact]
+    public void RegionCheck_WithoutResourcePrefabs_SameAnswerAsEveryPrefab()
+    {
+        var files = new List<GalaxyFile>();
+        var a = Valid(); a.Systems[0].Nodes[1].Prefab = "Nope"; files.Add(a);
+        var b = Valid(); b.Systems[0].Nodes[4].Prefab = "Station_X"; b.Systems[0].Nodes[4].Tags.Clear(); files.Add(b);
+        var c = Valid(); c.Systems[0].Nodes[4].Prefab = "Planet_Ice"; c.Systems[0].Nodes[4].Tags.Clear(); files.Add(c); // no station
+        var d = Valid(); d.Systems[0].Nodes[3].Prefab = null; files.Add(d);
+        foreach (var f in files)
+            Assert.Equal(GalaxyCheck.Problems(f, Full()), GalaxyCheck.Problems(f, TrenchPlusFound(Cat(), f, Game())));
+    }
 }
 
 public class CatalogueTests

@@ -205,4 +205,32 @@ public class GalaxyFileTests
         Assert.Equal(new[] { "z", "a" }, nested.Keys.ToArray());
         Assert.Equal(text, MiniJson.Write(back));
     }
+
+    // Numbers past float's range parse as doubles (or as infinity) and would put a system or body at infinity.
+    [Theory]
+    [InlineData("[1e39, 2]")]
+    [InlineData("[1e999, 2]")]
+    [InlineData("[-1e999, 2]")]
+    public void NonFinite_SystemPosition_Rejected(string position)
+    {
+        var e = Assert.Throws<FormatException>(() => GalaxyFile.Parse(Sample.Replace("[120.5, -40.25]", position)));
+        Assert.Contains("system 'kessar'", e.Message);
+        Assert.Contains("position", e.Message);
+    }
+
+    [Fact]
+    public void NonFinite_NodeRotation_Rejected()
+    {
+        var e = Assert.Throws<FormatException>(() => GalaxyFile.Parse(Sample.Replace("[10, 20.5, 30]", "[10, 1e40, 30]")));
+        Assert.Contains("node 'kessar/kessar-2'", e.Message);
+        Assert.Contains("rotation", e.Message);
+    }
+
+    [Fact]
+    public void NonFinite_Number_Rejected()
+    {
+        var e = Assert.Throws<FormatException>(() => GalaxyFile.Parse(Sample.Replace("\"landingRadius\": 1000", "\"landingRadius\": 1e999")));
+        Assert.Contains("node 'kessar/kessar-2'", e.Message);
+        Assert.Contains("landingRadius", e.Message);
+    }
 }

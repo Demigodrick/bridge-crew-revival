@@ -279,7 +279,9 @@ namespace StbcRevival.Galaxy
                 return fallback;
             }
             if (!(v is double)) throw new FormatException(where + ": '" + key + "' should be a number");
-            return (double)v;
+            double x = (double)v;
+            if (double.IsNaN(x) || double.IsInfinity(x)) throw new FormatException(where + ": '" + key + "' is too large a number");
+            return x;
         }
 
         public static List<object> List(Dictionary<string, object> d, string key, string where, bool required)
@@ -304,6 +306,9 @@ namespace StbcRevival.Galaxy
             {
                 if (!(l[i] is double)) throw new FormatException(where + ": '" + key + "' should be " + count + " numbers");
                 r[i] = (float)(double)l[i];
+                // A number past float's range (1e39, 1e999) would put a body at infinity.
+                if (float.IsNaN(r[i]) || float.IsInfinity(r[i]))
+                    throw new FormatException(where + ": '" + key + "' has a number too large (" + ((double)l[i]).ToString("R", System.Globalization.CultureInfo.InvariantCulture) + ")");
             }
             return r;
         }

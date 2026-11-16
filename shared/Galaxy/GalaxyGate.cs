@@ -31,6 +31,21 @@ namespace StbcRevival.Galaxy
             return new GateResult { On = false, Reason = regionName + " is off: " + NameList(missing) + (missing.Count == 1 ? " doesn't have it" : " don't have it") };
         }
 
+        /// <summary>
+        /// Nothing for the map hook to read, build or publish: no region set here, none built this session (so none
+        /// can be in the Trench's list), and the crew has none: hosting, or the host has no file and no region running.
+        /// A player without a region in a crew whose host has one is never quiet, so they still decide and leave.
+        /// </summary>
+        /// <param name="hostHash">The room's GH as a joiner sees it; ignored when hosting.</param>
+        /// <param name="running">The room's GA (null or "" between missions, "off", or a hash); ignored when hosting.</param>
+        public static bool NothingToDecide(string configRegion, bool everBuilt, bool isHost, string hostHash, string running)
+        {
+            if (!string.IsNullOrEmpty(configRegion) && configRegion.Trim() != "") return false;
+            if (everBuilt) return false;
+            if (isHost) return true;
+            return string.IsNullOrEmpty(hostHash) && (string.IsNullOrEmpty(running) || running == "off");
+        }
+
         /// <summary>System ids at or above the Trench count are the region's systems, not Trench's.</summary>
         public static bool IsRegionSystem(int systemId, int trenchCount) => systemId >= trenchCount;
 

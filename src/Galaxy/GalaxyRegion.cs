@@ -71,6 +71,7 @@ namespace StbcRevival.Galaxy
         private static object decidedFor;    // the SectorMap the last decision was made for
         private static bool decidedOn;
         private static bool crewOn;          // the crew's decision for that mission, before our own build
+        private static bool everBuilt;       // a region was built this session (its links may still be in a list)
 
         internal static void Patch(Harmony harmony)
         {
@@ -88,6 +89,8 @@ namespace StbcRevival.Galaxy
 
         private static void Init_Prefix(Sector.SectorMap __instance) => Ensure(__instance, "InitAllSystems");
 
+        private static string warnedName; // the last config value warned about as not a plain file name
+
         /// <summary>The galaxy file's path for the config value, or null when none is set.</summary>
         internal static string FilePath()
         {
@@ -96,7 +99,12 @@ namespace StbcRevival.Galaxy
             if (name.EndsWith(".json", StringComparison.OrdinalIgnoreCase)) name = name.Substring(0, name.Length - 5);
             if (name.IndexOfAny(new[] { '/', '\\', ':' }) >= 0 || name.Contains(".."))
             {
-                Plugin.Log.LogWarning(P + $"'{name}' isn't a plain file name; no region");
+                // Read every second (GalaxyRoom.OwnHash): said once per value.
+                if (warnedName != name)
+                {
+                    warnedName = name;
+                    Plugin.Log.LogWarning(P + $"'{name}' isn't a plain file name; no region");
+                }
                 return null;
             }
             return Path.Combine(GalaxyCatalogue.Folder, name + ".json");
@@ -134,6 +142,14 @@ namespace StbcRevival.Galaxy
 
                 bool on;
                 if (ReferenceEquals(decidedFor, sectorMap)) on = decidedOn; // the fallback hook for the same mission: same answer
+                else if (NothingToDecide())
+                {
+                    // No region of ours, never one built, none in the crew: the Trench as the game has it, nothing
+                    // read or published. (The in-mission check still leaves if the host turns out to have it on.)
+                    decidedFor = sectorMap;
+                    decidedOn = on = crewOn = false;
+                    DecidedThisMission = true;
+                }
                 else
                 {
                     decidedFor = sectorMap;
@@ -194,17 +210,37 @@ namespace StbcRevival.Galaxy
                 decidedFor = sectorMap;
                 decidedOn = false;
                 DecidedThisMission = true;
-                if (GalaxyRoom.IsHost) GalaxyRoom.PublishDecision(GalaxyRoom.Off, "");
+                // Inside the game's map load (a Harmony prefix): nothing may escape from here.
+                bool host = true;
+                try { host = GalaxyRoom.IsHost; }
+                catch (Exception e3) { Plugin.Log.LogWarning(P + "whether we host: " + e3.Message); }
+                if (host)
+                {
+                    try { GalaxyRoom.PublishDecision(GalaxyRoom.Off, ""); }
+                    catch (Exception e3) { Plugin.Log.LogWarning(P + "publishing the decision: " + e3.Message); }
+                }
                 else
                 {
                     // Whether or not we got as far as deciding: if the host has the region on, we're out of sync.
                     string running = null;
                     try { running = GalaxyRoom.RunningDecision(); }
                     catch (Exception e3) { Plugin.Log.LogWarning(P + "the host's decision: " + e3.Message); }
-                    if (crewHadItOn || (running != null && running != GalaxyRoom.Off))
-                        CantFollow("the crew has the region on but it failed to load here.", GalaxyRoom.DidntLoadMessage(HostName()));
+                    try
+                    {
+                        if (crewHadItOn || (running != null && running != GalaxyRoom.Off))
+                            CantFollow("the crew has the region on but it failed to load here.", GalaxyRoom.DidntLoadMessage(HostName()));
+                    }
+                    catch (Exception e3) { Plugin.Log.LogWarning(P + "leaving the crew: " + e3.Message); }
                 }
             }
+        }
+
+        // The default config's case, decided from a config read and the room's properties alone.
+        private static bool NothingToDecide()
+        {
+            if (ConfigName != "" || everBuilt) return false; // the cheap part first: no reflection for a region of ours
+            bool host = GalaxyRoom.IsHost;
+            return GalaxyGate.NothingToDecide(ConfigName, everBuilt, host, host ? null : GalaxyRoom.HostHash, host ? null : GalaxyRoom.RunningDecision());
         }
 
         // A crew member flying the Trench alone while the crew has the region would be out of sync (system ids and
@@ -288,6 +324,7 @@ namespace StbcRevival.Galaxy
                 }
                 regionLinks = links;
                 builtHash = hash;
+                everBuilt = true;
                 return true;
             }
             catch (Exception e)
@@ -311,8 +348,10 @@ namespace StbcRevival.Galaxy
             BuiltPage = file.Page;
             BuiltFolder = Path.GetDirectoryName(path);
 
-            // The same check the designer makes, against what this game has.
-            var catalogue = GalaxyCatalogue.Build(trench, out _);
+            // The same check the designer makes, against what this game has: the Trench, and of the prefabs the file
+            // names, those found by name (all of Resources/Sector is loaded only when the Trench lacks one).
+            var game = new GameParts(trench);
+            var catalogue = GalaxyCatalogue.Build(trench, out _, GalaxyCheck.PrefabNames(file), game.PrefabOrNull);
             var problems = GalaxyCheck.Problems(file, catalogue);
             if (problems.Count > 0)
             {
@@ -321,7 +360,6 @@ namespace StbcRevival.Galaxy
                 return null;
             }
 
-            var game = new GameParts(trench);
             var links = new List<Map.SystemLink>();
             var missing = new List<string>();
             foreach (var sys in file.Systems) game.Resolve(sys, missing);
@@ -546,7 +584,7 @@ namespace StbcRevival.Galaxy
                 return PrefabOrNull(name);
             }
 
-            private Sector.SectorBody PrefabOrNull(string name)
+            internal Sector.SectorBody PrefabOrNull(string name)
             {
                 if (prefabs.TryGetValue(name, out var body)) return body;
                 LoadAll();

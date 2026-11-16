@@ -5,7 +5,7 @@ namespace StbcRevival.Galaxy
 {
     /// <summary>
     /// Everything that would make a galaxy file misbehave in the game, as plain sentences. The designer shows them
-    /// and refuses to save while there are any; the mod runs the same check and ignores a file that fails it.
+    /// and asks "Save anyway?" while there are any; the mod runs the same check and ignores a file that fails it.
     /// </summary>
     public static class GalaxyCheck
     {
@@ -22,6 +22,22 @@ namespace StbcRevival.Galaxy
 
         /// <summary>Two systems closer than this share of the universe width sit on top of each other on the map.</summary>
         private const float OverlapShare = 0.02f;
+
+        /// <summary>
+        /// The prefab names the file's own nodes use (not copied families, not ""), once each in file order. Problems
+        /// asks the catalogue about these and no others, so a catalogue of the Trench plus those of these the game
+        /// has gives the same answer as one of every prefab.
+        /// </summary>
+        public static List<string> PrefabNames(GalaxyFile file)
+        {
+            var names = new List<string>();
+            if (file == null || file.Systems == null) return names;
+            foreach (var sys in file.Systems)
+                if (sys != null && sys.Nodes != null)
+                    foreach (var n in sys.Nodes)
+                        if (n != null && n.CopyFamily == null && !string.IsNullOrEmpty(n.Prefab) && !names.Contains(n.Prefab)) names.Add(n.Prefab);
+            return names;
+        }
 
         /// <summary>A null catalogue means no game data: only the checks that need none are made.</summary>
         public static List<string> Problems(GalaxyFile file, Catalogue catalogue)
