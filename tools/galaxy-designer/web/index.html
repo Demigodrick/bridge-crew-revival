@@ -22,7 +22,8 @@
       <label class="grow">File <input id="fileName" type="text" placeholder="my-region" spellcheck="false" title="Lower-case letters, digits and dashes"></label>
       <span id="dirtyMark" class="muted" hidden>unsaved</span>
     </div>
-    <ul id="openList" hidden></ul>
+    <ul id="openList" aria-label="Galaxy files"></ul>
+    <button id="btnReload" type="button" class="quiet" title="Read the game's files again (after the game updated, or the pictures were taken)">Reload game data</button>
   </header>
 
   <section id="galaxyPanel" class="panel">
@@ -43,6 +44,7 @@
         <label>X <input id="sX" type="number" step="1"></label>
         <label>Z <input id="sZ" type="number" step="1"></label>
       </div>
+      <div id="sWarn" class="warnline" hidden></div>
       <div class="row">
         <button id="sOpen" type="button" class="primary">Edit its nodes</button>
         <button id="sDelete" type="button">Delete</button>
@@ -117,7 +119,9 @@
 </aside>
 <main id="view">
   <canvas id="canvas"></canvas>
+  <div id="crumb" hidden></div>
   <div id="coords" class="muted"></div>
+  <div id="picker" hidden></div>
   <div id="toast" role="status" hidden></div>
   <footer id="help"></footer>
 </main>
