@@ -32,6 +32,9 @@ These aren't under the GPL. Don't take them out of the mod to share or use elsew
 - **Defiant** (`assets/ships/Defiant`): "U.S.S Defiant" by FatManInABox (Blend Swap #93289), under Creative Commons
   Attribution 3.0, marked fan art for non-commercial use; converted for the mod by YannikB98, who also supplied its
   pulse sound. See its `CREDITS.txt`.
+- **Voyager** (`assets/ships/Voyager`): "USS Voyager 4K Textures Star Trek Intrepid" by CGI Tutorials (Ben Shelley),
+  under Creative Commons Attribution-NonCommercial-NoDerivs 4.0; converted for the mod by YannikB98 and included with
+  the author's permission. See its `CREDITS.txt`.
 
 Star Trek and related marks are trademarks of CBS Studios / Paramount Global. Bridge Crew Revival is an unofficial
 fan project, not affiliated with or endorsed by Ubisoft, Red Storm Entertainment, CBS Studios or Paramount.
