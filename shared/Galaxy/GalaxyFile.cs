@@ -108,7 +108,9 @@ namespace StbcRevival.Galaxy
                 else f.Page = new Page { Label = f.Name, Background = "trench-darkened" };
 
                 var seen = new Dictionary<string, bool>();
-                foreach (var so in Json.List(root, "systems", "the file", true))
+                // Optional: a file may hold only additions to the Trench ("trench"); with neither, the check says
+                // "The region has no systems".
+                foreach (var so in Json.List(root, "systems", "the file", false))
                 {
                     var sys = ParseSystem(so);
                     if (seen.ContainsKey(sys.Id)) throw new FormatException("Two systems have the id '" + sys.Id + "'");

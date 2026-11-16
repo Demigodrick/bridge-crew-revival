@@ -18,7 +18,8 @@ namespace StbcRevival.Galaxy
     /// map), with an InitAllSystems prefix as the fallback: the earliest point both the numbering and the system build
     /// see (spike notes, "Changes implied" 1). The Trench's SectorRoot is an asset that stays loaded between missions, so
     /// its list is set before every mission on it: the Trench's own systems, then the region's when it's on
-    /// (RegionLinks). Appending keeps every Trench system id and SectorId.
+    /// (RegionLinks). Appending keeps every Trench system id; SectorIds after a Trench system swapped for its copy with
+    /// additions shift while additions are on (TrenchAdditions.cs).
     ///
     /// Whether it's on is decided on every PC from the same inputs (GalaxyRoom: the room's GH, every player's GH, the
     /// room's mission), so every PC builds the same list. A player joining a mission already running follows the host's
@@ -251,7 +252,7 @@ namespace StbcRevival.Galaxy
         }
 
         // A crew member flying the Trench alone while the crew has the region would be out of sync (system ids and
-        // SectorIds past the Trench missing): leave, as a joiner without the file does.
+        // SectorIds differing, past the Trench and after any system with additions): leave, as a joiner without the file does.
         private static void CantFollow(string why, string message) => GalaxyRoom.LeaveCrew(why, message);
 
         private static string HostName()

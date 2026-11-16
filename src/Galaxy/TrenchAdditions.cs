@@ -99,7 +99,8 @@ namespace StbcRevival.Galaxy
                     continue;
                 }
                 var root = game.Root(original);
-                if (root == null || root.Transform == null)
+                // The ROOT node's transform must be one of the system's own: the new families' runtime parent comes from it.
+                if (root == null || root.Transform == null || !original.SystemTransforms.Contains(root.Transform))
                     missing.Add($"{at}: '{found.Name}' has no ROOT node with a transform to hang families from");
                 game.ResolveNodes(at, add.Nodes, missing);
                 // Two additions naming the same system ("Venov" and "2824|Venov") make one copy, in file order.

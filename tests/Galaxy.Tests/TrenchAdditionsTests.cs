@@ -49,6 +49,17 @@ public class TrenchAdditionsTests
     }
 
     [Fact]
+    public void Parse_TrenchOnly_NoSystemsKey()
+    {
+        var f = GalaxyFile.Parse("{ \"format\": 1, \"name\": \"A\", \"trench\": [ { \"system\": \"Venov\", \"nodes\": [ "
+            + "{ \"id\": \"fam\", \"name\": \"Outpost\", \"prefab\": \"Family Group\", \"unit\": \"Lightseconds\", \"position\": [0, 0, 0] } ] } ] }");
+        Assert.Empty(f.Systems);
+        var a = Assert.Single(f.Trench);
+        Assert.Equal("Venov", a.System);
+        Assert.Equal("fam", Assert.Single(a.Nodes).Id);
+    }
+
+    [Fact]
     public void Trench_UnknownSystem()
         => Assert.Contains("trench Nope: no Trench system 'Nope'",
             GalaxyCheck.Problems(Only("Nope", Node("fam", null, "Family Group")), Cat()));
