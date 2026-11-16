@@ -139,10 +139,14 @@ public class GalaxyCheckTests
     }
 
     [Fact]
-    public void NoStationInRegion()
+    public void NoStationInRegion_IsAWarningNotAProblem()
     {
         var f = Valid(); f.Systems[0].Nodes.RemoveAt(4);
-        Assert.Contains("No station anywhere in the region: Patrol can't restock there", GalaxyCheck.Problems(f, Cat()));
+        List<string> w;
+        var problems = GalaxyCheck.Problems(f, Cat(), out w);
+        Assert.DoesNotContain(GalaxyCheck.NoStationWarning, problems);
+        Assert.Empty(problems);
+        Assert.Contains(GalaxyCheck.NoStationWarning, w);
     }
 
     [Fact]
@@ -258,9 +262,9 @@ public class GalaxyCheckTests
     {
         var c = Cat(); c.TrenchSystems[0].Families[0].HasStation = true;
         var f = Valid(); f.Systems[0].Nodes.RemoveAt(4);
-        Assert.Contains("No station anywhere in the region: Patrol can't restock there", GalaxyCheck.Problems(f, c));
+        Assert.Contains(GalaxyCheck.NoStationWarning, Warnings(f, c));
         f.Systems[0].Nodes.Add(Copy("c", "Venov", "FAMILY Venov III"));
-        Assert.DoesNotContain("No station anywhere in the region: Patrol can't restock there", GalaxyCheck.Problems(f, c));
+        Assert.DoesNotContain(GalaxyCheck.NoStationWarning, Warnings(f, c));
     }
 
     [Fact]
@@ -298,7 +302,7 @@ public class GalaxyCheckTests
     public void Station_FromPrefabKind_IgnoredWithoutCatalogue_ButNodeTagStillCounts()
     {
         var f = Valid(); var st = f.Systems[0].Nodes[4]; st.Prefab = "Station_X"; st.Tags.Clear();
-        Assert.Contains("No station anywhere in the region: Patrol can't restock there", GalaxyCheck.Problems(f, null));
+        Assert.Contains(GalaxyCheck.NoStationWarning, Warnings(f, null));
         st.Tags.Add("SpaceStation");
         Assert.Empty(GalaxyCheck.Problems(f, null));
     }
@@ -334,6 +338,8 @@ public class GalaxyCheckTests
         all["Station_X"] = new CataloguePrefab { Name = "Station_X", Kind = "station", Radius = 1 };
         return all;
     }
+
+    static List<string> Warnings(GalaxyFile f, Catalogue c) { List<string> w; GalaxyCheck.Problems(f, c, out w); return w; }
 
     static Catalogue Full() { var c = Cat(); c.Prefabs = Game().Values.ToList(); return c; }
 

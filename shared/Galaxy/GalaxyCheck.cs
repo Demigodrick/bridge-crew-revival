@@ -167,10 +167,21 @@ namespace StbcRevival.Galaxy
             }
         }
 
-        /// <summary>A null catalogue means no game data: only the checks that need none are made.</summary>
+        /// <summary>Text of the warning for a region with no station (advice, not a problem: the file still loads).</summary>
+        public const string NoStationWarning = "No station anywhere in the region: Patrol can't restock there";
+
+        /// <summary>A null catalogue means no game data: only the checks that need none are made. Problems stop the
+        /// file loading; warnings (see the overload) are advice only.</summary>
         public static List<string> Problems(GalaxyFile file, Catalogue catalogue)
         {
+            List<string> warnings;
+            return Problems(file, catalogue, out warnings);
+        }
+
+        public static List<string> Problems(GalaxyFile file, Catalogue catalogue, out List<string> warnings)
+        {
             var p = new List<string>();
+            warnings = new List<string>();
             bool noSystems = file.Systems == null || file.Systems.Count == 0;
             bool noTrench = file.Trench == null || file.Trench.Count == 0;
             if (noSystems && noTrench)
@@ -225,7 +236,7 @@ namespace StbcRevival.Galaxy
                     CheckNodes(p, lk, "trench " + shown + "/", add.Nodes, new NodeFacts());
                 }
 
-            if (!anyStation && !noSystems) p.Add("No station anywhere in the region: Patrol can't restock there");
+            if (!anyStation && !noSystems) warnings.Add(NoStationWarning);
 
             if (known && catalogue.UniverseWidth > 0)
             {

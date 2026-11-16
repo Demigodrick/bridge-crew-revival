@@ -366,7 +366,9 @@ namespace StbcRevival.Galaxy
             // names, those found by name (all of Resources/Sector is loaded only when the Trench lacks one).
             var game = new GameParts(trench);
             var catalogue = GalaxyCatalogue.Build(trench, out _, GalaxyCheck.PrefabNames(file), game.PrefabOrNull);
-            var problems = GalaxyCheck.Problems(file, catalogue);
+            List<string> advice;
+            var problems = GalaxyCheck.Problems(file, catalogue, out advice);
+            foreach (var a in advice) Plugin.Log.LogInfo(P + Path.GetFileName(path) + ": " + a + " (a warning; the file still loads)");
             if (problems.Count > 0)
             {
                 Plugin.Log.LogError(P + $"{Path.GetFileName(path)} has {problems.Count} problem(s); skipped, the Trench only:");

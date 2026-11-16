@@ -817,16 +817,18 @@ $('btnCheck').addEventListener('click', check);
 async function check() {
   try {
     const r = await (await api('/api/check', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: body() })).json();
-    showProblems(r.problems || []); return r.problems || [];
+    showProblems(r.problems || [], r.warnings || []); return r.problems || [];
   } catch (e) { toast(e.message, 6000); return null; }
 }
 function closeProblems() { $('problems').hidden = true; }
 $('pClose').addEventListener('click', closeProblems);
-function showProblems(ps) {
+function showProblems(ps, ws = []) {
   $('problems').hidden = false; $('pTitle').textContent = ps.length ? `${ps.length} problem${ps.length > 1 ? 's' : ''}` : 'Check passed';
   const ul = $('pList'); ul.textContent = '';
   if (!ps.length) ul.append(el('li', { class: 'ok' }, 'No problems found.'));
   for (const p of ps) ul.append(el('li', { class: 'bad', onclick: () => gotoProblem(p) }, p));
+  // Warnings are advice: the game still loads the file.
+  for (const w of ws) ul.append(el('li', { class: 'warn' }, 'Warning: ' + w));
 }
 function gotoProblem(text) {
   // "trench <name>/<node id>: ..." or "trench <name>: ..." for an addition; else "<system id>/<node id>:" or "<system id>:".

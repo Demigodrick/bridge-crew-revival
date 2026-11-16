@@ -52,6 +52,7 @@ legend { color: var(--accent); padding: 0 4px; }
 .phead { padding: 0 14px; display: flex; justify-content: space-between; align-items: center; }
 #pList li.bad { color: var(--bad); white-space: normal; }
 #pList li.ok { color: #7ee787; cursor: default; }
+#pList li.warn { color: #e3b341; white-space: normal; cursor: default; }
 #dirtyMark { color: var(--accent); }
 #view { position: relative; min-width: 0; min-height: 0; }
 canvas { display: block; width: 100%; height: 100%; }

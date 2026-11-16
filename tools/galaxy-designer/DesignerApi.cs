@@ -88,7 +88,11 @@ public sealed class DesignerApi
                 return Ok(MiniJson.Write(names));
             }
             if (path == "/api/check" && method == "POST")
-                return Ok(MiniJson.Write(new Dictionary<string, object> { ["problems"] = Check(Text(body)) }));
+            {
+                var warnings = new List<object>();
+                var problems = Check(Text(body), warnings);
+                return Ok(MiniJson.Write(new Dictionary<string, object> { ["problems"] = problems, ["warnings"] = warnings }));
+            }
             if (path.StartsWith("/api/galaxy/") && (method == "GET" || method == "PUT"))
             {
                 string name = Uri.UnescapeDataString(path.Substring("/api/galaxy/".Length));
@@ -134,14 +138,16 @@ public sealed class DesignerApi
         return "{\"picturesPending\":" + (pending ? "true" : "false") + "," + json.Substring(json.IndexOf('{') + 1);
     }
 
-    List<object> Check(string text)
+    List<object> Check(string text, List<object> warnings = null)
     {
         var problems = new List<object>();
         GalaxyFile file;
         try { file = GalaxyFile.Parse(text); }
         catch (FormatException e) { problems.Add(e.Message); return problems; }
         // No game data: null, so only the checks that need none are made.
-        problems.AddRange(GalaxyCheck.Problems(file, Game.Catalogue));
+        List<string> advice;
+        problems.AddRange(GalaxyCheck.Problems(file, Game.Catalogue, out advice));
+        if (warnings != null) warnings.AddRange(advice);
         return problems;
     }
 
