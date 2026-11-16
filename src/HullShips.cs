@@ -119,7 +119,7 @@ namespace StbcRevival
             if (show)
             {
                 string want = name + "|" + registry + "|" + Plugin.HullFont.Value;
-                if (lettering.DrawnFor != want && !lettering.Pending) DrawShipTexts(ship, lettering, name, registry, want);
+                if (lettering.DrawnFor != want && !lettering.Pending && NameSettled) DrawShipTexts(ship, lettering, name, registry, want);
                 if (lettering.Texts.Count == 0) return;
                 if (lettering.Decals == null) { if (!lettering.CuttingDecals) CutShipDecals(ship, lettering); return; }
                 foreach (var body in bodies)

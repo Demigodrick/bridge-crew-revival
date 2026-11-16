@@ -27,8 +27,8 @@ namespace StbcRevival
     /// hull. The ship takes that body as it wakes (only the player ship, not the original Enterprise or a campaign
     /// mission). Its systems stay the game ship's.
     ///
-    /// The model is read on a thread as the briefing room opens, and the bodies are built a piece per frame, textures
-    /// and meshes once for both; the mission's loading never waits for them (not ready: the game's own ship that time).
+    /// The model is read on a thread once the crew chooses the class, and the bodies are built a piece per frame,
+    /// textures and meshes once for both; the mission's loading never waits for them (not ready: the game's own ship that time).
     /// The host's choice goes on the room ("SHP" = the class's name) so the whole crew flies the same ship; a crewmate
     /// without the model files sees the game's own.
     /// </summary>
@@ -548,9 +548,10 @@ namespace StbcRevival
         private void Tick()
         {
             if (hologramMade != null) FinishHologram();
-            // Read and built as the briefing room opens (with the model here), so the hologram and the ship are ready
-            // when it's pressed rather than seconds after; one class at a time (each holds a lot while it's read).
-            if (!started && (FlownNow == this || ShipChoice.InBriefing) && Available && !ships.Any(s => s != this && s.Busy))
+            // Read and built once the crew chooses it (or the room has it), never all of them as the briefing room opens:
+            // reading a model makes a lot of garbage, and the collections that clears stall the game (a briefing room
+            // reading four models in turn stuttered for a minute). One class at a time (each holds a lot while it's read).
+            if (!started && FlownNow == this && Available && !ships.Any(s => s != this && s.Busy))
             {
                 started = true;
                 loading = new Thread(Load) { IsBackground = true, Name = Name + " model", Priority = System.Threading.ThreadPriority.BelowNormal };

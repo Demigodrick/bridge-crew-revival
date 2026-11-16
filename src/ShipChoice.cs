@@ -64,6 +64,17 @@ namespace StbcRevival
             if (setInteractable != null)
                 harmony.Patch(setInteractable, prefix: new HarmonyMethod(typeof(ShipChoice), nameof(Interactable_Prefix)) { priority = Priority.Low });
             else Plugin.Log.LogWarning("Ship choice: the console's SetInteractable wasn't found; the ship under ours shows greyed");
+            // The console switches the game's rows on itself as it refreshes (the Next Generation's row and its orange
+            // backgrounds whenever the DLC is there): a row scrolled out of the box would come back where it last was.
+            var uiUtils = AccessTools.TypeByName("KHDFGIINMKJ");
+            var setActiveBehaviour = AccessTools.Method(uiUtils, "SetActive", new[] { typeof(Behaviour), typeof(bool) });
+            var setActiveImage = AccessTools.Method(uiUtils, "SetActive", new[] { typeof(Image), typeof(bool) });
+            if (setActiveBehaviour != null && setActiveImage != null)
+            {
+                harmony.Patch(setActiveBehaviour, prefix: new HarmonyMethod(typeof(ShipChoice), nameof(SetActiveBehaviour_Prefix)));
+                harmony.Patch(setActiveImage, prefix: new HarmonyMethod(typeof(ShipChoice), nameof(SetActiveImage_Prefix)));
+            }
+            else Plugin.Log.LogWarning("Ship choice: the console's SetActive wasn't found; a row scrolled out of the box may show over another");
         }
 
         private static T Field<T>(ConsoleBriefingRoom console, string name) where T : class =>
@@ -106,6 +117,9 @@ namespace StbcRevival
                 foreach (var image in new[] { Field<Image>(console, "_tngToggleBackground1"), Field<Image>(console, "_tngToggleBackground2") })
                     if (image != null && !image.transform.IsChildOf(tng.transform)) box.TngExtras.Add(image.transform);
                 box.TngExtraHome = box.TngExtras.Select(t => t.localPosition).ToArray();
+                foreach (var gone in gameWants.Keys.Where(g => g == null).ToList()) { gameWants.Remove(gone); scrolledOut.Remove(gone); }
+                foreach (var go in new[] { aegis.gameObject, tos.gameObject, tng.gameObject }.Concat(box.TngExtras.Select(t => t.gameObject)))
+                    gameWants[go] = go.activeSelf;
 
                 var rows = Rows(box);
                 box.Home = new Vector3[rows.Length];
@@ -333,6 +347,28 @@ namespace StbcRevival
             foreach (var image in button.GetComponentsInChildren<Image>(true)) image.canvasRenderer.SetAlpha(on ? 1f : 0.3f);
         }
 
+        // The game's own rows (and the Next Generation's backgrounds): which are scrolled out of the box, and whether the
+        // game itself wants each shown (the Next Generation's only with the DLC), as it last said.
+        private static readonly HashSet<GameObject> scrolledOut = new HashSet<GameObject>();
+        private static readonly Dictionary<GameObject, bool> gameWants = new Dictionary<GameObject, bool>();
+
+        private static void SetActiveBehaviour_Prefix(Behaviour __0, ref bool __1) { if (__0 != null) Hold(__0.gameObject, ref __1); }
+        private static void SetActiveImage_Prefix(Image __0, ref bool __1) { if (__0 != null) Hold(__0.gameObject, ref __1); }
+
+        /// <summary>The game switching one of its rows on or off: noted, and kept off while the row is scrolled out of the box.</summary>
+        private static void Hold(GameObject go, ref bool active)
+        {
+            if (gameWants.Count == 0 || !gameWants.ContainsKey(go)) return;
+            gameWants[go] = active;
+            if (active && scrolledOut.Contains(go)) active = false;
+        }
+
+        private static void ShowGameRow(GameObject go, bool shown)
+        {
+            if (shown) { scrolledOut.Remove(go); go.SetActive(!gameWants.TryGetValue(go, out var wanted) || wanted); }
+            else { scrolledOut.Add(go); go.SetActive(false); }
+        }
+
         /// <summary>Shows rows offset..offset+2 in the box's three places; the others are out of sight.</summary>
         private static void Apply(Box box, int offset)
         {
@@ -345,12 +381,12 @@ namespace StbcRevival
                 if (rows[i] == null) continue;
                 int place = i - offset;
                 bool shown = place >= 0 && place < Visible;
-                rows[i].gameObject.SetActive(shown);
+                if (i < 3) ShowGameRow(rows[i].gameObject, shown); else rows[i].gameObject.SetActive(shown);
                 if (shown) rows[i].transform.localPosition = box.Home[0] + box.Step * place;
                 if (rows[i] == box.Tng)
                     for (int k = 0; k < box.TngExtras.Count; k++)
                     {
-                        box.TngExtras[k].gameObject.SetActive(shown);
+                        ShowGameRow(box.TngExtras[k].gameObject, shown);
                         box.TngExtras[k].localPosition = box.TngExtraHome[k] + box.Step * (place - 2);
                     }
             }

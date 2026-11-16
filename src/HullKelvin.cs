@@ -101,7 +101,10 @@ namespace StbcRevival
                         && m.GetTexture("_MainTex") is Texture t && (t.name == paint.File || t == paint.Done)).ToArray();
                     if (mine.Length == 0) continue;
                     string want = name + "|" + registry;
-                    if (paint.DrawnFor != want && !paint.Pending)
+                    // Painted only while the Kelvin is the ship flown (its model stays loaded once built; another class's name
+                    // isn't wanted on it), or for the preview.
+                    bool flown = CustomShip.InUse != null && CustomShip.InUse.Name == KelvinShip;
+                    if (paint.DrawnFor != want && !paint.Pending && (flown || Plugin.HullPreview.Value))
                     {
                         paint.DrawnFor = want; // tried once per name, whether it works or not (failures are logged)
                         var original = mine.Select(m => m.GetTexture("_MainTex")).FirstOrDefault(t => t != paint.Done);
