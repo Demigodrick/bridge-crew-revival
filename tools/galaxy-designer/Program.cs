@@ -1,18 +1,23 @@
 // galaxy-designer: designs a galaxy region (new systems on a second page of the helm's warp map) for Star Trek: Bridge Crew.
 //
-// It serves its page (web/, built into the program) to your browser on this PC only (127.0.0.1). The game's own
-// catalogue and the Trench's map picture (BepInEx/galaxies/catalogue.json and trench-map.png, which the mod writes
-// when you press its catalogue key at the shuttle) are read from the game's folder, and galaxy files are saved to
-// BepInEx/galaxies/<name>.json, the previous one kept as .json.bak.
+// It serves its page (web/, built into the program) to your browser on this PC only (127.0.0.1). What the game has
+// to offer (the Trench's systems, the prefabs, tags, sprites and the warp map art) is read from the game's own files
+// (GameCatalogue.cs), cached so later starts are quick; the pictures of the prefabs are the ones the game takes on
+// the shuttle (BepInEx/galaxies/thumbs.json and thumbs/). Galaxy files are saved to BepInEx/galaxies/<name>.json,
+// the previous one kept as .json.bak.
 //
-// Usage: dotnet run -- [--game <game folder>] [--port 8771] [--no-open] [--stay] [--web <folder>]
+// Usage: dotnet run -- [--game <game folder>] [--port 8771] [--no-open] [--stay] [--web <folder>] [--cache <folder>]
+//                      [--rebuild] [--catalogue-out <file>]
 //        (it stops by itself once its page is closed; --stay keeps it running until Ctrl+C)
 //        (the game folder also from $GAME_DIR; otherwise the folder this program is in, if it's in the game's folder
 //        as the installers put it, or the game in your Steam libraries. --web serves the page from a folder,
-//        e.g. web/ in the source, to try changes to it without a rebuild.)
+//        e.g. web/ in the source, to try changes to it without a rebuild. --cache: where the game data read is kept
+//        (default ~/.cache/galaxy-designer, %LOCALAPPDATA%\GalaxyDesigner\cache on Windows); --rebuild reads the
+//        game's files again; --catalogue-out writes the catalogue read to a file and stops.)
 using System.Diagnostics;
 using System.Net;
 using System.Text;
+using StbcRevival.Galaxy;
 
 // "0.7.42+abc1234": the mod's version and the commit this was built from.
 string version = typeof(GameFinder).Assembly.GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
@@ -22,7 +27,8 @@ string gameDir = Environment.GetEnvironmentVariable("GAME_DIR");
 int port = 8771;
 int? portArg = null;
 bool open = true, stay = false;
-string webArg = null;
+string webArg = null, cacheArg = null, catalogueOut = null;
+bool rebuild = false;
 for (int i = 0; i < args.Length; i++)
 {
     if (args[i] == "--game" && i + 1 < args.Length) gameDir = args[++i];
@@ -30,7 +36,10 @@ for (int i = 0; i < args.Length; i++)
     else if (args[i] == "--no-open") open = false;
     else if (args[i] == "--stay") stay = true;
     else if (args[i] == "--web" && i + 1 < args.Length) webArg = Path.GetFullPath(args[++i]);
-    else return Fail("usage: galaxy-designer [--game <folder>] [--port 8771] [--no-open] [--stay] [--web <folder>]");
+    else if (args[i] == "--cache" && i + 1 < args.Length) cacheArg = Path.GetFullPath(args[++i]);
+    else if (args[i] == "--rebuild") rebuild = true;
+    else if (args[i] == "--catalogue-out" && i + 1 < args.Length) catalogueOut = Path.GetFullPath(args[++i]);
+    else return Fail("usage: galaxy-designer [--game <folder>] [--port 8771] [--no-open] [--stay] [--web <folder>] [--cache <folder>] [--rebuild] [--catalogue-out <file>]");
 }
 // The game: given, beside this program (installed in the game's folder), or in one of Steam's libraries.
 gameDir ??= GameFinder.Find();
@@ -46,12 +55,41 @@ while (gameDir == null || !GameFinder.IsGame(gameDir))
     gameDir = typed;
 }
 string galaxies = Path.Combine(gameDir, "BepInEx", "galaxies");
-Directory.CreateDirectory(galaxies);
 Console.WriteLine($"Game: {gameDir}");
-Console.WriteLine($"Galaxies: {galaxies}{(File.Exists(Path.Combine(galaxies, "catalogue.json")) ? "" : " (no catalogue yet: in the game, press the catalogue key at the shuttle)")}");
+Console.WriteLine($"Galaxies: {galaxies}");
+
+// What the game has to offer, from its own files (or the cache of them).
+string cacheRoot = cacheArg ?? GameCatalogue.DefaultCacheRoot();
+if (GameCatalogue.IsInside(cacheRoot, gameDir))
+    return Fail($"The cache ({cacheRoot}) can't be inside the game's folder: give another with --cache <folder>.");
+GameData LoadGame(bool again)
+{
+    Console.WriteLine(again ? "Reading the game's files ..." : "Reading the game's map data ...");
+    var g = GameCatalogue.Load(gameDir, cacheRoot, again, m => Console.WriteLine(m));
+    if (g.Catalogue == null) { Console.Error.WriteLine(g.Error); return g; }
+    var c = g.Catalogue;
+    Console.WriteLine($"Game data: {c.TrenchSystems.Count} Trench systems, {c.TrenchSystems.Sum(s => s.Families.Count)} families, " +
+        $"{c.Prefabs.Count} prefabs, {c.Sprites.Count} sprites ({(g.FromCache ? "from the cache" : "read from the game's files")} " +
+        $"in {g.Took.TotalMilliseconds:0} ms; kept in {g.Folder})");
+    return g;
+}
+var game = LoadGame(rebuild);
+if (catalogueOut != null)
+{
+    if (game.Catalogue == null) return Fail(null);
+    File.WriteAllText(catalogueOut, game.Catalogue.ToJson());
+    Console.WriteLine($"Catalogue written to {catalogueOut}");
+    return 0;
+}
+string thumbsIndex = null;
+try { if (File.Exists(Path.Combine(galaxies, "thumbs.json"))) thumbsIndex = File.ReadAllText(Path.Combine(galaxies, "thumbs.json")); }
+catch (Exception) { } // can't be read: as if there were none
+if (!ThumbIndex.IsCurrent(thumbsIndex))
+    Console.WriteLine("No pictures of the prefabs yet: the game takes them on your next visit to the shuttle.");
+Directory.CreateDirectory(galaxies);
 
 var page = new Page(webArg);
-var api = new DesignerApi(galaxies);
+var api = new DesignerApi(galaxies, game, () => LoadGame(true));
 HttpListener listener = null;
 string url = null;
 for (int p = port; p < port + 10 && listener == null; p++)

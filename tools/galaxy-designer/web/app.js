@@ -617,6 +617,8 @@ async function start() {
   fetch('/api/version').then(r => r.ok ? r.text() : '').then(v => { $('version').textContent = v ? 'v' + v : ''; document.title = `Galaxy Designer ${v}`; }).catch(() => { });
   try { cat = await (await api('/api/catalogue')).json(); }
   catch (e) { cat = null; const b = $('banner'); b.hidden = false; b.textContent = e.message; }
+  // The game data works without the prefabs' pictures; the game takes them on the shuttle.
+  if (cat && cat.picturesPending) { const b = $('banner'); b.hidden = false; b.classList.add('note'); b.textContent = 'No pictures of the prefabs yet: they are taken by the game on your next visit to the shuttle.'; }
   const img = new Image();
   img.onload = () => { trenchImg = img; draw(); }; img.onerror = () => { trenchImg = 'none'; draw(); };
   img.src = '/api/trench-map.png';

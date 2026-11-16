@@ -18,10 +18,21 @@
     </Exec>
   </Target>
   <ItemGroup>
+    <PackageReference Include="Mono.Cecil" Version="0.11.5" />
+    <!-- Kept whole when the published program is trimmed: Cecil reads the game's Assembly-CSharp through types the
+         trimmer can't see are needed. -->
+    <TrimmerRootAssembly Include="Mono.Cecil" />
+  </ItemGroup>
+  <ItemGroup>
     <Compile Include="../bridge-designer/GameFinder.cs" />
     <Compile Include="../bridge-designer/Page.cs" />
     <Compile Include="../../shared/MiniJson.cs" />
     <Compile Include="../../shared/Galaxy/*.cs" />
+    <!-- The game files' reader, shared with tools/xref (linked, not copied). -->
+    <Compile Include="../../src/AssetFile.cs" Link="GameFiles/AssetFile.cs" />
+    <Compile Include="../xref/Layout.cs" Link="GameFiles/Layout.cs" />
+    <Compile Include="../xref/ScriptObjects.cs" Link="GameFiles/ScriptObjects.cs" />
+    <Compile Include="../xref/UnityAssets.cs" Link="GameFiles/UnityAssets.cs" />
     <!-- The page, built into the program (one file to hand out) (the web option serves it from a folder instead). -->
     <EmbeddedResource Include="web/**" LogicalName="web/%(RecursiveDir)%(Filename)%(Extension)" />
   </ItemGroup>

@@ -5,15 +5,23 @@ namespace Galaxy.Tests;
 public class DesignerApiTests : IDisposable
 {
     readonly string dir = Path.Combine(Path.GetTempPath(), "galaxy-designer-" + Guid.NewGuid().ToString("N"));
-    readonly DesignerApi api;
+    // The game data's folder (sprites/, trench-map.png), as GameCatalogue's cache has it.
+    readonly string gameFolder;
+    readonly DesignerApi api;   // with no game data
+    readonly DesignerApi withGame;
 
     public DesignerApiTests()
     {
         Directory.CreateDirectory(dir);
-        api = new DesignerApi(dir);
+        gameFolder = Path.Combine(dir, "cache");
+        Directory.CreateDirectory(Path.Combine(gameFolder, "sprites"));
+        api = new DesignerApi(dir, GameData.Failed("The game's files in /x/stbc_Data can't be read: broken"));
+        withGame = new DesignerApi(dir, new GameData { Catalogue = Catalogue.Parse(CatalogueJson()), Folder = gameFolder });
     }
 
     public void Dispose() { try { Directory.Delete(dir, true); } catch { } }
+
+    static Dictionary<string, object> Obj(byte[] body) => (Dictionary<string, object>)MiniJson.Parse(S(body));
 
     static byte[] B(string s) => Encoding.UTF8.GetBytes(s);
     static string S(byte[] b) => Encoding.UTF8.GetString(b);
@@ -57,34 +65,107 @@ public class DesignerApiTests : IDisposable
     }.ToJson();
 
     [Fact]
-    public void Catalogue_MissingGives404WithHowTo()
+    public void Catalogue_GameUnreadable_SaysWhy()
     {
         var (status, type, body) = api.Handle("GET", "/api/catalogue", null);
-        Assert.Equal(404, status);
+        Assert.Equal(503, status);
         Assert.Contains("json", type);
-        Assert.Contains("No catalogue yet", S(body));
-        Assert.Contains("CatalogueKey", S(body));
+        Assert.Contains("can't be read: broken", S(body));
+        Assert.DoesNotContain("CatalogueKey", S(body));
     }
 
     [Fact]
-    public void Catalogue_ServedWhenPresent()
+    public void Catalogue_NoPicturesYet_WorksAndSaysSo()
     {
-        File.WriteAllText(Path.Combine(dir, "catalogue.json"), CatalogueJson());
-        var (status, _, body) = api.Handle("GET", "/api/catalogue", null);
+        var (status, _, body) = withGame.Handle("GET", "/api/catalogue", null);
         Assert.Equal(200, status);
-        Assert.Contains("Star_Yellow", S(body));
+        var c = Obj(body);
+        Assert.Equal(true, c["picturesPending"]);
+        var prefabs = (List<object>)c["prefabs"];
+        Assert.Equal(4, prefabs.Count);
+        Assert.All(prefabs, p => Assert.Null(((Dictionary<string, object>)p)["thumb"]));
+        Assert.Equal("Star_Yellow", Catalogue.Parse(S(body)).Prefabs[0].Name);
     }
 
     [Fact]
-    public void TrenchMap_MissingIs404Json()
+    public void Catalogue_PicturesMergedFromThumbs()
     {
-        var (status, type, body) = api.Handle("GET", "/api/trench-map.png", null);
-        Assert.Equal(404, status);
+        var index = new ThumbIndex();
+        index.Pictures["Star_Yellow"] = new ThumbIndex.Picture { File = "Star_Yellow.png", Kind = "star", Label = "Star" };
+        index.Pictures["Planet_Rock"] = new ThumbIndex.Picture { File = "Planet_Rock.png", Kind = "planet", Label = "Rock" }; // no file
+        File.WriteAllText(Path.Combine(dir, "thumbs.json"), index.ToJson());
+        Directory.CreateDirectory(Path.Combine(dir, "thumbs"));
+        File.WriteAllBytes(Path.Combine(dir, "thumbs", "Star_Yellow.png"), new byte[] { 9 });
+        var (status, _, body) = withGame.Handle("GET", "/api/catalogue", null);
+        Assert.Equal(200, status);
+        Assert.Equal(false, Obj(body)["picturesPending"]);
+        var c = Catalogue.Parse(S(body));
+        Assert.Equal("Star_Yellow.png", c.Prefabs.Single(p => p.Name == "Star_Yellow").Thumb);
+        Assert.Null(c.Prefabs.Single(p => p.Name == "Planet_Rock").Thumb);
+        // The picture itself, through the API.
+        var pic = withGame.Handle("GET", "/api/thumb/Star_Yellow.png", null);
+        Assert.Equal(200, pic.status);
+        Assert.Equal("image/png", pic.contentType);
+        Assert.Equal(new byte[] { 9 }, pic.body);
+    }
+
+    [Fact]
+    public void Catalogue_UnfinishedPictureRun_StillPending()
+    {
+        File.WriteAllText(Path.Combine(dir, "thumbs.json"), new ThumbIndex { Format = 0 }.ToJson());
+        Assert.Equal(true, Obj(withGame.Handle("GET", "/api/catalogue", null).body)["picturesPending"]);
+    }
+
+    [Fact]
+    public void TrenchMap_FromTheGameDataFolder()
+    {
+        Assert.Equal(404, api.Handle("GET", "/api/trench-map.png", null).status);
+        var (status, _, body) = withGame.Handle("GET", "/api/trench-map.png", null);
+        Assert.Equal(404, status);   // the catalogue names no background
         Assert.Contains("error", S(body));
-        File.WriteAllBytes(Path.Combine(dir, "trench-map.png"), new byte[] { 1, 2, 3 });
-        var ok = api.Handle("GET", "/api/trench-map.png", null);
+        var c = Catalogue.Parse(CatalogueJson());
+        c.Background = "trench-map.png";
+        var api2 = new DesignerApi(dir, new GameData { Catalogue = c, Folder = gameFolder });
+        Assert.Equal(404, api2.Handle("GET", "/api/trench-map.png", null).status);
+        File.WriteAllBytes(Path.Combine(gameFolder, "trench-map.png"), new byte[] { 1, 2, 3 });
+        var ok = api2.Handle("GET", "/api/trench-map.png", null);
         Assert.Equal(200, ok.status);
         Assert.Equal("image/png", ok.contentType);
+    }
+
+    [Fact]
+    public void Sprite_ServedFromTheGameDataFolder()
+    {
+        File.WriteAllBytes(Path.Combine(gameFolder, "sprites", "FamilyMapBG_3.png"), new byte[] { 7 });
+        var ok = withGame.Handle("GET", "/api/sprite/FamilyMapBG_3.png", null);
+        Assert.Equal(200, ok.status);
+        Assert.Equal(new byte[] { 7 }, ok.body);
+        Assert.Equal(404, withGame.Handle("GET", "/api/sprite/Other.png", null).status);
+        Assert.Equal(404, api.Handle("GET", "/api/sprite/FamilyMapBG_3.png", null).status);
+    }
+
+    [Theory]
+    [InlineData("/api/sprite/..%2F..%2Fkey.txt")]
+    [InlineData("/api/sprite/../trench-map.png")]
+    [InlineData("/api/sprite/x.txt")]
+    [InlineData("/api/sprite/a%2Fb.png")]
+    [InlineData("/api/sprite/..png")]
+    [InlineData("/api/thumb/..%2Fthumbs.json")]
+    [InlineData("/api/thumb/..%5C..%5Cx.png")]
+    [InlineData("/api/thumb/%2Fetc%2Fpasswd")]
+    public void Pictures_RejectPathsOutOfTheirFolder(string path)
+        => Assert.Equal(400, withGame.Handle("GET", path, null).status);
+
+    [Fact]
+    public void Reload_ReplacesTheGameData()
+    {
+        int calls = 0;
+        var api2 = new DesignerApi(dir, GameData.Failed("not yet"), () => { calls++; return new GameData { Catalogue = Catalogue.Parse(CatalogueJson()), Folder = gameFolder }; });
+        Assert.Equal(503, api2.Handle("GET", "/api/catalogue", null).status);
+        Assert.Equal(200, api2.Handle("POST", "/api/reload", B("{}")).status);
+        Assert.Equal(1, calls);
+        Assert.Equal(200, api2.Handle("GET", "/api/catalogue", null).status);
+        Assert.Equal(404, api.Handle("POST", "/api/reload", B("{}")).status); // not offered
     }
 
     [Fact]
@@ -93,6 +174,7 @@ public class DesignerApiTests : IDisposable
         File.WriteAllText(Path.Combine(dir, "b.json"), "{}");
         File.WriteAllText(Path.Combine(dir, "a.json"), "{}");
         File.WriteAllText(Path.Combine(dir, "catalogue.json"), "{}");
+        File.WriteAllText(Path.Combine(dir, "thumbs.json"), "{}");
         File.WriteAllText(Path.Combine(dir, "a.json.bak"), "{}");
         var (status, _, body) = api.Handle("GET", "/api/galaxies", null);
         Assert.Equal(200, status);
@@ -116,6 +198,7 @@ public class DesignerApiTests : IDisposable
     [InlineData("A%20B")]
     [InlineData("..")]
     [InlineData("catalogue")]
+    [InlineData("thumbs")]
     public void Put_RejectsBadName(string name)
     {
         Assert.Equal(400, api.Handle("PUT", "/api/galaxy/" + name, B(GalaxyJson())).status);
@@ -141,14 +224,13 @@ public class DesignerApiTests : IDisposable
     [Fact]
     public void Check_ReturnsProblems()
     {
-        File.WriteAllText(Path.Combine(dir, "catalogue.json"), CatalogueJson());
-        Assert.Empty(Problems(api.Handle("POST", "/api/check", B(GalaxyJson())).body));
-        var bad = Problems(api.Handle("POST", "/api/check", B(GalaxyJson("Nope"))).body);
+        Assert.Empty(Problems(withGame.Handle("POST", "/api/check", B(GalaxyJson())).body));
+        var bad = Problems(withGame.Handle("POST", "/api/check", B(GalaxyJson("Nope"))).body);
         Assert.Contains("kessar/star: no prefab 'Nope' in the game", bad.Cast<string>());
     }
 
     [Fact]
-    public void Check_WithoutCatalogue_OnlyStructuralProblems()
+    public void Check_WithoutGameData_OnlyStructuralProblems()
     {
         var f = GalaxyFile.Parse(GalaxyJson("Nope"));
         f.Systems[0].Nodes[1].Parent = "ghost";
