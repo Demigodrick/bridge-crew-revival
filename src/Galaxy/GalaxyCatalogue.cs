@@ -350,7 +350,8 @@ namespace StbcRevival.Galaxy
                 try
                 {
                     var t = Traverse.Create(link);
-                    var root = t.Field("System").GetValue() as Map.SystemRoot;
+                    // The Trench as the game ships it, even while a system with additions is swapped for its copy.
+                    var root = GalaxyRegion.Original(t.Field("System").GetValue() as Map.SystemRoot);
                     if (root == null) continue;
                     var pos = (Vector3)t.Field("Position").GetValue();
                     var rt = Traverse.Create(root);
