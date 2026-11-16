@@ -235,7 +235,7 @@ namespace StbcRevival.Galaxy
                 instance.transform.localPosition = Vector3.zero;
                 // A procedural station's model is built from pieces by the game's Awake: built here instead, still
                 // inactive, before the strip (which then covers the pieces too).
-                try { station = GalaxyStations.Build(instance, r.Holder.transform); }
+                try { station = GalaxyStations.Build(instance); }
                 catch (Exception e)
                 {
                     r.Failed++;

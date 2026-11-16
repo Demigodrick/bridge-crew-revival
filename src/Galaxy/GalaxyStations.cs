@@ -14,11 +14,12 @@ namespace StbcRevival.Galaxy
     /// - the pieces are chosen by StationPlan with UnityEngine.Random seeded as the game seeds it, so the picture is
     ///   the station a crew sees (the game reseeds every time, so every copy of a prefab looks the same). The global
     ///   Random state is saved before and put back after, so the game's own randomness isn't moved;
-    /// - each piece is instantiated under the inactive picture holder (as the game does at the scene root, but
-    ///   nothing wakes) and attached by its attach points exactly as the game's attach step does, with the holder in
-    ///   place of the scene root for the moment an attach point is unparented. Rings and arms as the game places them;
-    ///   the attach points are then removed (the game's ClearAttachPoints). The game's final uniform rescale is left
-    ///   out: it doesn't change a picture framed to the model's bounds.
+    /// - each piece is instantiated inside the inactive picture instance (as the game does at the scene root, but
+    ///   nothing wakes) and attached by its attach points exactly as the game's attach step does, with a temporary
+    ///   child of the instance in place of the scene root (so a piece left behind by a failure dies with the instance). Rings and arms as the game places them;
+    ///   the attach points are then removed (the game's ClearAttachPoints). The game's final uniform rescale of the
+    ///   first piece (to unit size; every other piece hangs under it) is left out: scaling the whole model evenly
+    ///   doesn't change a picture framed to its bounds.
     /// Everything is then stripped with the rest of the instance before it is activated (ProceduralStationPart and any
     /// other piece script included), so no piece script ever runs.
     /// </summary>
@@ -28,7 +29,7 @@ namespace StbcRevival.Galaxy
         /// Builds the station's pieces into the (inactive) instance. Null when it isn't a procedural station, else a
         /// description of what was built; throws when it can't be built.
         /// </summary>
-        internal static string Build(GameObject instance, Transform holder)
+        internal static string Build(GameObject instance)
         {
             var body = instance.GetComponentInChildren<ProceduralSpaceStationBody>(true);
             if (body == null) return null;
@@ -78,10 +79,15 @@ namespace StbcRevival.Galaxy
             var first = (GameObject)UnityEngine.Object.Instantiate(Prefab(plan.First), body.transform, false);
             if (plan.Parts.Count > 0)
             {
+                // Stands in for the scene root: inside the (inactive) instance, so a piece left on it by a failure
+                // below is destroyed with the instance and never wakes in a later picture.
+                var stage = new GameObject("Revival station pieces").transform;
+                stage.SetParent(instance.transform, false);
+                var holder = stage;
                 var previous = Part(first);
                 foreach (var step in plan.Parts)
                 {
-                    // At the prefab's own placement, as the game's Instantiate at the scene root, but under the holder.
+                    // At the prefab's own placement, as the game's Instantiate at the scene root, but on the stage.
                     var part = Part((GameObject)UnityEngine.Object.Instantiate(Prefab(step.Piece), holder, true));
                     Attach(part, previous, holder);
                     if (step.Ring.HasValue)
@@ -98,13 +104,14 @@ namespace StbcRevival.Galaxy
                     previous = part;
                 }
                 foreach (var part in parts) ClearAttachPoints(part);
+                UnityEngine.Object.DestroyImmediate(stage.gameObject); // empty by now: every piece hangs on the one before
             }
             return $"seed {seed}, {count} parts from {set.name}: {plan}";
         }
 
         // The game's attach step: the part's attach point 1 moved onto the previous part's attach point 0, carrying
-        // the part with it; then the part under the previous one and its attach point back under it. The holder
-        // (inactive) stands in for the scene root.
+        // the part with it; then the part under the previous one and its attach point back under it. holder (an
+        // inactive child of the instance) stands in for the scene root.
         private static void Attach(ProceduralStationPart part, ProceduralStationPart previous, Transform holder)
         {
             var points = AttachPoints(part);
