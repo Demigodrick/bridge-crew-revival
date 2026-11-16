@@ -220,6 +220,7 @@ namespace StbcRevival.Galaxy
             counts[1]++;
             Camera.CameraCallback preCull = Camera.onPreCull, preRender = Camera.onPreRender, postRender = Camera.onPostRender;
             bool activated = false;
+            Transform[] before = null;
             try
             {
                 item.Prefab.Thumb = null;
@@ -243,7 +244,9 @@ namespace StbcRevival.Galaxy
                 activated = true;
                 r.Holder.SetActive(true);
 
+                before = instance.GetComponentsInChildren<Transform>(true);
                 Prepare(instance);
+                ReleasePooled(before, instance.transform, r.Layer, item);
                 SetLayer(instance.transform, r.Layer); // models the scripts just made
 
                 if (!Bounds(instance, out var bounds))
@@ -278,6 +281,7 @@ namespace StbcRevival.Galaxy
                     if (r.Light != null) r.Light.enabled = false;
                 }
                 catch (Exception e) { Plugin.Log.LogWarning($"Galaxy: picture of {item.Prefab.Name}: clearing up: {e.Message}"); }
+                if (before != null) ReleasePooled(before, null, r.Layer, item);
                 if (activated && (Camera.onPreCull != preCull || Camera.onPreRender != preRender || Camera.onPostRender != postRender))
                 {
                     Camera.onPreCull = preCull;
@@ -286,6 +290,33 @@ namespace StbcRevival.Galaxy
                     Plugin.Log.LogWarning($"Galaxy: picture of {item.Prefab.Name}: camera callbacks were left behind; put back as they were");
                 }
             }
+        }
+
+        // An SGT script whose model count shrinks hands the spare models to SGT's shared pool (SgtComponentPoolOf, kept
+        // for the session) instead of destroying them: anything that was part of the instance and has left it
+        // (or, after the instance is gone, is still there) goes back to layer 0, what a fresh model has, so the
+        // game's own bodies that later take it from the pool draw on its cameras.
+        private static void ReleasePooled(Transform[] before, Transform instance, int layer, Item item)
+        {
+            int reset = 0;
+            foreach (var t in before)
+            {
+                if (t == null || (instance != null && (t == instance || t.IsChildOf(instance)))) continue;
+                reset += ResetLayer(t, layer);
+            }
+            if (reset > 0) Plugin.Log.LogInfo($"Galaxy: picture of {item.Prefab.Name}: {reset} pooled model object(s) put back on layer 0");
+        }
+
+        private static int ResetLayer(Transform t, int layer)
+        {
+            int n = 0;
+            if (t.gameObject.layer == layer)
+            {
+                t.gameObject.layer = 0;
+                n++;
+            }
+            for (int i = 0; i < t.childCount; i++) n += ResetLayer(t.GetChild(i), layer);
+            return n;
         }
 
         // No picture for this prefab: an earlier run's file goes too.
