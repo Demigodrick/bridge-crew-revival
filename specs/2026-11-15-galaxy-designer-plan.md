@@ -457,3 +457,39 @@ a big `trench-map.png`; log line with counts; no hitch beyond a few seconds.
 
 **Verify:** Playwright against the user's real catalogue (copy it plus thumbs/sprites into testdata, or point
 `--game` at the game folder read-only); screenshots of the picker and both plan levels.
+
+### Change of approach (2026-11-16): the designer reads the game files itself
+
+Main now has an offline reader for the map data (`tools/xref`: Layout.cs, UnityAssets.cs, ReadAssets.cs; notes in
+`specs/2026-11-16-map-data-layouts.md`). The user chose: the designer builds its catalogue from the game files on
+startup; the game is needed only once, for the model pictures (taken automatically on the first shuttle visit).
+
+### Task 12: The designer reads the game files
+
+**Files:** `tools/galaxy-designer/GameCatalogue.cs` (new), `tools/galaxy-designer/galaxy-designer.csproj` (link the
+reader files from `tools/xref` — share them, don't copy — and Mono.Cecil), `DesignerApi.cs`, tests.
+
+- On startup (and on a "Reload game data" request), build a `Catalogue` from `<game>/stbc_Data`:
+  the Trench (`SectorRoot` named "0 - Sector - Trench A"): its systems (name, `DisplayName`, link position, skybox,
+  system tags, node tree with prefab names, units, tags, map names, sprites), families per system (the shared
+  `CatalogueFamilies.From`), every `SectorBody` prefab a Trench node uses plus the others in resources.assets
+  (name, kind from prefab tags, radius, `Label` from the body's TargetableComponent `_uiName` text key → English
+  where the files give it), all tag names (from `NovaTagList` strings seen plus the game's Tag enum names via Cecil),
+  spawn tags (`Player`, `AltPlayerSpawn`), universe bounds (x −265..265, z −115..115 — read from the WarpPanel
+  prefab/scene fields if reachable, else these constants), sprites used by nodes exported as PNGs into a cache
+  folder, and the "WarpMap" sprite as the background PNG.
+- Text keys: "2824|Venov" → "Venov" (the English after "|").
+- Merge in the pictures from the in-game run (`BepInEx/galaxies/thumbs/` + its index) when present.
+- Cache the result next to the tool (keyed by the game files' sizes and dates) so later starts are instant.
+- `GET /api/catalogue` serves it; the old in-game `catalogue.json` is no longer read for game data.
+- Tests: against a small fixture is not possible (game files can't be in the repo); unit-test the pure parts
+  (text keys, kind from tags, merge of pictures), and a smoke test that runs only when `GAME_DIR` is set.
+- Verify with the real game folder: same 15 systems / 55 families / sprites as the in-game catalogue, the WarpMap
+  background 2048×1024.
+
+### Task 10b: The in-game catalogue becomes the picture run only
+
+**Files:** `src/Galaxy/GalaxyCatalogue.cs`, `src/Galaxy/GalaxyThumbnails.cs`.
+- Remove the bridge map-art capture and the worker-thread map encoding; the automatic shuttle run takes only the
+  model pictures and writes `galaxies/thumbs/` plus a small index (`thumbs.json`: prefab name → file, format).
+- F5 stays as a manual re-take of the pictures. Keep every safety behaviour reviewed in Task 10.
