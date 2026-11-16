@@ -182,12 +182,12 @@ function kindOf(n) { const p = cat && (cat.prefabs || []).find(p => p.name === n
 const nodeTags = n => n.tags || (n.tags = []);
 
 // Sprites of the game (family backdrops, map icons) by their name in the catalogue; drawn once they've loaded.
-const spriteCache = {};
+let spriteCache = {};
 function spriteImg(name) {
   const file = name && cat && cat.spriteFiles && cat.spriteFiles[name];
   if (!file) return null;
   let e = spriteCache[file];
-  if (!e) { e = spriteCache[file] = { img: new Image(), ok: false }; e.img.onload = () => { e.ok = true; draw(); }; e.img.src = '/api/sprite/' + encodeURIComponent(file); }
+  if (!e) { e = spriteCache[file] = { img: new Image(), ok: false }; e.img.onload = () => { e.ok = true; draw(); }; e.img.onerror = () => { delete spriteCache[file]; }; e.img.src = '/api/sprite/' + encodeURIComponent(file); }
   return e.ok ? e.img : null;
 }
 const POI_ICON = 34;   // px (css) of a POI's map icon on a family's page
@@ -270,11 +270,12 @@ function drawFamilyPage(s, fam, w, h, d) {
 // above it (purely visual; stored positions don't change), so dots and labels stay readable. off=true for those.
 function layout(s) {
   const d = dpr(), pos = {}, count = {}, page = pageLevel();
+  const dragging = drag && drag.kind === 'node' && drag.moved ? selNode : null;   // the node being dragged is drawn where it is, never stacked
   const near = (page ? 30 : 12) * d, step = (page ? 44 : 15) * d;
   const place = (n, depth) => {
     if (pos[n.id]) return pos[n.id];
     const w = worldPos(s, n), [x, y] = toS(w[0], w[2]);
-    const par = n.id !== planRoot() && n.parent && depth < 50 ? nodeById(s, n.parent) : null;
+    const par = n.id !== planRoot() && n.id !== dragging && n.parent && depth < 50 ? nodeById(s, n.parent) : null;
     if (par) {
       const pp = place(par, depth + 1), pw = worldPos(s, par), [qx, qy] = toS(pw[0], pw[2]);
       if (Math.hypot(x - qx, y - qy) < near) {
@@ -306,13 +307,13 @@ canvas.addEventListener('pointerdown', e => {
   canvas.setPointerCapture(e.pointerId);
   if (view === 'galaxy') {
     const i = hitSystem(px, py);
-    if (i >= 0) { selSys = i; drag = { kind: 'sys', moved: false }; refreshGalaxyPanel(); }
+    if (i >= 0) { selSys = i; drag = { kind: 'sys', moved: false, px, py }; refreshGalaxyPanel(); }
     else drag = { kind: 'empty', px, py, moved: false };
   } else {
     const n = hitNode(px, py);
     if (n) {
       selNode = n.id; selFam = famOf(sys(), n).id;
-      drag = (layout(sys())[n.id].off || !n.parent || n.id === planRoot()) ? { kind: 'none', poi: pageLevel() && n.parent === selFam ? n.id : null } : { kind: 'node', moved: false, poi: pageLevel() ? n.id : null };
+      drag = (layout(sys())[n.id].off || !n.parent || n.id === planRoot()) ? { kind: 'none', poi: pageLevel() && n.parent === selFam ? n.id : null } : { kind: 'node', moved: false, px, py, poi: pageLevel() ? n.id : null };
       refreshSystemPanel();
     }
     else drag = { kind: 'pan', px, py, cx: cam.x, cz: cam.z, moved: false };
@@ -323,6 +324,8 @@ canvas.addEventListener('pointermove', e => {
   const rc = canvas.getBoundingClientRect(), d = dpr(), px = (e.clientX - rc.left) * d, py = (e.clientY - rc.top) * d;
   if (view === 'galaxy') { const [x, z] = fromPx(mapRect(), px, py); $('coords').textContent = `X ${x.toFixed(1)}  Z ${z.toFixed(1)}`; }
   if (!drag) return;
+  // A press only becomes a drag after a few pixels, so a click that wobbles still clicks (and moves nothing).
+  if ((drag.kind === 'sys' || drag.kind === 'node') && !drag.moved && Math.hypot(px - drag.px, py - drag.py) <= 3 * d) return;
   if (drag.kind === 'sys') {
     const [x, z] = fromPx(mapRect(), px, py), s = sys();
     s.position = [Math.round(x * 10) / 10, Math.round(z * 10) / 10]; drag.moved = true; setDirty();
@@ -332,7 +335,7 @@ canvas.addEventListener('pointermove', e => {
     let ox = 0, oz = 0;
     if (n.parent) { const p = nodeById(s, n.parent); if (p) { const pp = worldPos(s, p); ox = pp[0]; oz = pp[2]; } }
     const u = UNIT_KM[n.unit] || 1;
-    n.position[0] = (wx - ox) / u; n.position[2] = (wz - oz) / u; drag.moved = true; setDirty();
+    n.position[0] = Math.round((wx - ox) / u * 1000) / 1000; n.position[2] = Math.round((wz - oz) / u * 1000) / 1000; drag.moved = true; setDirty();
     setField('nX', n.position[0]); setField('nZ', n.position[2]);
   } else if (drag.kind === 'pan') {
     if (Math.hypot(px - drag.px, py - drag.py) > 3) drag.moved = true;
@@ -702,7 +705,7 @@ function deleteNode() {
 addEventListener('keydown', e => {
   const typing = /^(INPUT|SELECT|TEXTAREA|BUTTON)$/.test(document.activeElement.tagName);
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); save(); return; }
-  if (typing) return;
+  if (typing || !$('picker').hidden) return;
   if (e.key === 'Delete' || e.key === 'Backspace') { view === 'galaxy' ? deleteSystem() : deleteNode(); }
   if ((e.key === 'f' || e.key === 'F') && view === 'system') { fitCam(); draw(); }
 });
@@ -789,7 +792,7 @@ $('btnReload').addEventListener('click', async () => {
   const btn = $('btnReload'); btn.disabled = true; btn.textContent = 'Reading the game…';
   try {
     await api('/api/reload', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
-    await loadCatalogue(); toast('Game data reloaded');
+    spriteCache = {}; await loadCatalogue(); toast('Game data reloaded');
   } catch (e) { toast(e.message, 6000); }
   btn.disabled = false; btn.textContent = 'Reload game data';
   buildPrefabPicker(); buildCopyPicker();
