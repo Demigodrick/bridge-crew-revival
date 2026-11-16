@@ -229,6 +229,38 @@ namespace StbcRevival.Galaxy
             return digits > 0 ? value : (int?)null;
         }
 
+        /// <summary>
+        /// A catalogue file's "background" from its first few hundred characters (written right after the format):
+        /// the file name, or null for none, null, or not found there.
+        /// </summary>
+        public static string BackgroundOf(string start)
+        {
+            if (string.IsNullOrEmpty(start)) return null;
+            string head = start.Length > 400 ? start.Substring(0, 400) : start;
+            int at = head.IndexOf("\"background\"", StringComparison.Ordinal);
+            if (at < 0) return null;
+            int i = at + "\"background\"".Length;
+            while (i < head.Length && (head[i] == ' ' || head[i] == ':' || head[i] == '\t' || head[i] == '\r' || head[i] == '\n')) i++;
+            if (i >= head.Length || head[i] != '"') return null;
+            int end = head.IndexOf('"', i + 1);
+            if (end < 0) return null;
+            string name = head.Substring(i + 1, end - i - 1);
+            return name.Length > 0 && name.IndexOf('\\') < 0 ? name : null;
+        }
+
+        /// <summary>
+        /// Whether a catalogue file (its start; null for none) still needs the warp map art taken on the bridge: it has a
+        /// catalogueFormat (older ones picked a small frame as the art) but no background; fileExists says whether the
+        /// named background file is there. No file at all: false (the shuttle writes the catalogue first).
+        /// </summary>
+        public static bool NeedsMapArt(string fileStart, Func<string, bool> fileExists)
+        {
+            if (fileStart == null) return false;
+            if (FormatOf(fileStart) == null) return true;
+            string background = BackgroundOf(fileStart);
+            return background == null || !fileExists(background);
+        }
+
         /// <summary>Whether the mod should write the catalogue: no file (null), or one in an older format than CurrentFormat.</summary>
         public static bool NeedsWrite(string fileStart) => fileStart == null || (FormatOf(fileStart) ?? 1) < CurrentFormat;
 
@@ -248,7 +280,13 @@ namespace StbcRevival.Galaxy
         public string ToJson()
         {
             var root = new Dictionary<string, object>();
-            root["catalogueFormat"] = Format; // first, so FormatOf finds it without reading the whole file
+            // First, so FormatOf and BackgroundOf find them without reading the whole file.
+            root["catalogueFormat"] = Format;
+            root["background"] = Background;
+            root["universe"] = new Dictionary<string, object>
+            {
+                { "minX", UniverseMinX }, { "minZ", UniverseMinZ }, { "width", UniverseWidth }, { "height", UniverseHeight },
+            };
             var systems = new List<object>();
             foreach (var s in TrenchSystems)
             {
@@ -279,12 +317,7 @@ namespace StbcRevival.Galaxy
             root["tags"] = Json.StringList(Tags);
             root["skyboxes"] = Json.StringList(Skyboxes);
             root["spawnTags"] = Json.StringList(SpawnTags);
-            root["universe"] = new Dictionary<string, object>
-            {
-                { "minX", UniverseMinX }, { "minZ", UniverseMinZ }, { "width", UniverseWidth }, { "height", UniverseHeight },
-            };
             root["sprites"] = Json.StringList(Sprites);
-            root["background"] = Background;
             var spriteFiles = new Dictionary<string, object>();
             foreach (var kv in SpriteFiles) spriteFiles[kv.Key] = kv.Value;
             root["spriteFiles"] = spriteFiles;

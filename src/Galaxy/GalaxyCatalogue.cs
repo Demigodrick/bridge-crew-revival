@@ -37,26 +37,118 @@ namespace StbcRevival.Galaxy
         private const float AutoDelay = 5f;
         private static bool autoDone, autoChecked;
         private static float shuttleSince = -1f, nextAutoLook;
+        // The automatic map art: looked for every few seconds on the bridge until done once this session.
+        private static bool mapDone;
+        private static float nextMapLook;
+        // A catalogue save running on a worker thread; nothing else reads or writes catalogue.json meanwhile.
+        private static volatile bool saving;
+        // Resources.UnloadUnusedAssets wanted, done once no level is loading.
+        private static bool unloadWanted;
 
         internal static void Update()
         {
             GalaxyThumbnails.Update();
+            UnloadWhenSettled();
             Auto();
+            AutoMap();
             var key = Plugin.CatalogueKey.Value;
             if (key == KeyCode.None || !Input.GetKeyDown(key) || Time.realtimeSinceStartup - lastWritten < 3f) return;
-            if (GalaxyThumbnails.Running)
+            if (GalaxyThumbnails.Running || saving)
             {
-                Plugin.Log.LogInfo("Galaxy: still taking the catalogue's pictures; key ignored");
+                Plugin.Log.LogInfo("Galaxy: still taking the catalogue's pictures or saving it; key ignored");
                 return;
             }
             Write(false);
+        }
+
+        // The warp map art (trench-map.png) needs a warp panel, so only the bridge has it: the first time one is
+        // there (any mission) and the catalogue lacks the art, take just that and the universe bounds into the
+        // catalogue. Once a session; no Resources.LoadAll, no pictures.
+        private static void AutoMap()
+        {
+            if (mapDone || saving || GalaxyThumbnails.Running || Time.realtimeSinceStartup < nextMapLook) return;
+            nextMapLook = Time.realtimeSinceStartup + 3f;
+            try
+            {
+                if (GameState.Phase() != "GamePhase_Bridge" || GameState.Loading()) return;
+                string start = FileStart(CataloguePath);
+                if (start == null) return; // the shuttle writes the catalogue first; looked at again next bridge
+                if (!Catalogue.NeedsMapArt(start, f => File.Exists(Path.Combine(Folder, f))))
+                {
+                    mapDone = true;
+                    Plugin.Log.LogInfo("Galaxy: the catalogue has the warp map art; not taken again");
+                    return;
+                }
+                var panel = UnityEngine.Object.FindObjectOfType<WarpPanel>();
+                if (panel == null) return;
+                mapDone = true; // once, whatever happens next (logged); the key on the bridge takes it again
+                Plugin.Log.LogInfo("Galaxy: taking the warp map art for the catalogue by itself");
+                var fresh = new Catalogue();
+                WarpMap(fresh, panel);
+                if (fresh.Background == null && fresh.UniverseWidth <= 0)
+                {
+                    Plugin.Log.LogWarning("Galaxy: no warp map art or bounds found; catalogue left as it was");
+                    return;
+                }
+                SaveInBackground("the warp map art", () =>
+                {
+                    var c = Catalogue.Parse(File.ReadAllText(CataloguePath));
+                    if (fresh.Background != null) c.Background = fresh.Background;
+                    if (fresh.UniverseWidth > 0)
+                    {
+                        c.UniverseMinX = fresh.UniverseMinX;
+                        c.UniverseMinZ = fresh.UniverseMinZ;
+                        c.UniverseWidth = fresh.UniverseWidth;
+                        c.UniverseHeight = fresh.UniverseHeight;
+                    }
+                    return c;
+                });
+            }
+            catch (Exception e) { Plugin.Log.LogError("Galaxy: automatic warp map art: " + e); }
+        }
+
+        // Builds the catalogue to save (make) and writes it on a worker thread: megabytes of JSON, kept off the frame.
+        private static void SaveInBackground(string what, Func<Catalogue> make)
+        {
+            saving = true;
+            try
+            {
+                var thread = new System.Threading.Thread(() =>
+                {
+                    try
+                    {
+                        var c = make();
+                        Save(c);
+                        Plugin.Log.LogInfo($"Galaxy: catalogue saved with {what} (format {c.Format}, background {c.Background ?? "none"})");
+                    }
+                    catch (Exception e) { Plugin.Log.LogError($"Galaxy: saving the catalogue with {what}: {e}"); }
+                    finally { saving = false; }
+                });
+                thread.IsBackground = true;
+                thread.Start();
+            }
+            catch (Exception)
+            {
+                saving = false;
+                throw;
+            }
+        }
+
+        private static void UnloadWhenSettled()
+        {
+            if (!unloadWanted || GalaxyThumbnails.Running) return;
+            try { if (GameState.Loading()) return; }
+            catch (Exception) { }
+            unloadWanted = false;
+            try { Resources.UnloadUnusedAssets(); }
+            catch (Exception e) { Plugin.Log.LogWarning("Galaxy: unloading the loaded prefabs: " + e.Message); }
         }
 
         // Writes the catalogue by itself the first time the player is on the shuttle, if there's none yet or it's
         // in an older format than Catalogue.CurrentFormat; never on the bridge or in the briefing room.
         private static void Auto()
         {
-            if (autoDone || GalaxyThumbnails.Running || Time.realtimeSinceStartup < nextAutoLook) return;
+            if (autoDone || saving || GalaxyThumbnails.Running || Time.realtimeSinceStartup < nextAutoLook) return;
             nextAutoLook = Time.realtimeSinceStartup + 0.5f;
             bool onShuttle;
             try { onShuttle = GameState.Phase() == "GamePhase_MainMenu" && !GameState.Loading(); }
@@ -102,7 +194,7 @@ namespace StbcRevival.Galaxy
         private static void Write(bool auto)
         {
             lastWritten = Time.realtimeSinceStartup;
-            bool picturing = false;
+            bool picturing = false, pending = false;
             try
             {
                 var trench = FindTrench();
@@ -131,6 +223,7 @@ namespace StbcRevival.Galaxy
 
                 var catalogue = Build(trench, panel, out var bodies, out var sprites);
                 if (panel == null) KeepWarpMap(catalogue, previous, previousFormat);
+                else if (catalogue.Background != null) mapDone = true;
                 ExportSprites(catalogue, sprites);
                 var items = PictureItems(catalogue, bodies);
 
@@ -149,24 +242,23 @@ namespace StbcRevival.Galaxy
                     Plugin.Log.LogInfo($"Galaxy: no new pictures of the prefabs: {why}; they're taken on the shuttle or in the briefing room");
                     return;
                 }
-                GalaxyThumbnails.Start(items, auto, (complete, summary) =>
+                pending = GalaxyThumbnails.Start(items, auto, (interrupted, summary) =>
                 {
                     Plugin.Log.LogInfo("Galaxy: " + summary);
                     foreach (var item in items) item.Source = null;
-                    try
-                    {
-                        catalogue.Format = complete ? Catalogue.CurrentFormat : 1;
-                        Save(catalogue);
-                        int thumbs = 0;
-                        foreach (var p in catalogue.Prefabs) if (p.Thumb != null) thumbs++;
-                        Plugin.Log.LogInfo($"Galaxy: catalogue written again with {thumbs} pictures" +
-                            (complete ? $" (format {Catalogue.CurrentFormat}, complete)" : " (incomplete: written again on the next shuttle visit)"));
-                        if (complete) autoDone = true;
-                    }
+                    UnloadPrefabs(); // once no level is loading
+                    // Only leaving (or a load, or the scene going) leaves it for another try; any other end is as
+                    // complete as it gets, failures logged above, so it isn't retried every visit.
+                    catalogue.Format = interrupted ? 1 : Catalogue.CurrentFormat;
+                    if (!interrupted) autoDone = true;
+                    int thumbs = 0;
+                    foreach (var p in catalogue.Prefabs) if (p.Thumb != null) thumbs++;
+                    Plugin.Log.LogInfo($"Galaxy: writing the catalogue again with {thumbs} pictures" +
+                        (interrupted ? " (interrupted: written again on the next shuttle visit)" : $" (format {Catalogue.CurrentFormat})"));
+                    try { SaveInBackground(thumbs + " pictures", () => catalogue); }
                     catch (Exception e) { Plugin.Log.LogError("Galaxy: writing the catalogue after the pictures: " + e); }
-                    UnloadPrefabs();
                 });
-                picturing = GalaxyThumbnails.Running;
+                if (!pending) Plugin.Log.LogWarning("Galaxy: no new pictures this time (see above); catalogue left at format 1");
             }
             catch (Exception e)
             {
@@ -175,18 +267,21 @@ namespace StbcRevival.Galaxy
             finally
             {
                 // While pictures are taken the prefabs are still needed; the run's end unloads them.
-                if (!picturing) UnloadPrefabs();
+                if (!pending) UnloadPrefabs();
             }
         }
 
-        private static void Save(Catalogue c) => File.WriteAllText(CataloguePath, c.ToJson(), new UTF8Encoding(false));
-
-        // LoadAll("Sector") loaded every prefab under it; let go of the ones the scene doesn't use.
-        private static void UnloadPrefabs()
+        // Written to a temporary file and moved into place, so a save cut short (the game closing) leaves the old file.
+        private static void Save(Catalogue c)
         {
-            try { Resources.UnloadUnusedAssets(); }
-            catch (Exception e) { Plugin.Log.LogWarning("Galaxy: unloading the loaded prefabs: " + e.Message); }
+            string temp = CataloguePath + ".tmp";
+            File.WriteAllText(temp, c.ToJson(), new UTF8Encoding(false));
+            if (File.Exists(CataloguePath)) File.Delete(CataloguePath);
+            File.Move(temp, CataloguePath);
         }
+
+        // LoadAll("Sector") loaded every prefab under it; let go of the ones the scene doesn't use (once no level loads).
+        private static void UnloadPrefabs() => unloadWanted = true;
 
         // Without a warp panel (the shuttle): the previous catalogue's universe bounds, and its map art if it was
         // found by this version's search (a file with a catalogueFormat; older ones picked a small frame).

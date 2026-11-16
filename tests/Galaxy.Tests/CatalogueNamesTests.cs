@@ -109,3 +109,36 @@ public class CatalogueFormatTests
         Assert.Equal(1, Catalogue.Parse("{}").Format);
     }
 }
+
+public class CatalogueMapArtTests
+{
+    [Fact]
+    public void BackgroundOf_ReadsTheFileNameFromTheStart()
+    {
+        Assert.Equal("trench-map.png", Catalogue.BackgroundOf(new Catalogue { Background = "trench-map.png" }.ToJson()));
+        Assert.Null(Catalogue.BackgroundOf(new Catalogue().ToJson()));
+        Assert.Null(Catalogue.BackgroundOf(@"{ ""trenchSystems"": [] }"));
+        Assert.Null(Catalogue.BackgroundOf(null));
+    }
+
+    [Fact]
+    public void NeedsMapArt_OnlyWhenTheCatalogueLacksIt()
+    {
+        Func<string, bool> exists = f => f == "trench-map.png";
+        Assert.False(Catalogue.NeedsMapArt(null, exists));
+        Assert.True(Catalogue.NeedsMapArt(@"{ ""background"": ""trench-map.png"" }", exists)); // older format: the old search
+        Assert.True(Catalogue.NeedsMapArt(new Catalogue().ToJson(), exists));
+        Assert.True(Catalogue.NeedsMapArt(new Catalogue { Background = "gone.png" }.ToJson(), exists));
+        Assert.False(Catalogue.NeedsMapArt(new Catalogue { Background = "trench-map.png" }.ToJson(), exists));
+    }
+
+    [Fact]
+    public void BigCatalogue_FormatAndBackgroundStillAtTheStart()
+    {
+        var c = new Catalogue { Background = "trench-map.png" };
+        for (int i = 0; i < 500; i++) c.Prefabs.Add(new CataloguePrefab { Name = "P" + i });
+        string start = c.ToJson().Substring(0, 512);
+        Assert.Equal(2, Catalogue.FormatOf(start));
+        Assert.Equal("trench-map.png", Catalogue.BackgroundOf(start));
+    }
+}
