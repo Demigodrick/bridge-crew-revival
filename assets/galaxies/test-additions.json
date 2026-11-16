@@ -6,9 +6,10 @@
       "system": "Venov",
       "nodes": [
         { "id": "family", "name": "Venov Outpost", "prefab": "Family Group", "tags": ["FAMILY"], "unit": "Lightseconds",
-          "position": [4.5, 0, -4.5], "mapName": "Venov Outpost", "familyBackground": "FamilyMapBG_4" },
+          "position": [4.5, 0, -4.5], "mapName": "Venov Outpost", "familyBackground": "FamilyMapBG_4",
+          "mapIcon": "spr_sys_map_icon_space_station" },
         { "id": "poi", "parent": "family", "name": "Outpost Approach", "prefab": "Point of Interest", "unit": "Skybox",
-          "position": [0, 0, 0], "mapName": "Outpost Approach" },
+          "position": [0, 0, 0], "mapName": "Outpost Approach", "mapIcon": "spr_sys_map_icon_space_station" },
         { "id": "region", "parent": "poi", "name": "REGION Venov Outpost", "prefab": "Region", "tags": ["RegionSpaceStation"],
           "unit": "Skybox", "position": [15.6, 0, -7.3] },
         { "id": "impulse", "parent": "region", "name": "Impulse Destination", "prefab": "Impulse Destination", "unit": "Kilometers",

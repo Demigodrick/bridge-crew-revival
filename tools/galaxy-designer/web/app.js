@@ -579,6 +579,8 @@ function buildCopyPicker() {
   fillFam(tss[0].name);
 }
 
+// A new family or POI gets an icon (the game draws a white box without one) when the catalogue has the sprite.
+function defaultIcon(kind) { const v = 'spr_sys_map_icon_' + kind; return cat && (cat.sprites || []).includes(v) ? { mapIcon: v } : {}; }
 function addChild(parent, props) {
   const s = sys(), ids = s.nodes.map(n => n.id);
   const n = Object.assign({ id: uniqueId(props.name, ids), parent, position: [0, 0, 0], rotation: [0, 0, 0], tags: [], landingRadius: 1000 }, props);
@@ -586,7 +588,7 @@ function addChild(parent, props) {
 }
 $('addFamily').addEventListener('click', () => {
   const s = sys(), name = 'New family ' + (s.nodes.filter(n => !n.parent).length + 1);
-  addChild(null, { name, prefab: FAMILY, unit: 'Lightseconds' });
+  addChild(null, Object.assign({ name, prefab: FAMILY, unit: 'Lightseconds' }, defaultIcon('planet')));
   $('nName').focus(); $('nName').select();
 });
 $('addCopy').addEventListener('click', () => {
@@ -608,7 +610,7 @@ $('addPoi').addEventListener('click', () => {
   if (isCopy(fam)) return toast('A copied family is read-only: it keeps its own POIs');
   zoomPoi = null;
   const k = sys().nodes.filter(x => x.parent === fam.id).length, a = k * 2.4;   // spread new POIs so they don't pile up on the family's centre
-  addChild(fam.id, { name: 'New POI', prefab: POI, unit: 'Lightseconds', position: k ? [Math.round(Math.cos(a) * 20) / 10, 0, Math.round(Math.sin(a) * 20) / 10] : [0, 0, 0] });
+  addChild(fam.id, { name: 'New POI', prefab: POI, unit: 'Lightseconds', ...defaultIcon('planet'), position: k ? [Math.round(Math.cos(a) * 20) / 10, 0, Math.round(Math.sin(a) * 20) / 10] : [0, 0, 0] });
   $('nName').focus(); $('nName').select();
 });
 $('addRegion').addEventListener('click', () => {
@@ -699,7 +701,7 @@ function refreshSystemPanel() {
   $('nName').value = n.name || ''; $('nId').value = n.id;
   $('copyInfo').hidden = !copy;
   if (copy) $('copyInfo').textContent = `A copy of ${tLabel(n.copyFamily.system)} / ${n.copyFamily.family}. Rename it and give it a map name or background; the rest is the Trench's.`;
-  $('mapNameRow').hidden = lvl > 1; $('bgRow').hidden = lvl !== 0; $('iconRow').hidden = lvl !== 1;
+  $('mapNameRow').hidden = lvl > 1; $('bgRow').hidden = lvl !== 0; $('iconRow').hidden = lvl > 1;
   $('nMapName').value = n.mapName || '';
   const bw = $('nBgWrap'); bw.textContent = ''; bw.append(spritePicker(n.familyBackground, v => setOpt(n, 'familyBackground', v), 'nBg'));
   const iw = $('nIconWrap'); iw.textContent = ''; iw.append(spritePicker(n.mapIcon, v => setOpt(n, 'mapIcon', v), 'nIcon'));

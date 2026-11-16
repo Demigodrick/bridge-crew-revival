@@ -436,6 +436,11 @@ namespace StbcRevival.Galaxy
                     Map.SystemNode parent;
                     if (n.Parent == null) parent = root;
                     else if (!built.TryGetValue(n.Parent, out parent)) continue;
+                    if (n.CopyFamily == null && n.MapIcon == null && (n.Prefab == GalaxyCheck.FamilyPrefab || n.Prefab == GalaxyCheck.PoiPrefab))
+                    {
+                        n.MapIcon = MapIcons.FallbackFor(n, nodes);   // the game draws a white box for a node with no icon
+                        Plugin.Log.LogInfo(P + $"{at}: '{n.Name}' has no map icon; using {n.MapIcon}");
+                    }
                     built[n.Id] = n.CopyFamily != null ? CopiedFamily(n, parent, copy, game) : Node.Make(n, parent, copy, game, template);
                     pending.RemoveAt(i--);
                     done++;
