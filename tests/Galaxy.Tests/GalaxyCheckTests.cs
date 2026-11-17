@@ -145,6 +145,19 @@ public class GalaxyCheckTests
     }
 
     [Fact]
+    public void BodyDirectlyOnFamily_IsBackdropScenery_NoProblemOrWarning()
+    {
+        var f = Valid();
+        var nebula = Node("kessar-nebula", "kessar-fam", "Planet_Rock"); nebula.Unit = "Skybox"; nebula.X = 600;
+        f.Systems[0].Nodes.Add(nebula);
+        List<string> w;
+        var problems = GalaxyCheck.Problems(f, Cat(), out w);
+        Assert.DoesNotContain(problems, x => x.Contains("kessar-nebula"));
+        Assert.DoesNotContain(w, x => x.Contains("kessar-nebula"));
+        Assert.Empty(problems);
+    }
+
+    [Fact]
     public void NoStationInRegion_IsAWarningNotAProblem()
     {
         var f = Valid(); f.Systems[0].Nodes.RemoveAt(4);

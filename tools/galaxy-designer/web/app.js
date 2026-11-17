@@ -237,6 +237,9 @@ function farOut(s, n) {
 }
 let lastSel = null;   // the selection the plan last followed (a new selection inside a region zooms into it; a press or drag doesn't)
 const isSpawn = n => nodeTags(n).includes('SpawnPoint');
+// A body hung straight on a hand-made family (not under a POI): scenery seen from the whole family, not somewhere to fly to.
+const isBackdrop = (s, n) => { const p = n.parent && nodeById(s, n.parent); return !!p && p.prefab === FAMILY && !isCopy(p) && n.prefab !== POI && n.prefab !== REGION && !isWarp(n) && !isSpawn(n) && !isJump(n); };
+const BACKDROP_MSG = 'Do not jump here: backdrop only.';
 // A region: the "Region" prefab, or a prefab-less node directly under a POI (the Trench has those) that isn't a marker.
 const isRegion = (s, n) => n.prefab === REGION || (n.prefab === '' && !isWarp(n) && !isSpawn(n) && levelOf(s, n) === 2);
 function inRegion(s, n) { let c = n, i = 0; while (c && i++ < 50) { if (isRegion(s, c)) return c; c = c.parent ? nodeById(s, c.parent) : null; } return null; }   // the region it is (or is inside)
@@ -418,10 +421,10 @@ function drawFamilyPage(s, fam, w, h, d) {
   ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillRect(bx + 8 * d, by + 8 * d, ctx.measureText(title).width + 14 * d, 22 * d);
   ctx.fillStyle = '#f2c14e'; ctx.fillText(title, bx + 15 * d, by + 19 * d);
   ctx.font = `${11 * d}px system-ui, sans-serif`;
-  const label = (txt, x, y, sel) => {
+  const label = (txt, x, y, sel, color) => {
     const tw = ctx.measureText(txt).width; ctx.textAlign = 'center';
     ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(x - tw / 2 - 4 * d, y - 8 * d, tw + 8 * d, 16 * d);
-    ctx.fillStyle = sel ? '#f2c14e' : '#e6edf3'; ctx.fillText(txt, x, y); ctx.textAlign = 'left';
+    ctx.fillStyle = color || (sel ? '#f2c14e' : '#e6edf3'); ctx.fillText(txt, x, y); ctx.textAlign = 'left';
   };
   if (isCopy(fam)) {
     const cf = catFamily(fam), pois = (cf && cf.pois) || [], r = Math.min(box.w, box.h) * 0.3;
@@ -437,11 +440,11 @@ function drawFamilyPage(s, fam, w, h, d) {
   const L = layout(s);
   for (const n of planNodes(s)) {
     if (n.id === fam.id) continue;
-    const { x, y } = L[n.id], sel = n.id === selNode, ic = spriteImg(n.mapIcon), sz = POI_ICON * d;
+    const { x, y } = L[n.id], sel = n.id === selNode, back = isBackdrop(s, n), ic = back ? null : spriteImg(n.mapIcon), sz = POI_ICON * d;
     if (ic) ctx.drawImage(ic, x - sz / 2, y - sz / 2, sz, sz * ic.naturalHeight / ic.naturalWidth);
-    else { ctx.fillStyle = '#d7dde4'; ctx.beginPath(); ctx.arc(x, y, 7 * d, 0, 7); ctx.fill(); }
+    else { ctx.fillStyle = back ? '#ff5f56' : '#d7dde4'; ctx.beginPath(); ctx.arc(x, y, (back ? 9 : 7) * d, 0, 7); ctx.fill(); if (back) { ctx.strokeStyle = '#000'; ctx.lineWidth = 1.5 * d; ctx.stroke(); } }
     if (sel) { ctx.strokeStyle = '#f2c14e'; ctx.lineWidth = 2 * d; ctx.beginPath(); ctx.arc(x, y, sz * 0.62, 0, 7); ctx.stroke(); }
-    label(n.mapName || n.name || n.id, x, y + sz * 0.62 + 9 * d, sel);
+    label(back ? (n.name || n.id) + ' (backdrop)' : n.mapName || n.name || n.id, x, y + sz * 0.62 + 9 * d, sel, back ? '#ff8d86' : null);
   }
   const [cx, cy] = toS(0, 0);
   ctx.strokeStyle = 'rgba(242,193,78,0.5)'; ctx.lineWidth = d; ctx.beginPath(); ctx.moveTo(cx - 6 * d, cy); ctx.lineTo(cx + 6 * d, cy); ctx.moveTo(cx, cy - 6 * d); ctx.lineTo(cx, cy + 6 * d); ctx.stroke();
@@ -508,7 +511,7 @@ canvas.addEventListener('pointerdown', e => {
       const s0 = sys(), lay = layout(s0)[n.id];
       // A click on a POI (on the page) or a region (in a POI) goes into it; a drag moves it. Stacked markers drag too.
       const sysLv = planLevel() === 'system';
-      const zoom = sysLv ? { k: 'fam', id: n.id } : pageLevel() && n.parent === selFam ? { k: 'poi', id: n.id } : planLevel() === 'poi' && isRegion(s0, n) ? { k: 'region', id: n.id } : null;
+      const zoom = sysLv ? { k: 'fam', id: n.id } : pageLevel() && n.parent === selFam ? (isBackdrop(s0, n) ? null : { k: 'poi', id: n.id }) : planLevel() === 'poi' && isRegion(s0, n) ? { k: 'region', id: n.id } : null;
       drag = (lay.edge || (!sysLv && !n.parent) || n.id === planRoot() || (sysLv && famFixed(n))) ? { kind: 'none', zoom, px, py } : { kind: 'node', moved: false, px, py, zoom };
       refreshSystemPanel();
     }
@@ -798,10 +801,17 @@ $('addJump').addEventListener('click', () => {
 });
 $('addNode').addEventListener('click', () => {
   const s = sys(), parent = selNode && nodeById(s, selNode);
-  if (!parent || levelOf(s, parent) < 1 || isCopy(parent)) return toast('Select a POI, region or body to put it in');
+  const onFamily = !!parent && !parent.parent && parent.prefab === FAMILY && !isCopy(parent);   // a body straight on a hand-made family: backdrop scenery
+  if (!parent || isCopy(parent) || (levelOf(s, parent) < 1 && !onFamily)) return toast('Select a family, POI, region or body to put it in');
   const prefab = ($('addPrefabSel').value || '').trim();
   if (!prefab) return toast('Pick a prefab first');
   const k = (cat && (cat.prefabs || []).find(p => p.name === prefab) || {}).kind;
+  if (onFamily) {   // far-off scenery seen from the whole family: Skybox units, a little off the family's centre so it shows
+    atSystem = false; zoomPoi = null; zoomRegion = null;
+    const i = s.nodes.filter(x => x.parent === parent.id && isBackdrop(s, x)).length, a = i * 2.4 + 0.8;
+    addChild(parent.id, { name: prefab.replace(/^.*[\\/]/, ''), prefab, unit: 'Skybox', position: [Math.round(Math.cos(a) * 600), 0, Math.round(Math.sin(a) * 600)] });
+    return;
+  }
   addChild(parent.id, { name: prefab.replace(/^.*[\\/]/, ''), prefab, unit: k === 'star' || k === 'planet' ? 'AstronomicalUnits' : 'Kilometers' });
 });
 
@@ -870,10 +880,13 @@ function refreshSystemPanel() {
     if (!cf) ul.append(el('li', { class: 'muted' }, cat ? 'The catalogue has no such family.' : '(no catalogue: names unknown)'));
   } else if (fam) {
     for (const { n, depth } of depthOrder(s, fam))
-      ul.append(el('li', { class: n.id === selNode ? 'sel' : '', style: `padding-left:${14 + depth * 14}px`, onclick: () => { selNode = n.id; lastSel = null; atSystem = false; if (depth <= 1) { zoomPoi = null; zoomRegion = null; } refreshSystemPanel(); draw(); }, ondblclick: () => { if (depth === 1) { zoomPoi = n.id; zoomRegion = null; refreshSystemPanel(); draw(); } } },
-        (isJump(n) ? '◎ ' : '') + (n.name || n.id), el('small', null, depth === 0 ? 'family' : depth === 1 ? 'POI' : isWarp(n) ? 'jump point' : isSpawn(n) ? 'spawn point' : isRegion(s, n) ? 'region' : n.prefab)));
+      ul.append(el('li', { class: n.id === selNode ? 'sel' : '', style: `padding-left:${14 + depth * 14}px`, onclick: () => { selNode = n.id; lastSel = null; atSystem = false; if (depth <= 1) { zoomPoi = null; zoomRegion = null; } refreshSystemPanel(); draw(); }, ondblclick: () => { if (depth === 1 && !isBackdrop(s, n)) { zoomPoi = n.id; zoomRegion = null; refreshSystemPanel(); draw(); } } },
+        (isJump(n) ? '◎ ' : '') + (n.name || n.id), ...(isBackdrop(s, n) ? [el('small', { class: 'backdropTag' }, 'backdrop')] : []), el('small', null, depth === 0 ? 'family' : isBackdrop(s, n) ? n.prefab : depth === 1 ? 'POI' : isWarp(n) ? 'jump point' : isSpawn(n) ? 'spawn point' : isRegion(s, n) ? 'region' : n.prefab)));
   }
   const n = sel;
+  const back = !!n && isBackdrop(s, n); $('backdropBanner').hidden = !back;
+  if (back && backdropSeen !== n.id) toast(BACKDROP_MSG, 4500);
+  backdropSeen = back ? n.id : null;
   $('nodeForm').hidden = !n || !!n._ro;
   if (!n) return;
   const lvl = levelOf(s, n), copy = isCopy(n);
@@ -900,7 +913,7 @@ function refreshSystemPanel() {
   const par = $('nParent'); par.textContent = ''; if (lvl === 0) par.append(el('option', { value: '', textContent: '(none)' }));
   const bad = descendants(s, n.id);
   // Only one level up: a POI sits in a family, a region in a POI, anything else in a region or body (and never in a copied family).
-  const okParent = o => o.id === n.parent || (!isCopy(o) && !isWarp(o) && (n.prefab === POI ? o.prefab === FAMILY : n.prefab === REGION ? o.prefab === POI : levelOf(s, o) >= 2));
+  const okParent = o => o.id === n.parent || (!isCopy(o) && !isWarp(o) && (n.prefab === POI ? o.prefab === FAMILY : n.prefab === REGION ? o.prefab === POI : levelOf(s, o) >= 2 || (o.prefab === FAMILY && !isWarp(n) && !isSpawn(n) && !isJump(n))));
   for (const o of s.nodes) if (!bad.has(o.id) && okParent(o)) par.append(el('option', { value: o.id, textContent: o.name || o.id }));
   par.value = n.parent || ''; par.disabled = lvl === 0;
   n.position = n.position || [0, 0, 0];
@@ -914,6 +927,7 @@ function refreshSystemPanel() {
   $('poiKinds').hidden = lvl < 2 || isWarp(n);
 }
 
+let backdropSeen = null;   // the backdrop body whose toast has been shown (once per selection)
 function tagAllowed(t) { return !cat || (cat.tags || []).includes(t); }
 function refreshPoi(n) {
   const spawn = cat && cat.spawnTags && cat.spawnTags[0];

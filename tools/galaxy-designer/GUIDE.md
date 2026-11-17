@@ -63,6 +63,8 @@ the game. It's a quick way to start a system and then add your own families besi
 ### 3. The POIs (a family's page)
 Click a family in the System view to open its page. Each family gets 1–4 POIs (**Add POI**, with the family selected).
 
+A body can also sit directly on a family (**Add body** with the family selected) as backdrop scenery, like a distant nebula: it shows in red and isn't somewhere to fly to.
+
 **Where things go.** Every node is placed relative to its parent: drag it on the plan, or type it in the node's
 fields in the sidebar (scroll down to **X / Y / Z** and **Unit**; under them the designer shows the distance in plain
 kilometres, e.g. "≈ 27,000 km from Tharn's Landing"). The unit just says what the numbers count in:

@@ -125,3 +125,7 @@ button.quiet:hover { color: var(--text); border-color: var(--line); }
 .md th, .md td { border: 1px solid var(--line); padding: 5px 10px; text-align: left; vertical-align: top; }
 .md th { background: #0b0f14; color: var(--accent); }
 .md h1 { text-transform: none; letter-spacing: 0; }
+
+#backdropBanner { color: #fff; background: #c62828; border-radius: 6px; padding: 8px 10px; font-weight: 700; }
+.backdropTag { color: #ff5f56; font-weight: 700; margin-left: 6px; }
+#backdropBanner { margin: 6px 14px; }
