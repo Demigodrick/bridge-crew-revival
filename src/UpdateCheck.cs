@@ -135,7 +135,7 @@ namespace StbcRevival
                     foreach (var native in NativeFiles)
                         if (!File.Exists(NativePath(native))) Plugin.Instance.StartCoroutine(FetchNative(Plugin.Version, native));
                 }
-                // Our ship models (BepInEx/ships): any of this version's that's missing, once a launch.
+                // Our ship models (BepInEx/ships) and galaxy file (BepInEx/galaxies): any of this version's that's missing, once a launch.
                 if (!downloading && !shipsTried)
                 {
                     shipsTried = true;
@@ -257,24 +257,28 @@ namespace StbcRevival
             using (var sha = SHA256.Create()) return BitConverter.ToString(sha.ComputeHash(data)).Replace("-", "").ToLowerInvariant();
         }
 
-        // ---- ship models ----
-        // Our ship classes' models live in BepInEx/ships (the installers copy them from the zip). A release lists them
-        // in SHA256SUMS as "ships/<ship>/<file>", each uploaded as an asset of its own named with dots for the slashes
+        // ---- ship models and the second sector ----
+        // Our ship classes' models live in BepInEx/ships, the second sector's galaxy file in BepInEx/galaxies (the
+        // installers copy them from the zip). A release lists them in SHA256SUMS as "ships/<ship>/<file>" and
+        // "galaxies/<file>.json", each uploaded as an asset of its own named with dots for the slashes
         // ("ships.Nova.Nova.obj"), as Unity 5.4's .NET can't open the zip. Missing ones are fetched at launch; on an
         // update, changed ones too (their hashes worked out on a thread: the Nova's model is 46 MB).
 
         private static bool shipsTried;
         private const float ShipSeconds = 900f; // a large model on a slow line
-        private static string ShipsRoot => Path.Combine(Paths.BepInExRootPath, "ships");
+        private static string LocalPath(string path) => Path.Combine(Paths.BepInExRootPath, path.Replace('/', Path.DirectorySeparatorChar));
 
-        // A path from SHA256SUMS that's one of ours and safe to write: ships/<ship>/<file>, plain names only.
-        private static bool IsShipPath(string path)
+        // A path from SHA256SUMS that's one of ours and safe to write, plain names only: ships/<ship>/<file> or
+        // galaxies/<file>.json.
+        internal static bool IsAssetPath(string path)
         {
-            if (!path.StartsWith("ships/", StringComparison.Ordinal) || path.Contains("..") || path.Contains("\\")) return false;
-            var parts = path.Split('/');
-            if (parts.Length != 3) return false;
+            if (path.Contains("..") || path.Contains("\\")) return false;
             foreach (char c in path) if (!(char.IsLetterOrDigit(c) || c == '.' || c == '_' || c == '-' || c == '/')) return false;
-            return parts[1].Length > 0 && parts[2].Length > 0;
+            var parts = path.Split('/');
+            foreach (var part in parts) if (part.Length == 0) return false;
+            if (parts[0] == "ships") return parts.Length == 3;
+            if (parts[0] == "galaxies") return parts.Length == 2 && parts[1].EndsWith(".json", StringComparison.Ordinal);
+            return false;
         }
 
         private static IEnumerator SyncShips(string version, bool checkChanged)
@@ -289,13 +293,13 @@ namespace StbcRevival
             }
             if (sums == null) yield break; // offline or no such release: nothing to do this time
             var wanted = new List<KeyValuePair<string, string>>();
-            foreach (var kv in ParseSums(sums)) if (IsShipPath(kv.Key)) wanted.Add(kv);
+            foreach (var kv in ParseSums(sums)) if (IsAssetPath(kv.Key)) wanted.Add(kv);
             if (wanted.Count == 0) yield break;
 
             var todo = new List<KeyValuePair<string, string>>();
             foreach (var kv in wanted)
             {
-                var local = Path.Combine(ShipsRoot, kv.Key.Substring("ships/".Length).Replace('/', Path.DirectorySeparatorChar));
+                var local = LocalPath(kv.Key);
                 if (!File.Exists(local)) { todo.Add(kv); continue; }
                 if (!checkChanged) continue;
                 string have = null; bool done = false;
@@ -310,7 +314,7 @@ namespace StbcRevival
                 if (have != kv.Value) todo.Add(kv);
             }
             if (todo.Count == 0) yield break;
-            Plugin.Log.LogInfo($"Update: fetching {todo.Count} ship file(s) of {version}: {string.Join(", ", todo.Select(t => t.Key).ToArray())}");
+            Plugin.Log.LogInfo($"Update: fetching {todo.Count} ship/galaxy file(s) of {version}: {string.Join(", ", todo.Select(t => t.Key).ToArray())}");
             foreach (var kv in todo)
             {
                 var www = new WWW(Releases + version + "/" + kv.Key.Replace('/', '.'));
@@ -323,7 +327,7 @@ namespace StbcRevival
                 try
                 {
                     if (data == null || data.Length == 0 || Hash(data) != kv.Value) throw new Exception("it doesn't match its checksum");
-                    var local = Path.Combine(ShipsRoot, kv.Key.Substring("ships/".Length).Replace('/', Path.DirectorySeparatorChar));
+                    var local = LocalPath(kv.Key);
                     Directory.CreateDirectory(Path.GetDirectoryName(local));
                     File.WriteAllBytes(local + ".new", data);
                     if (File.Exists(local)) File.Delete(local);

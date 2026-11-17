@@ -13,6 +13,18 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 version="$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' "$root/src/StbcRevival.csproj")"
 notes="${1:-Bridge Crew Revival $version}"
 
+# The second sector (Jagged Sword) as it is in the game folder now, where the galaxy designer saves it: copied into
+# assets/galaxies and committed when it changed, so the release ships the latest and the repo records it.
+game="${GAME_DIR:-$HOME/.local/share/Steam/steamapps/common/Star Trek Bridge Crew}"
+sector="$root/assets/galaxies/jagged-sword.json"
+[ -f "$game/BepInEx/galaxies/jagged-sword.json" ] && cp "$game/BepInEx/galaxies/jagged-sword.json" "$sector"
+# Checked against the game's data as the game will: a file with problems would be refused, the second sector off.
+dotnet run --project "$root/tools/galaxy-designer" -c Release -- --game "$game" --no-open --check "$sector" ||
+  { echo "jagged-sword.json has problems (above): fix them in the galaxy designer, then release again." >&2; exit 1; }
+if ! git -C "$root" diff --quiet -- "$sector"; then
+  git -C "$root" commit -q -m "Galaxy: the second sector as released in $version" -- "$sector"
+fi
+
 zip="$("$root/tools/package.sh" | tail -n1)"
 out="$root/dist/release"
 rm -rf "$out" && mkdir -p "$out"
@@ -23,19 +35,20 @@ cp "$root/dist/BridgeCrewRevival-$version/plugins/StbcRevival.dll" "$root/dist/B
 cp "$root/dist/BridgeCrewRevival-$version/native/rnnoise.dll" "$root/dist/BridgeCrewRevival-$version/native/speexdsp.dll" "$out/"
 (cd "$out" && sha256sum StbcRevival.dll StbcCore.dll rnnoise.dll speexdsp.dll > SHA256SUMS)
 assets=("$out/BridgeCrewRevival.zip" "$out/BridgeCrewRevival.zip.sha256" "$out/StbcRevival.dll" "$out/StbcCore.dll" "$out/rnnoise.dll" "$out/speexdsp.dll")
-# Our ship models (BepInEx/ships) too, each file an asset of its own named with dots for the slashes
-# ("ships.Nova.Nova.obj") and listed in SHA256SUMS by its path ("ships/Nova/Nova.obj"): the updater fetches the
-# missing ones at launch and the changed ones on an update.
-ships="$root/dist/BridgeCrewRevival-$version/ships"
-if [ -d "$ships" ]; then
+# Our ship models (BepInEx/ships) and the second sector's galaxy file (BepInEx/galaxies) too, each file an asset of
+# its own named with dots for the slashes ("ships.Nova.Nova.obj") and listed in SHA256SUMS by its path
+# ("ships/Nova/Nova.obj"): the updater fetches the missing ones at launch and the changed ones on an update.
+for d in ships galaxies; do
+  dir="$root/dist/BridgeCrewRevival-$version/$d"
+  [ -d "$dir" ] || continue
   while IFS= read -r -d '' f; do
-    rel="ships/${f#"$ships"/}"
+    rel="$d/${f#"$dir"/}"
     name="${rel//\//.}"
     cp "$f" "$out/$name"
     printf '%s  %s\n' "$(sha256sum "$f" | cut -d' ' -f1)" "$rel" >> "$out/SHA256SUMS"
     assets+=("$out/$name")
-  done < <(find "$ships" -type f -print0 | sort -z)
-fi
+  done < <(find "$dir" -type f -print0 | sort -z)
+done
 assets+=("$out/SHA256SUMS")
 
 # The tag goes on the commit released: pushed first (docs/version.txt isn't changed yet, so players aren't told

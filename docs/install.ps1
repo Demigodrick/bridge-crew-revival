@@ -538,8 +538,8 @@ function Install-BridgeCrewRevival([string]$GameDir, [bool]$Uninstall, [string]$
             New-Item -ItemType Directory -Force -Path $native | Out-Null
             Copy-Item -Path (Join-Path $nativeSource "*.dll") -Destination $native -Force
         }
-        # Ship classes and bridge sets of our own, beside plugins\ in the zip.
-        foreach ($d in "ships", "bridges", "vr") {
+        # Ship classes, bridge sets and the second sector of our own, beside plugins\ in the zip.
+        foreach ($d in "ships", "bridges", "vr", "galaxies") {
             $assetSource = Join-Path (Split-Path -Parent $source) $d
             if (Test-Path $assetSource) {
                 $assetTarget = Join-Path $GameDir "BepInEx\$d"

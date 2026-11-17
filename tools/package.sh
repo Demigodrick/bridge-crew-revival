@@ -35,6 +35,9 @@ done
 # The models of our own ship classes and bridge sets (BepInEx/ships, BepInEx/bridges) and the Quest controllers' SteamVR
 # layout (BepInEx/vr), beside plugins/ in the zip.
 for d in ships bridges vr; do [ -d "$root/assets/$d" ] && mkdir -p "$out/$d" && cp -r "$root/assets/$d/." "$out/$d/"; done
+# The second sector beyond the Trench (BepInEx/galaxies, [Galaxy] Region's default). Only this one: the other files in
+# assets/galaxies are the tests' development files.
+mkdir -p "$out/galaxies" && cp "$root/assets/galaxies/jagged-sword.json" "$out/galaxies/"
 # The bridge designer: one program each for Windows and Linux with .NET inside (nothing to install first), trimmed
 # to what it uses.
 mkdir -p "$out/designer"

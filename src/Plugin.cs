@@ -261,10 +261,11 @@ namespace StbcRevival
                 + "when this is set. Set, they're taken once on your first shuttle visit if missing or out of date, and again when "
                 + "you press the key on the shuttle or in the briefing room. None (the default): no pictures.");
             StbcRevival.Galaxy.GalaxyCatalogue.MigrateOldKey(Config, PictureKey);
-            GalaxyRegionName = Config.Bind("Galaxy", "Region", "",
-                "Testing only: a galaxy region file in BepInEx/galaxies, by name (\"test-reach\" for test-reach.json). Its systems "
-                + "are added after the Trench's for Revival Patrol and Free Roam, when everyone in the crew has the same file (the "
-                + "host is told who hasn't). Empty (the default): off, the Trench as the game has it.");
+            GalaxyRegionName = Config.Bind("Galaxy", "Region", "jagged-sword",
+                "The second sector beyond the Trench: a galaxy file in BepInEx/galaxies, by name (\"jagged-sword\" for "
+                + "jagged-sword.json, the one the mod comes with). Its systems are added after the Trench's for Revival Patrol and "
+                + "Free Roam, when everyone in the crew has the same file (the host is told who hasn't). Empty: off, the Trench "
+                + "as the game has it.");
             TestPatrolAssignment = Config.Bind("Debug", "TestPatrolAssignment", "",
                 new BepInEx.Configuration.ConfigDescription(
                     "Testing only: every assignment Patrol offers is this one, when you host. Empty: Starfleet's usual mix "

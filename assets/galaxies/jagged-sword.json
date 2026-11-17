@@ -1,0 +1,1132 @@
+{
+  "format": 1,
+  "name": "jagged-sword",
+  "page": {
+    "label": "Jagged Sword",
+    "background": "trench-darkened"
+  },
+  "systems": [
+    {
+      "id": "new-system-1",
+      "name": "Thorn's Reach",
+      "position": [
+        -216.9,
+        70.1
+      ],
+      "template": "2824|Venov",
+      "skybox": null,
+      "systemTags": null,
+      "nodes": [
+        {
+          "id": "new-family-1",
+          "parent": null,
+          "position": [
+            0.032,
+            0,
+            0.088
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "tags": [],
+          "landingRadius": 1000,
+          "name": "Thorn's Star",
+          "prefab": "Family Group",
+          "unit": "Lightseconds",
+          "mapIcon": "spr_sys_map_icon_star",
+          "mapName": "Thorn's Star"
+        },
+        {
+          "id": "new-family-2",
+          "parent": null,
+          "position": [
+            -3.863,
+            0,
+            2.243
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "tags": [],
+          "landingRadius": 1000,
+          "name": "Thorn's Retreat",
+          "prefab": "Family Group",
+          "unit": "Lightseconds",
+          "mapIcon": "spr_sys_map_icon_planet",
+          "mapName": "Thorn's Retreat"
+        },
+        {
+          "id": "new-family-3",
+          "parent": null,
+          "position": [
+            5.907,
+            0,
+            -0.998
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "tags": [],
+          "landingRadius": 1000,
+          "name": "Thorn's Intrigue",
+          "prefab": "Family Group",
+          "unit": "Lightseconds",
+          "mapIcon": "spr_sys_map_icon_nebula"
+        },
+        {
+          "id": "new-poi",
+          "parent": "new-family-1",
+          "position": [
+            -0.034,
+            0,
+            0.039
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "tags": [],
+          "landingRadius": 1000,
+          "name": "Star",
+          "prefab": "Point of Interest",
+          "unit": "Lightseconds",
+          "mapIcon": "spr_sys_map_icon_star",
+          "mapName": "Thorn's Star"
+        },
+        {
+          "id": "spectacle-star-spinning",
+          "parent": "new-poi",
+          "position": [
+            -18169.993,
+            0,
+            523638.654
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "tags": [],
+          "landingRadius": 1000,
+          "name": "Dying Star",
+          "prefab": "DyingStarA",
+          "unit": "Kilometers"
+        },
+        {
+          "id": "new-region-2",
+          "parent": "new-poi",
+          "position": [
+            -502.513,
+            0,
+            1281.407
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "tags": [],
+          "landingRadius": 1000,
+          "name": "Thorn's Star",
+          "prefab": "Region",
+          "unit": "Kilometers"
+        },
+        {
+          "id": "impulse-destination-2",
+          "parent": "new-region-2",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "tags": [],
+          "landingRadius": 30000,
+          "name": "Impulse Destination",
+          "prefab": "Impulse Destination",
+          "unit": "Kilometers"
+        },
+        {
+          "id": "spawn-7",
+          "parent": "new-region-2",
+          "position": [
+            4,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "tags": [
+            "SpawnPoint"
+          ],
+          "landingRadius": 1000,
+          "name": "Spawn",
+          "prefab": "",
+          "unit": "Kilometers"
+        },
+        {
+          "id": "spawn-8",
+          "parent": "new-region-2",
+          "position": [
+            2,
+            0,
+            3.464
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "tags": [
+            "SpawnPoint"
+          ],
+          "landingRadius": 1000,
+          "name": "Spawn",
+          "prefab": "",
+          "unit": "Kilometers"
+        },
+        {
+          "id": "spawn-9",
+          "parent": "new-region-2",
+          "position": [
+            -2,
+            0,
+            3.464
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "tags": [
+            "SpawnPoint"
+          ],
+          "landingRadius": 1000,
+          "name": "Spawn",
+          "prefab": "",
+          "unit": "Kilometers"
+        },
+        {
+          "id": "spawn-10",
+          "parent": "new-region-2",
+          "position": [
+            -4,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "tags": [
+            "SpawnPoint"
+          ],
+          "landingRadius": 1000,
+          "name": "Spawn",
+          "prefab": "",
+          "unit": "Kilometers"
+        },
+        {
+          "id": "spawn-11",
+          "parent": "new-region-2",
+          "position": [
+            -2,
+            0,
+            -3.464
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "tags": [
+            "SpawnPoint"
+          ],
+          "landingRadius": 1000,
+          "name": "Spawn",
+          "prefab": "",
+          "unit": "Kilometers"
+        },
+        {
+          "id": "spawn-12",
+          "parent": "new-region-2",
+          "position": [
+            2,
+            0,
+            -3.464
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "tags": [
+            "SpawnPoint"
+          ],
+          "landingRadius": 1000,
+          "name": "Spawn",
+          "prefab": "",
+          "unit": "Kilometers"
+        },
+        {
+          "id": "warp-in",
+          "parent": "new-region-2",
+          "position": [
+            8.65,
+            0,
+            -0.401
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "tags": [
+            "WarpDestination",
+            "Player"
+          ],
+          "landingRadius": 1000,
+          "name": "Warp in",
+          "prefab": "",
+          "unit": "Kilometers"
+        },
+        {
+          "id": "new-poi-2",
+          "parent": "new-family-1",
+          "position": [
+            -1.462,
+            0,
+            0.495
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "tags": [],
+          "landingRadius": 1000,
+          "name": "Old Battleground",
+          "prefab": "Point of Interest",
+          "unit": "Lightseconds",
+          "mapIcon": "spr_sys_map_icon_debris_field",
+          "mapName": "Old Battleground"
+        },
+        {
+          "id": "new-region",
+          "parent": "new-poi-2",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "tags": [],
+          "landingRadius": 1000,
+          "name": "Debris Field",
+          "prefab": "Region",
+          "unit": "Kilometers"
+        },
+        {
+          "id": "impulse-destination",
+          "parent": "new-region",
+          "position": [
+            10.071,
+            0,
+            -0.768
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "tags": [],
+          "landingRadius": 30000,
+          "name": "Impulse Destination",
+          "prefab": "Impulse Destination",
+          "unit": "Kilometers"
+        },
+        {
+          "id": "spawn",
+          "parent": "new-region",
+          "position": [
+            19.729,
+            0,
+            -4.647
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "tags": [
+            "SpawnPoint"
+          ],
+          "landingRadius": 1000,
+          "name": "Spawn",
+          "prefab": "",
+          "unit": "Kilometers"
+        },
+        {
+          "id": "spawn-2",
+          "parent": "new-region",
+          "position": [
+            11.028,
+            0,
+            4.273
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "tags": [
+            "SpawnPoint"
+          ],
+          "landingRadius": 1000,
+          "name": "Spawn",
+          "prefab": "",
+          "unit": "Kilometers"
+        },
+        {
+          "id": "spawn-3",
+          "parent": "new-region",
+          "position": [
+            -0.166,
+            0,
+            10.176
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "tags": [
+            "SpawnPoint"
+          ],
+          "landingRadius": 1000,
+          "name": "Spawn",
+          "prefab": "",
+          "unit": "Kilometers"
+        },
+        {
+          "id": "spawn-4",
+          "parent": "new-region",
+          "position": [
+            -12.373,
+            0,
+            2.778
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "tags": [
+            "SpawnPoint"
+          ],
+          "landingRadius": 1000,
+          "name": "Spawn",
+          "prefab": "",
+          "unit": "Kilometers"
+        },
+        {
+          "id": "spawn-5",
+          "parent": "new-region",
+          "position": [
+            -4.626,
+            0,
+            -9.107
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "tags": [
+            "SpawnPoint"
+          ],
+          "landingRadius": 1000,
+          "name": "Spawn",
+          "prefab": "",
+          "unit": "Kilometers"
+        },
+        {
+          "id": "spawn-6",
+          "parent": "new-region",
+          "position": [
+            7.355,
+            0,
+            -11.38
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "tags": [
+            "SpawnPoint"
+          ],
+          "landingRadius": 1000,
+          "name": "Spawn",
+          "prefab": "",
+          "unit": "Kilometers"
+        },
+        {
+          "id": "ship-spacestationprocedural-10",
+          "parent": "new-region",
+          "position": [
+            -6.258,
+            0,
+            -1.896
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "tags": [],
+          "landingRadius": 1000,
+          "name": "Thorn's Station",
+          "prefab": "Ship - SpaceStationProcedural 10",
+          "unit": "Kilometers"
+        },
+        {
+          "id": "aliendebriscluster",
+          "parent": "new-region",
+          "position": [
+            -7.611,
+            0,
+            5.625
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "tags": [],
+          "landingRadius": 1000,
+          "name": "AlienDebrisCluster",
+          "prefab": "AlienDebrisCluster",
+          "unit": "Kilometers"
+        },
+        {
+          "id": "aliendebriscluster-2",
+          "parent": "new-region",
+          "position": [
+            -10.317,
+            0,
+            -0.403
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "tags": [],
+          "landingRadius": 1000,
+          "name": "AlienDebrisCluster",
+          "prefab": "AlienDebrisCluster",
+          "unit": "Kilometers"
+        },
+        {
+          "id": "aliendebriscluster-3",
+          "parent": "new-region",
+          "position": [
+            -1.689,
+            0,
+            -7.889
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "tags": [],
+          "landingRadius": 1000,
+          "name": "AlienDebrisCluster",
+          "prefab": "AlienDebrisCluster",
+          "unit": "Kilometers"
+        },
+        {
+          "id": "aliendebriscluster-4",
+          "parent": "new-region",
+          "position": [
+            -7.874,
+            -0.1,
+            -5.481
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "tags": [],
+          "landingRadius": 1000,
+          "name": "AlienDebrisCluster",
+          "prefab": "AlienDebrisCluster",
+          "unit": "Kilometers"
+        },
+        {
+          "id": "new-poi-3",
+          "parent": "new-family-1",
+          "position": [
+            -0.7,
+            0,
+            -1.668
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "tags": [],
+          "landingRadius": 1000,
+          "name": "Thorn's Last Stand",
+          "prefab": "Point of Interest",
+          "unit": "Lightseconds",
+          "mapIcon": "spr_sys_map_icon_nebula",
+          "mapName": "Thorn's Last Stand"
+        },
+        {
+          "id": "new-region-3",
+          "parent": "new-poi-3",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "tags": [],
+          "landingRadius": 1000,
+          "name": "Thorn's Last Stand",
+          "prefab": "Region",
+          "unit": "Kilometers"
+        },
+        {
+          "id": "impulse-destination-3",
+          "parent": "new-region-3",
+          "position": [
+            0.094,
+            0,
+            1.303
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "tags": [],
+          "landingRadius": 1000,
+          "name": "Impulse Destination",
+          "prefab": "Impulse Destination",
+          "unit": "Kilometers"
+        },
+        {
+          "id": "spawn-13",
+          "parent": "new-region-3",
+          "position": [
+            39.659,
+            0,
+            1.842
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "tags": [
+            "SpawnPoint"
+          ],
+          "landingRadius": 1000,
+          "name": "Spawn",
+          "prefab": "",
+          "unit": "Kilometers"
+        },
+        {
+          "id": "spawn-14",
+          "parent": "new-region-3",
+          "position": [
+            11.393,
+            0,
+            38.074
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "tags": [
+            "SpawnPoint"
+          ],
+          "landingRadius": 1000,
+          "name": "Spawn",
+          "prefab": "",
+          "unit": "Kilometers"
+        },
+        {
+          "id": "spawn-15",
+          "parent": "new-region-3",
+          "position": [
+            -25.99,
+            0,
+            30.247
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "tags": [
+            "SpawnPoint"
+          ],
+          "landingRadius": 1000,
+          "name": "Spawn",
+          "prefab": "",
+          "unit": "Kilometers"
+        },
+        {
+          "id": "spawn-16",
+          "parent": "new-region-3",
+          "position": [
+            -39.853,
+            0,
+            0.802
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "tags": [
+            "SpawnPoint"
+          ],
+          "landingRadius": 1000,
+          "name": "Spawn",
+          "prefab": "",
+          "unit": "Kilometers"
+        },
+        {
+          "id": "spawn-17",
+          "parent": "new-region-3",
+          "position": [
+            -28.752,
+            0,
+            -27.853
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "tags": [
+            "SpawnPoint"
+          ],
+          "landingRadius": 1000,
+          "name": "Spawn",
+          "prefab": "",
+          "unit": "Kilometers"
+        },
+        {
+          "id": "spawn-18",
+          "parent": "new-region-3",
+          "position": [
+            30.154,
+            0,
+            -26.327
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "tags": [
+            "SpawnPoint"
+          ],
+          "landingRadius": 1000,
+          "name": "Spawn",
+          "prefab": "",
+          "unit": "Kilometers"
+        },
+        {
+          "id": "anomalycloudcone-alt4",
+          "parent": "new-region-3",
+          "position": [
+            -10.528,
+            0,
+            12.475
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "tags": [],
+          "landingRadius": 1000,
+          "name": "Anomaly 2",
+          "prefab": "AnomalyCloudCone_Alt4",
+          "unit": "Kilometers"
+        },
+        {
+          "id": "anomalycloudcone-alt4-2",
+          "parent": "new-region-3",
+          "position": [
+            7.779,
+            0,
+            -14.522
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "tags": [],
+          "landingRadius": 1000,
+          "name": "Anomaly 3",
+          "prefab": "AnomalyCloudCone_Alt4",
+          "unit": "Kilometers"
+        },
+        {
+          "id": "anomalycloudcone-alt4-3",
+          "parent": "new-region-3",
+          "position": [
+            -17.722,
+            0,
+            -12.558
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "tags": [],
+          "landingRadius": 1000,
+          "name": "Anomaly 1",
+          "prefab": "AnomalyCloudCone_Alt4",
+          "unit": "Kilometers"
+        },
+        {
+          "id": "anomalycloudcone-alt4-4",
+          "parent": "new-region-3",
+          "position": [
+            9.614,
+            0,
+            12.907
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "tags": [],
+          "landingRadius": 1000,
+          "name": "Anomaly 4",
+          "prefab": "AnomalyCloudCone_Alt4",
+          "unit": "Kilometers"
+        },
+        {
+          "id": "aliendebriscluster-5",
+          "parent": "new-region",
+          "position": [
+            -11.74,
+            0,
+            -3.513
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "tags": [],
+          "landingRadius": 1000,
+          "name": "AlienDebrisCluster",
+          "prefab": "AlienDebrisCluster",
+          "unit": "Kilometers"
+        },
+        {
+          "id": "aliendebriscluster-6",
+          "parent": "new-region",
+          "position": [
+            2.247,
+            0,
+            6.275
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "tags": [],
+          "landingRadius": 1000,
+          "name": "AlienDebrisCluster",
+          "prefab": "AlienDebrisCluster",
+          "unit": "Kilometers"
+        },
+        {
+          "id": "aliendebriscluster-7",
+          "parent": "new-region",
+          "position": [
+            16.153,
+            0,
+            2.862
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "tags": [],
+          "landingRadius": 1000,
+          "name": "AlienDebrisCluster",
+          "prefab": "AlienDebrisCluster",
+          "unit": "Kilometers"
+        },
+        {
+          "id": "new-poi-4",
+          "parent": "new-family-2",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "tags": [],
+          "landingRadius": 1000,
+          "name": "Thorn's Retreat",
+          "prefab": "Point of Interest",
+          "unit": "Lightseconds",
+          "mapIcon": "spr_sys_map_icon_planet",
+          "mapName": "Thorn's Retreat"
+        },
+        {
+          "id": "new-region-4",
+          "parent": "new-poi-4",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "tags": [],
+          "landingRadius": 1000,
+          "name": "Thorn's Retreat",
+          "prefab": "Region",
+          "unit": "Kilometers"
+        },
+        {
+          "id": "impulse-destination-4",
+          "parent": "new-region-4",
+          "position": [
+            5.567,
+            0,
+            -0.001
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "tags": [],
+          "landingRadius": 1000,
+          "name": "Impulse Destination",
+          "prefab": "Impulse Destination",
+          "unit": "Kilometers"
+        },
+        {
+          "id": "spawn-19",
+          "parent": "new-region-4",
+          "position": [
+            4,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "tags": [
+            "SpawnPoint"
+          ],
+          "landingRadius": 1000,
+          "name": "Spawn",
+          "prefab": "",
+          "unit": "Kilometers"
+        },
+        {
+          "id": "spawn-20",
+          "parent": "new-region-4",
+          "position": [
+            2,
+            0,
+            3.464
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "tags": [
+            "SpawnPoint"
+          ],
+          "landingRadius": 1000,
+          "name": "Spawn",
+          "prefab": "",
+          "unit": "Kilometers"
+        },
+        {
+          "id": "spawn-21",
+          "parent": "new-region-4",
+          "position": [
+            -2,
+            0,
+            3.464
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "tags": [
+            "SpawnPoint"
+          ],
+          "landingRadius": 1000,
+          "name": "Spawn",
+          "prefab": "",
+          "unit": "Kilometers"
+        },
+        {
+          "id": "spawn-22",
+          "parent": "new-region-4",
+          "position": [
+            -6.57,
+            0,
+            -0.071
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "tags": [
+            "SpawnPoint"
+          ],
+          "landingRadius": 1000,
+          "name": "Spawn",
+          "prefab": "",
+          "unit": "Kilometers"
+        },
+        {
+          "id": "spawn-23",
+          "parent": "new-region-4",
+          "position": [
+            -2,
+            0,
+            -3.464
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "tags": [
+            "SpawnPoint"
+          ],
+          "landingRadius": 1000,
+          "name": "Spawn",
+          "prefab": "",
+          "unit": "Kilometers"
+        },
+        {
+          "id": "spawn-24",
+          "parent": "new-region-4",
+          "position": [
+            2,
+            0,
+            -3.464
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "tags": [
+            "SpawnPoint"
+          ],
+          "landingRadius": 1000,
+          "name": "Spawn",
+          "prefab": "",
+          "unit": "Kilometers"
+        },
+        {
+          "id": "set2classy014-2",
+          "parent": "new-poi-4",
+          "position": [
+            0.056,
+            0,
+            6.177
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "tags": [],
+          "landingRadius": 1000,
+          "name": "Set2ClassY014",
+          "prefab": "Set2ClassY014",
+          "unit": "Skybox"
+        },
+        {
+          "id": "ship-spacestationprocedural-m01",
+          "parent": "new-region-4",
+          "position": [
+            -3.794,
+            0,
+            -0.021
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "tags": [],
+          "landingRadius": 1000,
+          "name": "The Retreat Station",
+          "prefab": "Ship - SpaceStationProcedural M01",
+          "unit": "Kilometers"
+        }
+      ]
+    }
+  ]
+}

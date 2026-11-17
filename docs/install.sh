@@ -588,8 +588,8 @@ main() {
     mkdir -p "$game/BepInEx/native"
     cp "$plugins/../native/"*.dll "$game/BepInEx/native/"
   fi
-  # Ship classes and bridge sets of our own, beside plugins/ in the zip.
-  for d in ships bridges vr; do
+  # Ship classes, bridge sets and the second sector of our own, beside plugins/ in the zip.
+  for d in ships bridges vr galaxies; do
     if [ -d "$plugins/../$d" ]; then mkdir -p "$game/BepInEx/$d" && cp -r "$plugins/../$d/." "$game/BepInEx/$d/"; fi
   done
   install_designer "$game" "$plugins/.."

@@ -8,13 +8,14 @@
 // the previous one kept as .json.bak.
 //
 // Usage: dotnet run -- [--game <game folder>] [--port 8771] [--no-open] [--stay] [--web <folder>] [--cache <folder>]
-//                      [--rebuild] [--catalogue-out <file>]
+//                      [--rebuild] [--catalogue-out <file>] [--check <galaxy file>]
 //        (it stops by itself once its page is closed; --stay keeps it running until Ctrl+C)
 //        (the game folder also from $GAME_DIR; otherwise the folder this program is in, if it's in the game's folder,
 //        or the game in your Steam libraries. --web serves the page from a folder,
 //        e.g. web/ in the source, to try changes to it without a rebuild. --cache: where the game data read is kept
 //        (default ~/.cache/galaxy-designer, %LOCALAPPDATA%\GalaxyDesigner\cache on Windows); --rebuild reads the
-//        game's files again; --catalogue-out writes the catalogue read to a file and stops.)
+//        game's files again; --catalogue-out writes the catalogue read to a file and stops; --check checks a galaxy
+//        file against the game's data, as the game will, and stops: exit code 1 if it has problems.)
 using System.Diagnostics;
 using System.Net;
 using System.Text;
@@ -28,7 +29,7 @@ string gameDir = Environment.GetEnvironmentVariable("GAME_DIR");
 int port = 8771;
 int? portArg = null;
 bool open = true, stay = false;
-string webArg = null, cacheArg = null, catalogueOut = null;
+string webArg = null, cacheArg = null, catalogueOut = null, checkFile = null;
 bool rebuild = false;
 for (int i = 0; i < args.Length; i++)
 {
@@ -40,6 +41,7 @@ for (int i = 0; i < args.Length; i++)
     else if (args[i] == "--cache" && i + 1 < args.Length) cacheArg = Path.GetFullPath(args[++i]);
     else if (args[i] == "--rebuild") rebuild = true;
     else if (args[i] == "--catalogue-out" && i + 1 < args.Length) catalogueOut = Path.GetFullPath(args[++i]);
+    else if (args[i] == "--check" && i + 1 < args.Length) checkFile = Path.GetFullPath(args[++i]);
     else return Fail("usage: galaxy-designer [--game <folder>] [--port 8771] [--no-open] [--stay] [--web <folder>] [--cache <folder>] [--rebuild] [--catalogue-out <file>]");
 }
 // The game: given, beside this program (installed in the game's folder), or in one of Steam's libraries.
@@ -81,6 +83,18 @@ if (catalogueOut != null)
     File.WriteAllText(catalogueOut, game.Catalogue.ToJson());
     Console.WriteLine($"Catalogue written to {catalogueOut}");
     return 0;
+}
+if (checkFile != null)   // the release's check: the game would refuse a file with problems (warnings are advice)
+{
+    if (game.Catalogue == null) return Fail(null);
+    GalaxyFile file;
+    try { file = GalaxyFile.Parse(File.ReadAllText(checkFile)); }
+    catch (Exception e) when (e is FormatException || e is IOException) { Console.Error.WriteLine($"{checkFile}: {e.Message}"); return 1; }
+    var problems = GalaxyCheck.Problems(file, game.Catalogue, out var warnings);
+    foreach (var w in warnings) Console.WriteLine($"  warning: {w}");
+    foreach (var p in problems) Console.Error.WriteLine($"  PROBLEM: {p}");
+    Console.WriteLine($"{Path.GetFileName(checkFile)}: {problems.Count} problem(s), {warnings.Count} warning(s)");
+    return problems.Count == 0 ? 0 : 1;
 }
 string thumbsIndex = null;
 try { if (File.Exists(Path.Combine(galaxies, "thumbs.json"))) thumbsIndex = File.ReadAllText(Path.Combine(galaxies, "thumbs.json")); }
