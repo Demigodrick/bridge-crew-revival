@@ -892,7 +892,7 @@ function refreshSystemPanel() {
   $('geom').hidden = copy;
   $('poi').hidden = copy;
   if (copy) return;
-  $('prefabRow').hidden = lvl < 2 && (n.prefab === FAMILY || n.prefab === POI);
+  $('prefabRow').hidden = (lvl < 2 && (n.prefab === FAMILY || n.prefab === POI)) || n.prefab === REGION;
   const pw = $('nPrefabWrap'); pw.textContent = '';
   if (isWarp(n)) pw.append(el('input', { type: 'text', value: '(none)', disabled: true }));
   else if (prefabList().length) pw.append(modelButton(() => n.prefab, v => { n.prefab = v; setDirty(); refreshSystemPanel(); draw(); }, n.prefab === REGION || underPoi(s, n) || n.prefab === '', 'nPrefab'));
@@ -1013,7 +1013,7 @@ function showProblems(ps, ws = []) {
   if (!ps.length) ul.append(el('li', { class: 'ok' }, 'No problems found.'));
   for (const p of ps) ul.append(el('li', { class: 'bad', onclick: () => gotoProblem(p) }, p));
   // Warnings are advice: the game still loads the file.
-  for (const w of ws) ul.append(el('li', { class: 'warn' }, 'Warning: ' + w));
+  for (const w of ws) ul.append(el('li', { class: 'warn', onclick: () => gotoProblem(w) }, 'Warning: ' + w));
 }
 function gotoProblem(text) {
   // "trench <name>/<node id>: ..." or "trench <name>: ..." for an addition; else "<system id>/<node id>:" or "<system id>:".

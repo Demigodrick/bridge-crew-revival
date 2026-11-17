@@ -107,7 +107,8 @@ warning, but the sector still loads.
 
 ### 7. Check, save, fly
 1. **Check**. Red lines are problems: the game won't load the file until they're fixed. Click one to jump to it.
-   Amber lines are warnings: the file still loads.
+   Amber lines are warnings: the file still loads. They are design hints (a name still left as "New region", a POI
+   with nowhere to arrive or no spawn points, a POI far from its family, a family with no POI); click one to jump to it.
 2. **Save**.
 3. In `BepInEx/config/stbc.revival.cfg`, set `[Galaxy] Region = <your file name>`, start the game and host Revival
    Patrol or Free Roam. Your systems are on the warp map's second page.

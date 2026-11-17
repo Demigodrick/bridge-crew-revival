@@ -84,10 +84,11 @@ namespace StbcRevival.Galaxy
         private sealed class NodeFacts { public bool Jump, AnyPoi, AnyStation; }
 
         // The node rules, shared by region systems and Trench additions. Problems read "<prefix><node id>: ...".
-        private static void CheckNodes(List<string> p, Lookups lk, string prefix, List<GalaxyNode> nodes, NodeFacts facts)
+        private static void CheckNodes(List<string> p, List<string> w, Lookups lk, string prefix, List<GalaxyNode> nodes, NodeFacts facts)
         {
             var ids = new Dictionary<string, GalaxyNode>();
             foreach (var n in nodes) ids[n.Id] = n;
+            Hints(w, prefix, nodes, ids);
 
             foreach (var n in nodes)
             {
@@ -167,6 +168,90 @@ namespace StbcRevival.Galaxy
             }
         }
 
+
+        private static bool IsDefaultName(string name, string kind)
+        {
+            return name != null && System.Text.RegularExpressions.Regex.IsMatch(name, "^New " + kind + "( [0-9]+)?$");
+        }
+
+        /// <summary>Most a POI can sit from its family's centre before it's almost surely a unit slip (Trench: ~1.37M km).</summary>
+        private const double PoiFarKm = 1500000.0;
+
+        private static bool HasInSubtree(GalaxyNode root, Dictionary<string, List<GalaxyNode>> kids, Func<GalaxyNode, bool> test)
+        {
+            var seen = new HashSet<string>();
+            var stack = new Stack<GalaxyNode>();
+            stack.Push(root);
+            while (stack.Count > 0)
+            {
+                var c = stack.Pop();
+                if (!seen.Add(c.Id)) continue;
+                List<GalaxyNode> ch;
+                if (!kids.TryGetValue(c.Id, out ch)) continue;
+                foreach (var k in ch) { if (test(k)) return true; stack.Push(k); }
+            }
+            return false;
+        }
+
+        private static bool IsMarker(GalaxyNode n)
+        {
+            return n.Tags != null && (n.Tags.Contains("SpawnPoint") || n.Tags.Contains("WarpDestination"));
+        }
+
+        // Design advice (warnings): nothing here stops a file loading. Copied families are the game's own content: skipped.
+        private static void Hints(List<string> w, string prefix, List<GalaxyNode> nodes, Dictionary<string, GalaxyNode> ids)
+        {
+            var kids = new Dictionary<string, List<GalaxyNode>>();
+            foreach (var n in nodes)
+            {
+                if (n.Parent == null) continue;
+                List<GalaxyNode> l;
+                if (!kids.TryGetValue(n.Parent, out l)) kids[n.Parent] = l = new List<GalaxyNode>();
+                l.Add(n);
+            }
+            var ci = System.Globalization.CultureInfo.InvariantCulture;
+            foreach (var n in nodes)
+            {
+                if (n.CopyFamily != null) continue;
+                string at = prefix + n.Id;
+                GalaxyNode up = null;
+                if (n.Parent != null) ids.TryGetValue(n.Parent, out up);
+                List<GalaxyNode> ch;
+                if (!kids.TryGetValue(n.Id, out ch)) ch = new List<GalaxyNode>();
+
+                if ((n.Prefab == FamilyPrefab && IsDefaultName(n.Name, "family")) || (n.Prefab == PoiPrefab && IsDefaultName(n.Name, "POI"))
+                    || ((n.Prefab == "Region" || (up != null && up.Prefab == PoiPrefab)) && IsDefaultName(n.Name, "region")))
+                    w.Add(at + ": still has its default name '" + n.Name + "'");
+
+                if (up != null && up.Prefab == PoiPrefab && !string.IsNullOrEmpty(n.Prefab) && n.Prefab != "Region" && n.Prefab != PoiPrefab && n.Prefab != FamilyPrefab)
+                {
+                    bool holds = false;
+                    foreach (var c in ch) if (c.Prefab == "Impulse Destination" || IsMarker(c)) holds = true;
+                    if (holds)
+                        w.Add(at + ": holds an arrival point and spawn points but its model is '" + n.Prefab + "', not Region: make it a Region and put the "
+                            + n.Prefab + " inside it");
+                }
+
+                if (n.Prefab == FamilyPrefab)
+                {
+                    bool anyPoi = false;
+                    foreach (var c in ch) if (c.Prefab == PoiPrefab) anyPoi = true;
+                    if (!anyPoi) w.Add(at + ": has no Points of Interest: its impulse map page will be empty");
+                }
+
+                if (n.Prefab == PoiPrefab && up != null && up.CopyFamily == null && up.Prefab == FamilyPrefab)
+                {
+                    double km = Math.Sqrt((double)n.X * n.X + (double)n.Y * n.Y + (double)n.Z * n.Z) * MetresPer(n.Unit) / 1000.0;
+                    if (km > PoiFarKm)
+                        w.Add(at + ": is about " + Math.Round(km).ToString("#,##0", ci) + " km from its family's centre; Trench POIs are 10,000-150,000 km (check its Unit: Skybox = 1,000 km)");
+                    if (!HasInSubtree(n, kids, c => c.Prefab == "Impulse Destination"))
+                        w.Add(at + ": has nowhere to arrive: add a region (Add region gives it an Impulse Destination)");
+                    if (!HasInSubtree(n, kids, c => c.Tags != null && c.Tags.Contains("SpawnPoint")))
+                        w.Add(at + ": has no spawn points: Patrol's ships have nowhere to appear");
+                }
+            }
+        }
+
         /// <summary>Text of the warning for a region with no station (advice, not a problem: the file still loads).</summary>
         public const string NoStationWarning = "No station anywhere in the region: Patrol can't restock there";
 
@@ -214,9 +299,11 @@ namespace StbcRevival.Galaxy
 
                 if (sys.Name != null && sys.Name.IndexOf('|') >= 0)
                     p.Add(sys.Id + ": use a plain name, not a text key ('" + sys.Name + "')");
+                if (IsDefaultName(sys.Name, "system"))
+                    warnings.Add(sys.Id + ": still has its default name '" + sys.Name + "'");
 
                 var facts = new NodeFacts();
-                CheckNodes(p, lk, sys.Id + "/", sys.Nodes, facts);
+                CheckNodes(p, warnings, lk, sys.Id + "/", sys.Nodes, facts);
                 if (facts.AnyStation) anyStation = true;
                 if (!facts.AnyPoi)
                     p.Add(sys.Id + ": no family with a Point of Interest: the impulse map would be empty");
@@ -233,7 +320,7 @@ namespace StbcRevival.Galaxy
                     CatalogueSystem target = FindTrench(catalogue, add.System);
                     string shown = target != null ? (target.DisplayName ?? CatalogueNames.Display(target.Name)) : CatalogueNames.Display(add.System ?? "");
                     if (known && target == null) p.Add("trench " + shown + ": no Trench system '" + add.System + "'");
-                    CheckNodes(p, lk, "trench " + shown + "/", add.Nodes, new NodeFacts());
+                    CheckNodes(p, warnings, lk, "trench " + shown + "/", add.Nodes, new NodeFacts());
                 }
 
             if (!anyStation && !noSystems) warnings.Add(NoStationWarning);
