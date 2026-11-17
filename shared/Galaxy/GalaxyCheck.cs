@@ -96,8 +96,8 @@ namespace StbcRevival.Galaxy
                     p.Add(at + ": use a plain name, not a text key ('" + n.Name + "')");
                 if (n.Parent == null && !IsFamily(n))
                     p.Add(at + ": top-level nodes must be families (Family Group) or a copied family");
-                // A copied family keeps its Trench position; a hand-made one is placed by the file.
-                if (n.Parent == null && n.CopyFamily == null && n.Prefab == FamilyPrefab)
+                // A copied family keeps its Trench position unless the file gives one; a hand-made one is placed by the file.
+                if (n.Parent == null && ((n.CopyFamily == null && n.Prefab == FamilyPrefab) || (n.CopyFamily != null && n.HasPosition)))
                 {
                     double m = MetresPer(n.Unit);
                     double reach = ImpulseMapReach / 299792458.0;

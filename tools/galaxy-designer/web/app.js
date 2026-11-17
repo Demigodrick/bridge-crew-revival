@@ -208,8 +208,10 @@ const dispName = v => (v || '').indexOf('|') >= 0 ? v.slice(v.indexOf('|') + 1) 
 const isCopy = n => !!n.copyFamily;
 function famOf(s, n) { let c = n, i = 0; while (c && c.parent && i++ < 50) c = nodeById(s, c.parent); return c; }
 function levelOf(s, n) { let l = 0, c = n; while (c && c.parent && l < 50) { c = nodeById(s, c.parent); l++; } return l; }
-const planLevel = () => zoomRegion ? 'region' : zoomPoi ? 'poi' : 'page';   // the family's page, a POI in it, or a region in the POI
-const planRoot = () => zoomRegion || zoomPoi || selFam;      // the node the plan is drawn around
+let atSystem = true;   // the plan shows the whole system (every family), not one family's page
+const planLevel = () => atSystem ? 'system' : zoomRegion ? 'region' : zoomPoi ? 'poi' : 'page';   // the system, a family's page, a POI in it, or a region in the POI
+const planRoot = () => atSystem ? null : zoomRegion || zoomPoi || selFam;      // the node the plan is drawn around
+const LS_KM = 299792.458, REACH_KM = 2e6;   // a light-second, and the impulse map's reach (2e9 m) on each axis
 const pageLevel = () => planLevel() === 'page';
 const NEAR_KM = 5e6;   // inside a POI or region, nodes farther than this (AU- and skybox-scale bodies) sit at the edge as markers instead of squashing the view
 // Far-out: past NEAR_KM, or (in a POI) a body in light-seconds, AU or skybox units. Not part of the fit; an edge marker when off-screen.
@@ -232,6 +234,7 @@ function under(s, n, rootId) { let c = n, i = 0; while (c && i++ < 50) { if (c.i
 // regions); or a region with everything inside it.
 const planNodes = s => (s.nodes || []).filter(n => {
   const lv = planLevel();
+  if (lv === 'system') return !n.parent;   // every family
   if (lv === 'page') return n.id === selFam || n.parent === selFam;
   if (lv === 'region') return under(s, n, zoomRegion);
   if (!under(s, n, zoomPoi)) return false;
@@ -246,6 +249,10 @@ function worldPos(s, n, depth = 0) {
 }
 function fitCam() {
   const s = sys(); if (!s) return;
+  if (planLevel() === 'system') {   // the impulse map's reach, or further if a family is out beyond it
+    let m = REACH_KM; for (const n of planNodes(s)) { const p = famWorld(s, n); m = Math.max(m, Math.abs(p[0]) * 1.1, Math.abs(p[1]) * 1.1); }
+    cam.x = 0; cam.z = 0; cam.k = 0.42 * Math.min(canvas.width, canvas.height) / m; return;
+  }
   const lv = planLevel(); let m = 0;
   for (const n of planNodes(s)) {
     if (n.id === planRoot()) continue;
@@ -271,11 +278,36 @@ function spriteImg(name) {
 }
 const POI_ICON = 34;   // px (css) of a POI's map icon on a family's page
 
+// A top-level node's place on the system overview, in km [x, z]: its own position, or for a copied family without one the
+// Trench source family's (from the catalogue).
+function catFamilyPos(system, family) {
+  const t = findTrench(system); if (!t) return null;
+  const root = (t.nodes || []).find(x => !x.parent);
+  const f = (t.nodes || []).find(x => x.name === family && root && x.parent === root.id);
+  if (!f) return null;
+  const u = UNIT_KM[f.unit] || 1; return [f.position[0] * u, f.position[2] * u];
+}
+function famWorld(s, n) {
+  if (isCopy(n) && !n.position) { const p = catFamilyPos(n.copyFamily.system, n.copyFamily.family); return p || [0, 0]; }
+  const u = UNIT_KM[n.unit] || 1, pos = n.position || [0, 0, 0]; return [pos[0] * u, pos[2] * u];
+}
+const famFixed = n => !!n._ro;   // the Trench system's own families can't be moved
+const famOutOfReach = (s, n) => !famFixed(n) && (!isCopy(n) || !!n.position) && (() => { const p = famWorld(s, n); return Math.abs(p[0]) > REACH_KM || Math.abs(p[1]) > REACH_KM; })();
+// Making a family's position its own, in light-seconds, so a drag can write it (a copied family starts from its Trench spot).
+function ownFamPosition(s, n) {
+  if (isCopy(n) && !n.position) { const p = famWorld(s, n); n.position = [Math.round(p[0] / LS_KM * 1000) / 1000, 0, Math.round(p[1] / LS_KM * 1000) / 1000]; n.unit = 'Lightseconds'; return; }
+  n.position = n.position || [0, 0, 0];
+  if (n.unit !== 'Lightseconds') {
+    const f = (UNIT_KM[n.unit] || 1) / LS_KM; n.position = n.position.map(v => Math.round(v * f * 1000) / 1000);
+    toast(`${n.name || n.id} is now placed in light-seconds (was ${n.unit}).`); n.unit = 'Lightseconds';
+  }
+}
 function drawSystem() {
   const s = sys(), w = canvas.width, h = canvas.height, d = dpr();
   stars(w, h);
   if (!s) return;
   ctx.font = `${11 * d}px system-ui, sans-serif`; ctx.textBaseline = 'middle';
+  if (planLevel() === 'system') { drawOverview(s, w, h, d); return; }
   const fam = (s.nodes || []).find(n => n.id === selFam);
   if (!fam) { ctx.fillStyle = '#8592a0'; ctx.fillText('Add a family to begin: an empty one, or a copy of a Trench family.', 24 * d, 40 * d); return; }
   if (pageLevel()) { drawFamilyPage(s, fam, w, h, d); return; }
@@ -309,6 +341,50 @@ function drawSystem() {
   $('help').textContent = planLevel() === 'poi'
     ? 'A POI: click a region to go into it · drag a region or body to move it (Y is a field; far-out bodies sit at the edge as arrows: use the fields) · drag empty space: pan · wheel: zoom · F: fit · Delete: remove'
     : 'A region, in kilometres: drag a node to move it (Y is a field) · drag empty space: pan · wheel: zoom · F: fit · Delete: remove (and what is inside it)';
+}
+
+// The whole system as the impulse map's overview shows it: the centre, rings through each family's distance, every family a dot.
+function drawOverview(s, w, h, d) {
+  const [cx, cy] = toS(0, 0), R = REACH_KM * cam.k;
+  ctx.strokeStyle = 'rgba(133,146,160,0.5)'; ctx.lineWidth = d; ctx.setLineDash([6 * d, 5 * d]); ctx.strokeRect(cx - R, cy - R, 2 * R, 2 * R); ctx.setLineDash([]);
+  ctx.fillStyle = 'rgba(133,146,160,0.8)'; ctx.textAlign = 'left'; ctx.fillText('impulse map reach: \u00B16.7 light-seconds', cx - R + 6 * d, cy - R + 12 * d);
+  const fams = planNodes(s), L = overviewLayout(s, fams);
+  ctx.strokeStyle = 'rgba(133,146,160,0.18)'; ctx.lineWidth = d;
+  for (const n of fams) { const p = famWorld(s, n), r = Math.hypot(p[0], p[1]) * cam.k; if (r > 2 * d) { ctx.beginPath(); ctx.arc(cx, cy, r, 0, 7); ctx.stroke(); } }
+  ctx.strokeStyle = '#1b2430'; ctx.beginPath(); ctx.moveTo(cx - R, cy); ctx.lineTo(cx + R, cy); ctx.moveTo(cx, cy - R); ctx.lineTo(cx, cy + R); ctx.stroke();
+  ctx.fillStyle = '#ffd66b'; ctx.beginPath(); ctx.arc(cx, cy, 4 * d, 0, 7); ctx.fill();
+  ctx.fillStyle = '#8592a0'; ctx.fillText('centre', cx + 8 * d, cy - 8 * d);
+  const label = (txt, x, y, color) => {
+    const tw = ctx.measureText(txt).width; ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(x - tw / 2 - 4 * d, y - 8 * d, tw + 8 * d, 16 * d);
+    ctx.fillStyle = color; ctx.fillText(txt, x, y); ctx.textAlign = 'left';
+  };
+  for (const n of fams) {
+    const { x, y } = L[n.id], sel = n.id === selNode, fixed = famFixed(n), bad = famOutOfReach(s, n), ic = !fixed && spriteImg(n.mapIcon), sz = POI_ICON * d;
+    ctx.globalAlpha = fixed ? 0.55 : 1;
+    if (ic) ctx.drawImage(ic, x - sz / 2, y - sz / 2, sz, sz * ic.naturalHeight / ic.naturalWidth);
+    else { ctx.fillStyle = bad ? '#ff5f56' : fixed ? '#8592a0' : isCopy(n) ? '#ffb454' : '#7ee787'; ctx.beginPath(); ctx.arc(x, y, 8 * d, 0, 7); ctx.fill(); ctx.strokeStyle = '#000'; ctx.lineWidth = 1.5 * d; ctx.stroke(); }
+    if (bad) { ctx.strokeStyle = '#ff5f56'; ctx.lineWidth = 2 * d; ctx.beginPath(); ctx.arc(x, y, sz * 0.62, 0, 7); ctx.stroke(); }
+    if (sel) { ctx.strokeStyle = '#f2c14e'; ctx.lineWidth = 2 * d; ctx.beginPath(); ctx.arc(x, y, sz * 0.62, 0, 7); ctx.stroke(); }
+    ctx.globalAlpha = 1;
+    label((n.mapName || n.name || n.id) + (bad ? '  (out of reach)' : ''), x, y + sz * 0.62 + 9 * d, bad ? '#ff8d86' : sel ? '#f2c14e' : fixed ? '#8592a0' : '#e6edf3');
+  }
+  $('help').textContent = 'The whole system: drag a family to place it (light-seconds from the centre; keep inside the dashed box) · click a family to open its page · grey ones are the Trench system\'s own · wheel: zoom · F: fit';
+}
+// Overlapping families are fanned out in a column so each has its own dot (and can be dragged).
+function overviewLayout(s, fams) {
+  const d = dpr(), pos = {}, placed = [], dragging = drag && drag.kind === 'node' && drag.moved ? selNode : null;
+  const [cx, cy] = toS(0, 0);
+  for (const n of fams) {
+    const p = famWorld(s, n); let x = cx + p[0] * cam.k, y = cy - p[1] * cam.k, off = false;
+    if (n.id !== dragging) {
+      let k = placed.filter(q => Math.hypot(q.x0 - x, q.y0 - y) < 30 * d).length;
+      if (k) { y -= 44 * d * k; off = true; }
+    }
+    placed.push({ x0: cx + p[0] * cam.k, y0: cy - p[1] * cam.k });
+    pos[n.id] = { x, y, off };
+  }
+  return pos;
 }
 
 // A family as the impulse map shows it: its backdrop, and its Points of Interest placed around the family's centre.
@@ -359,6 +435,7 @@ function drawFamilyPage(s, fam, w, h, d) {
 // above it so each has its own marker (purely visual; stored positions don't change), and such a marker can still be dragged:
 // the node then goes to wherever it is dropped. Far-out nodes (past the view) get an edge marker: edge=true, not draggable.
 function layout(s) {
+  if (planLevel() === 'system') return overviewLayout(s, planNodes(s));
   const d = dpr(), pos = {}, count = {}, page = pageLevel();
   const dragging = drag && drag.kind === 'node' && drag.moved ? selNode : null;   // the node being dragged is drawn where it is, never stacked
   const near = (page ? 30 : 12) * d, step = (page ? 44 : 15) * d, W = canvas.width, H = canvas.height, mg = 18 * d;
@@ -385,7 +462,7 @@ function layout(s) {
   return pos;
 }
 function hitNode(px, py) {
-  const s = sys(), d = dpr(); let best = null, bd = (pageLevel() ? 20 : 14) * d;
+  const s = sys(), d = dpr(); let best = null, bd = (pageLevel() || planLevel() === 'system' ? 20 : 14) * d;
   const L = layout(s);
   for (const n of planNodes(s)) { const dd = Math.hypot(L[n.id].x - px, L[n.id].y - py); if (dd <= bd) { bd = dd; best = n; } }
   return best;
@@ -413,8 +490,9 @@ canvas.addEventListener('pointerdown', e => {
       selNode = n.id; lastSel = n.id; selFam = famOf(sys(), n).id;   // a press selects without changing the plan level
       const s0 = sys(), lay = layout(s0)[n.id];
       // A click on a POI (on the page) or a region (in a POI) goes into it; a drag moves it. Stacked markers drag too.
-      const zoom = pageLevel() && n.parent === selFam ? { k: 'poi', id: n.id } : planLevel() === 'poi' && isRegion(s0, n) ? { k: 'region', id: n.id } : null;
-      drag = (lay.edge || !n.parent || n.id === planRoot()) ? { kind: 'none', zoom } : { kind: 'node', moved: false, px, py, zoom };
+      const sysLv = planLevel() === 'system';
+      const zoom = sysLv ? { k: 'fam', id: n.id } : pageLevel() && n.parent === selFam ? { k: 'poi', id: n.id } : planLevel() === 'poi' && isRegion(s0, n) ? { k: 'region', id: n.id } : null;
+      drag = (lay.edge || (!sysLv && !n.parent) || n.id === planRoot() || (sysLv && famFixed(n))) ? { kind: 'none', zoom, px, py } : { kind: 'node', moved: false, px, py, zoom };
       refreshSystemPanel();
     }
     else drag = { kind: 'pan', px, py, cx: cam.x, cz: cam.z, moved: false };
@@ -426,11 +504,16 @@ canvas.addEventListener('pointermove', e => {
   if (view === 'galaxy') { const [x, z] = fromPx(mapRect(), px, py); $('coords').textContent = `X ${x.toFixed(1)}  Z ${z.toFixed(1)}`; }
   if (!drag) return;
   // A press only becomes a drag after a few pixels, so a click that wobbles still clicks (and moves nothing).
+  if (drag.kind === 'none') { if (!drag.moved && Math.hypot(px - drag.px, py - drag.py) > 3 * d) drag.moved = true; return; }   // not movable: a drag isn't a click either
   if ((drag.kind === 'sys' || drag.kind === 'node') && !drag.moved && Math.hypot(px - drag.px, py - drag.py) <= 3 * d) return;
   if (drag.kind === 'sys') {
     const [x, z] = fromPx(mapRect(), px, py), s = rsys();
     s.position = [Math.round(x * 10) / 10, Math.round(z * 10) / 10]; drag.moved = true; setDirty();
     setField('sX', s.position[0]); setField('sZ', s.position[1]); updateSysWarn();
+  } else if (drag.kind === 'node' && planLevel() === 'system') {   // a family on the overview: light-seconds from the centre
+    const s = sys(), n = nodeById(s, selNode), [wx, wz] = fromS(px, py);
+    if (!drag.own) { drag.own = true; ownFamPosition(s, n); }
+    n.position[0] = Math.round(wx / LS_KM * 1000) / 1000; n.position[2] = Math.round(wz / LS_KM * 1000) / 1000; drag.moved = true; setDirty();
   } else if (drag.kind === 'node') {
     const s = sys(), n = nodeById(s, selNode), [wx, wz] = fromS(px, py);
     let ox = 0, oz = 0;
@@ -456,7 +539,8 @@ let emptyClick = null;
 canvas.addEventListener('pointerup', e => {
   const d0 = drag; drag = null;
   if (d0 && d0.zoom && !d0.moved) {   // a click on a POI goes into it, on a region too
-    if (d0.zoom.k === 'poi') { zoomPoi = d0.zoom.id; zoomRegion = null; } else zoomRegion = d0.zoom.id;
+    if (d0.zoom.k === 'fam') { atSystem = false; selFam = d0.zoom.id; zoomPoi = null; zoomRegion = null; }
+    else if (d0.zoom.k === 'poi') { zoomPoi = d0.zoom.id; zoomRegion = null; } else zoomRegion = d0.zoom.id;
     refreshSystemPanel(); draw(); return;
   }
   emptyClick = d0 && d0.kind === 'empty' && !d0.moved && view === 'galaxy' ? d0 : null;
@@ -538,7 +622,7 @@ function deleteSystem() {
 function openTrench(name) { selTrench = name; selSys = -1; enterSystem(); }
 function openSystem(i) { selTrench = null; selSys = i; enterSystem(); }
 function enterSystem() {
-  selNode = null; lastSel = null; selFam = null; fitFam = undefined; zoomPoi = null; zoomRegion = null; view = 'system';
+  selNode = null; lastSel = null; selFam = null; fitFam = undefined; zoomPoi = null; zoomRegion = null; atSystem = true; view = 'system';
   $('galaxyPanel').hidden = true; $('systemPanel').hidden = false;
   buildPrefabPicker(); buildCopyPicker(); refreshSystemPanel(); draw();
 }
@@ -649,7 +733,8 @@ function addChild(parent, props) {
 }
 $('addFamily').addEventListener('click', () => {
   const s = sys(), name = 'New family ' + (s.nodes.filter(n => !n.parent).length + 1);
-  addChild(null, Object.assign({ name, prefab: FAMILY, unit: 'Lightseconds' }, defaultIcon('planet')));
+  const k = s.nodes.filter(n => !n.parent).length, a = k * 2.4;   // spread new families around the centre so they don't pile up
+  addChild(null, Object.assign({ name, prefab: FAMILY, unit: 'Lightseconds', position: k ? [Math.round(Math.cos(a) * 30) / 10, 0, Math.round(Math.sin(a) * 30) / 10] : [0, 0, 0] }, defaultIcon('planet')));
   $('nName').focus(); $('nName').select();
 });
 $('addCopy').addEventListener('click', () => {
@@ -669,7 +754,7 @@ $('addPoi').addEventListener('click', () => {
   const fam = selectedAt(0) || nodeById(sys(), selFam);
   if (!fam) return toast('Add or select a family first');
   if (isCopy(fam)) return toast('A copied family is read-only: it keeps its own POIs');
-  zoomPoi = null; zoomRegion = null;
+  atSystem = false; zoomPoi = null; zoomRegion = null;
   const k = sys().nodes.filter(x => x.parent === fam.id).length, a = k * 2.4;   // spread new POIs so they don't pile up on the family's centre
   addChild(fam.id, { name: 'New POI', prefab: POI, unit: 'Lightseconds', ...defaultIcon('planet'), position: k ? [Math.round(Math.cos(a) * 20) / 10, 0, Math.round(Math.sin(a) * 20) / 10] : [0, 0, 0] });
   $('nName').focus(); $('nName').select();
@@ -721,11 +806,12 @@ function catFamily(n) {
 // Breadcrumb over the plan: the family's page, then the POI zoomed into.
 function updateCrumb(s) {
   const c = $('crumb'); c.textContent = '';
-  const fam = s.nodes.find(n => n.id === selFam);
-  if (!fam) { c.hidden = true; return; }
   c.hidden = false;
+  const fam = s.nodes.find(n => n.id === selFam);
+  c.append(el('button', { type: 'button', class: atSystem ? 'on' : '', title: 'The whole system: place the families', onclick: () => { atSystem = true; zoomPoi = null; zoomRegion = null; selNode = null; lastSel = null; refreshSystemPanel(); draw(); } }, 'System'));
+  if (atSystem || !fam) return;
   const zp = zoomPoi && nodeById(s, zoomPoi), zr = zoomRegion && nodeById(s, zoomRegion);
-  c.append(el('button', { type: 'button', class: zp ? '' : 'on', title: "The family's page", onclick: () => { zoomPoi = null; zoomRegion = null; selNode = fam.id; refreshSystemPanel(); draw(); } }, (fam.name || fam.id) + ' (page)'));
+  c.append(el('span', { class: 'sep' }, '\u203A'), el('button', { type: 'button', class: zp ? '' : 'on', title: "The family's page", onclick: () => { zoomPoi = null; zoomRegion = null; selNode = fam.id; refreshSystemPanel(); draw(); } }, (fam.name || fam.id) + ' (page)'));
   if (zp) c.append(el('span', { class: 'sep' }, '\u203A'), el('button', { type: 'button', class: zr ? '' : 'on', title: 'The POI', onclick: () => { zoomRegion = null; selNode = zp.id; refreshSystemPanel(); draw(); } }, zp.name || zp.id));
   if (zr) c.append(el('span', { class: 'sep' }, '\u203A'), el('button', { type: 'button', class: 'on' }, zr.name || zr.id));
 }
@@ -740,6 +826,7 @@ function refreshSystemPanel() {
   if (!tops.some(n => n.id === selFam)) selFam = tops.length ? tops[0].id : null;
   if (selFam !== prevFam) zoomPoi = null;
   if (sel && levelOf(s, sel) >= 2 && selNode !== lastSel) {   // a node inside a POI: the plan goes into the POI, and into its region if it is in one
+    atSystem = false;
     let a = sel; while (a.parent && levelOf(s, a) > 1) a = nodeById(s, a.parent); zoomPoi = a.id;
     const r = inRegion(s, sel); zoomRegion = r ? r.id : null;
   }
@@ -748,13 +835,13 @@ function refreshSystemPanel() {
   if (!zp || !under(s, zp, selFam) || isCopy(nodeById(s, selFam) || {})) { zoomPoi = null; zoomRegion = null; }
   const zr = zoomRegion && nodeById(s, zoomRegion);
   if (!zr || !zoomPoi || !under(s, zr, zoomPoi)) zoomRegion = null;
-  const planKey = selFam + '/' + zoomPoi + '/' + zoomRegion + '/' + (zoomRegion ? 0 : planNodes(s).length);   // a new POI on the page refits it
+  const planKey = atSystem + '/' + (atSystem ? '' : selFam) + '/' + zoomPoi + '/' + zoomRegion + '/' + (zoomRegion ? 0 : planNodes(s).length);   // a new POI on the page refits it
   if (planKey !== fitFam) { fitFam = planKey; fitCam(); }
   updateCrumb(s);
   const fl = $('famList'); fl.textContent = '';
   if (!tops.length) fl.append(el('li', { class: 'muted' }, 'No families yet.'));
   for (const f of tops)
-    fl.append(el('li', { class: f.id === selFam ? 'sel' : '', onclick: () => { selNode = f.id; selFam = f.id; zoomPoi = null; zoomRegion = null; refreshSystemPanel(); draw(); } },
+    fl.append(el('li', { class: f.id === selFam ? 'sel' : '', onclick: () => { selNode = f.id; selFam = f.id; atSystem = false; zoomPoi = null; zoomRegion = null; refreshSystemPanel(); draw(); } },
       f.name || f.id, f._ro ? el('small', null, 'existing, read-only') : isCopy(f) ? el('small', null, 'copy of ' + tLabel(f.copyFamily.system) + ' / ' + f.copyFamily.family)
         : f.prefab === FAMILY ? el('small', null, 'family') : el('small', { class: 'warn' }, 'not a family')));
   const ul = $('nodeList'); ul.textContent = '';
@@ -766,7 +853,7 @@ function refreshSystemPanel() {
     if (!cf) ul.append(el('li', { class: 'muted' }, cat ? 'The catalogue has no such family.' : '(no catalogue: names unknown)'));
   } else if (fam) {
     for (const { n, depth } of depthOrder(s, fam))
-      ul.append(el('li', { class: n.id === selNode ? 'sel' : '', style: `padding-left:${14 + depth * 14}px`, onclick: () => { selNode = n.id; lastSel = null; if (depth <= 1) { zoomPoi = null; zoomRegion = null; } refreshSystemPanel(); draw(); }, ondblclick: () => { if (depth === 1) { zoomPoi = n.id; zoomRegion = null; refreshSystemPanel(); draw(); } } },
+      ul.append(el('li', { class: n.id === selNode ? 'sel' : '', style: `padding-left:${14 + depth * 14}px`, onclick: () => { selNode = n.id; lastSel = null; atSystem = false; if (depth <= 1) { zoomPoi = null; zoomRegion = null; } refreshSystemPanel(); draw(); }, ondblclick: () => { if (depth === 1) { zoomPoi = n.id; zoomRegion = null; refreshSystemPanel(); draw(); } } },
         (isJump(n) ? '◎ ' : '') + (n.name || n.id), el('small', null, depth === 0 ? 'family' : depth === 1 ? 'POI' : isWarp(n) ? 'jump point' : isSpawn(n) ? 'spawn point' : isRegion(s, n) ? 'region' : n.prefab)));
   }
   const n = sel;
@@ -776,6 +863,11 @@ function refreshSystemPanel() {
   $('nName').value = n.name || ''; $('nId').value = n.id;
   $('copyInfo').hidden = !copy;
   if (copy) $('copyInfo').textContent = `A copy of ${tLabel(n.copyFamily.system)} / ${n.copyFamily.family}. Rename it and give it a map name or background; the rest is the Trench's.`;
+  if (copy) {   // where it sits: dragged on the System view, or the Trench's own spot
+    const ci = $('copyInfo');
+    ci.append(' ', n.position ? el('span', null, 'Placed by you. ', el('button', { type: 'button', onclick: () => { delete n.position; delete n.unit; setDirty(); refreshSystemPanel(); draw(); } }, "Use the Trench's own spot"))
+      : 'It sits where the Trench has it; drag it on the System view to move it.');
+  }
   $('mapNameRow').hidden = lvl > 1; $('bgRow').hidden = lvl !== 0; $('iconRow').hidden = lvl > 1;
   $('nMapName').value = n.mapName || '';
   const bw = $('nBgWrap'); bw.textContent = ''; bw.append(spritePicker(n.familyBackground, v => setOpt(n, 'familyBackground', v), 'nBg'));

@@ -393,6 +393,18 @@ public class GalaxyCheckTests
     // The impulse map's system overview spans +/-2e9 m on each axis around ROOT (FamilyMap._maxOrbitRadius); a family
     // further out is drawn off the panel. The Trench's own reach 6.45 lightseconds (Silva VI).
     [Fact]
+    public void CopiedFamily_WithAPosition_IsHeldToTheImpulseMap()
+    {
+        var f = Valid(); var c = Copy("kessar-copy", "Venov", "FAMILY Venov III");
+        f.Systems[0].Nodes.Add(c);
+        Assert.DoesNotContain(GalaxyCheck.Problems(f, Cat()), x => x.Contains("kessar-copy: too far out"));   // no position: the Trench's own
+        c.HasPosition = true; c.X = 25; c.Z = 0;
+        Assert.Contains(GalaxyCheck.Problems(f, Cat()), x => x.StartsWith("kessar/kessar-copy: too far out for the impulse map"));
+        c.X = 3;
+        Assert.DoesNotContain(GalaxyCheck.Problems(f, Cat()), x => x.Contains("kessar-copy: too far out"));
+    }
+
+    [Fact]
     public void Family_BeyondTheImpulseMap_IsAProblem()
     {
         var f = Valid(); var fam = f.Systems[0].Nodes[0];

@@ -465,6 +465,7 @@ namespace StbcRevival.Galaxy
             if (!string.IsNullOrEmpty(n.MapName)) family.SystemMapName = n.MapName;
             if (n.FamilyBackground != null) family.FamilyMapBackground = game.Sprite(n.FamilyBackground);
             if (n.MapIcon != null) family.SystemMapIconSprite = game.Sprite(n.MapIcon);
+            if (n.HasPosition) Node.MoveFamily(family, n);   // placed by the file, else it keeps its Trench position
             return family;
         }
 
@@ -704,6 +705,31 @@ namespace StbcRevival.Galaxy
                     foreach (var child in Children(source))
                         if (child != null) Copy(child, node, copy, true);
                 return node;
+            }
+
+            /// <summary>
+            /// Places a copied family where the file says. The copy's transforms hold their positions in the system's
+            /// metres, so the family and everything under it are shifted by how far the family itself moves.
+            /// </summary>
+            internal static void MoveFamily(Map.SystemNode family, GalaxyNode n)
+            {
+                var before = family.SystemPosition;
+                family.Position = new Vector3(n.X, n.Y, n.Z);
+                var scale = NodeField("Scale");
+                scale.SetValue(family, Enum.Parse(scale.FieldType, n.Unit));
+                var delta = family.SystemPosition - before;
+                Shift(family, delta);
+            }
+
+            private static void Shift(Map.SystemNode node, Vector3d delta)
+            {
+                if (node.Transform != null)
+                {
+                    var f = TransformField("_position");
+                    f.SetValue(node.Transform, (Vector3d)f.GetValue(node.Transform) + delta);
+                }
+                foreach (var child in Children(node))
+                    if (child != null) Shift(child, delta);
             }
 
             /// <summary>A new node from the file.</summary>

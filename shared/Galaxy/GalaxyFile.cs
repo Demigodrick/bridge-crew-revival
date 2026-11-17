@@ -24,6 +24,8 @@ namespace StbcRevival.Galaxy
         /// <summary>The game's SectorBody prefab name, from the catalogue.</summary>
         public string Prefab;
         public float X, Y, Z;
+        /// <summary>The file gave a position. Always so for a hand-made node; a copied family without one keeps its Trench position.</summary>
+        public bool HasPosition;
         /// <summary>One of GalaxyFile.Units; what the position is measured in.</summary>
         public string Unit = "Kilometers";
         public float RotX, RotY, RotZ;
@@ -194,6 +196,7 @@ namespace StbcRevival.Galaxy
             float[] pos = d.ContainsKey("position") || n.CopyFamily == null
                 ? Json.Floats(d, "position", where, 3, true) : new float[3];
             n.X = pos[0]; n.Y = pos[1]; n.Z = pos[2];
+            n.HasPosition = n.CopyFamily == null || (d.ContainsKey("position") && d["position"] != null);
             n.MapName = Json.Str(d, "mapName", where, false, null);
             n.FamilyBackground = Json.Str(d, "familyBackground", where, false, null);
             n.MapIcon = Json.Str(d, "mapIcon", where, false, null);
@@ -262,8 +265,11 @@ namespace StbcRevival.Galaxy
             d["parent"] = n.Parent;
             d["name"] = n.Name;
             d["prefab"] = n.Prefab;
-            d["position"] = new List<object> { n.X, n.Y, n.Z };
-            d["unit"] = n.Unit;
+            if (n.CopyFamily == null || n.HasPosition)   // a copy without a position keeps its Trench one
+            {
+                d["position"] = new List<object> { n.X, n.Y, n.Z };
+                d["unit"] = n.Unit;
+            }
             d["rotation"] = new List<object> { n.RotX, n.RotY, n.RotZ };
             d["tags"] = Json.StringList(n.Tags);
             d["landingRadius"] = n.LandingRadius;

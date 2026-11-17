@@ -47,6 +47,13 @@ Plan 2–5 families, like the Trench does:
 - **Two to four more** for planets, a gas cloud, a debris field and so on, **2–6 lightseconds out**. Never more than
   **6.7 lightseconds** on either axis: further out falls off the impulse map (Check warns you).
 
+Place the families on the **System view**, the level you start at when you open a system (the **System** button in the
+bar above the plan brings you back to it). It draws the system like the game's impulse map overview: the centre, a ring
+through each family's distance, and every family as a dot with its icon and name. A dashed box marks the impulse map's
+reach (6.7 lightseconds each way); a family outside it turns red. **Drag a family** to place it; **click** it to open its
+page. A family copied from the Trench starts where the Trench has it, and you can drag that too. In a Trench system, its own
+families are shown greyed and can't be moved.
+
 For each family: **Add family (empty)**, set its **Name** (the dot's label on the overview), its **icon** (planet,
 star, nebula, space station, asteroid field…) and its **backdrop** (FamilyMapBG_1 to _6, the art behind its page).
 

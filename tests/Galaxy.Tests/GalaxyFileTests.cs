@@ -45,6 +45,22 @@ public class GalaxyFileTests
     }
 
     [Fact]
+    public void CopyFamily_Position_IsOptionalAndOnlyUsedWhenGiven()
+    {
+        var plain = GalaxyFile.Parse(Families).Systems[0].Nodes[1];
+        Assert.False(plain.HasPosition);
+        Assert.DoesNotContain("position", GalaxyFile.Parse(Families).ToJson().Split("\"copyFamily\"")[0].Split("\"id\": \"c\"").Last());
+        var placed = GalaxyFile.Parse(Families.Replace("\"name\": \"Copy\",", "\"name\": \"Copy\", \"position\": [3, 0, -2], \"unit\": \"Lightseconds\","))
+            .Systems[0].Nodes[1];
+        Assert.True(placed.HasPosition);
+        Assert.Equal(3f, placed.X); Assert.Equal(-2f, placed.Z); Assert.Equal("Lightseconds", placed.Unit);
+        var again = GalaxyFile.Parse(GalaxyFile.Parse(Families.Replace("\"name\": \"Copy\",", "\"name\": \"Copy\", \"position\": [3, 0, -2], \"unit\": \"Lightseconds\",")).ToJson()).Systems[0].Nodes[1];
+        Assert.True(again.HasPosition); Assert.Equal(3f, again.X);
+        // a copy without a position stays without one through ToJson (it must not land on 0,0,0)
+        Assert.False(GalaxyFile.Parse(GalaxyFile.Parse(Families).ToJson()).Systems[0].Nodes[1].HasPosition);
+    }
+
+    [Fact]
     public void Parse_CopyFamilyWithoutPrefab_Ok()
     {
         var c = GalaxyFile.Parse(Families).Systems[0].Nodes[1];
