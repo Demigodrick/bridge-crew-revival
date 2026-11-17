@@ -812,7 +812,11 @@ $('addNode').addEventListener('click', () => {
     addChild(parent.id, { name: prefab.replace(/^.*[\\/]/, ''), prefab, unit: 'Skybox', position: [Math.round(Math.cos(a) * 600), 0, Math.round(Math.sin(a) * 600)] });
     return;
   }
-  addChild(parent.id, { name: prefab.replace(/^.*[\\/]/, ''), prefab, unit: k === 'star' || k === 'planet' ? 'AstronomicalUnits' : 'Kilometers' });
+  // With a body (or marker) selected, the new body goes beside it, in the same region (or under the same POI), not
+  // inside it: the Trench keeps a region's stations, debris and asteroids side by side. The Parent list can still nest.
+  const isContainer = parent.prefab === FAMILY || parent.prefab === POI || isRegion(s, parent);
+  const target = isContainer ? parent : (inRegion(s, parent) || (parent.parent && nodeById(s, parent.parent)) || parent);
+  addChild(target.id, { name: prefab.replace(/^.*[\\/]/, ''), prefab, unit: k === 'star' || k === 'planet' ? 'AstronomicalUnits' : 'Kilometers' });
 });
 
 function depthOrder(s, root) {
