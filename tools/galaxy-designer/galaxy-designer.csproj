@@ -36,5 +36,7 @@
     <Compile Include="../xref/UnityAssets.cs" Link="GameFiles/UnityAssets.cs" />
     <!-- The page, built into the program (one file to hand out) (the web option serves it from a folder instead). -->
     <EmbeddedResource Include="web/**" LogicalName="web/%(RecursiveDir)%(Filename)%(Extension)" />
+    <!-- The guide to building a sector, shown by the page's Guide button (the web option reads the source file instead). -->
+    <EmbeddedResource Include="GUIDE.md" LogicalName="guide/GUIDE.md" />
   </ItemGroup>
 </Project>

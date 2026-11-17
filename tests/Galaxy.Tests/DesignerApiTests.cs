@@ -21,6 +21,19 @@ public class DesignerApiTests : IDisposable
 
     public void Dispose() { try { Directory.Delete(dir, true); } catch { } }
 
+    [Fact]
+    public void Guide_IsServedAsMarkdown()
+    {
+        var g = new DesignerApi(dir, GameData.Failed("x"), null, () => "# Guide\n\nText");
+        var r = g.Handle("GET", "/api/guide", null);
+        Assert.Equal(200, r.status);
+        Assert.StartsWith("text/markdown", r.contentType);
+        Assert.Equal("# Guide\n\nText", S(r.body));
+    }
+
+    [Fact]
+    public void Guide_Absent_Is404() => Assert.Equal(404, api.Handle("GET", "/api/guide", null).status);
+
     static Dictionary<string, object> Obj(byte[] body) => (Dictionary<string, object>)MiniJson.Parse(S(body));
 
     static byte[] B(string s) => Encoding.UTF8.GetBytes(s);

@@ -16,14 +16,17 @@ public sealed class DesignerApi
     static readonly string[] Reserved = { "catalogue", "thumbs" };
     readonly string dir;
     readonly Func<GameData> reload;
+    readonly Func<string> guide;
     readonly object gate = new object();
     GameData game;
 
     /// <param name="galaxiesDir">BepInEx/galaxies: galaxy files, and the game's pictures (thumbs.json, thumbs/).</param>
     /// <param name="game">The catalogue read from the game's files, or why there is none.</param>
+    /// <param name="guide">The guide's markdown (GET /api/guide); null: none.</param>
     /// <param name="reload">Reads the game's files again (POST /api/reload); null: not offered.</param>
-    public DesignerApi(string galaxiesDir, GameData game, Func<GameData> reload = null)
+    public DesignerApi(string galaxiesDir, GameData game, Func<GameData> reload = null, Func<string> guide = null)
     {
+        this.guide = guide;
         dir = galaxiesDir;
         this.game = game ?? GameData.Failed("The game's files haven't been read.");
         this.reload = reload;
@@ -40,6 +43,11 @@ public sealed class DesignerApi
                 var g = Game;
                 if (g.Catalogue == null) return Error(503, g.Error ?? "The game's files can't be read.");
                 return (200, Json, Encoding.UTF8.GetBytes(CatalogueJson(g.Catalogue)));
+            }
+            if (path == "/api/guide" && method == "GET")
+            {
+                string text = guide?.Invoke();
+                return text == null ? Error(404, "No guide") : (200, "text/markdown; charset=utf-8", Encoding.UTF8.GetBytes(text));
             }
             if (path == "/api/reload" && method == "POST")
             {

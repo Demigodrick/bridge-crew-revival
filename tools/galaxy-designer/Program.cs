@@ -90,7 +90,20 @@ if (!ThumbIndex.IsCurrent(thumbsIndex))
 Directory.CreateDirectory(galaxies);
 
 var page = new Page(webArg);
-var api = new DesignerApi(galaxies, game, () => LoadGame(true));
+// The guide: from the source folder next to web/ when --web is given (edits show without a rebuild), else built in.
+string Guide()
+{
+    if (webArg != null)
+    {
+        string f = Path.Combine(Path.GetDirectoryName(webArg.TrimEnd(Path.DirectorySeparatorChar, '/')) ?? "", "GUIDE.md");
+        if (File.Exists(f)) return File.ReadAllText(f);
+    }
+    using var s = typeof(Page).Assembly.GetManifestResourceStream("guide/GUIDE.md");
+    if (s == null) return null;
+    using var r = new StreamReader(s, System.Text.Encoding.UTF8);
+    return r.ReadToEnd();
+}
+var api = new DesignerApi(galaxies, game, () => LoadGame(true), Guide);
 HttpListener listener = null;
 string url = null;
 for (int p = port; p < port + 10 && listener == null; p++)

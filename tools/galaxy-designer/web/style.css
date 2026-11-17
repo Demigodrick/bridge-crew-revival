@@ -100,3 +100,26 @@ button.quiet:hover { color: var(--text); border-color: var(--line); }
 .tile .tn { font-size: 10px; color: var(--muted); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tile.cur { border-color: var(--accent); background: var(--accent-dim); }
 .tile:hover { border-color: var(--accent); }
+
+/* the guide */
+#guide { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; }
+.gbox { position: relative; width: min(900px, 94vw); height: 92vh; display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.gbody { overflow: auto; padding: 8px 28px 28px; flex: 1; }
+.md { line-height: 1.55; font-size: 14px; }
+.md > * { max-width: 78ch; }
+.md h1 { font-size: 22px; color: var(--accent); margin: 18px 0 8px; }
+.md h2 { font-size: 17px; color: var(--accent); margin: 26px 0 8px; padding-bottom: 4px; border-bottom: 1px solid var(--line); }
+.md h3 { font-size: 15px; margin: 20px 0 6px; }
+.md h4 { font-size: 13px; margin: 16px 0 4px; color: var(--muted); }
+.md p { margin: 8px 0; }
+.md ul, .md ol { margin: 6px 0; padding-left: 24px; }
+.md li { margin: 3px 0; }
+.md li > ul, .md li > ol { margin: 3px 0; }
+.md code { background: #0b0f14; border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; font: 12.5px ui-monospace, Menlo, Consolas, monospace; }
+.md pre { background: #0b0f14; border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; overflow: auto; max-width: none; }
+.md pre code { background: none; border: 0; padding: 0; font-size: 12.5px; line-height: 1.45; white-space: pre; }
+.md .tablewrap { overflow-x: auto; max-width: none; margin: 10px 0; }
+.md table { border-collapse: collapse; font-size: 13px; }
+.md th, .md td { border: 1px solid var(--line); padding: 5px 10px; text-align: left; vertical-align: top; }
+.md th { background: #0b0f14; color: var(--accent); }
+.md h1 { text-transform: none; letter-spacing: 0; }

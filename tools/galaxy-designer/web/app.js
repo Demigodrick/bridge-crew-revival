@@ -850,7 +850,7 @@ function deleteNode() {
 addEventListener('keydown', e => {
   const typing = /^(INPUT|SELECT|TEXTAREA|BUTTON)$/.test(document.activeElement.tagName);
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); save(); return; }
-  if (typing || !$('picker').hidden) return;
+  if (typing || !$('picker').hidden || !$('guide').hidden) return;
   if (e.key === 'Delete' || e.key === 'Backspace') { view === 'galaxy' ? deleteSystem() : deleteNode(); }
   if ((e.key === 'f' || e.key === 'F') && view === 'system') { fitCam(); draw(); }
 });
@@ -948,6 +948,87 @@ async function save() {
   } catch (e) { toast(e.message, 6000); }
 }
 addEventListener('beforeunload', e => { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
+
+// ---------- the guide (GUIDE.md, shown in an overlay by a small markdown renderer; DOM built with createElement/textContent)
+function mdInline(parent, text) {
+  const parts = text.split(/(\*\*[^*]+\*\*|`[^`]+`)/);
+  for (const p of parts) {
+    if (!p) continue;
+    if (p.startsWith('**') && p.endsWith('**') && p.length > 4) {
+      const b = el('strong'); const inner = p.slice(2, -2).split(/(`[^`]+`)/);
+      for (const q of inner) if (q) b.append(q.startsWith('`') && q.endsWith('`') && q.length > 2 ? el('code', null, q.slice(1, -1)) : document.createTextNode(q));
+      parent.append(b);
+    } else if (p.startsWith('`') && p.endsWith('`') && p.length > 2) parent.append(el('code', null, p.slice(1, -1)));
+    else parent.append(document.createTextNode(p));
+  }
+}
+const mdCells = line => line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(c => c.trim());
+function mdRender(md) {
+  const root = document.createDocumentFragment(), lines = md.replace(/\r\n/g, '\n').split('\n');
+  let i = 0;
+  const LIST = /^(\s*)([-*]|\d+\.)\s+(.*)$/;
+  while (i < lines.length) {
+    const line = lines[i];
+    if (!line.trim()) { i++; continue; }
+    if (line.startsWith('```')) {   // fenced code: kept as it is
+      const code = []; i++;
+      while (i < lines.length && !lines[i].startsWith('```')) code.push(lines[i++]);
+      i++; root.append(el('pre', null, el('code', null, code.join('\n')))); continue;
+    }
+    const h = line.match(/^(#{1,4})\s+(.*)$/);
+    if (h) { const e = el('h' + h[1].length); mdInline(e, h[2]); root.append(e); i++; continue; }
+    if (line.trim().startsWith('|') && i + 1 < lines.length && /^\s*\|?[\s:|-]+\|[\s:|-]*$/.test(lines[i + 1])) {   // table
+      const head = mdCells(line); i += 2;
+      const table = el('table'), thead = el('thead'), tr = el('tr');
+      for (const c of head) { const th = el('th'); mdInline(th, c); tr.append(th); }
+      thead.append(tr); table.append(thead);
+      const tb = el('tbody');
+      while (i < lines.length && lines[i].trim().startsWith('|')) {
+        const r = el('tr'); for (const c of mdCells(lines[i++])) { const td = el('td'); mdInline(td, c); r.append(td); } tb.append(r);
+      }
+      table.append(tb); root.append(el('div', { class: 'tablewrap' }, table)); continue;
+    }
+    if (LIST.test(line)) {   // lists, nested by indentation (a bullet list under a numbered item, and so on)
+      const stack = [];   // { indent, list }
+      let lastLi = null; const items = [];   // each item's text is rendered once the list ends, so **bold** can run over a line break
+      while (i < lines.length) {
+        const m = lines[i].match(LIST);
+        if (!m) {
+          // an indented line right after an item continues it; a blank line or anything else ends the list
+          if (lines[i].trim() && /^\s+\S/.test(lines[i]) && lastLi) { items[items.length - 1].raw += ' ' + lines[i].trim(); i++; continue; }
+          break;
+        }
+        const indent = m[1].length, ordered = /\d/.test(m[2]);
+        while (stack.length && indent < stack[stack.length - 1].indent) stack.pop();
+        if (!stack.length || indent > stack[stack.length - 1].indent) {
+          const list = el(ordered ? 'ol' : 'ul');
+          if (stack.length && lastLi) lastLi.append(list); else root.append(list);
+          stack.push({ indent, list });
+        }
+        const li = el('li'), holder = el('span'); li.append(holder); items.push({ holder, raw: m[3] }); stack[stack.length - 1].list.append(li); lastLi = li; i++;
+      }
+      for (const it of items) mdInline(it.holder, it.raw);
+      continue;
+    }
+    const para = [line.trim()]; i++;   // a paragraph: lines up to a blank line or the next block
+    while (i < lines.length && lines[i].trim() && !/^(#{1,4}\s|```|\s*([-*]|\d+\.)\s)/.test(lines[i]) && !lines[i].trim().startsWith('|')) para.push(lines[i++].trim());
+    const p = el('p'); mdInline(p, para.join(' ')); root.append(p);
+  }
+  return root;
+}
+async function openGuide() {
+  const g = $('guide'); g.textContent = ''; g.hidden = false;
+  const close = () => { g.hidden = true; removeEventListener('keydown', onKey, true); };
+  const onKey = e => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
+  addEventListener('keydown', onKey, true);
+  const body = el('div', { class: 'gbody md' }, el('p', { class: 'muted' }, 'Loading the guide…'));
+  g.append(el('div', { class: 'pback', onclick: close }), el('div', { class: 'gbox' },
+    el('div', { class: 'phead2' }, el('strong', null, 'Guide: building a sector'), el('span', { class: 'grow' }), el('button', { type: 'button', onclick: close }, 'Close')), body));
+  try { const t = await (await api('/api/guide')).text(); body.textContent = ''; body.append(mdRender(t)); }
+  catch (e) { body.textContent = ''; body.append(el('p', null, e.message)); }
+  body.scrollTop = 0;
+}
+$('btnGuide').addEventListener('click', openGuide);
 
 // ---------- start
 async function loadCatalogue() {
