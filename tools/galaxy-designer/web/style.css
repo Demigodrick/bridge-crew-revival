@@ -6,8 +6,10 @@
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
 html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font: 13px/1.4 system-ui, sans-serif; }
-body { display: grid; grid-template-columns: 340px 1fr; }
-#side { display: flex; flex-direction: column; min-height: 0; overflow: auto; border-right: 1px solid var(--line); background: var(--panel); }
+body { display: grid; grid-template-columns: 340px 1fr; grid-template-rows: minmax(0, 1fr); height: 100vh; overflow: hidden; }
+#side { display: flex; flex-direction: column; min-height: 0; height: 100%; overflow-y: auto; overscroll-behavior: contain; border-right: 1px solid var(--line); background: var(--panel); }
+/* The sidebar scrolls; its sections keep their own height instead of being squashed to fit. */
+#side > * { flex-shrink: 0; }
 header { padding: 14px 14px 10px; border-bottom: 1px solid var(--line); display: grid; gap: 8px; }
 h1 { margin: 0; font-size: 15px; letter-spacing: .04em; text-transform: uppercase; color: var(--accent); }
 h1 .version { font-weight: 400; letter-spacing: 0; text-transform: none; opacity: .6; font-size: .85em; margin-left: .4em; }
