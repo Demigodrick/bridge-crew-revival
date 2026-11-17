@@ -344,12 +344,23 @@ function drawSystem() {
   }
   // Each body's real size (its model's radius), so overlapping clouds or an arrival point inside one show up.
   for (const { n } of items) {
-    const p = L[n.id]; if (p.edge || p.off || !n.prefab || isRegion(s, n)) continue;
+    if (L[n.id].edge || !n.prefab || isRegion(s, n)) continue;
+    const w0 = worldPos(s, n), [cx, cy] = toS(w0[0], w0[2]), p = { x: cx, y: cy };   // its real place, even when its dot is stacked beside its parent
     const m = prefabByName(n.prefab), r = m && m.radius > 0 ? m.radius / 1000 * cam.k : 0;   // radius is in metres, the plan in km
     if (r < 6 * d || r > 4 * Math.max(w, h)) continue;
     const col = KIND_COLOR[kindOf(n)] || KIND_COLOR.other, sel = n.id === selNode;
     ctx.save(); ctx.globalAlpha = sel ? 0.16 : 0.08; ctx.fillStyle = col; ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, 7); ctx.fill();
     ctx.globalAlpha = sel ? 0.8 : 0.4; ctx.setLineDash([5 * d, 4 * d]); ctx.strokeStyle = col; ctx.lineWidth = d; ctx.stroke(); ctx.restore();
+  }
+  // An Impulse Destination's landing radius: the game stops the ship on this ring, on the side it came from, facing in.
+  for (const { n } of items) {
+    if (n.prefab !== 'Impulse Destination' || L[n.id].edge) continue;
+    const w0 = worldPos(s, n), [cx, cy] = toS(w0[0], w0[2]), p = { x: cx, y: cy };
+    const r = (n.landingRadius == null ? 1000 : n.landingRadius) / 1000 * cam.k;
+    if (r < 3 * d || r > 4 * Math.max(w, h)) continue;
+    ctx.save(); ctx.strokeStyle = '#6cb6ff'; ctx.globalAlpha = n.id === selNode ? 0.9 : 0.55; ctx.lineWidth = 1.5 * d; ctx.setLineDash([2 * d, 4 * d]);
+    ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, 7); ctx.stroke(); ctx.setLineDash([]);
+    if (r > 40 * d) { ctx.fillStyle = '#6cb6ff'; ctx.textAlign = 'center'; ctx.fillText('ships arrive on this ring', p.x, p.y - r - 8 * d); } ctx.restore();
   }
   for (const { n } of items) {
     const px = L[n.id].x, py = L[n.id].y, k = kindOf(n), sel = n.id === selNode;
