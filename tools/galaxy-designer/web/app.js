@@ -287,6 +287,12 @@ function catFamilyPos(system, family) {
   if (!f) return null;
   const u = UNIT_KM[f.unit] || 1; return [f.position[0] * u, f.position[2] * u];
 }
+function catFamilyIcon(system, family) {   // the Trench source family's map icon
+  const t = findTrench(system); if (!t) return null;
+  const root = (t.nodes || []).find(x => !x.parent);
+  const f = (t.nodes || []).find(x => x.name === family && root && x.parent === root.id);
+  return f ? f.mapIcon || null : null;
+}
 function famWorld(s, n) {
   if (isCopy(n) && !n.position) { const p = catFamilyPos(n.copyFamily.system, n.copyFamily.family); return p || [0, 0]; }
   const u = UNIT_KM[n.unit] || 1, pos = n.position || [0, 0, 0]; return [pos[0] * u, pos[2] * u];
@@ -360,7 +366,7 @@ function drawOverview(s, w, h, d) {
     ctx.fillStyle = color; ctx.fillText(txt, x, y); ctx.textAlign = 'left';
   };
   for (const n of fams) {
-    const { x, y } = L[n.id], sel = n.id === selNode, fixed = famFixed(n), bad = famOutOfReach(s, n), ic = !fixed && spriteImg(n.mapIcon), sz = POI_ICON * d;
+    const { x, y } = L[n.id], sel = n.id === selNode, fixed = famFixed(n), bad = famOutOfReach(s, n), ic = spriteImg(n.mapIcon || (isCopy(n) ? catFamilyIcon(n.copyFamily.system, n.copyFamily.family) : null)), sz = POI_ICON * d;
     ctx.globalAlpha = fixed ? 0.55 : 1;
     if (ic) ctx.drawImage(ic, x - sz / 2, y - sz / 2, sz, sz * ic.naturalHeight / ic.naturalWidth);
     else { ctx.fillStyle = bad ? '#ff5f56' : fixed ? '#8592a0' : isCopy(n) ? '#ffb454' : '#7ee787'; ctx.beginPath(); ctx.arc(x, y, 8 * d, 0, 7); ctx.fill(); ctx.strokeStyle = '#000'; ctx.lineWidth = 1.5 * d; ctx.stroke(); }

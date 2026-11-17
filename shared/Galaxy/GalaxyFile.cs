@@ -193,7 +193,7 @@ namespace StbcRevival.Galaxy
                 if (n.Parent != null) throw new FormatException(where + ": a copied family can't have a parent");
             }
             n.Prefab = Json.Str(d, "prefab", where, n.CopyFamily == null, null);
-            float[] pos = d.ContainsKey("position") || n.CopyFamily == null
+            float[] pos = (d.ContainsKey("position") && d["position"] != null) || n.CopyFamily == null
                 ? Json.Floats(d, "position", where, 3, true) : new float[3];
             n.X = pos[0]; n.Y = pos[1]; n.Z = pos[2];
             n.HasPosition = n.CopyFamily == null || (d.ContainsKey("position") && d["position"] != null);

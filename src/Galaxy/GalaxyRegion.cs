@@ -713,12 +713,17 @@ namespace StbcRevival.Galaxy
             /// </summary>
             internal static void MoveFamily(Map.SystemNode family, GalaxyNode n)
             {
-                var before = family.SystemPosition;
+                // Anchored to the family's transform (what the game reads), not to the node's own data, so the placement
+                // is exact even if the Trench's baked _position differs from the node's SystemPosition.
+                var field = TransformField("_position");
+                var nodePos = family.SystemPosition;
+                var cached = family.Transform != null ? (Vector3d)field.GetValue(family.Transform) : nodePos;
                 family.Position = new Vector3(n.X, n.Y, n.Z);
                 var scale = NodeField("Scale");
                 scale.SetValue(family, Enum.Parse(scale.FieldType, n.Unit));
-                var delta = family.SystemPosition - before;
-                Shift(family, delta);
+                var target = family.SystemPosition;
+                Plugin.Log.LogInfo(P + $"'{n.Name}' moved to {n.X},{n.Y},{n.Z} {n.Unit}: source transform {cached}, source node {nodePos}, target {target}");
+                Shift(family, target - cached);
             }
 
             private static void Shift(Map.SystemNode node, Vector3d delta)

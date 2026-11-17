@@ -61,6 +61,13 @@ public class GalaxyFileTests
     }
 
     [Fact]
+    public void CopyFamily_NullPosition_IsAbsent()
+    {
+        var c = GalaxyFile.Parse(Families.Replace("\"name\": \"Copy\",", "\"name\": \"Copy\", \"position\": null,")).Systems[0].Nodes[1];
+        Assert.False(c.HasPosition);
+    }
+
+    [Fact]
     public void Parse_CopyFamilyWithoutPrefab_Ok()
     {
         var c = GalaxyFile.Parse(Families).Systems[0].Nodes[1];
