@@ -61,10 +61,19 @@ Shortcut: **Copy a Trench family** brings in a whole finished family, with its P
 the game. It's a quick way to start a system and then add your own families beside it.
 
 ### 3. The POIs (a family's page)
-For each family, 1–4 POIs:
-- **The first POI at the family's centre** (0, 0, 0), holding the family's big body: add the planet or star **under
-  the POI** (Add body with the POI selected), in Skybox units, typically 10–50 units away.
-- **Other POIs 10–50 Skybox units** (10,000–50,000 km) from the family centre: a moon, an asteroid field, a station.
+Click a family in the System view to open its page. Each family gets 1–4 POIs (**Add POI**, with the family selected).
+
+**Where things go.** Every node is placed relative to its parent: drag it on the plan, or type it in the node's
+fields in the sidebar (scroll down to **X / Y / Z** and **Unit**; under them the designer shows the distance in plain
+kilometres, e.g. "≈ 27,000 km from Tharn's Landing"). The unit just says what the numbers count in:
+Kilometres, Skybox (1 = 1,000 km), Lightseconds (1 ≈ 300,000 km) or AU. The designer picks a sensible one for you.
+
+How the Trench lays out a family:
+- **The first POI sits at the family's centre** (X, Y, Z all 0). It's where the family's big body is: select the POI,
+  press **Add body** and pick the planet (or star). In the Trench that planet sits **10,000–50,000 km from its POI**,
+  for example X 20, Z 0 with Unit Skybox (≈ 20,000 km).
+- **Other POIs sit 10,000–50,000 km from the family's centre** (e.g. X 40, Z 6 in Skybox), each with its own body:
+  a moon, an asteroid field, a station.
 - Give each POI a **name** (shown on its family's page) and an **icon** that says what's there.
 
 ### 4. The regions (a POI's view)
@@ -113,7 +122,7 @@ warp-in point doesn't need another.
 
 - 1 lightsecond ≈ 300,000 km; 1 Skybox unit = 1,000 km.
 - Family: within ±6.7 ls of the system centre.
-- POI: 10–50 Skybox units from its family; big body under it.
+- POI: 10,000–50,000 km (10–50 Skybox) from its family's centre; its big body 10,000–50,000 km from the POI.
 - Region: a few Skybox units from its POI; contents in km.
 - One warp-in per system. Every region: an impulse destination and spawn points (Add region does both).
 - Every family and POI: a name and an icon.

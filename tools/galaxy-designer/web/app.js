@@ -4,8 +4,19 @@
 
 const $ = id => document.getElementById(id);
 const UNITS = ['Kilometers', 'Skybox', 'Lightseconds', 'AstronomicalUnits'];
-// Kilometres per unit, to lay a system's nodes out on one plan. 'Skybox' has no real size; drawn as kilometres.
-const UNIT_KM = { Kilometers: 1, Skybox: 1, Lightseconds: 299792.458, AstronomicalUnits: 149597870.7 };
+// Kilometres per unit, as the game converts them (Map.UnitScale.DistanceScaleToMeters: a Skybox unit is 1,000 km).
+const UNIT_KM = { Kilometers: 1, Skybox: 1000, Lightseconds: 299792.458, AstronomicalUnits: 149597870.7 };
+// What each unit means, for the unit picker.
+const UNIT_LABEL = { Kilometers: 'Kilometres', Skybox: 'Skybox (1 = 1,000 km)', Lightseconds: 'Lightseconds (1 ≈ 300,000 km)', AstronomicalUnits: 'AU (1 ≈ 150 million km)' };
+// "≈ 27,000 km from Tharn's Landing": the node's distance from its parent, in plain kilometres.
+function showDistance(n) {
+  const e = $('nDist'); if (!e || !n) return;
+  const p = n.position || [0, 0, 0], km = Math.hypot(p[0], p[1], p[2]) * (UNIT_KM[n.unit] || 1);
+  const par = n.parent ? nodeById(sys(), n.parent) : null, from = par ? (par.name || par.id) : 'the system centre';
+  const txt = km === 0 ? 'On ' + from : km < 1 ? Math.round(km * 1000) + ' m from ' + from
+    : '≈ ' + (km >= 1e6 ? (km / 1e6).toFixed(1) + ' million' : Math.round(km).toLocaleString('en-GB')) + ' km from ' + from;
+  e.textContent = txt;
+}
 // What a node can be for Patrol: the tag it gets and what Patrol does there.
 const KINDS = [
   { tag: 'SpaceStation', label: 'Station', note: 'restock, rescues' },
@@ -534,7 +545,7 @@ canvas.addEventListener('pointermove', e => {
     }
     const u = UNIT_KM[n.unit] || 1;
     n.position[0] = Math.round((wx - ox) / u * 1000) / 1000; n.position[2] = Math.round((wz - oz) / u * 1000) / 1000; drag.moved = true; setDirty();
-    setField('nX', n.position[0]); setField('nZ', n.position[2]);
+    setField('nX', n.position[0]); setField('nZ', n.position[2]); showDistance(n);
   } else if (drag.kind === 'pan') {
     if (Math.hypot(px - drag.px, py - drag.py) > 3) drag.moved = true;
     cam.x = drag.cx - (px - drag.px) / cam.k; cam.z = drag.cz + (py - drag.py) / cam.k;
@@ -894,7 +905,8 @@ function refreshSystemPanel() {
   par.value = n.parent || ''; par.disabled = lvl === 0;
   n.position = n.position || [0, 0, 0];
   $('nX').value = n.position[0]; $('nY').value = n.position[1]; $('nZ').value = n.position[2];
-  const u = $('nUnit'); u.textContent = ''; for (const x of UNITS) u.append(el('option', { value: x, textContent: x })); u.value = n.unit || 'Kilometers';
+  const u = $('nUnit'); u.textContent = ''; for (const x of UNITS) u.append(el('option', { value: x, textContent: UNIT_LABEL[x] || x })); u.value = n.unit || 'Kilometers';
+  showDistance(n);
   n.rotation = n.rotation || [0, 0, 0];
   $('nRX').value = n.rotation[0]; $('nRY').value = n.rotation[1]; $('nRZ').value = n.rotation[2];
   $('nLand').value = n.landingRadius == null ? 1000 : n.landingRadius;
@@ -929,13 +941,13 @@ $('tagInput').addEventListener('keydown', e => {
   if (!tagAllowed(t)) return toast(`No tag '${t}' in the game`);
   e.target.value = ''; toggleTag(n, t, true);
 });
-const nodeEdit = (id, f) => $(id).addEventListener('input', e => { const n = nodeById(sys(), selNode); if (!n) return; f(n, e.target.value); setDirty(); draw(); });
+const nodeEdit = (id, f) => $(id).addEventListener('input', e => { const n = nodeById(sys(), selNode); if (!n) return; f(n, e.target.value); setDirty(); showDistance(n); draw(); });
 nodeEdit('nName', (n, v) => n.name = v); $('nMapName').addEventListener('input', e => { const n = nodeById(sys(), selNode); if (n) setOpt(n, 'mapName', e.target.value); });
  $('nName').addEventListener('change', refreshSystemPanel);
 nodeEdit('nX', (n, v) => n.position[0] = num(v)); nodeEdit('nY', (n, v) => n.position[1] = num(v)); nodeEdit('nZ', (n, v) => n.position[2] = num(v));
 nodeEdit('nRX', (n, v) => n.rotation[0] = num(v)); nodeEdit('nRY', (n, v) => n.rotation[1] = num(v)); nodeEdit('nRZ', (n, v) => n.rotation[2] = num(v));
 nodeEdit('nLand', (n, v) => n.landingRadius = num(v));
-$('nUnit').addEventListener('change', e => { const n = nodeById(sys(), selNode); n.unit = e.target.value; setDirty(); draw(); });
+$('nUnit').addEventListener('change', e => { const n = nodeById(sys(), selNode); n.unit = e.target.value; setDirty(); showDistance(n); draw(); });
 $('nParent').addEventListener('change', e => { const n = nodeById(sys(), selNode); n.parent = e.target.value || null; setDirty(); refreshSystemPanel(); draw(); });
 $('nDelete').addEventListener('click', deleteNode);
 function deleteNode() {
