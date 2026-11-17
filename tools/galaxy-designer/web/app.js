@@ -342,6 +342,15 @@ function drawSystem() {
     if (!b.off && rad < 4 * Math.max(w, h)) ctx.arc(a.x, a.y, rad, 0, 7);
     ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
   }
+  // Each body's real size (its model's radius), so overlapping clouds or an arrival point inside one show up.
+  for (const { n } of items) {
+    const p = L[n.id]; if (p.edge || p.off || !n.prefab || isRegion(s, n)) continue;
+    const m = prefabByName(n.prefab), r = m && m.radius > 0 ? m.radius / 1000 * cam.k : 0;   // radius is in metres, the plan in km
+    if (r < 6 * d || r > 4 * Math.max(w, h)) continue;
+    const col = KIND_COLOR[kindOf(n)] || KIND_COLOR.other, sel = n.id === selNode;
+    ctx.save(); ctx.globalAlpha = sel ? 0.16 : 0.08; ctx.fillStyle = col; ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, 7); ctx.fill();
+    ctx.globalAlpha = sel ? 0.8 : 0.4; ctx.setLineDash([5 * d, 4 * d]); ctx.strokeStyle = col; ctx.lineWidth = d; ctx.stroke(); ctx.restore();
+  }
   for (const { n } of items) {
     const px = L[n.id].x, py = L[n.id].y, k = kindOf(n), sel = n.id === selNode;
     if (L[n.id].edge) {   // far out: a marker at the edge pointing the way
