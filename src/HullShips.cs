@@ -52,7 +52,6 @@ namespace StbcRevival
 
         private static readonly Dictionary<string, ShipLettering> shipLettering = new Dictionary<string, ShipLettering>();
         private static Material shipDecalBase;
-        private static bool keptBase;
         private static float shipsNext;
         private static readonly HashSet<int> shipsDecorated = new HashSet<int>();
 
@@ -96,8 +95,6 @@ namespace StbcRevival
                 try { UpdateShip(ship); }
                 catch (Exception e) { Plugin.Log.LogWarning($"Hull name: the {ship.Name}'s: " + e); shipsNext = Time.unscaledTime + 30f; }
             }
-            // The decal material is the briefing room's and missions' too: kept across scenes.
-            if (shipDecalBase != null && !keptBase) { UnityEngine.Object.DontDestroyOnLoad(shipDecalBase); keptBase = true; }
         }
 
         private static void UpdateShip(CustomShip ship)
@@ -230,7 +227,6 @@ namespace StbcRevival
                     {
                         t = new ShipText { W = w, H = h };
                         t.Material = new Material(baseMaterial) { name = ship.Name + " Name Decal (" + key + ")" };
-                        UnityEngine.Object.DontDestroyOnLoad(t.Material);
                         lettering.Texts[key] = t;
                     }
                     // Made anew each time and not readable (no copy kept in memory); the old one freed.
@@ -238,7 +234,6 @@ namespace StbcRevival
                     t.Texture = new Texture2D(w, h, TextureFormat.RGBA32, true) { name = ship.Name + " " + key, wrapMode = TextureWrapMode.Clamp, anisoLevel = 4 };
                     t.Texture.SetPixels32(px);
                     t.Texture.Apply(true, true);
-                    UnityEngine.Object.DontDestroyOnLoad(t.Texture);
                     t.Material.SetTexture("_MainTex", t.Texture);
                     if (old != null) UnityEngine.Object.Destroy(old);
                     if (preview) SavePreview(px, w, h, "hull-name-" + ship.Name + "-" + key.Replace('|', '_') + ".png");
@@ -350,7 +345,6 @@ namespace StbcRevival
                         var mesh = new Mesh { name = ship.Name + ShipDecalSuffix, vertices = kv.Value.Key, uv = kv.Value.Value.Key, triangles = kv.Value.Value.Value };
                         mesh.RecalculateNormals();
                         mesh.RecalculateBounds();
-                        UnityEngine.Object.DontDestroyOnLoad(mesh);
                         decals.Add(new KeyValuePair<string, Mesh>(parts[0], mesh));
                     }
                     lettering.Decals = decals;

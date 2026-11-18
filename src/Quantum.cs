@@ -244,17 +244,14 @@ namespace StbcRevival
                     }
                 texture.SetPixels(pixels);
                 texture.Apply(false, true);
-                DontDestroyOnLoad(texture);
                 material = new Material(shader) { name = "Quantum additive lens flare", mainTexture = texture };
                 material.SetColor("_TintColor", new Color(0.5f, 0.5f, 0.5f, 0.65f));
-                DontDestroyOnLoad(material);
                 mesh = new Mesh { name = "Quantum flare billboard" };
                 mesh.vertices = new[] { new Vector3(-0.5f, -0.5f, 0), new Vector3(0.5f, -0.5f, 0), new Vector3(0.5f, 0.5f, 0), new Vector3(-0.5f, 0.5f, 0) };
                 mesh.uv = new[] { new Vector2(0, 0), new Vector2(1, 0), new Vector2(1, 1), new Vector2(0, 1) };
                 mesh.colors = new[] { Color.white, Color.white, Color.white, Color.white };
                 mesh.triangles = new[] { 0, 1, 2, 0, 2, 3 };
                 mesh.RecalculateBounds();
-                DontDestroyOnLoad(mesh);
             }
             float diameter = 0f;
             float rootScale = Mathf.Max(0.00001f, Mathf.Abs(projectile.lossyScale.x));

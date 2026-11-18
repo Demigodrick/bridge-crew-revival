@@ -217,7 +217,6 @@ namespace StbcRevival
             if (like != null) { tex.wrapMode = like.wrapMode; tex.filterMode = like.filterMode; tex.anisoLevel = like.anisoLevel; tex.mipMapBias = like.mipMapBias; }
             tex.LoadRawTextureData(data);
             tex.Apply(false, true);
-            UnityEngine.Object.DontDestroyOnLoad(tex);
             return tex;
         }
 
