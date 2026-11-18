@@ -167,8 +167,11 @@ namespace StbcRevival
             return new CustomShip("Voyager", "VOYAGER", 36f, "USS Voyager", "NCC-74656", weapons)
             {
                 // Its Bussard collectors and navigation lights are materials of their own.
-                takePlasma = (part, mesh, scale) => part.Name == "glowred" ? ShipGlow.TakeAllAsPlasma(mesh) : null,
-                takeLight = (part, mesh, port) => part.Name == (port ? "LIGHT_red" : "LIGHT_green") ? ShipGlow.TakeAll(mesh) : null,
+                takePlasma = (part, mesh, scale) => part.Name.StartsWith("glowred", StringComparison.Ordinal) ? ShipGlow.TakeAllAsPlasma(mesh) : null,
+                takeLight = (part, mesh, port) => part.Name.StartsWith(port ? "LIGHT_red" : "LIGHT_green", StringComparison.Ordinal) ? ShipGlow.TakeAll(mesh) : null,
+                // Its nacelles swing up on their pylons at warp: the pieces named _NL / _NR (each side's nacelle,
+                // pylon, Bussard and lights), about each pylon's root on the hull (model file).
+                nacelles = new[] { new KeyValuePair<string, Vector3>("_NL", new Vector3(-0.01019f, -0.00407f, -0.04166f)), new KeyValuePair<string, Vector3>("_NR", new Vector3(0.01019f, -0.00407f, -0.04166f)) },
             };
         }
 
@@ -184,6 +187,7 @@ namespace StbcRevival
         private bool originalBussards;                     // its nacelles' fronts are the Aegis's own Bussard collectors (KeepBussards)
         private Func<ObjModel.Part, bool> hidePart;        // pieces left out when those are in place
         private Func<ObjModel.Part, bool> twoSided;        // pieces drawn from both sides (a shell that faces inward)
+        private KeyValuePair<string, Vector3>[] nacelles;  // pieces (by name ending) that swing up at warp, and their pivot (model file)
         private string windowPart;                         // the bridge window's piece: the view from the bridge is placed at it
         private string[] lettered;                         // textures the crew's name is painted into (HullName, on their DXT1 blocks)
 
@@ -785,6 +789,7 @@ namespace StbcRevival
                     shared.Starboard = takeLight?.Invoke(part, m, false);
                     meshes[n] = shared;
                 }
+                int piecesBefore = renderers.Count;
                 if (shared.Plasma != null)
                 {
                     Plugin.Log.LogInfo($"{Name}: bussard plasma from {part.Name} ({shared.Plasma.triangles.Length / 3} triangles)");
@@ -794,6 +799,22 @@ namespace StbcRevival
                 if (shared.Starboard != null) AddPiece(model, Name + "_StarboardLight_" + n, shared.Starboard, ShipGlow.LightMaterial(material, false), false, renderers);
                 if (shared.Hull.triangles.Length > 0) AddPiece(model, Name + "_" + part.Name + "_" + n, shared.Hull, material, true, renderers);
                 if (shared.Back != null) AddPiece(model, Name + "_" + part.Name + "_Outside_" + n, shared.Back, material, true, renderers);
+                // A swinging nacelle's pieces under its pivot (made with the first of them), at its pylon's root.
+                if (nacelles != null)
+                    foreach (var side in nacelles)
+                        if (part.Name.EndsWith(side.Key, StringComparison.Ordinal))
+                        {
+                            var pivot = model.Find(Name + "_Nacelle" + side.Key);
+                            if (pivot == null)
+                            {
+                                var go = new GameObject(Name + "_Nacelle" + side.Key) { layer = model.gameObject.layer };
+                                go.transform.SetParent(model, false);
+                                go.transform.localPosition = (orient(side.Value) - centre) * scale;
+                                go.AddComponent<NacelleSwing>();
+                                pivot = go.transform;
+                            }
+                            for (int i = piecesBefore; i < renderers.Count; i++) renderers[i].transform.SetParent(pivot, true);
+                        }
                 if (all.Count + shared.Verts.Length <= 65000 * 4) { int offset = all.Count; all.AddRange(shared.Verts); allTris.AddRange(shared.Tris.Select(t => t + offset)); }
                 yield return null; // a piece per frame
             }

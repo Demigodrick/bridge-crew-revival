@@ -54,3 +54,46 @@ Kd 0.100 1.000 0.200
 Ke 0.100 1.000 0.250
 d 1.00
 
+newmtl Nacelles_NL
+Kd 1.000 1.000 1.000
+d 1.00
+map_Kd Nacelles_DIFF.png
+map_Bump Nacelles_NRM.png
+map_Ns Nacelles_MG.png
+
+newmtl Nacelles_NR
+Kd 1.000 1.000 1.000
+d 1.00
+map_Kd Nacelles_DIFF.png
+map_Bump Nacelles_NRM.png
+map_Ns Nacelles_MG.png
+
+newmtl glowred_NL
+Kd 1.000 0.200 0.100
+Ke 1.000 0.250 0.100
+d 1.00
+
+newmtl glowred_NR
+Kd 1.000 0.200 0.100
+Ke 1.000 0.250 0.100
+d 1.00
+
+newmtl glowblue_NL
+Kd 0.400 0.700 1.000
+Ke 0.450 0.750 1.000
+d 1.00
+
+newmtl glowblue_NR
+Kd 0.400 0.700 1.000
+Ke 0.450 0.750 1.000
+d 1.00
+
+newmtl LIGHT_red_NR
+Kd 1.000 0.100 0.100
+Ke 1.000 0.100 0.050
+d 1.00
+
+newmtl LIGHT_green_NL
+Kd 0.100 1.000 0.200
+Ke 0.100 1.000 0.250
+d 1.00
