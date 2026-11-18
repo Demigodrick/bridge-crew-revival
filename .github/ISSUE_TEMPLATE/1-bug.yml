@@ -1,0 +1,108 @@
+name: Bug report
+description: Something in the game doesn't work as it should, or the game crashed.
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report this. The quickest way to get a bug fixed is a **bug report file**:
+        - **In game:** press **F10** right after the problem happens. It saves `BridgeCrewRevival-report-<date>.zip` in the game folder.
+        - **If the game crashed:** start the game again, then attach the newest zip from `BepInEx/crash-reports` in the game folder.
+
+        The game won't start or install at all? Use the **Install or update problem** form instead.
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What went wrong, and what you expected instead.
+      placeholder: "In Patrol, after warping to Jagged Sword, the helm's map stayed blank."
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: How can we make it happen?
+      description: The steps that lead to it. Does it happen every time, or only sometimes?
+      placeholder: |
+        1. Host a Revival Patrol on the Voyager
+        2. Warp to another system
+        3. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: report
+    attributes:
+      label: Bug report file
+      description: Drag the F10 zip (or the crash-reports zip) in here. Screenshots or a short video help too.
+    validations:
+      required: false
+
+  - type: input
+    id: version
+    attributes:
+      label: Mod version
+      description: The installer shows it when you run it again, and the F10 report has it too.
+      placeholder: "0.7.43"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which part of the game?
+      options:
+        - Missions (Patrol, Free Roam, Revival missions)
+        - Ships and bridges
+        - Voice chat or voice commands
+        - Playing with others (joining, hosting, connection)
+        - PvP
+        - VR (walking, controllers, headset)
+        - Menus, briefing room or settings
+        - Crash or freeze
+        - Something else
+    validations:
+      required: true
+
+  - type: dropdown
+    id: play
+    attributes:
+      label: How do you play?
+      options:
+        - VR
+        - Desktop (no headset)
+    validations:
+      required: true
+
+  - type: input
+    id: headset
+    attributes:
+      label: Headset and how it connects (VR only)
+      placeholder: "Quest 3 through Virtual Desktop, Index, Quest 2 with Meta Link..."
+    validations:
+      required: false
+
+  - type: dropdown
+    id: crew
+    attributes:
+      label: Who was playing?
+      options:
+        - Just me (solo)
+        - A crew, and I was hosting
+        - A crew, and someone else was hosting
+        - I don't know
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before you send it
+      options:
+        - label: I looked through the [open issues](https://github.com/Demigodrick/bridge-crew-revival/issues) and this isn't one of them.
+          required: true
+        - label: Everyone in my crew was on the same mod version (or I was playing solo).
+          required: false

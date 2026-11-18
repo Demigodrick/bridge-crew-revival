@@ -1,0 +1,77 @@
+name: Install or update problem
+description: The installer fails, the mod won't update, or the game won't start with the mod.
+title: "[Install] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Sorry it's not working. The installer's own messages are usually all that's needed to find the problem,
+        so please copy them in below.
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, and where it stopped.
+      placeholder: "I ran the install command and it said it couldn't find the game."
+    validations:
+      required: true
+
+  - type: textarea
+    id: output
+    attributes:
+      label: What the installer said
+      description: Copy everything from the installer's window and paste it here. It's shown as code, so no need to tidy it.
+      render: text
+    validations:
+      required: false
+
+  - type: textarea
+    id: log
+    attributes:
+      label: Game log
+      description: |
+        If the game starts but something's wrong, drag in `BepInEx/LogOutput.log` from the game folder.
+        If it crashed, attach the newest zip from `BepInEx/crash-reports` instead.
+    validations:
+      required: false
+
+  - type: dropdown
+    id: system
+    attributes:
+      label: Your computer
+      options:
+        - Windows 11
+        - Windows 10
+        - Linux (Steam / Proton)
+        - Something else
+    validations:
+      required: true
+
+  - type: input
+    id: folder
+    attributes:
+      label: Where the game is installed
+      description: Roughly is fine, e.g. which drive, or if it's somewhere other than Steam's usual folder.
+      placeholder: "D:\\SteamLibrary"
+    validations:
+      required: false
+
+  - type: input
+    id: version
+    attributes:
+      label: Mod version (if you know it)
+      placeholder: "0.7.43"
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before you send it
+      options:
+        - label: I looked through the [open issues](https://github.com/Demigodrick/bridge-crew-revival/issues) and this isn't one of them.
+          required: true
+        - label: The game was closed while I ran the installer.
+          required: false
