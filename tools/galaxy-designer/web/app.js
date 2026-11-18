@@ -159,6 +159,7 @@ function stars(w, h) {
 }
 
 function draw() {
+  insideCount = 0;
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   if (view === 'galaxy') drawGalaxy(); else drawSystem();
 }
@@ -342,16 +343,7 @@ function drawSystem() {
     if (!b.off && rad < 4 * Math.max(w, h)) ctx.arc(a.x, a.y, rad, 0, 7);
     ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
   }
-  // Each body's real size (its model's radius), so overlapping clouds or an arrival point inside one show up.
-  for (const { n } of items) {
-    if (L[n.id].edge || !n.prefab || isRegion(s, n)) continue;
-    const w0 = worldPos(s, n), [cx, cy] = toS(w0[0], w0[2]), p = { x: cx, y: cy };   // its real place, even when its dot is stacked beside its parent
-    const m = prefabByName(n.prefab), r = m && m.radius > 0 ? m.radius / 1000 * cam.k : 0;   // radius is in metres, the plan in km
-    if (r < 6 * d || r > 4 * Math.max(w, h)) continue;
-    const col = KIND_COLOR[kindOf(n)] || KIND_COLOR.other, sel = n.id === selNode;
-    ctx.save(); ctx.globalAlpha = sel ? 0.16 : 0.08; ctx.fillStyle = col; ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, 7); ctx.fill();
-    ctx.globalAlpha = sel ? 0.8 : 0.4; ctx.setLineDash([5 * d, 4 * d]); ctx.strokeStyle = col; ctx.lineWidth = d; ctx.stroke(); ctx.restore();
-  }
+  for (const { n } of items) if (!isRegion(s, n)) drawSize(s, n, w, h, d);
   // An Impulse Destination's landing radius: the game stops the ship on this ring, on the side it came from, facing in.
   for (const { n } of items) {
     if (n.prefab !== 'Impulse Destination' || L[n.id].edge) continue;
@@ -382,6 +374,33 @@ function drawSystem() {
     ? 'A POI: click a region to go into it · drag a region or body to move it (Y is a field; far-out bodies sit at the edge as arrows: use the fields) · drag empty space: pan · wheel: zoom · F: fit · Delete: remove'
     : 'A region, in kilometres: drag a node to move it (Y is a field) · drag empty space: pan · wheel: zoom · F: fit · Delete: remove (and what is inside it)';
 }
+
+// A body's real size (its model's radius), so overlapping clouds or an arrival point inside one show up: a faint
+// disc with a dashed edge, drawn from where the body really is (even when its dot is stacked beside its parent or sits
+// at the edge as an arrow). One bigger than the whole view tints it and says so; one too small to see is left out.
+function drawSize(s, n, w, h, d) {
+  const m = n.prefab ? prefabByName(n.prefab) : null;
+  if (!m || !(m.radius > 0) || STRUCTURAL.includes(n.prefab)) return;
+  const pw = worldPos(s, n), [x, y] = toS(pw[0], pw[2]), r = m.radius / 1000 * cam.k;   // radius in metres, the plan in km
+  if (r < 1.5 * d) return;
+  const col = KIND_COLOR[kindOf(n)] || KIND_COLOR.other, sel = n.id === selNode;
+  const far = Math.max(Math.hypot(x, y), Math.hypot(x - w, y), Math.hypot(x, y - h), Math.hypot(x - w, y - h));
+  const near = Math.hypot(Math.max(0, Math.abs(x - w / 2) - w / 2), Math.max(0, Math.abs(y - h / 2) - h / 2));
+  if (near > r) return;   // wholly outside the view
+  ctx.save();
+  if (far < r) {   // the view is inside it
+    ctx.globalAlpha = sel ? 0.1 : 0.05; ctx.fillStyle = col; ctx.fillRect(0, 0, w, h);
+    ctx.globalAlpha = 0.8; ctx.fillStyle = col; ctx.textAlign = 'right';
+    ctx.fillText(`all of this view is inside ${n.name || n.id} (${kmText(m.radius / 1000)} radius)`, w - 12 * d, (52 + 16 * insideCount++) * d);
+    ctx.restore(); return;
+  }
+  ctx.globalAlpha = sel ? 0.16 : 0.08; ctx.fillStyle = col; ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fill();
+  ctx.globalAlpha = sel ? 0.85 : 0.45; ctx.setLineDash([5 * d, 4 * d]); ctx.strokeStyle = col; ctx.lineWidth = d; ctx.stroke();
+  if (sel && r > 24 * d) { ctx.setLineDash([]); ctx.fillStyle = col; ctx.textAlign = 'center'; ctx.fillText(`${kmText(m.radius / 1000)} radius`, x, y - r - 8 * d); }
+  ctx.restore();
+}
+let insideCount = 0;   // "this view is inside ..." lines drawn so far this frame
+const kmText = km => km >= 1e6 ? (km / 1e6).toPrecision(3) + ' million km' : km >= 1 ? Math.round(km).toLocaleString() + ' km' : Math.round(km * 1000) + ' m';
 
 // The whole system as the impulse map's overview shows it: the centre, rings through each family's distance, every family a dot.
 function drawOverview(s, w, h, d) {
@@ -458,6 +477,7 @@ function drawFamilyPage(s, fam, w, h, d) {
     return;
   }
   const L = layout(s);
+  for (const n of planNodes(s)) if (n.id !== fam.id) drawSize(s, n, w, h, d);
   for (const n of planNodes(s)) {
     if (n.id === fam.id) continue;
     const { x, y } = L[n.id], sel = n.id === selNode, back = isBackdrop(s, n), ic = back ? null : spriteImg(n.mapIcon), sz = POI_ICON * d;
