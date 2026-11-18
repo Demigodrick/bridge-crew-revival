@@ -512,7 +512,6 @@ namespace StbcRevival
                 copy.anisoLevel = original.anisoLevel;
                 copy.SetPixels32(pixels);
                 copy.Apply(true, true);
-                DontDestroyOnLoad(copy);
                 goldTextures[original] = copy;
                 return copy;
             }

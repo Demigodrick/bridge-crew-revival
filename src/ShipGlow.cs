@@ -113,7 +113,6 @@ namespace StbcRevival
             if (m.HasProperty("_Glossiness")) m.SetFloat("_Glossiness", 0.8f);
             m.SetColor("_EmissionColor", colour);
             m.EnableKeyword("_EMISSION");
-            Object.DontDestroyOnLoad(m);
             if (port) redLight = m; else greenLight = m;
             return m;
         }
@@ -145,7 +144,6 @@ namespace StbcRevival
             material.SetTexture("_EmissionMap", frames[0]);
             material.SetColor("_EmissionColor", Color.white * 1.5f);
             material.EnableKeyword("_EMISSION");
-            Object.DontDestroyOnLoad(material);
             return material;
         }
 
@@ -203,7 +201,6 @@ namespace StbcRevival
                 var tex = new Texture2D(Size, Size, TextureFormat.RGB24, true) { name = "Ship plasma " + f, wrapMode = TextureWrapMode.Repeat, filterMode = FilterMode.Bilinear, anisoLevel = 2 };
                 tex.SetPixels32(px);
                 tex.Apply(true, true);
-                Object.DontDestroyOnLoad(tex);
                 frames[f] = tex;
             }
         }

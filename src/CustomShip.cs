@@ -311,8 +311,47 @@ namespace StbcRevival
             public Dictionary<string, byte[]> ImageFiles = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);      // .png / .jpg
             public Dictionary<string, CachedTexture> Cached = new Dictionary<string, CachedTexture>(StringComparer.OrdinalIgnoreCase); // by TextureKey
             public Dictionary<string, string> CacheFiles = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);       // by TextureKey: where it's kept
+            public Prepared[] Pieces;  // each part's arrays in the body's space, made on the reading thread
+            public Vector3 Lo, Hi;        // the model's extent, oriented (unscaled)
             public string Error;
             public float Seconds;
+        }
+
+        /// <summary>A part's vertices, triangles, normals and tangents in the body's space: worked out with the model's
+        /// reading (on its thread), so building a piece in the briefing room is only handing them to a mesh.</summary>
+        private sealed class Prepared { public Vector3[] Verts, Normals; public int[] Tris; public Vector4[] Tangents; }
+
+        // Into the body's space (x starboard, y up, z forward): both are right-handed, so one axis is mirrored and the
+        // triangles turn.
+        private static Vector3 Orient(Vector3 v) => new Vector3(-v.x, v.y, v.z);
+
+        private void Prepare(Loaded data)
+        {
+            Vector3 lo = Vector3.one * float.MaxValue, hi = Vector3.one * float.MinValue;
+            foreach (var p in data.Parts) foreach (var v in p.Vertices) { var o = Orient(v); lo = Vector3.Min(lo, o); hi = Vector3.Max(hi, o); }
+            data.Lo = lo; data.Hi = hi;
+            float scale = length / Mathf.Max(1e-3f, hi.z - lo.z);
+            var centre = (lo + hi) / 2f;
+            data.Pieces = new Prepared[data.Parts.Count];
+            for (int k = 0; k < data.Parts.Count; k++)
+            {
+                var part = data.Parts[k];
+                var verts = new Vector3[part.Vertices.Length];
+                for (int i = 0; i < verts.Length; i++) verts[i] = (Orient(part.Vertices[i]) - centre) * scale;
+                var tris = new int[part.Triangles.Length];
+                for (int i = 0; i + 2 < tris.Length; i += 3) { tris[i] = part.Triangles[i]; tris[i + 1] = part.Triangles[i + 2]; tris[i + 2] = part.Triangles[i + 1]; }
+                Vector3[] normals = null;
+                if (part.Normals != null && part.Normals.Length == verts.Length && Array.Exists(part.Normals, x => x != Vector3.zero))
+                {
+                    normals = new Vector3[verts.Length];
+                    for (int i = 0; i < normals.Length; i++) normals[i] = Orient(part.Normals[i]).normalized;
+                }
+                Vector4[] tangents = null;
+                if (normals != null && part.Uv != null && part.Uv.Length == verts.Length && part.Texture != null
+                    && data.Materials.TryGetValue(part.Texture, out var om) && om.Normal != null)
+                    tangents = Tangents(verts, part.Uv, normals, tris);
+                data.Pieces[k] = new Prepared { Verts = verts, Tris = tris, Normals = normals, Tangents = tangents };
+            }
         }
 
         private Thread loading;
@@ -495,7 +534,6 @@ namespace StbcRevival
                 if (p.Key.Value.Key != null) mesh.normals = p.Key.Value.Key; else mesh.RecalculateNormals();
                 if (p.Key.Value.Value != null) mesh.uv = p.Key.Value.Value;
                 mesh.RecalculateBounds();
-                UnityEngine.Object.DontDestroyOnLoad(mesh);
                 pieces.Add(new KeyValuePair<Mesh, UnityEngine.Material>(mesh, p.Value.Value));
             }
             hologram = pieces;
@@ -600,7 +638,7 @@ namespace StbcRevival
             yield return Guard(Build(data, "Sector/Ships/Ship - Aegis", "Aegis", b => body = b), "building its body (Aegis)");
             aegisTemplate = body;
             int fromCache = data.Cached.Count;
-            data.ImageFiles.Clear(); data.Cached.Clear();
+            data.ImageFiles.Clear(); data.Cached.Clear(); data.Pieces = null;
             building = false;
             Changed();
             Plugin.Log.LogInfo($"{Name}: built over {watch.ElapsedMilliseconds} ms, a piece per frame; {fromCache} of {textures.Count} textures from the cache");
@@ -667,6 +705,7 @@ namespace StbcRevival
                     if (m.Emission != null && m.Diffuse != null && m.Emission != m.Diffuse) { LoadImage(result, m.Diffuse); LoadImage(result, m.Emission); }
                 }
                 if (result.Parts.Count == 0) result.Error = "no meshes in the model";
+                else Prepare(result);
             }
             catch (Exception e) { result.Error = e.ToString(); }
             result.Seconds = (float)watch.Elapsed.TotalSeconds;
@@ -826,11 +865,9 @@ namespace StbcRevival
             var occlusion = body.transform.Find("ExternalViewCameraRig/ExteriorOcclusionProxy");
             if (occlusion != null) occlusion.gameObject.SetActive(false);
 
-            // Into the body's space (x starboard, y up, z forward): both are right-handed, so one axis is mirrored and
-            // the triangles turn. Then centred and sized to the game's length.
-            Func<Vector3, Vector3> orient = v => new Vector3(-v.x, v.y, v.z);
-            Vector3 lo = Vector3.one * float.MaxValue, hi = Vector3.one * float.MinValue;
-            foreach (var p in data.Parts) foreach (var v in p.Vertices) { var o = orient(v); lo = Vector3.Min(lo, o); hi = Vector3.Max(hi, o); }
+            // Into the body's space (Orient), centred and sized to the game's length (the extent from Prepare).
+            Func<Vector3, Vector3> orient = Orient;
+            Vector3 lo = data.Lo, hi = data.Hi;
             float scale = length / Mathf.Max(1e-3f, hi.z - lo.z);
             var centre = (lo + hi) / 2f;
             spaceOrient = orient; spaceCentre = centre; spaceScale = scale;
@@ -838,25 +875,29 @@ namespace StbcRevival
             var renderers = new List<MeshRenderer>();
             FitBussards(bussards, model, data, orient, centre, scale, renderers);
             var all = new List<Vector3>(); var allTris = new List<int>();
+            var pieceWatch = new System.Diagnostics.Stopwatch(); long slowest = 0; string slowestName = null;
             for (int n = 0; n < data.Parts.Count; n++)
             {
+                pieceWatch.Reset(); pieceWatch.Start();
                 var part = data.Parts[n];
                 if (bussards.Count > 0 && hidePart != null && hidePart(part)) continue;
                 var material = MaterialFor(data, part.Texture, hullMaterial);
                 if (material == null) continue; // fully see-through in the model (its window glass): left out
                 if (!meshes.TryGetValue(n, out var shared))
                 {
-                    var verts = part.Vertices.Select(v => (orient(v) - centre) * scale).ToArray();
-                    var tris = new int[part.Triangles.Length];
-                    for (int i = 0; i < tris.Length; i += 3) { tris[i] = part.Triangles[i]; tris[i + 1] = part.Triangles[i + 2]; tris[i + 2] = part.Triangles[i + 1]; }
+                    var prepared = data.Pieces[n];
+                    var verts = prepared.Verts; var tris = prepared.Tris;
                     var m = new Mesh { name = Name + " " + part.Name, vertices = verts, triangles = tris };
                     if (part.Uv != null && part.Uv.Length == verts.Length) m.uv = part.Uv;
-                    if (part.Normals != null && part.Normals.Length == verts.Length && part.Normals.Any(x => x != Vector3.zero)) m.normals = part.Normals.Select(x => orient(x).normalized).ToArray();
+                    if (prepared.Normals != null) m.normals = prepared.Normals;
                     else m.RecalculateNormals();
-                    var keptNormals = m.normals;
-                    if (material.IsKeywordEnabled("_NORMALMAP")) Tangents(m);
+                    var keptNormals = prepared.Normals ?? m.normals;
+                    if (material.IsKeywordEnabled("_NORMALMAP"))
+                    {
+                        if (prepared.Tangents != null) m.tangents = prepared.Tangents;
+                        else Tangents(m);
+                    }
                     m.RecalculateBounds();
-                    UnityEngine.Object.DontDestroyOnLoad(m);
                     shared = new PartMeshes { Hull = m, Verts = verts, Tris = tris, Normals = keptNormals, Uv = part.Uv != null && part.Uv.Length == verts.Length ? part.Uv : null, Material = material };
                     // A shell that faces inward: its inside kept, and the opposite winding added so it shows from outside too.
                     if (twoSided != null && twoSided(part))
@@ -868,7 +909,6 @@ namespace StbcRevival
                             triangles = backTris, normals = keptNormals.Select(v => -v).ToArray(), uv = m.uv };
                         if (material.IsKeywordEnabled("_NORMALMAP")) Tangents(shared.Back);
                         shared.Back.RecalculateBounds();
-                        UnityEngine.Object.DontDestroyOnLoad(shared.Back);
                         Plugin.Log.LogInfo($"{Name}: {part.Name} drawn from both sides ({backTris.Length / 3} triangles)");
                     }
                     // Its Bussard collectors' faces (the red plasma) apart, alive, and its navigation lights (red to port,
@@ -904,7 +944,13 @@ namespace StbcRevival
                             }
                             for (int i = piecesBefore; i < renderers.Count; i++) renderers[i].transform.SetParent(pivot, true);
                         }
-                if (all.Count + shared.Verts.Length <= 65000 * 4) { int offset = all.Count; all.AddRange(shared.Verts); allTris.AddRange(shared.Tris.Select(t => t + offset)); }
+                if (all.Count + shared.Verts.Length <= 65000 * 4)
+                {
+                    int offset = all.Count; all.AddRange(shared.Verts);
+                    foreach (var t in shared.Tris) allTris.Add(t + offset);
+                }
+                pieceWatch.Stop();
+                if (pieceWatch.ElapsedMilliseconds > slowest) { slowest = pieceWatch.ElapsedMilliseconds; slowestName = part.Name; }
                 yield return null; // a piece per frame
             }
             yield return null;
@@ -984,7 +1030,7 @@ namespace StbcRevival
             }
 
             var made = body.GetComponent<SpacecraftBody>();
-            Plugin.Log.LogInfo($"{Name}: body ({label}) built from {Name}.obj: {data.Parts.Count} pieces, {data.Parts.Sum(p => p.Vertices.Length)} vertices, {data.Parts.Sum(p => p.Triangles.Length) / 3} triangles, {materials.Count} materials; read in {data.Seconds:0.0} s, built over {(Time.realtimeSinceStartup - startedAt) * 1000f:0} ms; size {half * 2f}");
+            Plugin.Log.LogInfo($"{Name}: body ({label}) built from {Name}.obj: {data.Parts.Count} pieces, {data.Parts.Sum(p => p.Vertices.Length)} vertices, {data.Parts.Sum(p => p.Triangles.Length) / 3} triangles, {materials.Count} materials; read in {data.Seconds:0.0} s, built over {(Time.realtimeSinceStartup - startedAt) * 1000f:0} ms (the slowest piece {slowestName}, {slowest} ms); size {half * 2f}");
             done(made);
         }
 
@@ -1200,6 +1246,12 @@ namespace StbcRevival
         {
             var v = mesh.vertices; var uv = mesh.uv; var n = mesh.normals; var t = mesh.triangles;
             if (uv == null || uv.Length != v.Length || n == null || n.Length != v.Length) return;
+            mesh.tangents = Tangents(v, uv, n, t);
+        }
+
+        /// <summary>Tangents from the mapping (for normal maps); plain arrays, so it runs on any thread.</summary>
+        private static Vector4[] Tangents(Vector3[] v, Vector2[] uv, Vector3[] n, int[] t)
+        {
             var tan1 = new Vector3[v.Length]; var tan2 = new Vector3[v.Length];
             for (int i = 0; i + 2 < t.Length; i += 3)
             {
@@ -1221,7 +1273,7 @@ namespace StbcRevival
                 tg.Normalize();
                 tangents[i] = new Vector4(tg.x, tg.y, tg.z, Vector3.Dot(Vector3.Cross(n[i], tg), tan2[i]) < 0f ? -1f : 1f);
             }
-            mesh.tangents = tangents;
+            return tangents;
         }
 
         /// <summary>A texture beside the model, compressed (the fast compressor: this runs in the briefing room); linear for data (normal and gloss maps), not colours.</summary>
@@ -1240,7 +1292,6 @@ namespace StbcRevival
                     tex.LoadRawTextureData(cached.Data);
                     KeepBlocks(name, linear, tex, cached.Data);
                     tex.Apply(false, true);
-                    UnityEngine.Object.DontDestroyOnLoad(tex);
                     return tex;
                 }
                 catch (Exception e)
@@ -1264,7 +1315,6 @@ namespace StbcRevival
             else if (!linear && lettered != null && Array.IndexOf(lettered, name) >= 0)
                 Plugin.Log.LogWarning($"{Name}: {name} compressed to {tex.format}, not DXT1 or DXT5; its lettering stays as it is");
             tex.Apply(false, true);
-            UnityEngine.Object.DontDestroyOnLoad(tex);
             return tex;
         }
 
@@ -1309,7 +1359,6 @@ namespace StbcRevival
                 if (!any) return null;
                 var tex = new Texture2D(w, h, TextureFormat.RGB24, true) { name = mask + " glow", anisoLevel = 4 };
                 tex.SetPixels32(glow); tex.Apply(true); tex.Compress(false); tex.Apply(false, true);
-                UnityEngine.Object.DontDestroyOnLoad(tex);
                 return tex;
             }
             finally { UnityEngine.Object.Destroy(m); UnityEngine.Object.Destroy(c); }
@@ -1326,7 +1375,6 @@ namespace StbcRevival
             if (om != null && om.Opacity < 0.1f) { materials[key] = null; return null; } // see-through glass: not drawn
             m = hull != null ? new UnityEngine.Material(hull) : new UnityEngine.Material(Shader.Find("Standard"));
             m.name = Name + " " + key;
-            UnityEngine.Object.DontDestroyOnLoad(m);
             foreach (var keyword in new[] { "_NORMALMAP", "_METALLICGLOSSMAP", "_SPECGLOSSMAP", "_DETAIL_MULX2", "_PARALLAXMAP", "_EMISSION" }) m.DisableKeyword(keyword);
             foreach (var prop in new[] { "_MainTex", "_BumpMap", "_MetallicGlossMap", "_SpecGlossMap", "_DetailAlbedoMap", "_DetailNormalMap", "_OcclusionMap", "_ParallaxMap", "_EmissionMap" })
                 if (m.HasProperty(prop)) m.SetTexture(prop, null);
