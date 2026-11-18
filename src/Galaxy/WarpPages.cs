@@ -402,7 +402,7 @@ namespace StbcRevival.Galaxy
                 if (fLocationLabel != null && fLocationLabel.GetValue(panel) is Component label && label != null)
                     y = mapRect.InverseTransformPoint(label.transform.position).y;
                 // Just under the title bar's line (not across it), and in from the frame's rounded corner.
-                frameRect.localPosition = new Vector3(r.xMax - halfW - halfH * 2f, y - halfH * 1.6f, 0f);
+                frameRect.localPosition = new Vector3(r.xMax - halfW - halfH * 2f, y - halfH * 1.35f, 0f);
             }
             foreach (var toggle in button.GetComponentsInChildren<UnityEngine.UI.Toggle>(true))
             {
