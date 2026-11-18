@@ -221,17 +221,53 @@ namespace StbcRevival.Walking
         private static readonly uint stateSize = (uint)Marshal.SizeOf(typeof(ControllerState));
         private static bool buttonBroken;
 
-        /// <summary>True once, when B on the right controller has been held for 0.7 s. Only with the Quest controls: in
-        /// the game's own SteamVR layout that button is the pause menu.</summary>
+        /// <summary>True once, when B on the right controller has been held for 0.7 s. Through Meta Link (the Oculus
+        /// runtime) B is read as the game reads it (it's the game's "back" there). Through SteamVR only with the Quest
+        /// controls on: in the game's own SteamVR layout that button is the pause menu.</summary>
         public static bool VrToggleHeld()
         {
-            if (!QuestControls.Active) { heldSince = -1f; return false; }
-            bool down = RightB();
+            bool down = HoldSource() switch { HoldB.MetaLink => RiftB(), HoldB.QuestControls => RightB(), _ => false };
             if (!down) { heldSince = -1f; heldDone = false; return false; }
             if (heldSince < 0f) heldSince = Time.unscaledTime;
             if (heldDone || Time.unscaledTime - heldSince < 0.7f) return false;
             heldDone = true;
             return true;
+        }
+
+        private enum HoldB { None, MetaLink, QuestControls }
+
+        private static HoldB HoldSource()
+        {
+            try
+            {
+                if (IEDCLJPAJKO.IsRiftActive()) return HoldB.MetaLink;
+                if (QuestControls.Active) return HoldB.QuestControls;
+            }
+            catch { }
+            return HoldB.None;
+        }
+
+        /// <summary>For the log when you stand up in VR: whether holding B sits you back down, and why not.</summary>
+        public static string HoldBNote()
+        {
+            switch (HoldSource())
+            {
+                case HoldB.MetaLink: return "hold B to sit down (Meta Link)";
+                case HoldB.QuestControls: return "hold B to sit down (Quest controls)";
+                default:
+                    return Plugin.QuestControlsOn.Value
+                        ? "holding B isn't read (SteamVR, but the Quest controls aren't in use: not a Meta/Oculus headset, or a controller is off)"
+                        : "holding B isn't read (SteamVR without [VR] QuestControls: B is the game's pause button there)";
+            }
+        }
+
+        private static bool riftBroken;
+
+        private static bool RiftB()
+        {
+            if (riftBroken) return false;
+            try { return GLIJHPJPJIB.Get(GLIJHPJPJIB.MLAGJOCMKNB.B, GLIJHPJPJIB.JKOIDGDMCAN.RTouch); } // OVRInput.Get(RawButton.B, RTouch)
+            catch (Exception e) { riftBroken = true; Plugin.Log.LogWarning("Bridge walk: reading the Touch controller's B button: " + e.Message); return false; }
         }
 
         private static bool RightB()

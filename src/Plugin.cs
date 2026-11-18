@@ -328,8 +328,8 @@ namespace StbcRevival
             ShuttleTurnSpeed = Config.Bind("Shuttle", "TurnSpeed", 30f, "Shuttle keyboard turn speed (degrees per second).");
             BridgeWalkEnabled = Config.Bind("Bridge Walk", "Enabled", true,
                 "Experimental: stand up from your seat with the key and walk around the bridge: WASD or arrow keys, "
-                + "mouse to look around, Shift to run, the key again or Escape to sit back down. In VR: hold B on the right controller (or press the key) "
-                + "to stand up or sit down, the left stick walks, the right stick turns, and you can walk around your play space. "
+                + "mouse to look around, Shift to run, the key again or Escape to sit back down. In VR: hold B on the right controller (through Meta Link, or SteamVR with [VR] QuestControls on) "
+                + "or press the key to stand up or sit down, the left stick walks, the right stick turns, and you can walk around your play space. "
                 + "Crewmates with the mod see you stand and walk. Takes effect after a restart.");
             BridgeWalkKey = Config.Bind("Bridge Walk", "Key", UnityEngine.KeyCode.F6, "Stands you up and sits you back down.");
             BridgeWalkSpeed = Config.Bind("Bridge Walk", "WalkSpeed", 1.4f, "Walking speed, metres per second.");

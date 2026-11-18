@@ -214,7 +214,7 @@ namespace StbcRevival.Walking
             if (me == null || me.PawnObject == null) { Plugin.Log.LogWarning($"Bridge walk: your character wasn't found in {Bridge.PlaceName(phase)} (actor {Bridge.LocalActor()}, {Bridge.Players().Length} players)"); return; }
             bool vr = VrOn;
             Transform view;
-            if (vr) { if (!FindVrRig(me, out view)) return; }
+            if (vr) { if (!FindVrRig(me, out view)) return; Plugin.Log.LogInfo("Bridge walk: in VR, " + HoldBNote()); }
             else
             {
                 var fps = me.PawnObject.GetComponentInChildren<FPSCamera>(true);
