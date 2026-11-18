@@ -20,9 +20,7 @@
 
   <!-- The galaxy code the mod shares, compiled here for net8. -->
   <ItemGroup>
-    <Compile Include="../../tools/galaxy-designer/DesignerApi.cs" Link="Designer/DesignerApi.cs" />
-    <Compile Include="../../tools/galaxy-designer/GameCatalogue.cs" Link="Designer/GameCatalogue.cs" />
-    <!-- The game files' reader the designer links from tools/xref. -->
+    <!-- The game files' reader, from tools/xref. -->
     <Compile Include="../../src/AssetFile.cs" Link="GameFiles/AssetFile.cs" />
     <Compile Include="../../tools/xref/Layout.cs" Link="GameFiles/Layout.cs" />
     <Compile Include="../../tools/xref/ScriptObjects.cs" Link="GameFiles/ScriptObjects.cs" />

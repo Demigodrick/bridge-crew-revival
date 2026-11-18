@@ -6,3 +6,5 @@ decompiled/
 *.DotSettings.user
 server/.env
 .superpowers/
+# The galaxy designer: a development tool kept in its own local repo, not published.
+/tools/galaxy-designer/

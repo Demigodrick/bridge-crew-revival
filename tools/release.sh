@@ -19,6 +19,9 @@ game="${GAME_DIR:-$HOME/.local/share/Steam/steamapps/common/Star Trek Bridge Cre
 sector="$root/assets/galaxies/jagged-sword.json"
 [ -f "$game/BepInEx/galaxies/jagged-sword.json" ] && cp "$game/BepInEx/galaxies/jagged-sword.json" "$sector"
 # Checked against the game's data as the game will: a file with problems would be refused, the second sector off.
+# The galaxy designer is a local development tool (its own repo in tools/galaxy-designer, ignored here, not published).
+[ -f "$root/tools/galaxy-designer/galaxy-designer.csproj" ] ||
+  { echo "The galaxy designer isn't in tools/galaxy-designer, so jagged-sword.json can't be checked." >&2; exit 1; }
 dotnet run --project "$root/tools/galaxy-designer" -c Release -- --game "$game" --no-open --check "$sector" ||
   { echo "jagged-sword.json has problems (above): fix them in the galaxy designer, then release again." >&2; exit 1; }
 if ! git -C "$root" diff --quiet -- "$sector"; then

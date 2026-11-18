@@ -13,7 +13,7 @@ public class TestReachTests
     static GalaxyFile File_() => GalaxyFile.Parse(File.ReadAllText(Path.Combine(Repo(), "assets", "galaxies", "test-reach.json")));
 
     static Catalogue RealCatalogue() =>
-        Catalogue.Parse(File.ReadAllText(Path.Combine(Repo(), "tools", "galaxy-designer", "testdata", "catalogue-real.json")));
+        Catalogue.Parse(File.ReadAllText(Path.Combine(Repo(), "tests", "Galaxy.Tests", "testdata", "catalogue-real.json")));
 
     [Fact]
     public void TestReach_IsValid()
