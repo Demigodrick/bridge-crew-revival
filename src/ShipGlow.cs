@@ -172,37 +172,63 @@ namespace StbcRevival
 
         // ---- the plasma frames ----
 
+        private static Color32[][] framePixels;
+        private static readonly object pixelsLock = new object();
+
+        /// <summary>
+        /// The frames' pixels (about a million and a half, a third of a second's work): plain arrays, so it runs on a
+        /// thread, and is called as a ship's model is read; made once, whichever asks first.
+        /// </summary>
+        internal static void MakePixels()
+        {
+            lock (pixelsLock)
+            {
+                if (framePixels != null || frames != null) return;
+                var made = new Color32[Frames][];
+                var rng = new System.Random(1701);
+                var a = Noise(rng, 8, 4); // large, slow swirls
+                var b = Noise(rng, 16, 3); // finer turbulence
+                for (int f = 0; f < Frames; f++) made[f] = FramePixels(a, b, f);
+                framePixels = made;
+            }
+        }
+
+        /// <summary>The textures from the pixels (on the main thread: Unity's own calls).</summary>
         private static void MakeFrames()
         {
             if (frames != null) return;
-            var rng = new System.Random(1701);
-            var a = Noise(rng, 8, 4); // large, slow swirls
-            var b = Noise(rng, 16, 3); // finer turbulence
+            MakePixels(); // already made on the model's reading thread, as a rule
             frames = new Texture2D[Frames];
-            var px = new Color32[Size * Size];
             for (int f = 0; f < Frames; f++)
             {
-                float t = f / (float)Frames;
-                // Each layer moves a whole tile per loop (so the loop closes): one up, one across; the bands turn through a whole cycle too.
-                int ay = Mathf.RoundToInt(t * Size), bx = Mathf.RoundToInt(t * Size * 2) % Size;
-                for (int y = 0; y < Size; y++)
-                    for (int x = 0; x < Size; x++)
-                    {
-                        float na = a[((y + ay) % Size) * Size + x];
-                        float nb = b[y * Size + (x + Size - bx) % Size];
-                        float s = 0.5f + 0.5f * Mathf.Sin(Mathf.PI * 2f * (2.2f * na + 1.3f * nb - t));
-                        float v = Mathf.Clamp01(0.55f * s + 0.45f * na * nb * 2.2f);
-                        // dark ember, deep red, bright red, an orange-white heart where it's hottest
-                        float r = Mathf.Lerp(0.22f, 1f, Mathf.Pow(v, 0.8f));
-                        float g = 0.04f + 0.55f * Mathf.Pow(v, 4f);
-                        float bl = 0.02f + 0.35f * Mathf.Pow(v, 7f);
-                        px[y * Size + x] = new Color(r, g, bl);
-                    }
                 var tex = new Texture2D(Size, Size, TextureFormat.RGB24, true) { name = "Ship plasma " + f, wrapMode = TextureWrapMode.Repeat, filterMode = FilterMode.Bilinear, anisoLevel = 2 };
-                tex.SetPixels32(px);
+                tex.SetPixels32(framePixels[f]);
                 tex.Apply(true, true);
                 frames[f] = tex;
             }
+            framePixels = null;
+        }
+
+        private static Color32[] FramePixels(float[] a, float[] b, int f)
+        {
+            var px = new Color32[Size * Size];
+            float t = f / (float)Frames;
+            // Each layer moves a whole tile per loop (so the loop closes): one up, one across; the bands turn through a whole cycle too.
+            int ay = Mathf.RoundToInt(t * Size), bx = Mathf.RoundToInt(t * Size * 2) % Size;
+            for (int y = 0; y < Size; y++)
+                for (int x = 0; x < Size; x++)
+                {
+                    float na = a[((y + ay) % Size) * Size + x];
+                    float nb = b[y * Size + (x + Size - bx) % Size];
+                    float s = 0.5f + 0.5f * Mathf.Sin(Mathf.PI * 2f * (2.2f * na + 1.3f * nb - t));
+                    float v = Mathf.Clamp01(0.55f * s + 0.45f * na * nb * 2.2f);
+                    // dark ember, deep red, bright red, an orange-white heart where it's hottest
+                    float r = Mathf.Lerp(0.22f, 1f, Mathf.Pow(v, 0.8f));
+                    float g = 0.04f + 0.55f * Mathf.Pow(v, 4f);
+                    float bl = 0.02f + 0.35f * Mathf.Pow(v, 7f);
+                    px[y * Size + x] = new Color(r, g, bl);
+                }
+            return px;
         }
 
         /// <summary>Tileable fractal value noise (0..1), Size×Size: a grid of cells random values, smoothed, octaves added.</summary>

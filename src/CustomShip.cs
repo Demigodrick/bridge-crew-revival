@@ -706,6 +706,7 @@ namespace StbcRevival
                 }
                 if (result.Parts.Count == 0) result.Error = "no meshes in the model";
                 else Prepare(result);
+                ShipGlow.MakePixels(); // the Bussards' plasma frames, here rather than in the briefing room
             }
             catch (Exception e) { result.Error = e.ToString(); }
             result.Seconds = (float)watch.Elapsed.TotalSeconds;
