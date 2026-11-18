@@ -879,10 +879,10 @@ namespace StbcRevival
         }
 
         /// <summary>The hull collider's shape: the model's surface welded to a coarse grid, then its convex hull. Unity's
-        /// convex collider takes at most 255 polygons: a detailed hull (the Abrams' 22,800 welded triangles) fails to
-        /// cook, and physics then retries the failed cook every time something touches it (a ship under fire drops to
-        /// about one frame a second). A hull of n points has at most 2n-4 faces, so a spread of about a hundred points
-        /// stays well under the limit and keeps the shape.</summary>
+        /// convex collider takes at most 255 polygons: a detailed mesh may fail to cook (the Kelvin's 22,800 welded
+        /// triangles, the Voyager's 17,057), and physics then retries the failed cook every time something touches it or
+        /// looks for it (a ship under fire, or in the exterior view, drops to about one frame a second). A hull of n
+        /// points has at most 2n-4 faces, so a spread of 120 points stays under the limit and keeps the shape.</summary>
         private Mesh ColliderMesh(List<Vector3> verts, List<int> tris)
         {
             // Always welded: the collider needs the shape, not the detail, and a light mesh cooks quickly (on the main
@@ -901,16 +901,13 @@ namespace StbcRevival
                 if (a != b && b != c && a != c) { outT.Add(a); outT.Add(b); outT.Add(c); }
             }
 
-            // A hull this simple cooks without Unity's builder giving up (the Nova's and the Sovereign's do): kept as
-            // it is, so their collision stays exactly what it was.
-            if (outT.Count / 3 <= 18000)
-            {
-                Plugin.Log.LogInfo($"{Name}: hull collider {outV.Count} vertices, {outT.Count / 3} triangles (from {verts.Count} / {tris.Count / 3})");
-                return new Mesh { name = Name + " hull collider", vertices = outV.ToArray(), triangles = outT.ToArray() };
-            }
-
-            // A detailed hull (the Abrams' 22,800 welded triangles): its convex hull has more polygons than Unity takes.
-            var points = Spread(outV, 100);
+            // The collider is convex (the game's is), and Unity's convex collider takes at most 255 polygons. Whether
+            // PhysX manages that for a detailed mesh can't be told from its triangles: the Voyager's 17,057 failed (and
+            // a failed cook is tried again at every physics query near the ship: its exterior view fell to a frame a
+            // second), the Nova's 10,661 didn't. So every class gets a hull worked out here, from up to 120 points
+            // spread over its outside: at most 236 faces, always within the limit, and the same shape a convex collider
+            // takes in any case.
+            var points = Spread(outV, 120);
             var faces = ConvexHull(points);
             if (faces != null && faces.Count >= 4 && faces.Count <= 255)
             {
