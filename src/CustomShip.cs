@@ -309,6 +309,8 @@ namespace StbcRevival
             public List<ObjModel.Part> Parts;
             public Dictionary<string, ObjModel.Material> Materials;
             public Dictionary<string, byte[]> ImageFiles = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);      // .png / .jpg
+            public Dictionary<string, CachedTexture> Cached = new Dictionary<string, CachedTexture>(StringComparer.OrdinalIgnoreCase); // by TextureKey
+            public Dictionary<string, string> CacheFiles = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);       // by TextureKey: where it's kept
             public string Error;
             public float Seconds;
         }
@@ -597,10 +599,11 @@ namespace StbcRevival
             SpacecraftBody body = null;
             yield return Guard(Build(data, "Sector/Ships/Ship - Aegis", "Aegis", b => body = b), "building its body (Aegis)");
             aegisTemplate = body;
-            data.ImageFiles.Clear();
+            int fromCache = data.Cached.Count;
+            data.ImageFiles.Clear(); data.Cached.Clear();
             building = false;
             Changed();
-            Plugin.Log.LogInfo($"{Name}: built over {watch.ElapsedMilliseconds} ms, a piece per frame");
+            Plugin.Log.LogInfo($"{Name}: built over {watch.ElapsedMilliseconds} ms, a piece per frame; {fromCache} of {textures.Count} textures from the cache");
         }
 
         /// <summary>A coroutine that stops (and says why) at an exception rather than breaking the caller.</summary>
@@ -657,8 +660,12 @@ namespace StbcRevival
                 result.Parts = ObjModel.Read(ObjFile, out var mats);
                 result.Materials = mats;
                 foreach (var m in mats.Values)
-                    foreach (var file in new[] { m.Diffuse, m.Emission, m.Normal, m.Gloss })
-                        if (file != null) LoadImage(result, file);
+                {
+                    WantTexture(result, m.Diffuse, false); WantTexture(result, m.Emission, false);
+                    WantTexture(result, m.Normal, true); WantTexture(result, m.Gloss, true);
+                    // A glow map is made from the two images themselves.
+                    if (m.Emission != null && m.Diffuse != null && m.Emission != m.Diffuse) { LoadImage(result, m.Diffuse); LoadImage(result, m.Emission); }
+                }
                 if (result.Parts.Count == 0) result.Error = "no meshes in the model";
             }
             catch (Exception e) { result.Error = e.ToString(); }
@@ -670,14 +677,96 @@ namespace StbcRevival
         private void LoadImage(Loaded result, string name)
         {
             if (result.ImageFiles.ContainsKey(name)) return;
+            var file = ImageFile(name);
+            if (file != null) result.ImageFiles[name] = File.ReadAllBytes(file);
+        }
+
+        private string ImageFile(string name)
+        {
             string stem = Path.GetFileNameWithoutExtension(name);
             foreach (var candidate in new[] { name, stem + ".png", stem + ".jpg", stem + ".jpeg" })
             {
                 var file = Path.Combine(Folder, candidate);
                 if (!File.Exists(file)) continue;
                 var ext = Path.GetExtension(file).ToLowerInvariant();
-                if (ext == ".png" || ext == ".jpg" || ext == ".jpeg") { result.ImageFiles[name] = File.ReadAllBytes(file); return; }
+                if (ext == ".png" || ext == ".jpg" || ext == ".jpeg") return file;
             }
+            return null;
+        }
+
+        // ---- the textures' cache ----
+        // Decoding a 2048-square PNG and compressing it takes a few hundred milliseconds, on the main thread (Unity's
+        // LoadImage and Compress can't run elsewhere): a ship with nine of them (the Voyager) stalled the briefing room
+        // for seconds each time it was chosen. So each texture, once compressed, is kept in BepInEx/cache/ship-textures
+        // (its DXT blocks, every mip), and later read here on the thread and handed to the graphics card as it is. Kept
+        // by the image file's size and time, so a changed image (an update) is compressed afresh.
+
+        internal sealed class CachedTexture { public int W, H, Mips; public TextureFormat Format; public byte[] Data; }
+
+        private static string TextureKey(string name, bool linear) => name + (linear ? " data" : "");
+
+        private string CacheFolder => Path.Combine(Path.Combine(BepInEx.Paths.CachePath, "ship-textures"), Name);
+
+        /// <summary>A texture the model wants (thread): from the cache if it's there for this image, else the image file.</summary>
+        private void WantTexture(Loaded result, string name, bool linear)
+        {
+            if (name == null) return;
+            string key = TextureKey(name, linear);
+            if (result.Cached.ContainsKey(key)) return;
+            var source = ImageFile(name);
+            if (source == null) return;
+            try
+            {
+                var info = new FileInfo(source);
+                string file = Path.Combine(CacheFolder, Path.GetFileName(name) + (linear ? ".data." : ".colour.") + info.Length + "-" + info.LastWriteTimeUtc.Ticks + ".dxt");
+                result.CacheFiles[key] = file;
+                if (File.Exists(file))
+                {
+                    var cached = ReadCached(File.ReadAllBytes(file));
+                    if (cached != null) { result.Cached[key] = cached; return; }
+                }
+            }
+            catch (Exception e) { Plugin.Log.LogInfo($"{Name}: texture cache for {name}: {e.Message}"); }
+            LoadImage(result, name);
+        }
+
+        private const int CacheMagic = 0x54584453; // "SDXT"
+
+        private static CachedTexture ReadCached(byte[] b)
+        {
+            if (b.Length < 24 || BitConverter.ToInt32(b, 0) != CacheMagic) return null;
+            var c = new CachedTexture { W = BitConverter.ToInt32(b, 4), H = BitConverter.ToInt32(b, 8), Mips = BitConverter.ToInt32(b, 12), Format = (TextureFormat)BitConverter.ToInt32(b, 16) };
+            int length = BitConverter.ToInt32(b, 20);
+            if ((c.Format != TextureFormat.DXT1 && c.Format != TextureFormat.DXT5) || c.W <= 0 || c.H <= 0 || length != b.Length - 24) return null;
+            c.Data = new byte[length];
+            Buffer.BlockCopy(b, 24, c.Data, 0, length);
+            return c;
+        }
+
+        /// <summary>A compressed texture into the cache, on a thread (any older one of the same image goes).</summary>
+        private void SaveCached(string file, Texture2D tex, byte[] data)
+        {
+            int w = tex.width, h = tex.height, mips = tex.mipmapCount, format = (int)tex.format;
+            ThreadPool.QueueUserWorkItem(_ =>
+            {
+                try
+                {
+                    var dir = Path.GetDirectoryName(file);
+                    Directory.CreateDirectory(dir);
+                    string stem = Path.GetFileName(file); stem = stem.Substring(0, stem.LastIndexOf('.', stem.LastIndexOf('.') - 1) + 1); // "name.colour."
+                    foreach (var old in Directory.GetFiles(dir, stem + "*.dxt")) if (old != file) File.Delete(old);
+                    var b = new byte[24 + data.Length];
+                    Buffer.BlockCopy(BitConverter.GetBytes(CacheMagic), 0, b, 0, 4);
+                    Buffer.BlockCopy(BitConverter.GetBytes(w), 0, b, 4, 4); Buffer.BlockCopy(BitConverter.GetBytes(h), 0, b, 8, 4);
+                    Buffer.BlockCopy(BitConverter.GetBytes(mips), 0, b, 12, 4); Buffer.BlockCopy(BitConverter.GetBytes(format), 0, b, 16, 4);
+                    Buffer.BlockCopy(BitConverter.GetBytes(data.Length), 0, b, 20, 4);
+                    Buffer.BlockCopy(data, 0, b, 24, data.Length);
+                    File.WriteAllBytes(file + ".new", b);
+                    if (File.Exists(file)) File.Delete(file);
+                    File.Move(file + ".new", file);
+                }
+                catch (Exception e) { Plugin.Log.LogInfo($"{Name}: texture cache {Path.GetFileName(file)} not kept: {e.Message}"); }
+            });
         }
 
         // ---- the body (main thread) ----
@@ -1138,21 +1227,52 @@ namespace StbcRevival
         /// <summary>A texture beside the model, compressed (the fast compressor: this runs in the briefing room); linear for data (normal and gloss maps), not colours.</summary>
         private Texture2D MakeTexture(Loaded data, string name, bool linear)
         {
-            if (name == null || !data.ImageFiles.TryGetValue(name, out var bytes)) return null;
-            var tex = linear ? new Texture2D(2, 2, TextureFormat.ARGB32, true, true) { name = name } : new Texture2D(2, 2, TextureFormat.RGB24, true) { name = name };
+            if (name == null) return null;
+            string key = TextureKey(name, linear);
+            Texture2D tex;
+            // Kept from before: its blocks straight to the graphics card.
+            if (data.Cached.TryGetValue(key, out var cached))
+            {
+                tex = new Texture2D(cached.W, cached.H, cached.Format, cached.Mips > 1, linear) { name = name, anisoLevel = 4 };
+                try
+                {
+                    if (tex.mipmapCount != cached.Mips) throw new InvalidDataException($"{tex.mipmapCount} mips, the cache {cached.Mips}");
+                    tex.LoadRawTextureData(cached.Data);
+                    KeepBlocks(name, linear, tex, cached.Data);
+                    tex.Apply(false, true);
+                    UnityEngine.Object.DontDestroyOnLoad(tex);
+                    return tex;
+                }
+                catch (Exception e)
+                {
+                    Plugin.Log.LogInfo($"{Name}: cached {name} not used ({e.Message}); made afresh");
+                    UnityEngine.Object.Destroy(tex);
+                    LoadImage(data, name);
+                }
+            }
+            if (!data.ImageFiles.TryGetValue(name, out var bytes)) return null;
+            tex = linear ? new Texture2D(2, 2, TextureFormat.ARGB32, true, true) { name = name } : new Texture2D(2, 2, TextureFormat.RGB24, true) { name = name };
             if (!tex.LoadImage(bytes)) { UnityEngine.Object.Destroy(tex); return null; }
             tex.anisoLevel = 4;
             tex.Compress(false);
-            // A texture the crew's name is painted into (HullName): its blocks kept, as the texture itself won't be readable.
-            if (!linear && lettered != null && Array.IndexOf(lettered, name) >= 0)
+            if (tex.format == TextureFormat.DXT1 || tex.format == TextureFormat.DXT5)
             {
-                if (tex.format == TextureFormat.DXT1 || tex.format == TextureFormat.DXT5)
-                    blocks[name] = new Blocks { W = tex.width, H = tex.height, MipCount = tex.mipmapCount, Format = tex.format, BlockBytes = tex.format == TextureFormat.DXT5 ? 16 : 8, Data = tex.GetRawTextureData() };
-                else Plugin.Log.LogWarning($"{Name}: {name} compressed to {tex.format}, not DXT1 or DXT5; its lettering stays as it is");
+                var raw = tex.GetRawTextureData();
+                KeepBlocks(name, linear, tex, raw);
+                if (data.CacheFiles.TryGetValue(key, out var file)) SaveCached(file, tex, raw);
             }
+            else if (!linear && lettered != null && Array.IndexOf(lettered, name) >= 0)
+                Plugin.Log.LogWarning($"{Name}: {name} compressed to {tex.format}, not DXT1 or DXT5; its lettering stays as it is");
             tex.Apply(false, true);
             UnityEngine.Object.DontDestroyOnLoad(tex);
             return tex;
+        }
+
+        /// <summary>A texture the crew's name is painted into (HullName): its blocks kept, as the texture itself won't be readable.</summary>
+        private void KeepBlocks(string name, bool linear, Texture2D tex, byte[] data)
+        {
+            if (linear || lettered == null || Array.IndexOf(lettered, name) < 0) return;
+            blocks[name] = new Blocks { W = tex.width, H = tex.height, MipCount = tex.mipmapCount, Format = tex.format, BlockBytes = tex.format == TextureFormat.DXT5 ? 16 : 8, Data = data };
         }
 
         /// <summary>
