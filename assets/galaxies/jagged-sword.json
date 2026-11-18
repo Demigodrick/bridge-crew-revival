@@ -77,7 +77,8 @@
           "name": "Thorn's Intrigue",
           "prefab": "Family Group",
           "unit": "Lightseconds",
-          "mapIcon": "spr_sys_map_icon_nebula"
+          "mapIcon": "spr_sys_map_icon_nebula",
+          "mapName": "Thorn's Intrigue"
         },
         {
           "id": "new-poi",
@@ -1103,7 +1104,7 @@
           ],
           "tags": [],
           "landingRadius": 1000,
-          "name": "Set2ClassY014",
+          "name": "Thorns Retreat",
           "prefab": "Set2ClassY014",
           "unit": "Skybox"
         },
@@ -1124,6 +1125,229 @@
           "landingRadius": 1000,
           "name": "The Retreat Station",
           "prefab": "Ship - SpaceStationProcedural M01",
+          "unit": "Kilometers"
+        },
+        {
+          "id": "new-poi-5",
+          "parent": "new-family-3",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "tags": [],
+          "landingRadius": 1000,
+          "name": "Nebula",
+          "prefab": "Point of Interest",
+          "unit": "Lightseconds",
+          "mapIcon": "spr_sys_map_icon_nebula",
+          "mapName": "Nebula"
+        },
+        {
+          "id": "new-region-5",
+          "parent": "new-poi-5",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "tags": [],
+          "landingRadius": 1000,
+          "name": "Nebula",
+          "prefab": "Region",
+          "unit": "Kilometers"
+        },
+        {
+          "id": "impulse-destination-5",
+          "parent": "new-region-5",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "tags": [],
+          "landingRadius": 30000,
+          "name": "Impulse Destination",
+          "prefab": "Impulse Destination",
+          "unit": "Kilometers"
+        },
+        {
+          "id": "spawn-25",
+          "parent": "new-region-5",
+          "position": [
+            4,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "tags": [
+            "SpawnPoint"
+          ],
+          "landingRadius": 1000,
+          "name": "Spawn",
+          "prefab": "",
+          "unit": "Kilometers"
+        },
+        {
+          "id": "spawn-26",
+          "parent": "new-region-5",
+          "position": [
+            2,
+            0,
+            3.464
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "tags": [
+            "SpawnPoint"
+          ],
+          "landingRadius": 1000,
+          "name": "Spawn",
+          "prefab": "",
+          "unit": "Kilometers"
+        },
+        {
+          "id": "spawn-27",
+          "parent": "new-region-5",
+          "position": [
+            -2,
+            0,
+            3.464
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "tags": [
+            "SpawnPoint"
+          ],
+          "landingRadius": 1000,
+          "name": "Spawn",
+          "prefab": "",
+          "unit": "Kilometers"
+        },
+        {
+          "id": "spawn-28",
+          "parent": "new-region-5",
+          "position": [
+            -4,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "tags": [
+            "SpawnPoint"
+          ],
+          "landingRadius": 1000,
+          "name": "Spawn",
+          "prefab": "",
+          "unit": "Kilometers"
+        },
+        {
+          "id": "spawn-29",
+          "parent": "new-region-5",
+          "position": [
+            -2,
+            0,
+            -3.464
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "tags": [
+            "SpawnPoint"
+          ],
+          "landingRadius": 1000,
+          "name": "Spawn",
+          "prefab": "",
+          "unit": "Kilometers"
+        },
+        {
+          "id": "spawn-30",
+          "parent": "new-region-5",
+          "position": [
+            2,
+            0,
+            -3.464
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "tags": [
+            "SpawnPoint"
+          ],
+          "landingRadius": 1000,
+          "name": "Spawn",
+          "prefab": "",
+          "unit": "Kilometers"
+        },
+        {
+          "id": "protoplanetdisk",
+          "parent": "new-poi-5",
+          "position": [
+            19648.501,
+            0,
+            89.184
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "tags": [],
+          "landingRadius": 1000,
+          "name": "ProtoPlanetDisk",
+          "prefab": "ProtoPlanetDisk",
+          "unit": "Kilometers"
+        },
+        {
+          "id": "venov-large-nebula-03",
+          "parent": "new-region-5",
+          "position": [
+            137205.821,
+            0,
+            -964.632
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "tags": [],
+          "landingRadius": 1000,
+          "name": "Venov_Large Nebula 03",
+          "prefab": "Venov_Large Nebula 03",
           "unit": "Kilometers"
         }
       ]
