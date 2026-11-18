@@ -36,54 +36,87 @@ namespace StbcRevival
         // has about 300,000 positions and 430,000 triangles.
         private const int MaxPositions = 2000000, MaxFaces = 4000000;
 
+        /// <summary>One material's faces as read: the corners (v, vt, vn per corner; -1 for none) of every face, flat, and each face's corner count.</summary>
+        private sealed class Faces { public readonly List<int> Corners = new List<int>(); public readonly List<int> Counts = new List<int>(); }
+
+        // Read without splitting lines into strings: a ship's .obj has over a million lines, and the strings and arrays
+        // a split makes per line come to gigabytes of garbage; collecting that stalls the game (on every thread) while
+        // the model is read in the briefing room. Numbers are read straight out of each line.
         internal static List<Part> Read(string path, out Dictionary<string, Material> materials)
         {
             materials = new Dictionary<string, Material>(StringComparer.OrdinalIgnoreCase);
             var pos = new List<Vector3>(); var uv = new List<Vector2>(); var nrm = new List<Vector3>();
-            var faces = new Dictionary<string, List<int[]>>(); // material → corners (v, vt, vn per corner, flattened per face)
+            var faces = new Dictionary<string, Faces>(); // material → its faces
             var order = new List<string>();
             string current = "";
+            Faces currentFaces = null;
             int faceCount = 0;
-            var inv = CultureInfo.InvariantCulture;
-            var sep = new[] { ' ', '\t' };
-            using (var reader = new StreamReader(path))
+            var corner = new int[64 * 3];
+            using (var reader = new StreamReader(path, System.Text.Encoding.UTF8, true, 1 << 16))
             {
-                string line;
-                while ((line = reader.ReadLine()) != null)
+                var line = new char[256];
+                int n;
+                while ((n = ReadLine(reader, ref line)) >= 0)
                 {
-                    if (line.Length < 2) continue;
-                    var p = line.Split(sep, StringSplitOptions.RemoveEmptyEntries);
-                    if (p.Length == 0) continue;
-                    switch (p[0])
+                    int i = 0;
+                    while (i < n && (line[i] == ' ' || line[i] == '\t')) i++;
+                    if (n - i < 2) continue;
+                    char c0 = line[i], c1 = line[i + 1];
+                    if (c0 == 'v' && (c1 == ' ' || c1 == '\t'))
                     {
-                        case "v": if (pos.Count >= MaxPositions) throw new InvalidDataException($"over {MaxPositions} vertices"); pos.Add(new Vector3(float.Parse(p[1], inv), float.Parse(p[2], inv), float.Parse(p[3], inv))); break;
-                        case "vt": uv.Add(new Vector2(float.Parse(p[1], inv), p.Length > 2 ? float.Parse(p[2], inv) : 0f)); break;
-                        case "vn": nrm.Add(new Vector3(float.Parse(p[1], inv), float.Parse(p[2], inv), float.Parse(p[3], inv))); break;
-                        case "usemtl": current = p.Length > 1 ? p[1] : ""; break;
-                        case "mtllib":
+                        if (pos.Count >= MaxPositions) throw new InvalidDataException($"over {MaxPositions} vertices");
+                        i++;
+                        float x = Float(line, ref i, n), y = Float(line, ref i, n), z = Float(line, ref i, n);
+                        pos.Add(new Vector3(x, y, z));
+                    }
+                    else if (c0 == 'v' && c1 == 't' && i + 2 < n && (line[i + 2] == ' ' || line[i + 2] == '\t'))
+                    {
+                        i += 2;
+                        float u = Float(line, ref i, n);
+                        float v = More(line, i, n) ? Float(line, ref i, n) : 0f;
+                        uv.Add(new Vector2(u, v));
+                    }
+                    else if (c0 == 'v' && c1 == 'n' && i + 2 < n && (line[i + 2] == ' ' || line[i + 2] == '\t'))
+                    {
+                        i += 2;
+                        float x = Float(line, ref i, n), y = Float(line, ref i, n), z = Float(line, ref i, n);
+                        nrm.Add(new Vector3(x, y, z));
+                    }
+                    else if (c0 == 'f' && (c1 == ' ' || c1 == '\t'))
+                    {
+                        i++;
+                        int count = 0;
+                        while (More(line, i, n))
                         {
-                            var mtl = Path.Combine(Path.GetDirectoryName(path), line.Substring(line.IndexOf(' ') + 1).Trim());
-                            if (!File.Exists(mtl)) mtl = Path.ChangeExtension(path, ".mtl");
-                            if (File.Exists(mtl)) ReadMtl(mtl, materials);
-                            break;
-                        }
-                        case "f":
-                        {
-                            int n = p.Length - 1;
-                            var corners = new int[n * 3];
-                            for (int i = 0; i < n; i++)
+                            while (line[i] == ' ' || line[i] == '\t') i++;
+                            int v = Int(line, ref i, n, pos.Count), t = -1, nn = -1;
+                            if (i < n && line[i] == '/')
                             {
-                                var idx = p[i + 1].Split('/');
-                                corners[i * 3] = Index(idx[0], pos.Count);
-                                corners[i * 3 + 1] = idx.Length > 1 && idx[1].Length > 0 ? Index(idx[1], uv.Count) : -1;
-                                corners[i * 3 + 2] = idx.Length > 2 && idx[2].Length > 0 ? Index(idx[2], nrm.Count) : -1;
+                                i++;
+                                if (i < n && line[i] != '/' && line[i] != ' ' && line[i] != '\t') t = Int(line, ref i, n, uv.Count);
+                                if (i < n && line[i] == '/') { i++; if (i < n && line[i] != ' ' && line[i] != '\t') nn = Int(line, ref i, n, nrm.Count); }
                             }
-                            if (++faceCount > MaxFaces) throw new InvalidDataException($"over {MaxFaces} faces");
-                            if (n < 3 || n > 64) break; // not a face (or not one a ship needs)
-                            if (!faces.TryGetValue(current, out var list)) { faces[current] = list = new List<int[]>(); order.Add(current); }
-                            list.Add(corners);
-                            break;
+                            while (i < n && line[i] != ' ' && line[i] != '\t') i++; // anything else in the corner
+                            if (count < 64) { corner[count * 3] = v; corner[count * 3 + 1] = t; corner[count * 3 + 2] = nn; }
+                            count++;
                         }
+                        if (++faceCount > MaxFaces) throw new InvalidDataException($"over {MaxFaces} faces");
+                        if (count < 3 || count > 64) continue; // not a face (or not one a ship needs)
+                        if (currentFaces == null && !faces.TryGetValue(current, out currentFaces)) { faces[current] = currentFaces = new Faces(); order.Add(current); }
+                        for (int k = 0; k < count * 3; k++) currentFaces.Corners.Add(corner[k]);
+                        currentFaces.Counts.Add(count);
+                    }
+                    else if (Starts(line, i, n, "usemtl"))
+                    {
+                        var p = new string(line, i, n - i).Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+                        current = p.Length > 1 ? p[1] : "";
+                        currentFaces = null;
+                    }
+                    else if (Starts(line, i, n, "mtllib") && i + 6 < n && (line[i + 6] == ' ' || line[i + 6] == '\t'))
+                    {
+                        var mtl = Path.Combine(Path.GetDirectoryName(path), new string(line, i + 6, n - i - 6).Trim());
+                        if (!File.Exists(mtl)) mtl = Path.ChangeExtension(path, ".mtl");
+                        if (File.Exists(mtl)) ReadMtl(mtl, materials);
                     }
                 }
             }
@@ -100,34 +133,102 @@ namespace StbcRevival
                     parts.Add(new Part { Name = mat, Texture = mat, Vertices = verts.ToArray(), Uv = uvs.ToArray(), Normals = norms.ToArray(), Triangles = tris.ToArray() });
                     map.Clear(); verts.Clear(); uvs.Clear(); norms.Clear(); tris.Clear();
                 }
-                int Corner(int[] c, int k)
+                var f = faces[mat];
+                int Corner(int at)
                 {
-                    int v = c[k * 3], t = c[k * 3 + 1], nn = c[k * 3 + 2];
+                    int v = f.Corners[at], t = f.Corners[at + 1], nn = f.Corners[at + 2];
                     long key = ((long)v << 42) ^ ((long)(t + 1) << 21) ^ (nn + 1);
-                    if (map.TryGetValue(key, out var at)) return at;
-                    at = verts.Count;
+                    if (map.TryGetValue(key, out var idx)) return idx;
+                    idx = verts.Count;
                     verts.Add(pos[v]); uvs.Add(t >= 0 ? uv[t] : Vector2.zero); norms.Add(nn >= 0 ? nrm[nn] : Vector3.zero);
-                    map[key] = at;
-                    return at;
+                    map[key] = idx;
+                    return idx;
                 }
-                foreach (var c in faces[mat])
+                int start = 0;
+                foreach (int count in f.Counts)
                 {
-                    int n = c.Length / 3;
-                    if (verts.Count + n > MaxVertices) Flush();
-                    int first = Corner(c, 0);
-                    int prev = Corner(c, 1);
-                    for (int k = 2; k < n; k++) { int next = Corner(c, k); tris.Add(first); tris.Add(prev); tris.Add(next); prev = next; }
+                    if (verts.Count + count > MaxVertices) Flush();
+                    int first = Corner(start);
+                    int prev = Corner(start + 3);
+                    for (int k = 2; k < count; k++) { int next = Corner(start + k * 3); tris.Add(first); tris.Add(prev); tris.Add(next); prev = next; }
+                    start += count * 3;
                 }
                 Flush();
             }
             return parts;
         }
 
-        private static int Index(string s, int count)
+        /// <summary>The next line into a reused buffer (grown as needed): its length, or -1 at the end of the file.</summary>
+        private static int ReadLine(StreamReader reader, ref char[] line)
         {
-            int i = int.Parse(s, CultureInfo.InvariantCulture);
-            int at = i < 0 ? count + i : i - 1;
-            if (at < 0 || at >= count) throw new InvalidDataException($"index {i} with {count} defined");
+            int n = 0, c;
+            while ((c = reader.Read()) >= 0)
+            {
+                if (c == '\n') return n;
+                if (c == '\r') { if (reader.Peek() == '\n') reader.Read(); return n; }
+                if (n == line.Length) Array.Resize(ref line, line.Length * 2);
+                line[n++] = (char)c;
+            }
+            return n > 0 ? n : -1;
+        }
+
+        private static bool Starts(char[] s, int i, int n, string word)
+        {
+            if (n - i < word.Length) return false;
+            for (int k = 0; k < word.Length; k++) if (s[i + k] != word[k]) return false;
+            return true;
+        }
+
+        /// <summary>Another number follows on the line (after spaces or tabs).</summary>
+        private static bool More(char[] s, int i, int n)
+        {
+            while (i < n && (s[i] == ' ' || s[i] == '\t')) i++;
+            return i < n && s[i] != '#';
+        }
+
+        /// <summary>The number at i (after any spaces), read without making a string; i moves past it.</summary>
+        private static float Float(char[] s, ref int i, int n)
+        {
+            while (i < n && (s[i] == ' ' || s[i] == '\t')) i++;
+            int begin = i;
+            bool negative = false;
+            if (i < n && (s[i] == '-' || s[i] == '+')) { negative = s[i] == '-'; i++; }
+            double value = 0; int digits = 0, scale = 0;
+            while (i < n && s[i] >= '0' && s[i] <= '9') { if (digits < 18) { value = value * 10 + (s[i] - '0'); digits++; } else scale++; i++; }
+            if (i < n && s[i] == '.')
+            {
+                i++;
+                while (i < n && s[i] >= '0' && s[i] <= '9') { if (digits < 18) { value = value * 10 + (s[i] - '0'); digits++; scale--; } i++; }
+            }
+            if (i < n && (s[i] == 'e' || s[i] == 'E'))
+            {
+                int j = i + 1; bool expNegative = false; int exp = 0, expDigits = 0;
+                if (j < n && (s[j] == '-' || s[j] == '+')) { expNegative = s[j] == '-'; j++; }
+                while (j < n && s[j] >= '0' && s[j] <= '9') { if (exp < 1000) exp = exp * 10 + (s[j] - '0'); expDigits++; j++; }
+                if (expDigits > 0) { scale += expNegative ? -exp : exp; i = j; }
+            }
+            if (i == begin || (i < n && s[i] != ' ' && s[i] != '\t' && s[i] != '#'))
+            {
+                // Not a plain number (nan, inf, a stray character): read as before, or fail as before.
+                int end = i; while (end < n && s[end] != ' ' && s[end] != '\t') end++;
+                i = end;
+                return float.Parse(new string(s, begin, end - begin), CultureInfo.InvariantCulture);
+            }
+            double result = scale == 0 ? value : scale > 0 ? value * Math.Pow(10, scale) : value / Math.Pow(10, -scale);
+            return (float)(negative ? -result : result);
+        }
+
+        /// <summary>A face corner's index at i (1-based, or negative from the end), as a 0-based index; checked as before.</summary>
+        private static int Int(char[] s, ref int i, int n, int count)
+        {
+            int begin = i;
+            bool negative = false;
+            if (i < n && (s[i] == '-' || s[i] == '+')) { negative = s[i] == '-'; i++; }
+            long value = 0; int digits = 0;
+            while (i < n && s[i] >= '0' && s[i] <= '9') { value = value * 10 + (s[i] - '0'); digits++; i++; if (value > int.MaxValue) throw new InvalidDataException("index too large"); }
+            if (digits == 0) throw new FormatException($"not an index at column {begin} of \"{new string(s, 0, n)}\"");
+            int at = negative ? count - (int)value : (int)value - 1;
+            if (at < 0 || at >= count) throw new InvalidDataException($"index {(negative ? -value : value)} with {count} defined");
             return at;
         }
 

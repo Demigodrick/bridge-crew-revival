@@ -27,8 +27,8 @@ namespace StbcRevival
     /// hull. The ship takes that body as it wakes (only the player ship, not the original Enterprise or a campaign
     /// mission). Its systems stay the game ship's.
     ///
-    /// The model is read on a thread as the briefing room opens, and the bodies are built a piece per frame, textures
-    /// and meshes once for both; the mission's loading never waits for them (not ready: the game's own ship that time).
+    /// The model is read on a thread once the crew chooses the class, and the bodies are built a piece per frame,
+    /// textures and meshes once for both; the mission's loading never waits for them (not ready: the game's own ship that time).
     /// The host's choice goes on the room ("SHP" = the class's name) so the whole crew flies the same ship; a crewmate
     /// without the model files sees the game's own.
     /// </summary>
@@ -36,7 +36,7 @@ namespace StbcRevival
     {
         // ---- the classes ----
 
-        private static readonly CustomShip[] ships = { Nova(), Sovereign(), AbramsEnterprise(), Defiant() };
+        private static readonly CustomShip[] ships = { Nova(), Sovereign(), AbramsEnterprise(), Defiant(), Voyager() };
 
         /// <summary>Every ship class there is (whether its model is on this PC or not), in the ship box's order.</summary>
         internal static IList<CustomShip> All => ships;
@@ -143,6 +143,32 @@ namespace StbcRevival
             {
                 takePlasma = (part, mesh, scale) => part.Name.IndexOf("Bussard", StringComparison.OrdinalIgnoreCase) >= 0 ? ShipGlow.TakeAllAsPlasma(mesh) : null,
                 takeLight = (part, mesh, port) => part.Name == (port ? "Defiant_Light_Red" : "Defiant_Light_Green") ? ShipGlow.TakeAll(mesh) : null,
+            };
+        }
+
+        private static CustomShip Voyager()
+        {
+            var weapons = new Dictionary<string, Vector3>
+            {
+                // Forward launchers under the saucer's neck, aft launchers at the end of the secondary hull.
+                ["Tube 1"] = new Vector3(-0.05f, -0.25f, 0.25f),
+                ["Tube 2"] = new Vector3(0f, -0.25f, 0.26f),
+                ["Tube 3"] = new Vector3(0.05f, -0.25f, 0.25f),
+                ["Tube 4"] = new Vector3(-0.05f, -0.30f, -0.55f),
+                ["Tube 5"] = new Vector3(0.05f, -0.30f, -0.55f),
+                // The saucer's phaser strips, top and bottom.
+                ["Top Front Turret"] = new Vector3(0f, 0.45f, 0.55f),
+                ["Top Left Turret"] = new Vector3(-0.55f, 0.35f, 0.30f),
+                ["Top Right Turret"] = new Vector3(0.55f, 0.35f, 0.30f),
+                ["Bottom Front Turret"] = new Vector3(0f, -0.05f, 0.55f),
+                ["Bottom Left Turret"] = new Vector3(-0.55f, -0.05f, 0.30f),
+                ["Bottom Right Turret"] = new Vector3(0.55f, -0.05f, 0.30f),
+            };
+            return new CustomShip("Voyager", "VOYAGER", 36f, "USS Voyager", "NCC-74656", weapons)
+            {
+                // Its Bussard collectors and navigation lights are materials of their own.
+                takePlasma = (part, mesh, scale) => part.Name == "glowred" ? ShipGlow.TakeAllAsPlasma(mesh) : null,
+                takeLight = (part, mesh, port) => part.Name == (port ? "LIGHT_red" : "LIGHT_green") ? ShipGlow.TakeAll(mesh) : null,
             };
         }
 
@@ -522,9 +548,10 @@ namespace StbcRevival
         private void Tick()
         {
             if (hologramMade != null) FinishHologram();
-            // Read and built as the briefing room opens (with the model here), so the hologram and the ship are ready
-            // when it's pressed rather than seconds after; one class at a time (each holds a lot while it's read).
-            if (!started && (FlownNow == this || ShipChoice.InBriefing) && Available && !ships.Any(s => s != this && s.Busy))
+            // Read and built once the crew chooses it (or the room has it), never all of them as the briefing room opens:
+            // reading a model makes a lot of garbage, and the collections that clears stall the game (a briefing room
+            // reading four models in turn stuttered for a minute). One class at a time (each holds a lot while it's read).
+            if (!started && FlownNow == this && Available && !ships.Any(s => s != this && s.Busy))
             {
                 started = true;
                 loading = new Thread(Load) { IsBackground = true, Name = Name + " model", Priority = System.Threading.ThreadPriority.BelowNormal };

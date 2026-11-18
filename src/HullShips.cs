@@ -16,7 +16,8 @@ namespace StbcRevival
     /// and optionally which way its letters' tops pointed, and for lettering on an arc the arc's radius, the letters' height
     /// and where the arc's centre lies across the place). Kinds: "both" (registry large, "U.S.S. NAME" under it),
     /// "nameover" ("U.S.S. NAME" small, the registry large under it), "registry", "name", "barename" (the name without
-    /// "U.S.S."), "line" ("U.S.S. NAME  NCC-…" on one line). Each place gets a decal cut from the hull itself:
+    /// "U.S.S."), "line" ("U.S.S. NAME  NCC-…" on one line), "number" (the registry's number alone, as on the Voyager's
+    /// shuttle bay). Each place gets a decal cut from the hull itself:
     /// the triangles there facing the same way, lifted a hair off it, the text laid over them; the letters' tops point
     /// as given, or else to the ship's middle. Letters in the Enterprise-D decal's style: dark, a red rim. The decals go
     /// on the classes' bodies (CustomShip's templates), so every ship made from then on wears them; the textures are
@@ -29,7 +30,7 @@ namespace StbcRevival
 
         private sealed class ShipPlace
         {
-            public string Kind;               // both, registry, name, line
+            public string Kind;               // both, nameover, registry, name, barename, line, number
             public Vector3 Centre, Normal, Axis;
             public Vector3? Up;               // which way the letters' tops point (model file); null: to the ship's middle
             public float ArcRadius, ArcCap, ArcAcross; // on an arc: its radius to the letters' middle line, their height, the
@@ -118,7 +119,7 @@ namespace StbcRevival
             if (show)
             {
                 string want = name + "|" + registry + "|" + Plugin.HullFont.Value;
-                if (lettering.DrawnFor != want && !lettering.Pending) DrawShipTexts(ship, lettering, name, registry, want);
+                if (lettering.DrawnFor != want && !lettering.Pending && NameSettled) DrawShipTexts(ship, lettering, name, registry, want);
                 if (lettering.Texts.Count == 0) return;
                 if (lettering.Decals == null) { if (!lettering.CuttingDecals) CutShipDecals(ship, lettering); return; }
                 foreach (var body in bodies)
@@ -152,6 +153,7 @@ namespace StbcRevival
             if (reg.Length == 0) reg = hull; // no registry: the name where it would be
             string line = reg == hull ? hull : hull + "  " + reg;
             string bare = hull.StartsWith("U.S.S. ", StringComparison.Ordinal) ? hull.Substring(7) : hull;
+            string number = registry.Trim().Length > 0 ? NumberOf(reg) : ""; // "NCC-74656" -> "74656"; none without a registry
             var face = LoadFace(hull + reg);
             var baseMaterial = ShipDecalBaseMaterial();
             if (face == null || baseMaterial == null) return;
@@ -202,6 +204,9 @@ namespace StbcRevival
                         break;
                     case "name":
                         lines.Add(new KeyValuePair<Line, string>(Make(h * 0.5f, h * 0.62f, "U.S.S. NOVA", 0.9f), hull));
+                        break;
+                    case "number":
+                        if (number.Length > 0) lines.Add(new KeyValuePair<Line, string>(Make(h * 0.5f, h * 0.62f, "00000", 0.9f), number));
                         break;
                     case "line":
                         lines.Add(new KeyValuePair<Line, string>(Make(h * 0.5f, h * 0.62f, "U.S.S. NOVA  NCC-00000", 0.95f), line));

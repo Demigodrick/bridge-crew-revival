@@ -90,7 +90,14 @@ namespace StbcRevival
 
         private static readonly Dictionary<Material, Texture[]> originals = new Dictionary<Material, Texture[]>();
         private static float nextScan, scanUntil;
-        private static string lastScene, lastWant;
+        private static int lastScene = -1, lastSceneCount = -1;
+        private static string lastName, lastRegistry, lastFont;
+        private static bool lastPreview;
+        private static float nameChangedAt = -10f;
+
+        /// <summary>The ship's name hasn't changed for a second: drawn only then, so pressing through the ship box (each
+        /// class brings its own name when the crew has none) draws once, for the ship it stops on, not once per press.</summary>
+        internal static bool NameSettled => Time.unscaledTime - nameChangedAt >= 1f;
         private static int generation; // goes up as the game's textures are put back: drawings started before are dropped
 
         // Material properties this class swaps textures in.
@@ -101,11 +108,18 @@ namespace StbcRevival
             Jobs();
             // A scan of every material costs a few milliseconds, so it only runs for a while after a scene loads (the
             // ships come with it), after the name changes, and just after a drawing is done; not all the time.
-            var scene = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name + "/" + UnityEngine.SceneManagement.SceneManager.sceneCount;
-            if (scene != lastScene) { lastScene = scene; ScanFor(25f); }
-            string name = ShipName.Name, registry = ShipName.Registry;
-            string want = name + "|" + registry + "|" + Plugin.HullFont.Value + "|" + Plugin.HullPreview.Value;
-            if (want != lastWant) { lastWant = want; ScanFor(10f); }
+            // Compared as they are (no strings made each frame).
+            int scene = UnityEngine.SceneManagement.SceneManager.GetActiveScene().GetHashCode(), sceneCount = UnityEngine.SceneManagement.SceneManager.sceneCount;
+            if (scene != lastScene || sceneCount != lastSceneCount) { lastScene = scene; lastSceneCount = sceneCount; ScanFor(25f); }
+            string name = ShipName.Name, registry = ShipName.Registry, font = Plugin.HullFont.Value;
+            bool preview = Plugin.HullPreview.Value;
+            if (name != lastName || registry != lastRegistry || font != lastFont || preview != lastPreview)
+            {
+                lastName = name; lastRegistry = registry; lastFont = font; lastPreview = preview;
+                nameChangedAt = Time.unscaledTime;
+                ScanFor(11f);
+            }
+            if (!NameSettled) return;
             if (Time.unscaledTime > scanUntil || Time.unscaledTime < nextScan) return;
             nextScan = Time.unscaledTime + 2f;
             try

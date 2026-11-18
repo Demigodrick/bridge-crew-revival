@@ -190,7 +190,7 @@ namespace StbcRevival
             ExcelsiorTest = Config.Bind("Ships", "Excelsior", false,
                 "Test: when you host, the crew flies an Excelsior-class ship, with the training holodeck as its bridge for now.");
             PlayerShip = Config.Bind("Ships", "PlayerShip", "Aegis",
-                "The crew's ship when you host: Aegis, Nova, Sovereign, AbramsEnterprise (the Kelvin Enterprise) or Defiant (beta). Those four are ship classes of their own (their models come with the mod, in BepInEx/ships); their bridge and systems are the game's own for now. The briefing room's ship box decides after that.");
+                "The crew's ship when you host: Aegis, Nova, Sovereign, AbramsEnterprise (the Kelvin Enterprise), Defiant or Voyager (beta). Those five are ship classes of their own (their models come with the mod, in BepInEx/ships); their bridge and systems are the game's own for now. The briefing room's ship box decides after that.");
             QuantumTorpedoes = Config.Bind("Ships", "QuantumTorpedoes", true,
                 "The Sovereign's and the Defiant's torpedoes are quantum torpedoes: blue, and QuantumDamage times the damage. Restart after changing it.");
             QuantumDamage = Config.Bind("Ships", "QuantumDamage", 1.5f,
