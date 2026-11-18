@@ -389,7 +389,7 @@ namespace StbcRevival.Galaxy
             }
             else
             {
-                // The right end of the map's title bar, the same share of the map's width as on the helm.
+                // At the right of the map's title bar, the same share of the map's width as on the helm.
                 var helmPanel = helm.GetComponentInChildren<WarpPanel>(true);
                 var helmMap = helmPanel != null ? fMapRect.GetValue(helmPanel) as RectTransform : null;
                 float share = helmMap != null && WorldWidth(helmMap) > 0f && WorldWidth(impulse) > 0f ? WorldWidth(impulse) / WorldWidth(helmMap) : 0.15f;
@@ -401,7 +401,8 @@ namespace StbcRevival.Galaxy
                 float y = r.yMax + halfH * 1.5f;
                 if (fLocationLabel != null && fLocationLabel.GetValue(panel) is Component label && label != null)
                     y = mapRect.InverseTransformPoint(label.transform.position).y;
-                frameRect.localPosition = new Vector3(r.xMax - halfW, y, 0f);
+                // Just under the title bar's line (not across it), and in from the frame's rounded corner.
+                frameRect.localPosition = new Vector3(r.xMax - halfW - halfH * 2f, y - halfH * 1.6f, 0f);
             }
             foreach (var toggle in button.GetComponentsInChildren<UnityEngine.UI.Toggle>(true))
             {
