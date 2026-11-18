@@ -1,0 +1,60 @@
+name: Feature request
+description: An idea for something new, or a way to make something better.
+title: "[Idea] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Ideas are welcome. Telling us **what you want to do in the game** helps more than how it should be built:
+        there's often more than one way to get there.
+
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like?
+      placeholder: "Let the tactical officer give voice commands too, not just the captain."
+    validations:
+      required: true
+
+  - type: textarea
+    id: why
+    attributes:
+      label: Why would it help?
+      description: What you're trying to do, or what gets in the way today.
+      placeholder: "Our captain is often busy talking to the crew, so tactical has to wait to raise shields."
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which part of the game?
+      options:
+        - Missions
+        - Ships and bridges
+        - Places to explore
+        - Voice chat or voice commands
+        - Playing with others
+        - PvP
+        - VR
+        - Accessibility
+        - Something else
+    validations:
+      required: true
+
+  - type: textarea
+    id: more
+    attributes:
+      label: Anything else?
+      description: Pictures, links, or how another game does it.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before you send it
+      options:
+        - label: I looked through the [open issues](https://github.com/Demigodrick/bridge-crew-revival/issues) and nobody's asked for this yet.
+          required: true
