@@ -169,6 +169,9 @@ namespace StbcRevival
                 // Its Bussard collectors and navigation lights are materials of their own.
                 takePlasma = (part, mesh, scale) => part.Name == "glowred" ? ShipGlow.TakeAllAsPlasma(mesh) : null,
                 takeLight = (part, mesh, port) => part.Name == (port ? "LIGHT_red" : "LIGHT_green") ? ShipGlow.TakeAll(mesh) : null,
+                // Its welded shape (17,000 triangles) failed to cook as a convex collider: under fire with the shields
+                // down the game then ran at about a frame a second.
+                hullOnlyCollider = true,
             };
         }
 
@@ -184,6 +187,7 @@ namespace StbcRevival
         private bool originalBussards;                     // its nacelles' fronts are the Aegis's own Bussard collectors (KeepBussards)
         private Func<ObjModel.Part, bool> hidePart;        // pieces left out when those are in place
         private Func<ObjModel.Part, bool> twoSided;        // pieces drawn from both sides (a shell that faces inward)
+        private bool hullOnlyCollider;                     // its collider always the convex hull of a few points (its welded shape fails to cook)
         private string windowPart;                         // the bridge window's piece: the view from the bridge is placed at it
         private string[] lettered;                         // textures the crew's name is painted into (HullName, on their DXT1 blocks)
 
@@ -903,7 +907,7 @@ namespace StbcRevival
 
             // A hull this simple cooks without Unity's builder giving up (the Nova's and the Sovereign's do): kept as
             // it is, so their collision stays exactly what it was.
-            if (outT.Count / 3 <= 18000)
+            if (outT.Count / 3 <= 18000 && !hullOnlyCollider)
             {
                 Plugin.Log.LogInfo($"{Name}: hull collider {outV.Count} vertices, {outT.Count / 3} triangles (from {verts.Count} / {tris.Count / 3})");
                 return new Mesh { name = Name + " hull collider", vertices = outV.ToArray(), triangles = outT.ToArray() };
