@@ -27,7 +27,10 @@ namespace StbcRevival
     /// - Collision rays: the forward rays were spread over the middle third of the hull's width (CastCollisionRays'
     ///   NextRayOffset, GNNKBPMLPFI). Now over the whole width.
     /// - Navigation exclusion zones (planets, stations, anomalies a mission marks): only Borg cubes and the Planet
-    ///   Killer steered around them. Now every AI ship does (_avoidNavigationExclusionZones on as it spawns).
+    ///   Killer steered around them. Now every AI ship does (_avoidNavigationExclusionZones on as it spawns). When
+    ///   where it's going is inside a zone (a freighter parked off a planet, a ship by a station), the game's step
+    ///   (SetAvoidMarkerAroundExclusionZone, DCPPEEIGJAN) sends it to the zone's edge instead, so it never closes in;
+    ///   for the ships switched on here that step is skipped and they fly straight in, as before.
     /// - Engine power: see EnemyAiFlying (the throttle there takes the ship's engine pips into account).
     /// </summary>
     internal static class EnemyAiExtras
@@ -47,7 +50,7 @@ namespace StbcRevival
         private delegate void ApplyDamageCall(AI.AgentShip ship, float damage, Sector.HOLJLCLENCA attacker, AI.LGGMICILCMN type, bool toHull, bool toShields);
         private static ApplyDamageCall applyDamage;
         private static FieldInfo avoidZones;
-        private static bool loggedLock, loggedStray, loggedSplit, loggedZones;
+        private static bool loggedLock, loggedStray, loggedSplit, loggedZones, loggedZoneTarget;
 
         internal static void Patch(Harmony harmony)
         {
@@ -111,6 +114,8 @@ namespace StbcRevival
                 var enable = AccessTools.DeclaredMethod(typeof(AI.DefaultShip), "JFBMOICFCEL"); // OnBodyEnabled
                 if (avoidZones == null || enable == null) return false;
                 harmony.Patch(enable, prefix: Me(nameof(Spawn_Prefix)));
+                var marker = AccessTools.DeclaredMethod(typeof(AI.DCPPEEIGJAN), "IKLNPCHBLCA"); // SetAvoidMarkerAroundExclusionZone's tick
+                if (marker != null) harmony.Patch(marker, prefix: Me(nameof(ZoneMarker_Prefix)));
                 return true;
             });
             Plugin.Log.LogInfo($"Enemy AI extras: {ok} of {of} patched");
@@ -257,6 +262,8 @@ namespace StbcRevival
             if (Flying) __2 *= RayWidth;
         }
 
+        private static readonly HashSet<int> switchedOn = new HashSet<int>(); // ships whose prefab had zones off (pooled: kept)
+
         private static void Spawn_Prefix(AI.DefaultShip __instance)
         {
             if (!Flying || __instance == null || __instance is AI.BorgCube) return;
@@ -265,6 +272,7 @@ namespace StbcRevival
                 if (avoidZones.GetValue(__instance) is bool on && !on)
                 {
                     avoidZones.SetValue(__instance, true);
+                    switchedOn.Add(__instance.GetInstanceID());
                     if (!loggedZones)
                     {
                         loggedZones = true;
@@ -273,6 +281,25 @@ namespace StbcRevival
                 }
             }
             catch { }
+        }
+
+        // Destination inside the zone: no avoidance marker (Fail, as when the path misses the zone), so the ship flies
+        // straight to it. Only for ships switched on above; Borg cubes and the Planet Killer keep the game's step.
+        private static bool ZoneMarker_Prefix(AI.MNIJEDINGOI __0, ref AI.LECHLIEBBEM __result)
+        {
+            try
+            {
+                if (!(__0?.Owner is AI.AgentShip ship) || !switchedOn.Contains(ship.GetInstanceID()) || __0.NavMarker == null) return true;
+                if (!AI.AINavigationExclusionZoneManager.IEFBKOMBFGO.IsBodyInExclusionZoneCluster(__0.ExclusionZoneClusterIndex, __0.NavMarker)) return true;
+                __result = AI.LECHLIEBBEM.Fail;
+                if (!loggedZoneTarget)
+                {
+                    loggedZoneTarget = true;
+                    Plugin.Log.LogInfo($"Enemy AI extras: {ship.name}: where it's going is inside a zone; flying straight in");
+                }
+                return false;
+            }
+            catch { return true; }
         }
     }
 }
