@@ -306,6 +306,13 @@ Check("AI.MNIJEDINGOI.PlayerShip (Fleet Battle's player preference)", game.GetTy
 var ovrInput = game.GetType("GLIJHPJPJIB");
 Check("GLIJHPJPJIB.Get(MLAGJOCMKNB, JKOIDGDMCAN) (OVRInput raw button: hold B through Meta Link)", ovrInput?.GetMethod("Get", AnyS, null, new[] { game.GetType("GLIJHPJPJIB+MLAGJOCMKNB"), game.GetType("GLIJHPJPJIB+JKOIDGDMCAN") }, null));
 Check("IEDCLJPAJKO.IsRiftActive (hold B through Meta Link)", game.GetType("IEDCLJPAJKO")?.GetMethod("IsRiftActive", AnyS));
+// Quest controls' Touch pictures (QuestControlsArt): the display code that picks by controller type, and the type itself.
+Check("SVR.InputManager.GetCurrentControllerType (Touch pictures with Quest controls)", game.GetType("SVR.InputManager")?.GetMethod("GetCurrentControllerType", Inst));
+Check("SVR.IGLEGHPMPBK.OculusTouch / ViveHandTracker", game.GetType("SVR.IGLEGHPMPBK")?.GetField("OculusTouch") != null && game.GetType("SVR.IGLEGHPMPBK")?.GetField("ViveHandTracker") != null ? (object)true : null);
+foreach (var (t, m) in new[] { ("ControllerInputHighlighter", "PJMEJABMKEB"), ("InputToGlyphMap", "GetImageForInput"), ("InputToGlyphMap", "GetDescriptionForInput"),
+             ("CenterViewIntroElement", "JCAANHKJECE"), ("TrackingAndCalibrationWarning", "SetText") })
+    Check($"{t}.{m} (Touch pictures with Quest controls)", game.GetType(t)?.GetMethod(m, Inst) ?? game.GetType(t)?.GetMethod(m, AnyS));
+
 Check("SVR.GJDABPJJLBF.HFMELMLOJPG(bool[]) / KGKMIOOCKLC(float[]) (Quest controls)", game.GetType("SVR.GJDABPJJLBF")?.GetMethod("HFMELMLOJPG", AnyS) != null ? game.GetType("SVR.GJDABPJJLBF")?.GetMethod("KGKMIOOCKLC", AnyS) : null);
 Check("PhotonNetwork.get_playerList (host hand-off)", photon?.GetMethod("get_playerList", PS));
 var roomType = photon?.GetMethod("get_room", PS)?.ReturnType;

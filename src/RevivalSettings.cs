@@ -109,6 +109,19 @@ namespace StbcRevival
             Switch("VR seat warning", () => Plugin.SeatWarning),
             // Lighter where it costs most in VR (for now the briefing table's hologram: a simplified copy of our ships).
             Switch("VR performance", () => Plugin.VrPerformance),
+            // Meta Quest through SteamVR: the Touch buttons (and pictures). It needs SteamVR to use the mod's Quest layout
+            // too, which the game can't set while SteamVR runs: told how, when it isn't.
+            new Entry
+            {
+                Text = () => "Quest controller buttons (next launch)",
+                Ticked = () => Plugin.QuestControlsOn.Value,
+                Press = () =>
+                {
+                    Plugin.QuestControlsOn.Value = !Plugin.QuestControlsOn.Value;
+                    Plugin.Log.LogInfo($"Revival settings: Quest controller buttons {(Plugin.QuestControlsOn.Value ? "on" : "off")}");
+                    QuestControls.TellAboutBinding(Plugin.QuestControlsOn.Value);
+                },
+            },
             new Entry
             {
                 Text = () => "Crews listed: " + ContentName(Plugin.CrewContentFilter.Value),
