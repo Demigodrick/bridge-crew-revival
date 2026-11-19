@@ -15,8 +15,9 @@ namespace StbcRevival.Missions
     /// <summary>
     /// Fleet Battle (Revival Missions): a Starfleet fleet and yours against a Klingon or Romulan fleet,
     /// [Revival] FleetBattleSize ships a side (30 by default). Allies form up around you, the enemy arrives
-    /// ahead: every ally is ordered to attack an enemy ship, and the enemy hunts in packs of five (one ship in
-    /// eight comes for you), sending a third as many again as reinforcements when it's down to half, up to twice;
+    /// ahead: every ally is ordered to attack an enemy ship, and the enemy picks its own targets (the game's
+    /// own aggro: whatever's in range, and what hits it, with no preference for your ship: FleetBattleAggro),
+    /// sending a third as many again as reinforcements when it's down to half, up to twice;
     /// Starfleet sends five of its own as they arrive. Your ship takes 40% less damage
     /// (FleetBattleArmor).
     /// The allied fleet arrives a little battle-worn (85% hull). Won when
@@ -44,7 +45,7 @@ namespace StbcRevival.Missions
         internal const string Title = "FLEET BATTLE";
 
         // Mostly light ships, so the fight isn't one-sided (the cruisers outclass the raiders they meet).
-        private static readonly string[] Starfleet =
+        internal static readonly string[] Starfleet =
         {
             "Sector/Ships/Ship - Saladin", "Sector/Ships/Ship - Saladin", "Sector/Ships/Ship - Raleigh", "Sector/Ships/Ship - Huxley",
         };
@@ -96,12 +97,13 @@ namespace StbcRevival.Missions
 
             // Balance (from the logged hull and shields: with fire spread over thirty ships no allied shield
             // ever broke): allied ships can be destroyed (some Starfleet ships spawn invulnerable, as mission
-            // allies) and have weak shields; the enemy fleet has strong ones and hunts in packs (see EnemyTarget),
-            // and sends reinforcements when it's down to half.
+            // allies) and have normal shields that recharge faster than the prefabs' (ReadyAllies); the enemy fleet has
+            // strong ones, picks its own targets, and sends
+            // reinforcements when it's down to half.
             foreach (var step in ReadyAllies(allies)) yield return step;
 
             var enemies = new List<BodyRef>();
-            foreach (var step in SpawnEnemies(size, empire, enemies, allies)) yield return step;
+            foreach (var step in SpawnEnemies(size, empire, enemies)) yield return step;
             foreach (var ally in allies)
                 yield return Task.NDFEDBHFGFB.TellAI(ally).ToAddObjectives(enemies[random.Next(enemies.Count)]).OfObjectiveType(AIObjective.Attack);
             int reinforcements = 0;
@@ -123,14 +125,11 @@ namespace StbcRevival.Missions
                     Plugin.Log.LogInfo($"Fleet battle: enemies {Condition(liveEnemies)}; allies {Condition(liveAllies)}");
                 if (liveEnemies.Count == enemiesLeft && liveAllies.Count == alliesLeft) continue;
 
-                // Ships whose target died go after a survivor (re-ordering everyone is cheap and keeps it simple).
+                // Allies whose target died go after a survivor (re-ordering everyone is cheap and keeps it simple);
+                // the enemy finds its own.
                 if (liveEnemies.Count < enemiesLeft && liveEnemies.Count > 0)
                     foreach (var ally in liveAllies)
                         yield return Task.NDFEDBHFGFB.TellAI(ally).ToAddObjectives(liveEnemies[random.Next(liveEnemies.Count)]).OfObjectiveType(AIObjective.Attack);
-                if (liveAllies.Count < alliesLeft)
-                    for (int i = 0; i < liveEnemies.Count; i++)
-                        yield return Task.NDFEDBHFGFB.TellAI(liveEnemies[i]).ToAddObjectives(EnemyTarget(i, liveAllies))
-                            .OfObjectiveType(AIObjective.Attack);
 
                 // Reinforcements whenever the enemy is down to half, up to twice: a third as many again each time,
                 // warping in ahead (half was too many).
@@ -144,7 +143,7 @@ namespace StbcRevival.Missions
                     int extra = Math.Max(1, size / 3);
                     Plugin.Log.LogInfo($"Fleet battle: {extra} enemy reinforcements");
                     var more = new List<BodyRef>();
-                    foreach (var step in SpawnEnemies(extra, empire, more, liveAllies.Count > 0 ? liveAllies : allies)) yield return step;
+                    foreach (var step in SpawnEnemies(extra, empire, more)) yield return step;
                     enemies.AddRange(more);
                     liveEnemies.AddRange(more);
                     foreach (var ship in more) spawnedAt[ship] = UnityEngine.Time.time;
@@ -197,20 +196,48 @@ namespace StbcRevival.Missions
             }
         }
 
-        // Allied ships can be destroyed (some Starfleet ships spawn invulnerable, as mission allies) and have weak
-        // shields.
+        // Allied ships can be destroyed (some Starfleet ships spawn invulnerable, as mission allies). Their shields are
+        // normal strength and recharge faster than the Starfleet prefabs' 5 a second (after 15 s, 2 min once down): with
+        // the enemy AI's shield fix (EnemyAiFixes) the Klingon and Romulan shields recharge at their real 200-250 a
+        // second, and the allied fleet's drained away while theirs held. Still well below the enemy's.
+        private const float AllyShieldRecharge = 50f, AllyShieldWait = 30f, AllyShieldDownWait = 60f;
+
         private IEnumerable<Step> ReadyAllies(List<BodyRef> ships)
         {
             foreach (var ally in ships)
             {
                 yield return Task.FEBCHOJGMHM.TellAI(ally).ToSetVulnerable();
-                yield return Task.OFNIKPPKOGI.TellAI(ally).ToSetShieldStrength(AI.IDCAFFBNKFO.Weak);
+                yield return Task.OFNIKPPKOGI.TellAI(ally).ToSetShieldStrength(AI.IDCAFFBNKFO.Normal);
+                AllyShields(ally);
             }
         }
 
-        // Enemy ships at the far side of the field, facing you, with strong shields and their orders; a flagship
-        // among them for every six ships.
-        private IEnumerable<Step> SpawnEnemies(int count, int empire, List<BodyRef> into, List<BodyRef> allies)
+        private static readonly System.Reflection.FieldInfo RechargeRate = HarmonyLib.AccessTools.Field(typeof(AI.AgentShip), "_shieldRechargeRate");
+        private static readonly System.Reflection.FieldInfo RechargeWait = HarmonyLib.AccessTools.Field(typeof(AI.AgentShip), "_shieldRechargeWaitTime");
+        private static readonly System.Reflection.FieldInfo RechargeDownWait = HarmonyLib.AccessTools.Field(typeof(AI.AgentShip), "_shieldDownRechargeWaitTime");
+        private static bool loggedAllyShields;
+
+        internal static void AllyShields(BodyRef ally)
+        {
+            try
+            {
+                if (!(ally.AHMPFHDGMKJ is AI.AgentShip ship)) return;
+                RechargeRate?.SetValue(ship, AllyShieldRecharge);
+                RechargeWait?.SetValue(ship, AllyShieldWait);
+                RechargeDownWait?.SetValue(ship, AllyShieldDownWait);
+                if (!loggedAllyShields)
+                {
+                    loggedAllyShields = true;
+                    Plugin.Log.LogInfo($"Fleet battle: allied shields normal, recharging {AllyShieldRecharge:0}/s after {AllyShieldWait:0} s ({AllyShieldDownWait:0} s once down)");
+                }
+            }
+            catch { /* the game's */ }
+        }
+
+        // Enemy ships at the far side of the field, facing you, with strong shields; a flagship among them for every
+        // six ships. No orders: they pick their targets as the game's AI does (everything is inside their 40 km aggro
+        // radius), so whoever's near or shooting at them.
+        private IEnumerable<Step> SpawnEnemies(int count, int empire, List<BodyRef> into)
         {
             int first = enemyCount;
             for (int i = 0; i < count; i++)
@@ -223,17 +250,9 @@ namespace StbcRevival.Missions
                 yield return Task.BFMBGDIDKEI.UsingSpawner(MakeSpawner(prefab, EnemyNames[empire], enemyCount++, Tag.Enemy))
                     .AtAngleAndDistanceFromBody(player, angle, distance).FaceOtherBody(player).OutputTo(ship);
             }
-            for (int i = 0; i < into.Count; i++)
-            {
-                yield return Task.OFNIKPPKOGI.TellAI(into[i]).ToSetShieldStrength(AI.IDCAFFBNKFO.Strong);
-                yield return Task.NDFEDBHFGFB.TellAI(into[i]).ToAddObjectives(EnemyTarget(first + i, allies)).OfObjectiveType(AIObjective.Attack);
-            }
+            foreach (var ship in into)
+                yield return Task.OFNIKPPKOGI.TellAI(ship).ToSetShieldStrength(AI.IDCAFFBNKFO.Strong);
         }
-
-        // Enemies hunt in packs of five, each pack on one allied ship, so shields actually break; one ship in
-        // eight comes for the player instead (one in six was too many).
-        private BodyRef EnemyTarget(int index, List<BodyRef> allies) =>
-            allies.Count == 0 || index % 8 == 0 ? player : allies[(index / 5) % allies.Count];
 
         // When each ship appeared: a ship counts as alive for its first seconds, before its body is set.
         private readonly Dictionary<BodyRef, float> spawnedAt = new Dictionary<BodyRef, float>();

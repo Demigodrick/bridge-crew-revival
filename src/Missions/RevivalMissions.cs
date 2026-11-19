@@ -138,6 +138,7 @@ namespace StbcRevival.Missions
             PatrolWarfareAggro.Patch(harmony);
             FleetBattleArmor.Patch(harmony);
             StbcRevival.Science.ScienceEffects.Patch(harmony);
+            FleetBattleAggro.Patch(harmony);
             LastStandBridgeRepair.Patch(harmony);
             MissionMaps.Patch(harmony);
         }

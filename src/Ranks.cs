@@ -25,6 +25,8 @@ namespace StbcRevival
         private static readonly string[] ShortDe = { "Fähnrich", "Lt. j.g.", "Lt.", "Lt. Cmdr.", "Cmdr.", "Captain" };
 
         private static readonly FieldInfo WornRank = AccessTools.Field(typeof(BodyCustomization), "OMJKMLCLMNI");
+        // Its SkinnedMeshRenderer, set in its Awake: a body that hasn't woken (an inactive one) can't take a rank yet.
+        private static readonly FieldInfo BodyRenderer = AccessTools.Field(typeof(BodyCustomization), "PDMECBLMBGB");
         private static float nextCheck;
         private static int lastChosen = -2;
 
@@ -100,7 +102,8 @@ namespace StbcRevival
                     if (info == null || info.VisualPawnObject == null || info.PKIBEAIHJNE == null) continue;
                     int rank = Mathf.Clamp(info.FPCLMHFIGLD, 0, Names.Length - 1);
                     foreach (var body in info.VisualPawnObject.GetComponentsInChildren<BodyCustomization>(true))
-                        if (WornRank == null || !(WornRank.GetValue(body) is FJHJPAIGAEO worn) || (int)worn != rank)
+                        if ((BodyRenderer == null || BodyRenderer.GetValue(body) as SkinnedMeshRenderer != null)
+                            && (WornRank == null || !(WornRank.GetValue(body) is FJHJPAIGAEO worn) || (int)worn != rank))
                             body.SetRankType((FJHJPAIGAEO)rank);
                 }
             }

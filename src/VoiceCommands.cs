@@ -380,7 +380,7 @@ namespace StbcRevival
         }
 
         // The sector's map entries in a system (MissionManager.Sector.FindBodies().InThisSystem(system), searched;
-        // the search's Count and Item are KLNOKFCAMGO and JGKPJIGDKBH).
+        // the search's Count and Item are the properties KLNOKFCAMGO and JGKPJIGDKBH, whose getters kept their names).
         private static List<SystemTransform> SystemEntries(object mission, Map.SystemRoot system)
         {
             var entries = new List<SystemTransform>();
@@ -392,7 +392,7 @@ namespace StbcRevival
             {
                 AccessTools.Method(search.GetType(), "Search")?.Invoke(search, null);
                 var count = Traverse.Create(search).Property("KLNOKFCAMGO").GetValue() is int n ? n : 0;
-                var item = AccessTools.Method(search.GetType(), "get_JGKPJIGDKBH", new[] { typeof(int) })
+                var item = AccessTools.Method(search.GetType(), "get_Item", new[] { typeof(int) })
                            ?? search.GetType().GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
                                .FirstOrDefault(m => m.ReturnType == typeof(SystemTransform) && m.GetParameters().Length == 1 && m.GetParameters()[0].ParameterType == typeof(int));
                 for (int i = 0; i < count && item != null; i++)
@@ -530,7 +530,7 @@ namespace StbcRevival
         {
             if (!Plugin.VoiceCommands.Value) return;
             var vrm = typeof(VoiceRecognitionManager);
-            var using_ = AccessTools.PropertyGetter(vrm, "UsingVoiceRecognition") ?? AccessTools.Method(vrm, "get_UsingVoiceRecognition");
+            var using_ = AccessTools.Method(vrm, "get_UsingVoiceRecognition"); // its property is renamed; the getter kept its name
             var update = AccessTools.Method(vrm, "Update");
             var button = AccessTools.Constructor(AccessTools.TypeByName("NKEPKEMCLNH"), new[] { typeof(bool) });
             if (using_ == null || update == null || button == null)

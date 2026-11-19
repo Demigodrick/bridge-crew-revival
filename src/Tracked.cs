@@ -138,7 +138,8 @@ namespace StbcRevival
                 foreach (var o in made[key])
                 {
                     if (o == null) { gone.Add(o); continue; } // destroyed
-                    var go = ((Component)o).gameObject;
+                    var go = ObjectOf(o);
+                    if (go == null) continue; // still being loaded: not on its GameObject yet
                     if (go.scene.IsValid() || assets.Contains(o) || live.Contains(o)) continue;
                     if (go.activeInHierarchy) unsure.Add(o);
                 }
@@ -161,11 +162,26 @@ namespace StbcRevival
                 foreach (var o in made[key])
                 {
                     if (o == null || !(o is T c)) continue;
-                    var go = c.gameObject;
-                    if (!go.activeInHierarchy) continue; // switched off
+                    var go = ObjectOf(c);
+                    if (go == null || !go.activeInHierarchy) continue; // still being loaded, or switched off
                     if (go.scene.IsValid() || live.Contains(o)) result.Add(c);
                 }
             return result;
+        }
+
+        /// <summary>
+        /// The object's GameObject, or null while it has none. A scene loading in the background (Shuttle Console,
+        /// just after Lobby_Shuttle) makes its components off the main thread; they're kept as their constructor
+        /// runs, and for a moment they exist but aren't on a GameObject yet, so .gameObject gives null.
+        /// </summary>
+        private static GameObject ObjectOf(UnityEngine.Object o)
+        {
+            try
+            {
+                var go = (o as Component)?.gameObject;
+                return go == null ? null : go;
+            }
+            catch (Exception) { return null; } // MissingReferenceException and the like: not usable now
         }
 
         /// <summary>

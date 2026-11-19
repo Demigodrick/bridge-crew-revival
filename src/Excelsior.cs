@@ -38,7 +38,7 @@ namespace StbcRevival
 
         internal static void Patch(Harmony harmony)
         {
-            var bridge = AccessTools.PropertyGetter(typeof(Loader), "CurrentBridgeScene") ?? AccessTools.Method(typeof(Loader), "get_CurrentBridgeScene");
+            var bridge = AccessTools.Method(typeof(Loader), "get_CurrentBridgeScene"); // its property is renamed; the getter kept its name
             var announce = AccessTools.Method(typeof(SectorSpawnManager), "CJDNEDMKCJJ", new[] { typeof(SectorBody) });
             if (bridge == null || announce == null)
             {

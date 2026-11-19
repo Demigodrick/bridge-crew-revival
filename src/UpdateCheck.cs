@@ -91,10 +91,15 @@ namespace StbcRevival
             foreach (var file in Files)
             {
                 var old = Path.Combine(PluginFolder, file) + ".old";
+                if (File.Exists(old)) updatedInGame = true;
                 try { if (File.Exists(old)) File.Delete(old); }
                 catch (Exception e) { Plugin.Log.LogInfo($"Update: couldn't delete {old}: {e.Message}"); }
             }
         }
+
+        // This launch is the first since the in-game updater replaced the DLLs (it left the old ones as .old). Not
+        // for a build put in place by hand, or by an installer (which copies every file from the zip).
+        private static bool updatedInGame;
 
         private static string PluginFolder => Path.GetDirectoryName(typeof(UpdateCheck).Assembly.Location);
 
@@ -129,7 +134,10 @@ namespace StbcRevival
                 }
                 else
                     Plugin.Log.LogInfo($"Update check: up to date ({Plugin.Version}; latest {latest})");
-                if (!downloading && !nativeTried)
+                // The first launch after an in-game update, by an updater that didn't check this version's files in
+                // full (0.7.46 and older): that check now. It brings any missing native library too.
+                bool fullCheck = updatedInGame && !Synced(Plugin.Version);
+                if (!downloading && !nativeTried && !fullCheck)
                 {
                     nativeTried = true;
                     foreach (var native in NativeFiles)
@@ -139,7 +147,7 @@ namespace StbcRevival
                 if (!downloading && !shipsTried)
                 {
                     shipsTried = true;
-                    Plugin.Instance.StartCoroutine(SyncShips(Plugin.Version, false));
+                    Plugin.Instance.StartCoroutine(SyncShips(Plugin.Version, fullCheck));
                 }
             }
             finally
@@ -151,36 +159,34 @@ namespace StbcRevival
         private static IEnumerator Download(string version)
         {
             var got = new Dictionary<string, byte[]>();
-            string sums = null;
-            foreach (var file in new[] { "SHA256SUMS" }.Concat(Files))
+            string sums = null, problem = null;
+            yield return FetchSums(version, (text, p) => { sums = text; problem = p; });
+            if (problem != null)
             {
-                var www = new WWW(Releases + version + "/" + file);
-                float until = Time.realtimeSinceStartup + DownloadSeconds;
-                while (!www.isDone && Time.realtimeSinceStartup < until) yield return null;
-                string problem = !www.isDone ? "no answer" : !string.IsNullOrEmpty(www.error) ? www.error : null;
-                if (problem == null)
-                {
-                    if (file == "SHA256SUMS") sums = www.text;
-                    else got[file] = www.bytes;
-                }
-                www.Dispose();
+                Plugin.Log.LogInfo($"Update: {version}'s SHA256SUMS: {problem}; offering the website instead");
+                downloading = false;
+                yield break;
+            }
+            foreach (var file in Files)
+            {
+                byte[] data = null;
+                yield return GetFile(version, "plugins/" + file, file, (b, p) => { data = b; problem = p; });
                 if (problem != null)
                 {
                     Plugin.Log.LogInfo($"Update: {version}'s {file}: {problem}; offering the website instead");
                     downloading = false;
                     yield break;
                 }
+                got[file] = data;
             }
             // The native libraries too, if this release has them (older ones don't): each its own try, as they're optional.
             var natives = new Dictionary<string, byte[]>();
             foreach (var file in NativeFiles)
             {
-                var www = new WWW(Releases + version + "/" + file);
-                float until = Time.realtimeSinceStartup + DownloadSeconds;
-                while (!www.isDone && Time.realtimeSinceStartup < until) yield return null;
-                if (www.isDone && string.IsNullOrEmpty(www.error)) natives[file] = www.bytes;
-                else Plugin.Log.LogInfo($"Update: {version}'s {file}: {(www.isDone ? www.error : "no answer")}; {NativeUse(file)} stays as it is");
-                www.Dispose();
+                byte[] data = null;
+                yield return GetFile(version, "native/" + file, file, (b, p) => { data = b; problem = p; });
+                if (problem == null) natives[file] = data;
+                else Plugin.Log.LogInfo($"Update: {version}'s {file}: {problem}; {NativeUse(file)} stays as it is");
             }
             try
             {
@@ -260,8 +266,9 @@ namespace StbcRevival
         // ---- ship models and the second sector ----
         // Our ship classes' models live in BepInEx/ships, the second sector's galaxy file in BepInEx/galaxies (the
         // installers copy them from the zip). A release lists them in SHA256SUMS as "ships/<ship>/<file>" and
-        // "galaxies/<file>.json", each uploaded as an asset of its own named with dots for the slashes
-        // ("ships.Nova.Nova.obj"), as Unity 5.4's .NET can't open the zip. Missing ones are fetched at launch; on an
+        // "galaxies/<file>.json", and they're fetched from the release's zip (ReleaseZip); up to 0.7.46 each was an
+        // asset of its own named with dots for the slashes ("ships.Nova.Nova.obj"), still tried when the zip can't
+        // be read. Missing ones are fetched at launch; on an
         // update, changed ones too (their hashes worked out on a thread: the Nova's model is 46 MB).
 
         private static bool shipsTried;
@@ -284,22 +291,23 @@ namespace StbcRevival
         private static IEnumerator SyncShips(string version, bool checkChanged)
         {
             string sums = null;
-            {
-                var www = new WWW(Releases + version + "/SHA256SUMS");
-                float until = Time.realtimeSinceStartup + DownloadSeconds;
-                while (!www.isDone && Time.realtimeSinceStartup < until) yield return null;
-                if (www.isDone && string.IsNullOrEmpty(www.error)) sums = www.text;
-                www.Dispose();
-            }
+            yield return FetchSums(version, (text, p) => sums = text);
             if (sums == null) yield break; // offline or no such release: nothing to do this time
             var wanted = new List<KeyValuePair<string, string>>();
-            foreach (var kv in ParseSums(sums)) if (IsAssetPath(kv.Key)) wanted.Add(kv);
-            if (wanted.Count == 0) yield break;
+            var all = ParseSums(sums);
+            foreach (var kv in all) if (IsAssetPath(kv.Key)) wanted.Add(kv);
+            // The full check (once a version) takes in the native libraries too: an older updater that brought this
+            // version may have left changed ones behind (it fetched each from an asset of its own, which releases
+            // no longer have).
+            if (checkChanged)
+                foreach (var native in NativeFiles)
+                    if (all.TryGetValue(native, out var nativeHash)) wanted.Add(new KeyValuePair<string, string>(native, nativeHash));
+            if (wanted.Count == 0) { if (checkChanged) MarkSynced(version); yield break; }
 
             var todo = new List<KeyValuePair<string, string>>();
             foreach (var kv in wanted)
             {
-                var local = LocalPath(kv.Key);
+                var local = Local(kv.Key);
                 if (!File.Exists(local)) { todo.Add(kv); continue; }
                 if (!checkChanged) continue;
                 string have = null; bool done = false;
@@ -313,17 +321,21 @@ namespace StbcRevival
                 while (!done) yield return null;
                 if (have != kv.Value) todo.Add(kv);
             }
-            if (todo.Count == 0) yield break;
-            Plugin.Log.LogInfo($"Update: fetching {todo.Count} ship/galaxy file(s) of {version}: {string.Join(", ", todo.Select(t => t.Key).ToArray())}");
+            if (todo.Count == 0) { if (checkChanged) MarkSynced(version); yield break; }
+            Plugin.Log.LogInfo($"Update: fetching {todo.Count} file(s) of {version}: {string.Join(", ", todo.Select(t => t.Key).ToArray())}");
+            bool allDone = true;
             foreach (var kv in todo)
             {
-                var www = new WWW(Releases + version + "/" + kv.Key.Replace('/', '.'));
-                float until = Time.realtimeSinceStartup + ShipSeconds;
-                while (!www.isDone && Time.realtimeSinceStartup < until) yield return null;
-                string problem = !www.isDone ? "no answer" : !string.IsNullOrEmpty(www.error) ? www.error : null;
-                byte[] data = problem == null ? www.bytes : null;
-                www.Dispose();
-                if (problem != null) { Plugin.Log.LogInfo($"Update: {kv.Key}: {problem}; tried again next launch"); continue; }
+                byte[] data = null; string problem = null;
+                bool native = Array.IndexOf(NativeFiles, kv.Key) >= 0;
+                yield return GetFile(version, native ? "native/" + kv.Key : kv.Key, kv.Key.Replace('/', '.'), (b, p) => { data = b; problem = p; });
+                if (problem != null) { allDone = false; Plugin.Log.LogInfo($"Update: {kv.Key}: {problem}; tried again next launch"); continue; }
+                if (native)
+                {
+                    if (!InstallNative(version, sums, kv.Key, data)) allDone = false;
+                    data = null;
+                    continue;
+                }
                 try
                 {
                     if (data == null || data.Length == 0 || Hash(data) != kv.Value) throw new Exception("it doesn't match its checksum");
@@ -334,9 +346,85 @@ namespace StbcRevival
                     File.Move(local + ".new", local);
                     Plugin.Log.LogInfo($"Update: {kv.Key} put in place ({data.Length / 1024} KB); used from the next launch");
                 }
-                catch (Exception e) { Plugin.Log.LogInfo($"Update: {kv.Key} not installed ({e.Message})"); }
+                catch (Exception e) { allDone = false; Plugin.Log.LogInfo($"Update: {kv.Key} not installed ({e.Message})"); }
                 data = null;
             }
+            if (checkChanged && allDone) MarkSynced(version);
+        }
+
+        private static string Local(string path) => Array.IndexOf(NativeFiles, path) >= 0 ? NativePath(path) : LocalPath(path);
+
+        // Which version's files were last checked in full (ship models, the sector and the native libraries against
+        // that release's SHA256SUMS), by the update that brought it or the first launch after: an updater from 0.7.46
+        // or older fetched changed files from assets of their own, which releases no longer have.
+        private static string SyncedPath => Path.Combine(Paths.CachePath, "revival-files-checked.txt");
+
+        private static bool Synced(string version)
+        {
+            try { return File.Exists(SyncedPath) && File.ReadAllText(SyncedPath).Trim() == version; }
+            catch { return false; }
+        }
+
+        private static void MarkSynced(string version)
+        {
+            try { Directory.CreateDirectory(Paths.CachePath); File.WriteAllText(SyncedPath, version + "\n"); }
+            catch (Exception e) { Plugin.Log.LogInfo("Update: couldn't note the files as checked: " + e.Message); }
+        }
+
+        // ---- fetching from a release ----
+
+        // The release's zip, opened once a version (its index read); null after a failure, so the files come from
+        // the release's own assets, as before 0.7.47.
+        private static readonly Dictionary<string, ReleaseZip> zips = new Dictionary<string, ReleaseZip>();
+
+        private static IEnumerator OpenZip(string version)
+        {
+            if (zips.ContainsKey(version)) yield break;
+            var zip = new ReleaseZip(version);
+            zips[version] = zip; // a second caller waits on the same one
+            yield return zip.Open();
+            if (zip.IsOpen) Plugin.Log.LogInfo($"Update: reading {version}'s files from its zip");
+            else
+            {
+                Plugin.Log.LogInfo($"Update: {version}'s zip couldn't be read ({zip.Problem}); fetching its files one by one");
+                zips[version] = null;
+            }
+        }
+
+        // One file of a release: from its zip (zipPath, its path in the release folder), or from an asset of its own
+        // (asset) when the zip can't be read. done(bytes, null) or done(null, problem). Not yet checked against
+        // SHA256SUMS: the caller does that.
+        private static IEnumerator GetFile(string version, string zipPath, string asset, Action<byte[], string> done)
+        {
+            yield return OpenZip(version);
+            var zip = zips[version];
+            while (zip != null && !zip.IsOpen && zip.Problem == null) { yield return null; zip = zips[version]; }
+            if (zip != null && zip.IsOpen)
+            {
+                byte[] data = null; string problem = null;
+                yield return zip.Get(zipPath, (b, p) => { data = b; problem = p; });
+                if (data != null) { done(data, null); yield break; }
+                Plugin.Log.LogInfo($"Update: {zipPath} from {version}'s zip: {problem}; trying it on its own");
+            }
+            var www = new WWW(Releases + version + "/" + asset);
+            float until = Time.realtimeSinceStartup + ShipSeconds;
+            while (!www.isDone && Time.realtimeSinceStartup < until) yield return null;
+            string failed = !www.isDone ? "no answer" : !string.IsNullOrEmpty(www.error) ? www.error : null;
+            byte[] bytes = failed == null ? www.bytes : null;
+            www.Dispose();
+            if (failed == null && (bytes == null || bytes.Length == 0)) failed = "nothing came back";
+            done(failed == null ? bytes : null, failed);
+        }
+
+        private static IEnumerator FetchSums(string version, Action<string, string> done)
+        {
+            var www = new WWW(Releases + version + "/SHA256SUMS");
+            float until = Time.realtimeSinceStartup + DownloadSeconds;
+            while (!www.isDone && Time.realtimeSinceStartup < until) yield return null;
+            string problem = !www.isDone ? "no answer" : !string.IsNullOrEmpty(www.error) ? www.error : null;
+            string text = problem == null ? www.text : null;
+            www.Dispose();
+            done(text, problem);
         }
 
         // This version's native library, when it's missing: from this version's release, checked against its
@@ -344,28 +432,21 @@ namespace StbcRevival
         // means what it does stays off.
         private static IEnumerator FetchNative(string version, string native)
         {
-            string sums = null;
+            string sums = null, problem = null;
             byte[] data = null;
-            foreach (var file in new[] { "SHA256SUMS", native })
+            yield return FetchSums(version, (text, p) => { sums = text; problem = p; });
+            if (problem == null) yield return GetFile(version, "native/" + native, native, (b, p) => { data = b; problem = p; });
+            if (problem != null)
             {
-                var www = new WWW(Releases + version + "/" + file);
-                float until = Time.realtimeSinceStartup + DownloadSeconds;
-                while (!www.isDone && Time.realtimeSinceStartup < until) yield return null;
-                string problem = !www.isDone ? "no answer" : !string.IsNullOrEmpty(www.error) ? www.error : null;
-                if (problem == null) { if (file == native) data = www.bytes; else sums = www.text; }
-                www.Dispose();
-                if (problem != null)
-                {
-                    Plugin.Log.LogInfo($"Update: {native} is missing, and {version}'s {file} couldn't be fetched ({problem}); {NativeUse(native)} stays off");
-                    yield break;
-                }
+                Plugin.Log.LogInfo($"Update: {native} is missing, and {version}'s couldn't be fetched ({problem}); {NativeUse(native)} stays off");
+                yield break;
             }
             InstallNative(version, sums, native, data);
         }
 
         // Checked, then put in BepInEx/native: a copy already there (loaded, perhaps) is moved aside to .old first,
         // deleted at the next start.
-        private static void InstallNative(string version, string sums, string file, byte[] data)
+        private static bool InstallNative(string version, string sums, string file, byte[] data)
         {
             var path = NativePath(file);
             try
@@ -382,11 +463,13 @@ namespace StbcRevival
                 }
                 File.Move(path + ".new", path);
                 Plugin.Log.LogInfo($"Update: {version}'s {file} put in {Path.GetDirectoryName(path)}; {NativeUse(file)} from the next launch");
+                return true;
             }
             catch (Exception e)
             {
                 Plugin.Log.LogInfo($"Update: {version}'s {file} not installed ({e.Message}); {NativeUse(file)} stays as it is");
                 try { File.Delete(path + ".new"); } catch { }
+                return false;
             }
         }
 

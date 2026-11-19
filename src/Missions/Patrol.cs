@@ -28,6 +28,8 @@ namespace StbcRevival.Missions
     ///     escort in two, raiders attack the convoy on the way (sometimes Klingons decloaking around it).
     ///   - Research: unidentified objects scattered about the site; scan them all. Now and then raiders
     ///     turn up after the first scan.
+    ///   - Intercept: a Klingon or Romulan flagship and its escort cruise the system; a Starfleet task force warps
+    ///     in with you. Destroy the flagship.
     ///   - Warfare Anomaly (rare, about one assignment in WarfareChance): offered as sensor anomalies to
     ///     investigate, but five Borg cubes and forty Romulan ships are fighting there as you warp in. They fight
     ///     each other and leave you alone (PatrolWarfareAggro). Over when one side is gone or after WarfareMax.
@@ -65,7 +67,7 @@ namespace StbcRevival.Missions
         private const double MinTravel = 30000;    // a site at least this far from the warp arrival, if there is one
         private const int BorgChance = 20;         // one assignment in this many has a Borg cube turn up
         private const float BorgStays = 240f;      // seconds the cube attacks before it warps away
-        private const int WarfareChance = 20;      // one offer in about this many is a warfare anomaly
+        private const int WarfareChance = 10;      // one offer in about this many is a warfare anomaly
         private static readonly Tag[] SiteTags =
         {
             Tag.ImpulseDestination, Tag.Planet, Tag.Moon, Tag.SpaceStation, Tag.Asteroid, Tag.Anomaly, Tag.Nebula,
@@ -173,7 +175,7 @@ namespace StbcRevival.Missions
                     Objective.AddStep(borg, Task.MFLJBKCDBMC.WithSubtaskCoroutine(() => Borg(system)));
                     yield return Task.KKALNAMJCNH.WithName(borg); // a step added while another runs waits to be started
                 }
-                IEnumerable<Step> run = job == Warfare ? WarfareAnomaly() : job == 0 ? Hunt() : job == 1 ? Defend() : job == 4 ? Escort() : job == 5 ? Research() : Rescue(job == 3);
+                IEnumerable<Step> run = job == Warfare ? WarfareAnomaly() : job == Intercept_ ? Intercept() : job == 0 ? Hunt() : job == 1 ? Defend() : job == 4 ? Escort() : job == 5 ? Research() : Rescue(job == 3);
                 foreach (var step in run) yield return step;
                 yield return Task.BCJDEKKIHDD.RemoveAllMarkers();
 
@@ -192,6 +194,115 @@ namespace StbcRevival.Missions
         }
 
         // ---- Assignments ------------------------------------------------------------------------------
+
+        // Intercept: a Klingon or Romulan flagship and its escort (a squad of destroyers and more: InterceptEscorts,
+        // growing with the assignments done) cruise between the system's bodies, starting at the site. As you arrive
+        // a Starfleet task force warps in alongside you, one ship for each of theirs bar the flagship, with Fleet
+        // Battle's allied shields, and goes for the enemy fleet. The flagship doesn't cloak (FleetBattleNoCloak). Won
+        // when the flagship is destroyed: its escort and the task force then warp out. (With EnemyAI.GroupTactics the escort forms squads round the flagship.)
+        private const int InterceptEscorts = 7, InterceptMaxEscorts = 11;
+        private static readonly string[] InterceptEmpires = { "Klingon", "Romulan" };
+        private static readonly string[] InterceptFlagships = { "Sector/Ships/Ship - Klingon Flagship", "Sector/Ships/Ship - Romulan DDeridex" };
+        private static readonly string[][] InterceptEscortShips =
+        {
+            new[] { "Sector/Ships/Ship - Warbird", "Sector/Ships/Ship - Warbird", "Sector/Ships/Ship - D5 Cruiser", "Sector/Ships/Ship - D5 Cruiser", "Sector/Ships/Ship - Bird Of Prey" },
+            new[] { "Sector/Ships/Ship - Romulan Medium", "Sector/Ships/Ship - Romulan Medium", "Sector/Ships/Ship - Romulan Scout" },
+        };
+
+        private IEnumerable<Step> Intercept()
+        {
+            int empire = random.Next(InterceptEmpires.Length);
+            string side = InterceptEmpires[empire];
+            int escorts = Math.Min(InterceptEscorts + completed / 3, InterceptMaxEscorts);
+            string line = $"Intercept the {side} flagship{Near()} and destroy it";
+            yield return Task.NECMCDDOFJB.AddSubDirectives(Directive, line);
+
+            // The enemy fleet: the flagship off the site, its escort round it.
+            var flagship = new BodyRef();
+            yield return Task.BFMBGDIDKEI.UsingSpawner(MakeSpawner(InterceptFlagships[empire], $"{side} flagship", Tag.Enemy))
+                .AtAngleAndDistanceFromBody(site, random.Next(0, 360), OffSurface(site, 6000f)).OutputTo(flagship);
+            var fleet = new List<BodyRef> { flagship };
+            var pool = InterceptEscortShips[empire];
+            for (int i = 0; i < escorts; i++)
+            {
+                var ship = new BodyRef();
+                fleet.Add(ship);
+                yield return Task.BFMBGDIDKEI.UsingSpawner(MakeSpawner(pool[i % pool.Length], side, Tag.Enemy))
+                    .AtAngleAndDistanceFromBody(flagship, 360f * i / escorts + random.Next(-15, 15), 1500f + random.Next(0, 2000)).OutputTo(ship);
+            }
+            // No disengaging (a Romulan's is to cloak and slip away), and a route round the system to cruise.
+            yield return Task.GLACCPHKCDO.TellAI(fleet.ToArray());
+            var route = new List<BodyRef> { site };
+            route.AddRange(SystemBodies().Where(b => b.AHMPFHDGMKJ != site.AHMPFHDGMKJ).OrderBy(_ => random.Next()).Take(2));
+            foreach (var ship in fleet)
+                yield return Task.HBCFKPJCPCD.TellAI(ship).ToAddPatrolPoints(route.ToArray()).WithPointWaitTime(10f); // AIPatrol
+            yield return Task.BCJDEKKIHDD.AddMarker(new[] { flagship });
+            FleetBattleNoCloak.Ships.Clear();
+            if (flagship.AHMPFHDGMKJ != null) FleetBattleNoCloak.Ships.Add(flagship.AHMPFHDGMKJ); // it has to be found: no cloaking
+            Plugin.Log.LogInfo($"Patrol: intercept, a {side} flagship ({ShipName(flagship)}) and {escorts} escorts cruising {route.Count} points");
+
+            // The Starfleet task force warps in alongside you and goes for them.
+            string support = "A Starfleet task force has arrived to support you";
+            yield return Task.NECMCDDOFJB.AddSubDirectives(Directive, support);
+            var taskForce = new List<BodyRef>();
+            for (int i = 0; i < escorts; i++)
+            {
+                var ally = new BodyRef();
+                taskForce.Add(ally);
+                yield return Task.BFMBGDIDKEI.UsingSpawner(MakeSpawner(FleetBattleObjective.Starfleet[random.Next(FleetBattleObjective.Starfleet.Length)], "USS", Tag.Friendly))
+                    .UsingSpawnMode(AI.POGGHNHDBAL.Warp)
+                    .AtAngleAndDistanceFromBody(player, 180f + random.Next(-70, 70), 2500f + random.Next(0, 3000)).OutputTo(ally);
+            }
+            yield return Task.ABHANLLBILL.WithEventID("PLAY_NPC_WARP_IN").ContinueImmediately();
+            foreach (var ally in taskForce)
+            {
+                yield return Task.FEBCHOJGMHM.TellAI(ally).ToSetVulnerable();
+                yield return Task.OFNIKPPKOGI.TellAI(ally).ToSetShieldStrength(AI.IDCAFFBNKFO.Normal);
+                FleetBattleObjective.AllyShields(ally);
+                yield return Task.NDFEDBHFGFB.TellAI(ally).ToAddObjectives(fleet[random.Next(fleet.Count)]).OfObjectiveType(AIObjective.Attack);
+            }
+            Plugin.Log.LogInfo($"Patrol: intercept, {taskForce.Count} Starfleet ships warping in");
+
+            foreach (var step in UntilClose(flagship)) yield return step;
+            if (!abandoned) yield return Task.OKLDNLKLLFJ.WithGroup("State_Group_Mus_Dyn").WithState("Tension");
+
+            // Until the flagship is gone (or the crew leaves the system).
+            float started = UnityEngine.Time.time, nextLog = started + 60f;
+            bool sunk = false;
+            for (;;)
+            {
+                yield return Task.KNMMMJOOBHC.WithTime(2f);
+                if (Abandoned()) break;
+                bool justSpawned = UnityEngine.Time.time - started < 10f;
+                if (!LastStandWaves.Alive(flagship, justSpawned)) { sunk = true; break; }
+                if (UnityEngine.Time.time >= nextLog)
+                {
+                    nextLog = UnityEngine.Time.time + 60f;
+                    Plugin.Log.LogInfo($"Patrol: intercept, {fleet.Count(x => LastStandWaves.Alive(x, false))} {side} ships "
+                                       + $"(flagship hull {Hull(flagship)}), {taskForce.Count(x => LastStandWaves.Alive(x, false))} Starfleet ships left");
+                }
+            }
+            FleetBattleNoCloak.Ships.Clear();
+            yield return Task.NECMCDDOFJB.RemoveSubDirective(Directive, support);
+            yield return Task.NECMCDDOFJB.RemoveSubDirective(Directive, line);
+            if (!sunk)
+            {
+                Plugin.Log.LogInfo("Patrol: intercept abandoned; the fleets are left to it");
+                yield break;
+            }
+
+            // The flagship's gone: its escort runs for it, and the task force warps out after.
+            succeeded = true;
+            Plugin.Log.LogInfo("Patrol: intercept, the flagship is destroyed; its escort warps out");
+            string done = $"The {side} flagship is destroyed. Its escort is retreating";
+            yield return Task.NECMCDDOFJB.AddSubDirectives(Directive, done);
+            foreach (var ship in fleet.Skip(1).Where(x => LastStandWaves.Alive(x, false)))
+                yield return Task.OONDNDHIEDI.TellAI(ship).UsingMode(AI.POGGHNHDBAL.Warp);
+            yield return Task.KNMMMJOOBHC.WithTime(15f);
+            foreach (var ally in taskForce.Where(x => LastStandWaves.Alive(x, false)))
+                yield return Task.OONDNDHIEDI.TellAI(ally).UsingMode(AI.POGGHNHDBAL.Warp);
+            yield return Task.NECMCDDOFJB.RemoveSubDirective(Directive, done);
+        }
 
         // Raiders near the arrival point, coming for you. Won when they're all gone.
         private IEnumerable<Step> Hunt()
@@ -1453,8 +1564,9 @@ namespace StbcRevival.Missions
             catch { return system.SystemName; }
         }
 
-        private const int Jobs = 6;      // the regular assignments, in rotation
-        private const int Warfare = 6;   // the warfare anomaly, picked now and then instead (WarfareChance)
+        private const int Jobs = 7;      // the regular assignments, in rotation
+        private const int Intercept_ = 6; // the intercept: a flagship and its escort, with a Starfleet task force
+        private const int Warfare = 7;   // the warfare anomaly, picked now and then instead (WarfareChance)
 
         // The results screen's line for the patrol: one "Assignments completed: N", a success once there's one done.
         // (The game's WithMissionResult adds a line per distinct text, so a new count added a new line each time,
@@ -1495,10 +1607,11 @@ namespace StbcRevival.Missions
             return -1;
         }
 
-        private static string JobName(int job) => job == Warfare ? "warfare anomaly" : job == 0 ? "hunt" : job == 1 ? "defend" : job == 2 ? "rescue" : job == 3 ? "ambush" : job == 4 ? "escort" : "research";
+        private static string JobName(int job) => job == Warfare ? "warfare anomaly" : job == Intercept_ ? "intercept" : job == 0 ? "hunt" : job == 1 ? "defend" : job == 2 ? "rescue" : job == 3 ? "ambush" : job == 4 ? "escort" : "research";
 
         // An ambush is offered as a rescue: it's a trap.
         private static string Offer(int job) => job == Warfare ? "sensors have detected anomalies to investigate (Warfare Anomaly)"
+            : job == Intercept_ ? "an enemy flagship and its escort have been sighted (Intercept)"
             : job == 0 ? "raiders are attacking shipping"
             : job == 1 ? "a disabled freighter is under attack"
             : job == 4 ? "a convoy of freighters needs an escort"
