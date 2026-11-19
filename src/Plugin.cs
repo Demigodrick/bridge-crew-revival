@@ -88,6 +88,9 @@ namespace StbcRevival
         internal static ConfigEntry<bool> EnemyAiFightSmarter;
         internal static ConfigEntry<float> EnemyAiFireRate;
         internal static ConfigEntry<bool> EnemyAiGroupTactics;
+        internal static ConfigEntry<bool> CrewHelmHoldsRange;
+        internal static ConfigEntry<bool> CrewQuickTorpedoes;
+        internal static ConfigEntry<bool> CrewAutoPower;
         internal static ConfigEntry<string> TestPatrolAssignment;
         internal static ConfigEntry<int> EvacuationMinutes;
         internal static ConfigEntry<bool> VoiceCommands;
@@ -289,6 +292,16 @@ namespace StbcRevival
             EnemyAiGroupTactics = Config.Bind("EnemyAI", "GroupTactics", true,
                 "Enemy fleets fight in squads: wingmen (a flagship has a bigger escort) go for what their leader is attacking "
                 + "and for whoever hits their leader, and regroup when it's destroyed. Host only.");
+            CrewHelmHoldsRange = Config.Bind("CrewAI", "HelmHoldsRange", true,
+                "The AI helm, attacking a ship, closes to phaser range, then slows to a stop facing it (and backs off if it gets "
+                + "very close) instead of ramming it at full speed. Only when an AI crew member is at helm. Host only.");
+            CrewQuickTorpedoes = Config.Bind("CrewAI", "QuickTorpedoes", true,
+                "The AI tactical officer fires torpedoes about a second sooner, and fires them without the ship having a move "
+                + "order. Only when an AI crew member is at tactical; the shorter wait applies from the next system. Host only.");
+            CrewAutoPower = Config.Bind("CrewAI", "AutoPower", true,
+                "The AI engineer reroutes power by itself: offense in a fight, defense when the shields are low, balanced "
+                + "afterwards. A captain's power order holds until a fight starts or ends. Only when an AI crew member is at "
+                + "engineering. Host only.");
             EvacuationMinutes = Config.Bind("Revival", "EvacuationMinutes", 15,
                 "Stellar Evacuation: minutes until the star erupts (3-30), the last of them to warp out.");
             MapOverride = Config.Bind("Debug", "MapOverride", "",
@@ -454,6 +467,7 @@ namespace StbcRevival
             Safely("enemy AI combat", () => StbcRevival.EnemyAiCombat.Patch(harmony));
             Safely("enemy AI tuning", () => StbcRevival.EnemyAiTuning.Patch(harmony));
             Safely("enemy AI extras", () => StbcRevival.EnemyAiExtras.Patch(harmony));
+            Safely("crew AI", () => StbcRevival.CrewAi.Patch(harmony));
             EnemyAiThinkFaster.SettingChanged += (_, __) => Safely("enemy AI think rate", StbcRevival.EnemyAiThinkRate.Apply);
             SteamMode.Install(harmony);
             ShuttleControls.Install();
