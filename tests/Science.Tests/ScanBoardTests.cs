@@ -166,3 +166,16 @@ public class ScienceWireHardeningTests
         Assert.Null(ScienceWire.Complete("a\udc00"));
     }
 }
+
+public class ScanBoardIdsTests
+{
+    [Fact]
+    public void Ids_InOrderAndSurviveTheWire()
+    {
+        var b = new ScanBoard();
+        b.SetTargets(new[] { "b", "a", "bad;id", "c" });
+        Assert.Equal(new[] { "b", "a", "c" }, b.Ids());
+        Assert.Equal(new[] { "b", "a", "c" }, ScanBoard.FromWire(b.ToWire()).Ids());
+        Assert.Empty(new ScanBoard().Ids());
+    }
+}

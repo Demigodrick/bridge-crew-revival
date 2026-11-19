@@ -302,6 +302,14 @@ Check("  BorgCube.MHHGGHHKMKN (UpdateMoveVelocity) (science: enemy speed)", game
 var subsystemServer = game.GetType("Sector.Spacecraft.Subsystems.SubsystemServer");
 Check("  SubsystemServer.PPBDHDJCFKF (AutoRepair) + subsystemAutoRepairPoints (science: crew repair)", subsystemServer?.GetMethod("PPBDHDJCFKF", Decl) != null ? subsystemServer.GetField("subsystemAutoRepairPoints", Inst) : null);
 Check("  TargetInfoComponent.get_TeamID (DGGJOECIFAF) (science: victim's team)", game.GetType("Sector.TargetInfoComponent")?.GetMethod("get_TeamID", Inst));
+// Science console targets (Patrol): debris where hostile ships die, readings unspawned once scanned
+var bodyDied = game.GetType("Sector.EEKAKKNBAIH");
+Check("  Sector.EEKAKKNBAIH (BodyDiedEvent).Died (science: debris)", bodyDied?.GetField("Died", BindingFlags.Public | BindingFlags.Instance));
+Check("  CIFDOFLFGEA (Events).AddListener<T>(FFEMIIJDFMK+LCHKEJBPNEF<T>) (science: debris)", game.GetType("CIFDOFLFGEA")?.GetMethods(PS).FirstOrDefault(m => m.Name == "AddListener" && m.IsGenericMethodDefinition && m.GetParameters() is { Length: 1 } p && p[0].ParameterType.Name.StartsWith("LCHKEJBPNEF") && p[0].ParameterType.DeclaringType?.Name == "FFEMIIJDFMK"));
+var unspawnReason = game.GetType("Sector.JBFDKPHCLFC");
+Check("  SectorSpawnManager.UnspawnBody(SectorBody, JBFDKPHCLFC) + UnspawnReason.Other (science: scanned targets)", unspawnReason?.GetField("Other") != null ? game.GetType("Sector.SectorSpawnManager")?.GetMethod("UnspawnBody", new[] { game.GetType("Sector.SectorBody")!, unspawnReason }) : null);
+Check("  SectorBody.get_guid (FLOBHLBHLLJ) (science: target ids)", game.GetType("Sector.SectorBody")?.GetMethod("get_guid", Inst));
+Check("  SystemTransform.get_Forward (science: debris bearing)", game.GetType("SystemTransform")?.GetMethod("get_Forward", Inst));
 // Host hand-off
 Check("  NetworkStatus.SetError(error, popup, ...) (hand-off: no popup for failed regroup joins)",
     game.GetType("SVR.Network.NetworkStatus")?.GetMethods(BindingFlags.Public | BindingFlags.Static).FirstOrDefault(m => m.Name == "SetError" && m.GetParameters().Length == 4));

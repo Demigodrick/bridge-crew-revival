@@ -108,6 +108,11 @@ namespace StbcRevival.Missions
 
         private IEnumerator<Step> Patrol()
         {
+            if (StbcRevival.Science.ScienceSession.Ledger.On) // the science console's targets, for the whole patrol
+            {
+                Objective.AddStep("science targets", Task.MFLJBKCDBMC.WithSubtaskCoroutine(() => StbcRevival.Science.ScienceTargets.DebrisLoop(Objective, Task, player)));
+                yield return Task.KKALNAMJCNH.WithName("science targets");
+            }
             foreach (var step in MissionAudio.Start(Task)) yield return step;
             yield return Task.NECMCDDOFJB.WithDescriptionString(Directive);
             yield return Task.HHNFJKHGEPH.WithMissionString(Title);
@@ -159,6 +164,8 @@ namespace StbcRevival.Missions
                 jobSystem = target;
                 yield return Task.KNMMMJOOBHC.WithTime(3f); // out of warp
                 PickSite();
+                if (StbcRevival.Science.ScienceSession.Active)
+                    foreach (var step in StbcRevival.Science.ScienceTargets.SpawnReadings(Objective, Task, site, player)) yield return step;
                 if (job != Warfare && random.Next(BorgChance) == 0)
                 {
                     var system = target;
@@ -851,7 +858,7 @@ namespace StbcRevival.Missions
         // survey in ResearchRaidChance, raiders come for the ship after the first scan, as the game's research
         // mission calls in enemy patrols on its science reports; the survey needs only the scans.
         private const int ResearchRaidChance = 4;  // one survey in this many is interrupted by raiders
-        private static readonly string[] Scannables =
+        internal static readonly string[] Scannables =
         {
             "Sector/System/Prop - ScannableObjectA", "Sector/System/Prop - ScannableObjectB",
             "Sector/System/Prop - ScannableObjectC", "Sector/System/Prop - ScannableObjectD",
@@ -1086,7 +1093,7 @@ namespace StbcRevival.Missions
         }
 
         // A distance from a body's surface, not its centre (3 km from a planet's or asteroid's centre is inside it).
-        private static float OffSurface(BodyRef site, float clearance)
+        internal static float OffSurface(BodyRef site, float clearance)
         {
             try
             {

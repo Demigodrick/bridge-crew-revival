@@ -103,6 +103,7 @@ namespace StbcRevival.Science
             Active = false;
             nextPublish = 0f;
             ScienceEffects.Forget();
+            ScienceTargets.Forget();
         }
 
         /// <summary>An assignment was completed (host): the enemy grows a step stronger.</summary>
@@ -264,6 +265,7 @@ namespace StbcRevival.Science
             Active = false;
             patrolSeen = false;
             ScienceEffects.Forget();
+            ScienceTargets.Forget();
             sentLedger = sentBoard = readLedger = readBoard = null;
             sentClaimant = -1;
         }

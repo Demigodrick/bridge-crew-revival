@@ -23,6 +23,9 @@ namespace StbcRevival.Science
 
         public int Count { get { return order.Count; } }
 
+        // The listed ids, in order (a copy).
+        public string[] Ids() { return order.ToArray(); }
+
         public static bool ValidId(string id)
         {
             return id != null && id.Length > 0 && id.Length <= MaxIdLength && id.IndexOf(';') < 0 && id.IndexOf(',') < 0;
