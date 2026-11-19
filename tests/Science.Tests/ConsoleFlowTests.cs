@@ -146,6 +146,45 @@ public class ConsoleFlowTests
         Assert.True(complete > 0);
         Assert.Equal("report 42 100", r.Sent[complete - 1]);
         Assert.Equal("release", r.Sent[complete + 1]);
+        for (int i = 0; i < 30; i++) { t += 0.1f; f.Tick(t, 0.1f, Me, Me, TargetState.InRange, false); }
+        Assert.Equal(1, r.Count("complete"));
+        Assert.Equal(1, r.Count("release"));
+    }
+
+    [Fact]
+    public void Scan_At100_WaitsForTheClaimBeforeCompleting()
+    {
+        var r = new Recorder();
+        var f = Started(r, 99.9f);
+        r.Sent.Clear();
+        float t = 0f;
+        for (int i = 0; i < 30; i++) // 3 s with the board showing no claimant (a new host, a lapsed claim)
+        {
+            t += 0.1f;
+            Solve(f, t);
+            f.Tick(t, 0.1f, 0, Me, TargetState.InRange, false);
+        }
+        Assert.True(f.Progress.Done);
+        Assert.Equal(ScreenMode.Scan, f.Mode);
+        Assert.Equal(0, r.Count("complete"));
+        Assert.Equal(0, r.Count("release"));
+        Assert.Equal(0, r.Count("report 42 100"));
+        Assert.True(r.Count("claim") >= 2);
+        t += 0.1f;
+        f.Tick(t, 0.1f, Me, Me, TargetState.InRange, false);
+        Assert.Equal(ScreenMode.Targets, f.Mode);
+        Assert.Equal(1, r.Count("complete 42"));
+        int complete = r.Sent.IndexOf("complete 42");
+        Assert.Equal("report 42 100", r.Sent[complete - 1]);
+        Assert.Equal("release", r.Sent[complete + 1]);
+    }
+
+    [Fact]
+    public void Start_RefusesATargetAlreadyAt100()
+    {
+        var f = new ConsoleFlow(new Recorder());
+        Assert.False(f.Start("42", 100f, false, 0f));
+        Assert.Equal(ScreenMode.Targets, f.Mode);
     }
 
     [Fact]

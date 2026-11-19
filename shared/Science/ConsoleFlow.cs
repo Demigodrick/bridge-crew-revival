@@ -30,7 +30,8 @@ namespace StbcRevival.Science
     ///   - Scan: the games run and the bar fills while both hold a lock; reports 4 times a second while locked, a
     ///     heartbeat once a second, and a claim again once a second while the board doesn't show us as the claimant
     ///     (a new host forgets the claim; a claim lapses 3 s after the last beat). At 100: report, complete, release,
-    ///     back to Targets.
+    ///     back to Targets, but only while the board shows us as the claimant (the host drops them from anyone else);
+    ///     until then it waits at 100, claiming again.
     ///   - OutOfRange: the target is listed but too far: paused, one report of where it got to; the heartbeat goes on, so
     ///     the console stays ours. Back to Scan when it's in range again.
     ///   - Busy: someone else holds the console. Whatever we were scanning is dropped (its progress is on the board); back
@@ -71,7 +72,7 @@ namespace StbcRevival.Science
         /// <summary>A target row was tapped: claim and open its scan from the board's progress. False if it can't start.</summary>
         public bool Start(string id, float boardProgress, bool boardDone, float now)
         {
-            if (Mode != ScreenMode.Targets || string.IsNullOrEmpty(id) || boardDone) return false;
+            if (Mode != ScreenMode.Targets || string.IsNullOrEmpty(id) || boardDone || boardProgress >= 100f) return false;
             MiniGame[] g = GamesFor(id);
             TargetId = id;
             GameA = g[0];
@@ -123,6 +124,14 @@ namespace StbcRevival.Science
             if (claimant != localActor && now >= nextClaim) { link.Claim(); nextClaim = now + ClaimEvery; }
             if (now >= nextBeat) { link.Heartbeat(); nextBeat = now + BeatEvery; }
 
+            // At 100 but not (yet) shown as the claimant: the host would drop the report and the complete. Wait at 100,
+            // claiming again, and finish once the board shows us.
+            if (Progress.Done)
+            {
+                if (claimant == localActor) Finish();
+                return;
+            }
+
             if (target != TargetState.InRange)
             {
                 if (Mode == ScreenMode.Scan)
@@ -139,10 +148,7 @@ namespace StbcRevival.Science
             Progress.Advance(GameA.Match, GameB.Match, dt);
             if (Progress.Done)
             {
-                link.Report(TargetId, 100f);
-                link.Complete(TargetId);
-                link.Release();
-                ToTargets();
+                if (claimant == localActor) Finish();
                 return;
             }
             if (Progress.Locked && now >= nextReport)
@@ -150,6 +156,14 @@ namespace StbcRevival.Science
                 link.Report(TargetId, Progress.Value);
                 nextReport = now + ReportEvery;
             }
+        }
+
+        void Finish()
+        {
+            link.Report(TargetId, 100f);
+            link.Complete(TargetId);
+            link.Release();
+            ToTargets();
         }
 
         void ToTargets() { Clear(); Mode = ScreenMode.Targets; }

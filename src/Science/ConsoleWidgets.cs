@@ -413,7 +413,7 @@ namespace StbcRevival
                                 cut += a.Length - keep.Count;
                             }
                         }
-                        catch (Exception) { }
+                        catch (Exception e) { Plugin.Log.LogWarning(P + $"{copy.name}: clearing {type.Name}.{f.Name}: {e.Message}"); }
                     }
             }
             if (cut > 0) Plugin.Log.LogInfo(P + $"{copy.name}: {cut} reference(s) to the original's surroundings cleared");

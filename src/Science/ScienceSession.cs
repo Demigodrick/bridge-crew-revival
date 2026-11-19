@@ -41,7 +41,10 @@ namespace StbcRevival.Science
         /// <summary>The actor at the console, 0 if free.</summary>
         internal static int Claimant => IsHost ? Board.Claimant(Time.unscaledTime) : clientClaimant;
 
-        internal static bool IsHost => !InRoom || (Photon?.GetMethod("get_isMasterClient", Static)?.Invoke(null, null) is bool b && b);
+        internal static bool IsHost => !InRoom || (IsMasterClient?.Invoke(null, null) is bool b && b);
+
+        private static MethodInfo isMasterClient;
+        private static MethodInfo IsMasterClient => isMasterClient ?? (isMasterClient = Photon?.GetMethod("get_isMasterClient", Static));
 
         /// <summary>This machine's actor number (1 when not in a room).</summary>
         internal static int LocalActor
@@ -304,7 +307,9 @@ namespace StbcRevival.Science
         // ------------------------------------------------------------------------------------------- Photon
         private static Type Photon => Patches.PhotonNetworkType;
         private static object Room => Photon?.GetMethod("get_room", Static)?.Invoke(null, null);
-        private static bool InRoom => Photon?.GetMethod("get_inRoom", Static)?.Invoke(null, null) is bool b && b;
+        private static bool InRoom => GetInRoom?.Invoke(null, null) is bool b && b;
+        private static MethodInfo getInRoom;
+        private static MethodInfo GetInRoom => getInRoom ?? (getInRoom = Photon?.GetMethod("get_inRoom", Static));
         private static int? ActorOf(object player) =>
             player?.GetType().GetMethod("get_ID", BindingFlags.Public | BindingFlags.Instance)?.Invoke(player, null) as int?;
 
