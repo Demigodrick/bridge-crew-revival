@@ -234,6 +234,8 @@ namespace StbcRevival
             RevivalSettings.Patch(harmony);
             VrSetupSkip.Patch(harmony);
             QuietConnect.Patch(harmony);
+            NoPlatformSpecs.Patch(harmony);
+            SlowCallProbe.Patch(harmony);
             SteamFriendAdd.Patch(harmony);
             PlayerVolumes.Patch(harmony);
             if (SteamMode.Enabled) Blocklist.Patch(harmony);

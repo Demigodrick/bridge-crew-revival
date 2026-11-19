@@ -137,6 +137,8 @@ Check("SkipVrSetup: InputManager.UpdateActiveController(bool) returns bool",
 var vrSetupInput = game.GetType("SVR.InputManager");
 Check("SkipVrSetup: InputManager IHNHENLGKBO/FAKBNJECKGI/OMHIFCDEJLK (bool: keyboard+mouse, motion controllers, usable)",
     new[] { "IHNHENLGKBO", "FAKBNJECKGI", "OMHIFCDEJLK" }.All(f => vrSetupInput?.GetField(f, Inst)?.FieldType.FullName == "System.Boolean") ? vrSetupInput : null);
+Check("TrackingEvents.PlatformSpecs.PIKCINNNNPA() (the telemetry coroutine) returns IEnumerator",
+    game.GetType("SVR.Network.KNJHLNDOOGP+LPIKHEPODPN")?.GetMethod("PIKCINNNNPA", AnyS) is { } specs && specs.ReturnType.FullName == "System.Collections.IEnumerator" ? specs : null);
 var centerView = game.GetType("CenterViewIntroElement");
 Check("SkipVrSetup: CenterViewIntroElement.LateUpdate + ANDHFMCAMMM(VRRecenteredEvent) + NDDFIMFHMKI (Transform)",
     centerView?.GetMethod("LateUpdate", Inst) is not null

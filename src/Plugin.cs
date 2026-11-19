@@ -146,6 +146,7 @@ namespace StbcRevival
         internal static ConfigEntry<string> ExtraDevConfig;
         internal static ConfigEntry<bool> Diagnostics;
         internal static ConfigEntry<float> HangWatchdogSeconds;
+        internal static ConfigEntry<bool> SlowCallProbe;
         internal static ConfigEntry<string> TraceTypes;
         internal static ConfigEntry<UnityEngine.KeyCode> BrowserKey;
         internal static ConfigEntry<bool> ShortRoomCodes;
@@ -430,6 +431,8 @@ namespace StbcRevival
             HangWatchdogSeconds = Config.Bind("Debug", "HangWatchdogSeconds", 30f,
                 "When the game runs no frame for this long (a freeze), log it and save a dump of the game to BepInEx/sessions "
                 + "for the next crash report (and a second one if it's still stuck four times as long later). 0 = off.");
+            SlowCallProbe = Config.Bind("Debug", "SlowCallProbe", false,
+                "Development: time the game's Awake/Start/Update-style methods and every coroutine step, and log any call over 50 ms ([diag] slow call). Slows the game; for finding a freeze.");
             HangWatchdog.Start(HangWatchdogSeconds.Value);
 
             DevConfig.Build();
