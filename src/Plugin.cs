@@ -274,8 +274,8 @@ namespace StbcRevival
                 "How fast enemy ships (Klingon, Romulan, pirate, Borg) fire, as a share of the game's: 0.75, 1, 1.25 or 1.5 "
                 + "(any value from 0.25 to 4 works here). Applies to ships that spawn after a change. Host only.");
             EnemyAiGroupTactics = Config.Bind("EnemyAI", "GroupTactics", true,
-                "Enemy fleets fight in squads: wingmen stay with their leader (a flagship leads a bigger escort), go for "
-                + "what their leader is attacking and for whoever hits their leader, and regroup when it's destroyed. Host only.");
+                "Enemy fleets fight in squads: wingmen (a flagship has a bigger escort) go for what their leader is attacking "
+                + "and for whoever hits their leader, and regroup when it's destroyed. Host only.");
             EvacuationMinutes = Config.Bind("Revival", "EvacuationMinutes", 15,
                 "Stellar Evacuation: minutes until the star erupts (3-30), the last of them to warp out.");
             MapOverride = Config.Bind("Debug", "MapOverride", "",

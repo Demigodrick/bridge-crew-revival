@@ -12,12 +12,13 @@ namespace StbcRevival
     /// up to FlagshipWingmen, any other ship up to Wingmen), and every other ship joins the nearest squad with room whose
     /// leader is within JoinDistance, or leads one of its own.
     ///
-    /// - Staying together: a wingman is tethered to its leader (the game's own tether, AgentShip.SetTether: it flies back
-    ///   when more than TetherDistance away, and only picks targets within that distance of its leader).
+    /// - No tether: the game's own (AgentShip.SetTether) was tried for keeping wingmen with their leader, but its
+    ///   return-to-tether branch outranks attacking, so a wingman more than the tether distance away (as attack runs
+    ///   often take it) broke off and flew back without firing: in Patrol's intercept the escort barely fought.
     /// - Focus fire: a wingman's aggro list gives LeaderTargetBonus to its leader's target, and LeaderAttackerBonus to
     ///   whoever last hit its leader; its squad doesn't count as a crowd on its leader's target (EnemyAiCombat).
     /// - When a leader is destroyed its wingmen are let go (their tether off) and join or lead new squads.
-    /// A ship a mission has tethered itself is left out. Turning the setting off lets every wingman go.
+    /// A ship a mission has tethered is left out. Turning the setting off breaks the squads up.
     /// </summary>
     internal static class EnemyAiSquads
     {
@@ -27,7 +28,6 @@ namespace StbcRevival
         private const int MinFleet = 4;                 // ships a side needs in a system before it forms squads
         private const int Wingmen = 2, FlagshipWingmen = 4;
         private const double JoinDistance = 12000;      // metres from a leader to join its squad
-        private const double TetherDistance = 15000;    // metres a wingman keeps within of its leader (about phaser range)
         internal const float LeaderTargetBonus = 40f, LeaderAttackerBonus = 30f;
 
         private sealed class Squad
@@ -39,7 +39,6 @@ namespace StbcRevival
 
         private static readonly Dictionary<AI.AgentShip, Squad> squadOf = new Dictionary<AI.AgentShip, Squad>(); // every member, leader included
         private static readonly List<Squad> squads = new List<Squad>();
-        private static readonly HashSet<AI.AgentShip> tethered = new HashSet<AI.AgentShip>(); // wingmen whose tether is ours
         private static readonly List<AI.AgentShip> candidates = new List<AI.AgentShip>();
         private static float nextUpdate;
         private static string lastSummary;
@@ -167,8 +166,6 @@ namespace StbcRevival
                 {
                     best.Wingmen.Add(ship);
                     squadOf[ship] = best;
-                    try { ship.SetTether(true, TetherDistance, best.Leader); tethered.Add(ship); }
-                    catch (Exception e) { Plugin.Log.LogWarning("Enemy AI squads: tether: " + e.Message); }
                 }
                 else
                 {
@@ -195,8 +192,6 @@ namespace StbcRevival
         {
             if (ship == null) return;
             squadOf.Remove(ship);
-            if (!tethered.Remove(ship)) return;
-            try { if (ship.NMJIEDJOOCJ != null) ship.SetTether(false, 0.0, null); } catch { }
         }
 
         private static void Dissolve(Squad squad)
@@ -210,8 +205,6 @@ namespace StbcRevival
             foreach (var squad in squads) Dissolve(squad);
             squads.Clear();
             squadOf.Clear();
-            foreach (var ship in tethered) try { if (ship != null && ship.NMJIEDJOOCJ != null) ship.SetTether(false, 0.0, null); } catch { }
-            tethered.Clear();
             lastSummary = null;
         }
 
