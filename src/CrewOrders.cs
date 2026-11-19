@@ -113,14 +113,16 @@ namespace StbcRevival
             if (menuEnabled != null && menuVisible != null)
                 foreach (var type in AccessTools.AllTypes().Where(t => t != null && item.IsAssignableFrom(t)))
                 {
-                    var state = AccessTools.DeclaredMethod(type, "OnUpdateMenuState");
+                    // Not every kind has its own (AccessTools.DeclaredMethod warns of each that doesn't).
+                    var state = type.GetMethods(BindingFlags.DeclaredOnly | BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+                        .FirstOrDefault(m => m.Name == "OnUpdateMenuState");
                     if (state == null || state.IsAbstract) continue;
                     harmony.Patch(state, postfix: new HarmonyMethod(typeof(CrewOrders), nameof(MenuState_Postfix)));
                     states++;
                 }
             var playbook = AccessTools.Method(manager, "UpdatePlaybookOrders");
-            playbookOn = AccessTools.Method(manager, "GGBIFBCOIND");      // get_PlaybookCommands
-            playbookShown = AccessTools.Method(manager, "IPDEODMCKJF");   // get_PlaybookVisibleCommands
+            playbookOn = AccessTools.Method(manager, "get_PlaybookCommands");               // property GGBIFBCOIND
+            playbookShown = AccessTools.Method(manager, "get_PlaybookVisibleCommands");     // property IPDEODMCKJF
             if (playbook != null && playbookOn != null && playbookShown != null)
                 harmony.Patch(playbook, postfix: new HarmonyMethod(typeof(CrewOrders), nameof(PlaybookState_Postfix)));
             target = AccessTools.TypeByName("AI.OILEJOBJAEJ");                                          // TargetSubsystemMenuItem

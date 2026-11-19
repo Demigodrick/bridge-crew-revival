@@ -22,7 +22,7 @@ namespace StbcRevival
         private static readonly string[] Classes = { "Sovereign", "Defiant" };
         private static CustomShip[] classes;
         private static FieldInfo source;      // the payload's firing ship
-        private static FieldInfo body;        // a player ship's body
+        private static PropertyInfo body;     // a player ship's body (BaseSpacecraft.KLENBCLCNKB, the one Awake builds from _body)
         private static AudioClip salvoClip;
         private static bool audioTried;
 
@@ -43,10 +43,10 @@ namespace StbcRevival
             try
             {
                 source = AccessTools.Field(typeof(LauncherPayload), "DOJCBJGPHJL");
-                body = AccessTools.Field(typeof(PlayerSpacecraft), "KLENBCLCNKB");
+                body = AccessTools.Property(typeof(BaseSpacecraft), "KLENBCLCNKB");
                 var init = AccessTools.DeclaredMethod(typeof(LauncherPayload), "LMOOIPLMILG", new[] { typeof(string) });
                 var explosion = AccessTools.DeclaredMethod(typeof(BaseCombatManager), "Server_Explosion");
-                if (source == null || source.FieldType != typeof(SectorBody) || body == null || !typeof(SpacecraftBody).IsAssignableFrom(body.FieldType)
+                if (source == null || source.FieldType != typeof(SectorBody) || body == null || !typeof(SpacecraftBody).IsAssignableFrom(body.PropertyType)
                     || init == null || explosion == null || explosion.GetParameters().Length != 9 || explosion.GetParameters()[3].ParameterType != typeof(float))
                     throw new MissingMemberException("the game's launcher or explosion differs");
                 harmony.Patch(init, postfix: new HarmonyMethod(typeof(Quantum), nameof(PayloadReady)));
@@ -77,7 +77,7 @@ namespace StbcRevival
         private static bool IsQuantumShip(SectorBody ship)
         {
             if (!(ship is PlayerSpacecraft player)) return false;
-            var b = body.GetValue(player) as SpacecraftBody;
+            var b = body.GetValue(player, null) as SpacecraftBody;
             if (b == null) return false;
             string name = b.name;
             foreach (var c in Classes) if (name.StartsWith("Body - " + c + " (", StringComparison.Ordinal)) return true;
