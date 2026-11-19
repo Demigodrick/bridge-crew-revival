@@ -99,7 +99,7 @@ falls behind. A crew that scans regularly can stay ahead indefinitely.
 
 The mockups are in `/home/patrick/stbc/.superpowers/brainstorm/437533-1795043084/content/science-minigames-v4.html`
 (ignored by git, in the main checkout only). Tuning (how much
-targets drift, how fast the bar fills, the 70% threshold) is set by playtesting. The goal is about 30–45 seconds
+targets drift, how fast the bar fills, the 70% threshold) is set by playtesting. The goal is about 15–25 seconds (doubled from 30–45 after playtesting)
 for a competent player.
 
 ### What can be scanned (Patrol)
