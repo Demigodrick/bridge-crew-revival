@@ -97,7 +97,8 @@ namespace StbcRevival.Missions
 
             // Balance (from the logged hull and shields: with fire spread over thirty ships no allied shield
             // ever broke): allied ships can be destroyed (some Starfleet ships spawn invulnerable, as mission
-            // allies) and have weak shields; the enemy fleet has strong ones, picks its own targets, and sends
+            // allies) and have normal shields that recharge faster than the prefabs' (ReadyAllies); the enemy fleet has
+            // strong ones, picks its own targets, and sends
             // reinforcements when it's down to half.
             foreach (var step in ReadyAllies(allies)) yield return step;
 
@@ -195,15 +196,42 @@ namespace StbcRevival.Missions
             }
         }
 
-        // Allied ships can be destroyed (some Starfleet ships spawn invulnerable, as mission allies) and have weak
-        // shields.
+        // Allied ships can be destroyed (some Starfleet ships spawn invulnerable, as mission allies). Their shields are
+        // normal strength and recharge faster than the Starfleet prefabs' 5 a second (after 15 s, 2 min once down): with
+        // the enemy AI's shield fix (EnemyAiFixes) the Klingon and Romulan shields recharge at their real 200-250 a
+        // second, and the allied fleet's drained away while theirs held. Still well below the enemy's.
+        private const float AllyShieldRecharge = 50f, AllyShieldWait = 30f, AllyShieldDownWait = 60f;
+
         private IEnumerable<Step> ReadyAllies(List<BodyRef> ships)
         {
             foreach (var ally in ships)
             {
                 yield return Task.FEBCHOJGMHM.TellAI(ally).ToSetVulnerable();
-                yield return Task.OFNIKPPKOGI.TellAI(ally).ToSetShieldStrength(AI.IDCAFFBNKFO.Weak);
+                yield return Task.OFNIKPPKOGI.TellAI(ally).ToSetShieldStrength(AI.IDCAFFBNKFO.Normal);
+                AllyShields(ally);
             }
+        }
+
+        private static readonly System.Reflection.FieldInfo RechargeRate = HarmonyLib.AccessTools.Field(typeof(AI.AgentShip), "_shieldRechargeRate");
+        private static readonly System.Reflection.FieldInfo RechargeWait = HarmonyLib.AccessTools.Field(typeof(AI.AgentShip), "_shieldRechargeWaitTime");
+        private static readonly System.Reflection.FieldInfo RechargeDownWait = HarmonyLib.AccessTools.Field(typeof(AI.AgentShip), "_shieldDownRechargeWaitTime");
+        private static bool loggedAllyShields;
+
+        private static void AllyShields(BodyRef ally)
+        {
+            try
+            {
+                if (!(ally.AHMPFHDGMKJ is AI.AgentShip ship)) return;
+                RechargeRate?.SetValue(ship, AllyShieldRecharge);
+                RechargeWait?.SetValue(ship, AllyShieldWait);
+                RechargeDownWait?.SetValue(ship, AllyShieldDownWait);
+                if (!loggedAllyShields)
+                {
+                    loggedAllyShields = true;
+                    Plugin.Log.LogInfo($"Fleet battle: allied shields normal, recharging {AllyShieldRecharge:0}/s after {AllyShieldWait:0} s ({AllyShieldDownWait:0} s once down)");
+                }
+            }
+            catch { /* the game's */ }
         }
 
         // Enemy ships at the far side of the field, facing you, with strong shields; a flagship among them for every
