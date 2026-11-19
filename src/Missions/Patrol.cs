@@ -67,7 +67,7 @@ namespace StbcRevival.Missions
         private const double MinTravel = 30000;    // a site at least this far from the warp arrival, if there is one
         private const int BorgChance = 20;         // one assignment in this many has a Borg cube turn up
         private const float BorgStays = 240f;      // seconds the cube attacks before it warps away
-        private const int WarfareChance = 20;      // one offer in about this many is a warfare anomaly
+        private const int WarfareChance = 10;      // one offer in about this many is a warfare anomaly
         private static readonly Tag[] SiteTags =
         {
             Tag.ImpulseDestination, Tag.Planet, Tag.Moon, Tag.SpaceStation, Tag.Asteroid, Tag.Anomaly, Tag.Nebula,
