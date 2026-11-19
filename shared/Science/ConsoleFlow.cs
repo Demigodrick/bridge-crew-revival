@@ -36,7 +36,8 @@ namespace StbcRevival.Science
     ///     the console stays ours. Back to Scan when it's in range again.
     ///   - Busy: someone else holds the console. Whatever we were scanning is dropped (its progress is on the board); back
     ///     to Targets when it's free.
-    /// A target that's done on the board, or gone from the list for longer than MissingGrace, ends the scan.
+    /// A target that's done on the board, or gone from the list for longer than MissingGrace, ends the scan; one at 100 but
+    /// not done can be started again, to complete it.
     /// </summary>
     internal sealed class ConsoleFlow
     {
@@ -69,10 +70,14 @@ namespace StbcRevival.Science
             return new[] { MiniGame.Create(kinds[0], seed), MiniGame.Create(kinds[1], unchecked(seed * 31 + 7)) };
         }
 
-        /// <summary>A target row was tapped: claim and open its scan from the board's progress. False if it can't start.</summary>
+        /// <summary>
+        /// A target row was tapped: claim and open its scan from the board's progress. False if it can't start (it's done).
+        /// A target the board has at 100 but not done (its scanner left, or dropped, before the claim let it complete)
+        /// opens at 100 and finishes as soon as the board shows us as the claimant.
+        /// </summary>
         public bool Start(string id, float boardProgress, bool boardDone, float now)
         {
-            if (Mode != ScreenMode.Targets || string.IsNullOrEmpty(id) || boardDone || boardProgress >= 100f) return false;
+            if (Mode != ScreenMode.Targets || string.IsNullOrEmpty(id) || boardDone) return false;
             MiniGame[] g = GamesFor(id);
             TargetId = id;
             GameA = g[0];

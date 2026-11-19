@@ -180,11 +180,36 @@ public class ConsoleFlowTests
     }
 
     [Fact]
-    public void Start_RefusesATargetAlreadyAt100()
+    public void Start_RefusesADoneTargetAt100()
     {
-        var f = new ConsoleFlow(new Recorder());
-        Assert.False(f.Start("42", 100f, false, 0f));
+        var r = new Recorder();
+        var f = new ConsoleFlow(r);
+        Assert.False(f.Start("42", 100f, true, 0f));
         Assert.Equal(ScreenMode.Targets, f.Mode);
+        Assert.Empty(r.Sent);
+    }
+
+    [Fact]
+    public void Start_TakesATargetAt100NotDone_AndCompletesItOnceWithTheClaim()
+    {
+        // Its scanner waited at 100 for the claim and left (Leave reported 100), or dropped between Report and Complete.
+        var r = new Recorder();
+        var f = new ConsoleFlow(r);
+        Assert.True(f.Start("42", 100f, false, 0f));
+        Assert.Equal(ScreenMode.Scan, f.Mode);
+        Assert.True(f.Progress.Done);
+        f.Tick(0.1f, 0.1f, 0, Me, TargetState.InRange, false); // the board doesn't show us yet: waits at 100
+        Assert.Equal(ScreenMode.Scan, f.Mode);
+        Assert.Equal(0, r.Count("complete"));
+        f.Tick(0.2f, 0.1f, Me, Me, TargetState.InRange, false);
+        Assert.Equal(ScreenMode.Targets, f.Mode);
+        for (int i = 0; i < 20; i++) f.Tick(0.3f + i * 0.1f, 0.1f, Me, Me, TargetState.InRange, false);
+        Assert.Equal(1, r.Count("complete 42"));
+        int complete = r.Sent.IndexOf("complete 42");
+        Assert.Equal("report 42 100", r.Sent[complete - 1]);
+        Assert.Equal("release", r.Sent[complete + 1]);
+        // Done on the board now: it can't be started again.
+        Assert.False(f.Start("42", 100f, true, 3f));
     }
 
     [Fact]
