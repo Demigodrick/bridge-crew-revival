@@ -40,15 +40,16 @@ cp "$root/dist/BridgeCrewRevival-$version/plugins/StbcRevival.dll" "$root/dist/B
 # Revival voice's native libraries: the in-game updater puts them in BepInEx/native (on update, or when missing).
 (cd "$root/dist/BridgeCrewRevival-$version/native" && sha256sum rnnoise.dll speexdsp.dll >> "$out/SHA256SUMS")
 assets=("$out/BridgeCrewRevival.zip" "$out/BridgeCrewRevival.zip.sha256" "$out/StbcRevival.dll" "$out/StbcCore.dll")
-# Our ship models (BepInEx/ships) and the second sector's galaxy file (BepInEx/galaxies), listed by their path in the
-# zip's folder ("ships/Nova/Nova.obj"): the updater fetches the missing ones at launch and the changed ones on an update.
-for d in ships galaxies; do
+# Our ship models (BepInEx/ships), the second sector's galaxy file (BepInEx/galaxies) and the science console's positions
+# (BepInEx/bridges/science), listed by their path in the zip's folder ("ships/Nova/Nova.obj"): the updater fetches the
+# missing ones at launch and the changed ones on an update.
+for d in ships galaxies bridges/science; do
   dir="$root/dist/BridgeCrewRevival-$version/$d"
   [ -d "$dir" ] || continue
   while IFS= read -r -d '' f; do
     rel="$d/${f#"$dir"/}"
     printf '%s  %s\n' "$(sha256sum "$f" | cut -d' ' -f1)" "$rel" >> "$out/SHA256SUMS"
-  done < <(find "$dir" -type f -print0 | sort -z)
+  done < <(find "$dir" -type f ! -name README.md -print0 | sort -z)
 done
 assets+=("$out/SHA256SUMS")
 

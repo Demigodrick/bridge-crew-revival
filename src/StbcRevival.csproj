@@ -18,6 +18,7 @@
     <Compile Include="../shared/MiniJson.cs" Link="Shared/MiniJson.cs" />
     <Compile Include="../shared/Galaxy/*.cs" Link="Shared/Galaxy/%(Filename).cs" />
     <Compile Include="../shared/Voice/*.cs" Link="Shared/Voice/%(Filename).cs" />
+    <Compile Include="../shared/Science/*.cs" Link="Shared/Science/%(Filename).cs" />
   </ItemGroup>
 
   <ItemGroup>

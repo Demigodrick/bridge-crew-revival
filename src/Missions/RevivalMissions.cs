@@ -72,6 +72,7 @@ namespace StbcRevival.Missions
         private static void EndRequest_Prefix(Mission.BEEEGBFNGFJ __0)
         {
             if (__0 == null || Selected != typeof(PatrolSequence)) return;
+            StbcRevival.Science.ScienceSession.PatrolEnded();
             Plugin.Log.LogInfo($"Patrol: mission ending ({__0.MissionStatus}), {PatrolObjective.Completed} assignment(s) completed");
             if (PatrolObjective.Completed < 1) return;
             if (__0.MissionStatus != Mission.GPJGLFHMNJO.aborted && __0.MissionStatus != Mission.GPJGLFHMNJO.captainLeft) return;
@@ -136,6 +137,7 @@ namespace StbcRevival.Missions
             FleetBattleNoCloak.Patch(harmony);
             PatrolWarfareAggro.Patch(harmony);
             FleetBattleArmor.Patch(harmony);
+            StbcRevival.Science.ScienceEffects.Patch(harmony);
             FleetBattleAggro.Patch(harmony);
             LastStandBridgeRepair.Patch(harmony);
             MissionMaps.Patch(harmony);

@@ -55,6 +55,9 @@ namespace StbcRevival
         internal static ConfigEntry<bool> CheckForUpdates;
         internal static ConfigEntry<bool> AutoUpdate;
         internal static ConfigEntry<bool> TestLastStand;
+        internal static ConfigEntry<bool> ScienceOn;
+        internal static ConfigEntry<string> ScienceLedger;
+        internal static ConfigEntry<string> ScienceTestPlacement;
         internal static ConfigEntry<bool> PvpTest;
         internal static ConfigEntry<string> PvpTestShip;
         internal static ConfigEntry<bool> SkipMicCheck;
@@ -129,6 +132,7 @@ namespace StbcRevival
         internal static ConfigEntry<bool> BridgeWalkWalls;
         internal static ConfigEntry<bool> BridgeWalkAnimate;
         internal static ConfigEntry<bool> BridgeWalkTestCorridor;
+        internal static ConfigEntry<UnityEngine.KeyCode> ScienceUseKey;
         internal static ConfigEntry<bool> BridgeLayouts;
         internal static ConfigEntry<bool> BridgeShareLayouts;
         internal static Plugin Instance { get; private set; }
@@ -298,6 +302,15 @@ namespace StbcRevival
                     "Testing only: every assignment Patrol offers is this one, when you host. Empty: Starfleet's usual mix "
                     + "(a Warfare Anomaly about one time in twenty).",
                     new BepInEx.Configuration.AcceptableValueList<string>("", "hunt", "defend", "rescue", "ambush", "escort", "research", "warfare")));
+            ScienceOn = Config.Bind("Debug", "ScienceOn", false,
+                "Testing only: the science console counts as available on every bridge, when you host a Patrol.");
+            ScienceTestPlacement = Config.Bind("Debug", "SciencePlacement", "",
+                "Testing only: a science console placement file (as the bridge designer saves them in assets/bridges/science) "
+                + "put on whatever bridge is loaded, instead of the ones that come with the mod. Empty: off.");
+            ScienceLedger = Config.Bind("Debug", "ScienceLedger", "",
+                "Testing only: the science upgrades every Patrol you host starts with, as the ledger's wire text "
+                + "(\"SCL1;1;<weapons>,<shields>,<impulse>,<repair>;<team>:<share>,...;<enemy steps>\", shares as fractions: "
+                + "\"SCL1;1;0.5,0,0,0;;28\" is weapons +50% and enemy damage +30%). The console is on. Empty: off.");
             TestLastStand = Config.Bind("Debug", "TestLastStand", false,
                 "Testing only: every Ongoing Voyage you host runs the Revival mission Last Stand instead.");
             PvpTest = Config.Bind("Debug", "PvpTest", false,
@@ -359,6 +372,8 @@ namespace StbcRevival
                 + "or press the key to stand up or sit down, the left stick walks, the right stick turns, and you can walk around your play space. "
                 + "Crewmates with the mod see you stand and walk. Takes effect after a restart.");
             BridgeWalkKey = Config.Bind("Bridge Walk", "Key", UnityEngine.KeyCode.F6, "Stands you up and sits you back down.");
+            ScienceUseKey = Config.Bind("Science", "UseKey", UnityEngine.KeyCode.F,
+                "Standing at the science console on a monitor: uses it (the view goes to its screen and the mouse is free) and stops using it (Escape does too). None: off.");
             BridgeWalkSpeed = Config.Bind("Bridge Walk", "WalkSpeed", 1.4f, "Walking speed, metres per second.");
             BridgeWalkRunSpeed = Config.Bind("Bridge Walk", "RunSpeed", 2.6f, "Speed with Shift held, metres per second.");
             BridgeWalkMouseSensitivity = Config.Bind("Bridge Walk", "MouseSensitivity", 2f, "How fast the mouse turns you while standing.");
@@ -488,6 +503,8 @@ namespace StbcRevival
             Safely("galaxy catalogue", StbcRevival.Galaxy.GalaxyCatalogue.Update);
             Safely("galaxy room", StbcRevival.Galaxy.GalaxyRoom.Update);
             Safely("restock sync", StbcRevival.Missions.RestockSync.Update);
+            Safely("science", StbcRevival.Science.ScienceSession.Update);
+            Safely("science screen", StbcRevival.Science.ScienceScreen.Update);
             Safely("excelsior", Excelsior.Update);
             Safely("ships", CustomShip.Update);
             Safely("defiant", Defiant.Update);
@@ -531,6 +548,7 @@ namespace StbcRevival
         {
             Safely("room browser window", RoomBrowser.OnGUI);
             Safely("text prompt", TextPrompt.OnGUI);
+            Safely("science console prompt", StbcRevival.Science.ScienceUse.OnGUI);
             Safely("ship name prompt", ShipNamePrompt.OnGUI);
         }
     }

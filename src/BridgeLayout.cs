@@ -163,6 +163,9 @@ namespace StbcRevival
 
         private static string Folder => Path.Combine(Paths.BepInExRootPath, "bridges");
 
+        // The layout's added parts (the science console's are a set of their own: SciencePlacement).
+        private static BridgeParts Parts => BridgeParts.For(BridgeParts.LayoutSet);
+
         // The game's bridge a class of ours flies on (CustomShip): the Aegis's.
         private static readonly string[] ShipBridges = { "Bridge_scene_02" };
 
@@ -197,11 +200,14 @@ namespace StbcRevival
         // ------------------------------------------------------------------------------------------- every frame
         internal static void Update()
         {
+            // The science console's place comes with the mod, layouts on or off (a set of parts of its own).
+            try { Science.SciencePlacement.Update(); }
+            catch (Exception e) { Plugin.Log.LogWarning("Science console: " + e.Message); }
             if (Plugin.BridgeLayouts == null || !Plugin.BridgeLayouts.Value) return;
             BridgeShare.Update();
             if (boundRoot != 0)
             {
-                BridgeParts.Update();
+                Parts.Update();
                 // Copies of batched pieces wait for the scene's file to be read.
                 foreach (var c in changes) if (c.T != null && c.Moved && c.Batched.Count > 0 && c.Copy == null && c.CopyProblem == null) Refresh(c);
                 // Lights it switches off stay off (the game's scripts switch some on and off).
@@ -227,7 +233,7 @@ namespace StbcRevival
                     Plugin.Log.LogInfo($"Bridge layout: {scene.name}'s layout changed ({now.Label}): put on again");
                     foreach (var c in changes) Reset(c);
                     ResetFollowers();
-                    BridgeParts.Clear();
+                    Parts.Clear();
                     Forget();
                     // Gone altogether (the file deleted, or the host has none): the bridge stays as it is.
                     if (now.Text == null) { boundRoot = RootId(scene); boundKey = now.Key; return; }
@@ -310,7 +316,7 @@ namespace StbcRevival
             try { layout = ParseLayout(text, out added, out lights); }
             catch (Exception e) { Plugin.Log.LogWarning($"Bridge layout: {label} for {scene.name} isn't a layout this version can read: {e.Message}"); return; }
             Plugin.Log.LogInfo($"Bridge layout: {label} for {scene.name}: {layout.Count} change(s), {added.Count} added part(s), {lights.Count} added light(s)");
-            BridgeParts.Start(added, scene);
+            Parts.Start(added, scene);
             BridgeLights.Start(lights, scene);
             if (layout.Count == 0) return;
             var byPath = Index();
@@ -669,7 +675,7 @@ namespace StbcRevival
         /// <summary>The scene's gone (its objects with it) or its layout is put on again: what we made goes.</summary>
         private static void Forget()
         {
-            BridgeParts.Clear();
+            Parts.Clear();
             BridgeLights.Clear();
             followers.Clear();
             seatsDone.Clear();

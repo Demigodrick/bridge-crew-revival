@@ -59,7 +59,7 @@ namespace StbcRevival.Missions
     public sealed class PatrolObjective : MissionObjective
     {
         internal const string Title = "PATROL";
-        private const string Directive = "Patrol: carry out Starfleet's assignments";
+        internal const string Directive = "Patrol: carry out Starfleet's assignments"; // the science console's notices go under it too
         private const double RepairRange = 5000;   // metres from a station
         private const float RepairCooldown = 60f;  // seconds between station repairs
         private const double AmbushRange = 10000;  // metres from the freighter when the ambush is sprung
@@ -103,12 +103,18 @@ namespace StbcRevival.Missions
         {
             Completed = 0;
             PatrolWarfareAggro.Clear(); // from a patrol quit mid-battle
+            StbcRevival.Science.ScienceSession.PatrolStarted();
             player = Objective.FFKKADIEOGP;
             Objective.AddStep("patrol", Task.MFLJBKCDBMC.WithSubtaskCoroutine(Patrol));
         }
 
         private IEnumerator<Step> Patrol()
         {
+            if (StbcRevival.Science.ScienceSession.Ledger.On) // the console is on for this patrol: its targets' loop, for the whole patrol (it checks Active itself)
+            {
+                Objective.AddStep("science targets", Task.MFLJBKCDBMC.WithSubtaskCoroutine(() => StbcRevival.Science.ScienceTargets.DebrisLoop(Objective, Task, player)));
+                yield return Task.KKALNAMJCNH.WithName("science targets");
+            }
             foreach (var step in MissionAudio.Start(Task)) yield return step;
             yield return Task.NECMCDDOFJB.WithDescriptionString(Directive);
             yield return Task.HHNFJKHGEPH.WithMissionString(Title);
@@ -160,6 +166,8 @@ namespace StbcRevival.Missions
                 jobSystem = target;
                 yield return Task.KNMMMJOOBHC.WithTime(3f); // out of warp
                 PickSite();
+                if (StbcRevival.Science.ScienceSession.Active)
+                    foreach (var step in StbcRevival.Science.ScienceTargets.SpawnReadings(Objective, Task, site, player)) yield return step;
                 if (job != Warfare && random.Next(BorgChance) == 0)
                 {
                     var system = target;
@@ -171,7 +179,7 @@ namespace StbcRevival.Missions
                 foreach (var step in run) yield return step;
                 yield return Task.BCJDEKKIHDD.RemoveAllMarkers();
 
-                if (succeeded) completed++; else failed++;
+                if (succeeded) { completed++; StbcRevival.Science.ScienceSession.AssignmentCompleted(); } else failed++;
                 Completed = completed;
                 Plugin.Log.LogInfo($"Patrol: {JobName(job)} {(succeeded ? "complete" : abandoned ? "abandoned" : "failed")}; {completed} done, {failed} failed");
                 ResultRow(completed);
@@ -961,7 +969,7 @@ namespace StbcRevival.Missions
         // survey in ResearchRaidChance, raiders come for the ship after the first scan, as the game's research
         // mission calls in enemy patrols on its science reports; the survey needs only the scans.
         private const int ResearchRaidChance = 4;  // one survey in this many is interrupted by raiders
-        private static readonly string[] Scannables =
+        internal static readonly string[] Scannables =
         {
             "Sector/System/Prop - ScannableObjectA", "Sector/System/Prop - ScannableObjectB",
             "Sector/System/Prop - ScannableObjectC", "Sector/System/Prop - ScannableObjectD",
@@ -1196,7 +1204,7 @@ namespace StbcRevival.Missions
         }
 
         // A distance from a body's surface, not its centre (3 km from a planet's or asteroid's centre is inside it).
-        private static float OffSurface(BodyRef site, float clearance)
+        internal static float OffSurface(BodyRef site, float clearance)
         {
             try
             {

@@ -287,6 +287,70 @@ foreach (var m in new[] { "MEOMCEOEBAC", "MBHACAKGEGM" })
 // Fleet Battle: player ships take less damage
 foreach (var ty in new[] { "Sector.Spacecraft.Subsystems.HullServer", "Sector.Spacecraft.Subsystems.SubsystemServer" })
     Check($"  {ty.Substring(ty.LastIndexOf('.') + 1)}.systemHit(float) (Fleet Battle armour)", game.GetType(ty)?.GetMethods(Inst | BindingFlags.DeclaredOnly).FirstOrDefault(x => x.Name == "systemHit" && x.GetParameters().Length == 1));
+// Science console effects (Patrol): upgrades and enemy steps
+const BindingFlags Decl = Inst | BindingFlags.DeclaredOnly;
+var agentShip = game.GetType("AI.AgentShip");
+Check("  AgentShip.takeHit(Ray, float, float, Subsystem, attacker, ...) (science: crew weapons, phasers)", agentShip?.GetMethods(Decl).FirstOrDefault(m => m.Name == "takeHit" && m.GetParameters() is { Length: >= 5 } p && p[0].ParameterType.FullName == "UnityEngine.Ray" && p[2].ParameterType.FullName == "System.Single" && !p[4].ParameterType.IsValueType));
+Check("  AgentShip.takeHit(Vector3, float, Subsystem, attacker, ...) (science: crew weapons, torpedoes)", agentShip?.GetMethods(Decl).FirstOrDefault(m => m.Name == "takeHit" && m.GetParameters() is { Length: >= 4 } p && p[0].ParameterType.FullName == "UnityEngine.Vector3" && p[1].ParameterType.FullName == "System.Single" && !p[3].ParameterType.IsValueType));
+Check("  BaseSpacecraft.takeHit(Vector3, float, Subsystem, attacker, ...) (science: enemy damage)", game.GetType("Sector.Spacecraft.BaseSpacecraft")?.GetMethods(Decl).FirstOrDefault(m => m.Name == "takeHit" && m.GetParameters() is { Length: >= 4 } p && p[0].ParameterType.FullName == "UnityEngine.Vector3" && p[1].ParameterType.FullName == "System.Single" && !p[3].ParameterType.IsValueType));
+Check("  BubbleShieldServer.shieldHit(float, attacker, out float) (science: crew shields)", game.GetType("Sector.Spacecraft.Subsystems.BubbleShieldServer")?.GetMethods(Decl).FirstOrDefault(m => m.Name == "shieldHit" && m.GetParameters() is { Length: 3 } p && p[0].ParameterType.FullName == "System.Single" && p[2].ParameterType.IsByRef));
+Check("  AgentShip.get_MaxShieldHealth (LPAMAFAACEJ) (science: enemy shields)", agentShip?.GetMethod("get_MaxShieldHealth", Decl));
+var engineClient = game.GetType("Sector.Spacecraft.Subsystems.SimpleEngineClient");
+Check("  SimpleEngineClient.BatchFixedUpdate + _maxSpeed + _maxYawVel (science: crew impulse, speed and turning)", engineClient?.GetMethod("BatchFixedUpdate", Decl, null, Type.EmptyTypes, null) != null && engineClient.GetField("_maxSpeed", Inst) != null ? engineClient.GetField("_maxYawVel", Inst) : null);
+Check("  AgentShip.MHHGGHHKMKN (UpdateMoveVelocity) + KEIEAFFMBPF (_moveVelocity) (science: enemy speed)", agentShip?.GetMethod("MHHGGHHKMKN", Decl) != null ? agentShip.GetField("KEIEAFFMBPF", Inst) : null);
+Check("  BorgCube.MHHGGHHKMKN (UpdateMoveVelocity) (science: enemy speed)", game.GetType("AI.BorgCube")?.GetMethod("MHHGGHHKMKN", Decl));
+var subsystemServer = game.GetType("Sector.Spacecraft.Subsystems.SubsystemServer");
+Check("  SubsystemServer.PPBDHDJCFKF (AutoRepair) + subsystemAutoRepairPoints (science: crew repair)", subsystemServer?.GetMethod("PPBDHDJCFKF", Decl) != null ? subsystemServer.GetField("subsystemAutoRepairPoints", Inst) : null);
+Check("  TargetInfoComponent.get_TeamID (DGGJOECIFAF) (science: victim's team)", game.GetType("Sector.TargetInfoComponent")?.GetMethod("get_TeamID", Inst));
+// Science console targets (Patrol): debris where hostile ships die, readings unspawned once scanned
+var bodyDied = game.GetType("Sector.EEKAKKNBAIH");
+Check("  Sector.EEKAKKNBAIH (BodyDiedEvent).Died (science: debris)", bodyDied?.GetField("Died", BindingFlags.Public | BindingFlags.Instance));
+Check("  CIFDOFLFGEA (Events).AddListener<T>(FFEMIIJDFMK+LCHKEJBPNEF<T>) (science: debris)", game.GetType("CIFDOFLFGEA")?.GetMethods(PS).FirstOrDefault(m => m.Name == "AddListener" && m.IsGenericMethodDefinition && m.GetParameters() is { Length: 1 } p && p[0].ParameterType.Name.StartsWith("LCHKEJBPNEF") && p[0].ParameterType.DeclaringType?.Name == "FFEMIIJDFMK"));
+var unspawnReason = game.GetType("Sector.JBFDKPHCLFC");
+Check("  SectorSpawnManager.UnspawnBody(SectorBody, JBFDKPHCLFC) + UnspawnReason.Other (science: scanned targets)", unspawnReason?.GetField("Other") != null ? game.GetType("Sector.SectorSpawnManager")?.GetMethod("UnspawnBody", new[] { game.GetType("Sector.SectorBody")!, unspawnReason }) : null);
+var sectorBodyT = game.GetType("Sector.SectorBody");
+var sectorIdT = game.GetType("Sector.CFOKIEECCHC");
+Check("  SectorBody.get_id -> SectorId (CFOKIEECCHC) with .value and ctor(int) (science: target ids)", sectorBodyT?.GetMethod("get_id", Inst)?.ReturnType == sectorIdT && sectorIdT?.GetField("value", Inst) != null ? sectorIdT.GetConstructor(new[] { mlc.CoreAssembly!.GetType("System.Int32")! }) : null);
+Check("  SectorBody.get_sector -> ISector (EGGMAHHMNCE) (science: finding targets)", sectorBodyT?.GetMethod("get_sector", Inst)?.ReturnType == game.GetType("Sector.EGGMAHHMNCE") ? sectorBodyT : null);
+Check("  ISector.GetBodyWithID<T>(SectorId) (science: finding targets)", game.GetType("Sector.EGGMAHHMNCE")?.GetMethods(Inst).FirstOrDefault(m => m.Name == "GetBodyWithID" && m.IsGenericMethodDefinition && m.GetParameters() is { Length: 1 } p && p[0].ParameterType == sectorIdT));
+Check("  AgentShip.get_IsDestroyed (HAFBKMDMMIO) (science: debris only from deaths)", game.GetType("AI.AgentShip")?.GetMethod("get_IsDestroyed", Inst));
+Check("  SystemTransform.get_Forward (science: debris bearing)", game.GetType("SystemTransform")?.GetMethod("get_Forward", Inst));
+// Console widgets (warp map page button, science console screen): copies of the helm's IMPULSE button, throttle and text
+foreach (var f in new[] { "_impulseButton", "_systemToggle", "_localButton", "_warpButton", "_warpToggle", "throttleSlider" })
+    Check($"  ConsoleHelm.{f} (console widgets)", helm?.GetField(f, Inst));
+var handInteraction = game.GetType("HandInteraction");
+foreach (var f in new[] { "_grid", "_poses", "_sideRestriction" })
+    Check($"  HandInteraction.{f} (console widgets)", handInteraction?.GetField(f, Inst));
+Check("  HandInteraction+HandSide.Either (science: both hands)", handInteraction?.GetField("_sideRestriction", Inst)?.FieldType.GetField("Either"));
+Check("  HandInteraction.MaxCountPerConsole (science: the hands' list size)", handInteraction?.GetField("MaxCountPerConsole", AnyS));
+Check("  HandInteraction.get_IsBeingManipulated (JLLBFOIFAKI) (science: sliders a hand holds)", handInteraction?.GetProperty("JLLBFOIFAKI", Inst)?.GetMethod);
+var sliderInteraction = game.GetType("SliderInteraction");
+foreach (var f in new[] { "BDCPELPJBAL", "OnValueChanged", "MinLocalPosition", "MaxLocalPosition", "RecenterSpeed", "SliderMinValue" })
+    Check($"  SliderInteraction.{f} (science: sliders)", sliderInteraction?.GetField(f, Inst));
+Check("  SliderInteraction.Direction = Horizontal (science: sliders)", sliderInteraction?.GetField("Direction", Inst)?.FieldType.GetField("Horizontal"));
+Check("  SliderInteraction.Value (OJKPBPCBPMA) get/set (science: sliders)", sliderInteraction?.GetProperty("OJKPBPCBPMA", Inst) is { } sv && sv.GetMethod != null ? sv.SetMethod : null);
+var handGrid = game.GetType("HandInteractionGrid");
+foreach (var f in new[] { "_topLeftTransform", "_bottomRightTransform", "_positions", "_poseCount" })
+    Check($"  HandInteractionGrid.{f} (science: the screen's hand grid)", handGrid?.GetField(f, Inst));
+var handAnimator = game.GetType("HandAnimator");
+Check("  HandAnimator.DPAFLMHJMEC (_consoleInteractions: List<HandInteraction>) (science: hands use the screen)", handAnimator?.GetField("DPAFLMHJMEC", Inst) is { } ci && ci.FieldType.IsGenericType ? ci : null);
+Check("  HandAnimator.OLMKBPANPIO (_interactionsChanged) (science)", handAnimator?.GetField("OLMKBPANPIO", Inst));
+Check("  HandAnimatorManager.AFBJOJJNCEA (animators) (science)", game.GetType("HandAnimatorManager")?.GetField("AFBJOJJNCEA", Inst));
+Check("  PawnComponent.HAMOMEFCFNB (_playerInfo) (science: the local hands)", game.GetType("PawnComponent")?.GetField("HAMOMEFCFNB", Inst));
+Check("  PlayerInfo.AOLEJMABHPE (IsLocal) (science: the local hands)", game.GetType("PlayerInfo")?.GetProperty("AOLEJMABHPE", Inst));
+Check("  TMPro.EGJGCPILBBH (alignment) Left / Right / Center (science)", game.GetType("TMPro.EGJGCPILBBH") is { } al
+    && al.GetField("Left") != null && al.GetField("Right") != null && al.GetField("Center") != null ? al : null);
+// Using the science console standing (ScienceUse)
+var inputAxis = game.GetType("SVR.FEKBGPPHGEP");
+Check("  SVR.FEKBGPPHGEP (InputAxis) Left/RightHandIndexPull, Left/RightHandGrab (science: VR hands at the console)", inputAxis is { } ax
+    && ax.GetField("LeftHandIndexPull") != null && ax.GetField("RightHandIndexPull") != null && ax.GetField("LeftHandGrab") != null && ax.GetField("RightHandGrab") != null ? ax : null);
+Check("  SVR.LONCAPHEAPA (InputAction) ContactLeft/RightIndexTrigger (science: VR finger at the console)", game.GetType("SVR.LONCAPHEAPA") is { } ac
+    && ac.GetField("ContactLeftIndexTrigger") != null && ac.GetField("ContactRightIndexTrigger") != null ? ac : null);
+Check("  HandInteraction.get_MouseTriggerCollider (PLIHOHLOJDI) (science: the monitor's mouse at the console)", handInteraction?.GetProperty("PLIHOHLOJDI", Inst)?.GetMethod);
+Check("  HandInteraction.get_TriggerCollider (DGPEFNGNJDM) (science: the monitor's mouse at the console)", handInteraction?.GetProperty("DGPEFNGNJDM", Inst)?.GetMethod);
+Check("  HandInteraction.Interactable (science: the monitor's mouse at the console)", handInteraction?.GetField("Interactable", Inst));
+Check("  SliderInteraction.get_MinPosition (FCHMAJKOCHF) / get_MaxPosition (EHMILCABDPH) (science: mouse slider drags)", sliderInteraction?.GetProperty("FCHMAJKOCHF", Inst)?.GetMethod != null ? sliderInteraction.GetProperty("EHMILCABDPH", Inst)?.GetMethod : null);
+Check("  NovaPlayerInfo.get_Console (GHJLPNMIOAJ) (science: the hands need your own console on)", game.GetType("NovaPlayerInfo")?.GetProperty("GHJLPNMIOAJ", Inst)?.GetMethod);
 // Host hand-off
 Check("  NetworkStatus.SetError(error, popup, ...) (hand-off: no popup for failed regroup joins)",
     game.GetType("SVR.Network.NetworkStatus")?.GetMethods(BindingFlags.Public | BindingFlags.Static).FirstOrDefault(m => m.Name == "SetError" && m.GetParameters().Length == 4));
