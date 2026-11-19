@@ -86,6 +86,7 @@ namespace StbcRevival
             Switch("Enemy AI thinks faster", () => Plugin.EnemyAiThinkFaster),
             Switch("Enemy AI flies better", () => Plugin.EnemyAiFlyBetter),
             Switch("Enemy AI fights smarter", () => Plugin.EnemyAiFightSmarter),
+            Switch("Enemy AI group tactics", () => Plugin.EnemyAiGroupTactics),
             // Host only: how fast enemy ships fire, a share of the game's rate.
             new Entry
             {

@@ -82,6 +82,7 @@ namespace StbcRevival
         internal static ConfigEntry<bool> EnemyAiFlyBetter;
         internal static ConfigEntry<bool> EnemyAiFightSmarter;
         internal static ConfigEntry<float> EnemyAiFireRate;
+        internal static ConfigEntry<bool> EnemyAiGroupTactics;
         internal static ConfigEntry<string> TestPatrolAssignment;
         internal static ConfigEntry<int> EvacuationMinutes;
         internal static ConfigEntry<bool> VoiceCommands;
@@ -272,6 +273,9 @@ namespace StbcRevival
             EnemyAiFireRate = Config.Bind("EnemyAI", "FireRate", 1f,
                 "How fast enemy ships (Klingon, Romulan, pirate, Borg) fire, as a share of the game's: 0.75, 1, 1.25 or 1.5 "
                 + "(any value from 0.25 to 4 works here). Applies to ships that spawn after a change. Host only.");
+            EnemyAiGroupTactics = Config.Bind("EnemyAI", "GroupTactics", true,
+                "Enemy fleets fight in squads: wingmen stay with their leader (a flagship leads a bigger escort), go for "
+                + "what their leader is attacking and for whoever hits their leader, and regroup when it's destroyed. Host only.");
             EvacuationMinutes = Config.Bind("Revival", "EvacuationMinutes", 15,
                 "Stellar Evacuation: minutes until the star erupts (3-30), the last of them to warp out.");
             MapOverride = Config.Bind("Debug", "MapOverride", "",
@@ -422,6 +426,7 @@ namespace StbcRevival
             Safely("enemy AI flying", () => StbcRevival.EnemyAiFlying.Patch(harmony));
             Safely("enemy AI combat", () => StbcRevival.EnemyAiCombat.Patch(harmony));
             Safely("enemy AI tuning", () => StbcRevival.EnemyAiTuning.Patch(harmony));
+            Safely("enemy AI extras", () => StbcRevival.EnemyAiExtras.Patch(harmony));
             EnemyAiThinkFaster.SettingChanged += (_, __) => Safely("enemy AI think rate", StbcRevival.EnemyAiThinkRate.Apply);
             SteamMode.Install(harmony);
             ShuttleControls.Install();
@@ -442,6 +447,7 @@ namespace StbcRevival
             HangWatchdog.Beat(); // first: the watchdog only needs to know a frame ran
             Walking.StutterTrace.FrameStart(); // the frame that just ended, while standing (Bridge Walk)
             Safely("tracked objects check", Tracked.Update);
+            Safely("enemy AI squads", StbcRevival.EnemyAiSquads.Update);
             Safely("openssl sha fix", OpenSslShaFix.Apply);
             if (!deferredApplied)
             {

@@ -13,6 +13,8 @@ namespace StbcRevival
     ///   1-3 km ships overshot and circled. Now the speed drops with the angle still to turn (down to MinTurnThrottle
     ///   when facing away), and, outside combat, it eases off near the nav point it is flying to. Done around
     ///   AgentShip.UpdateMoveVelocity (MHHGGHHKMKN) by scaling the blackboard's DesiredSpeed for that one call.
+    /// - Engine power: the throttle also follows the engine pips the ship's attack patterns set (70 % at none, 100 % at
+    ///   four, 107.5 % at five), which the game's AI ignored.
     /// - Turning: AgentShip.UpdateFacing (HICMEIBEAKI) turns the nose a fraction of the way each call, and is called by a
     ///   round robin, so the more ships there were the slower each one turned; and a stopped ship couldn't turn at all.
     ///   Now each call turns as much as the ship's own turn curve would at one call a physics step, for the time since its
@@ -47,6 +49,13 @@ namespace StbcRevival
         private static readonly AccessTools.FieldRef<AI.AgentShip, Quaternion> DesiredRotation = AccessTools.FieldRefAccess<AI.AgentShip, Quaternion>("HGAOKEFAKHF");
         private static readonly AccessTools.FieldRef<AI.AgentShip, int> LastFacingFrame = AccessTools.FieldRefAccess<AI.AgentShip, int>("LHFANEENMAA");
         private static bool loggedPush, loggedTurn;
+        private static readonly Func<Sector.FAMOMDAAPCH, int> enginePower = EnginePowerGetter();
+
+        private static Func<Sector.FAMOMDAAPCH, int> EnginePowerGetter()
+        {
+            var getter = AccessTools.Method(typeof(Sector.FAMOMDAAPCH), "get_EnginePower"); // TargetInfo.EnginePower
+            return getter != null ? (Func<Sector.FAMOMDAAPCH, int>)Delegate.CreateDelegate(typeof(Func<Sector.FAMOMDAAPCH, int>), getter) : null;
+        }
 
         internal static void Patch(Harmony harmony)
         {
@@ -105,7 +114,10 @@ namespace StbcRevival
                         if (distance < EaseDistance) scale *= Mathf.Max(MinEase, (float)(distance / EaseDistance));
                     }
                 }
-                if (scale >= 0.999f) return;
+                // Engine power: the pips the attack patterns set didn't change the game's AI speed. 0 -> 70 %, 4 -> 100 %, 5 -> 107.5 %.
+                var info = __instance.GetTargetInfo();
+                if (info != null && enginePower != null) scale *= 0.7f + 0.075f * Mathf.Clamp(enginePower(info), 0, 5);
+                if (Mathf.Abs(scale - 1f) < 0.001f) return;
                 __state = wanted;
                 bb.EMFCFEPAGHL = wanted * scale;
             }
@@ -253,8 +265,8 @@ namespace StbcRevival
     ///   (AgentShip.CreateAttackSubtree, MLJDADGCJPH, built at spawn: ships spawned after the setting changes).
     /// - A fallback attack: when every pattern was cooling down the attack branch failed and the ship wandered off. Now
     ///   it holds station off the target's beam and keeps firing until a pattern can start again.
-    /// - Torpedoes when shields are down: PickWeaponGroup (OLKGIDHOMIG) picks the torpedo group when it can fire and the
-    ///   target's shields are gone.
+    /// - Weapon choice: after PickWeaponGroup (OLKGIDHOMIG) picks by the game's priorities, the ship fires the group that
+    ///   can fire with the most damage in a volley instead, and a torpedo group when the target's shields are gone.
     /// - Firing on the approach: attack patterns cut phaser power to 1-2 on their approach legs, which cut phaser range
     ///   to 35-45 %. NPCWeaponGroup.Range now never drops below the 3-pip range (57 %) while phasers have any power.
     /// </summary>
@@ -388,12 +400,13 @@ namespace StbcRevival
                     var them = key.ALPAOOKFIEE;
                     if (them != null && them.System == me.System)
                         bonus = ClosenessBonus * Mathf.Clamp01(1f - (float)(them.Position - me.Position).magnitude / reach);
+                    bonus += EnemyAiSquads.Bonus(__instance, key); // its squad leader's target, or whoever hit its leader
                     float before = value;
                     value += bonus;
                     // Each other ship already on this body counts against it, so a fleet spreads its fire.
                     if (targetedBy.TryGetValue(key, out int on))
                     {
-                        int others = ReferenceEquals(bb.Target, key) ? on - 1 : on;
+                        int others = (ReferenceEquals(bb.Target, key) ? on - 1 : on) - EnemyAiSquads.MatesOn(__instance, key); // a squad isn't a crowd
                         if (others > 0) value = Mathf.Max(value - CrowdPenalty * others, Mathf.Min(value, KeepAbove));
                     }
                     bonus = value - before; // what this pass added (or took off), to take back next time
@@ -565,6 +578,9 @@ namespace StbcRevival
 
         // ---- Torpedoes when the shields are down -----------------------------------------------------------------------
 
+        // After the game's pick (highest Priority that can fire): with the target's shields down, a torpedo group that can
+        // fire; otherwise the group that can fire with the most damage in a volley. The game's priorities had the D'deridex
+        // opening with its weakest beam (inner beams, 9 a volley) over its strongest (40).
         private static void Pick_Postfix(AI.OLKGIDHOMIG __instance, AI.MNIJEDINGOI __0, AI.LECHLIEBBEM __result)
         {
             if (!On || __result != AI.LECHLIEBBEM.Success) return;
@@ -573,26 +589,78 @@ namespace StbcRevival
                 var bb = __0;
                 if (pickSecondary(__instance) || pickType(__instance) != 0) return; // a pattern asking for one kind
                 if (!(bb.Owner is AI.AgentShip ship) || bb.Target == null) return;
-                var info = bb.Target.GetTargetInfo();
-                if (info == null || shieldHealth(info) > 0f) return;
                 var groups = ship.BOKKOEPBHKF; // WeaponGroups
-                if (groups == null || bb.CurrentWeaponGroup >= 0 && bb.CurrentWeaponGroup < groups.Length
-                    && groups[bb.CurrentWeaponGroup].FCBJFOCMKEA == Sector.Spacecraft.MDMEPIGBOFJ.Torpedo) return;
+                if (groups == null) return;
+                var info = bb.Target.GetTargetInfo();
+                bool shieldsDown = info != null && shieldHealth(info) <= 0f;
+                int best = -1;
+                float bestDamage = -1f;
                 for (int i = 0; i < groups.Length; i++)
                 {
                     var group = groups[i];
-                    if (group == null || group.FCBJFOCMKEA != Sector.Spacecraft.MDMEPIGBOFJ.Torpedo || !bb.AvailableWeapons.Contains(group)) continue;
+                    if (group == null || !bb.AvailableWeapons.Contains(group)) continue;
+                    var type = group.FCBJFOCMKEA;
+                    if (type != Sector.Spacecraft.MDMEPIGBOFJ.Phaser && type != Sector.Spacecraft.MDMEPIGBOFJ.Torpedo) continue;
                     if (!canUseGroup(__instance, group, bb)) continue;
-                    bb.CurrentWeaponGroup = i;
-                    if (!loggedTorpedo)
-                    {
-                        loggedTorpedo = true;
-                        Plugin.Log.LogInfo($"Enemy AI combat: {ship.name}: target's shields are down, torpedoes");
-                    }
-                    return;
+                    float damage = Volley(group);
+                    if (shieldsDown && type == Sector.Spacecraft.MDMEPIGBOFJ.Torpedo) damage += 1e6f; // torpedoes first
+                    if (damage > bestDamage) { bestDamage = damage; best = i; }
+                }
+                if (best < 0 || best == bb.CurrentWeaponGroup) return;
+                bb.CurrentWeaponGroup = best;
+                if (shieldsDown && groups[best].FCBJFOCMKEA == Sector.Spacecraft.MDMEPIGBOFJ.Torpedo && !loggedTorpedo)
+                {
+                    loggedTorpedo = true;
+                    Plugin.Log.LogInfo($"Enemy AI combat: {ship.name}: target's shields are down, torpedoes");
+                }
+                else if (!loggedVolley)
+                {
+                    loggedVolley = true;
+                    Plugin.Log.LogInfo($"Enemy AI combat: {ship.name}: firing its heaviest ready weapon ({bestDamage:0} a volley)");
                 }
             }
             catch { }
+        }
+
+        // A group's damage in one volley: its per-shot damage (with the subsystem's weak/strong delta) times the shots a
+        // volley fires (a burst's shots, or a beam's pulses) and its turrets or tubes. The counts are read once per group.
+        private static readonly Dictionary<int, float> shotsPerVolley = new Dictionary<int, float>();
+        private static bool loggedVolley;
+
+        private static float Volley(Sector.Spacecraft.FJKHPJOOAHN group)
+        {
+            float shots = 1f;
+            if (group is Component component)
+            {
+                int id = component.GetInstanceID();
+                if (!shotsPerVolley.TryGetValue(id, out shots))
+                {
+                    shots = 1f;
+                    try
+                    {
+                        if (group is Sector.Spacecraft.NPCWeaponGroup phasers)
+                        {
+                            var data = phaserData(phasers);
+                            float burst = Field<int>(data, "_numberOfVirtualShotsInBurst");
+                            float time = Field<float>(data, "_totalFiringTime"), between = Field<float>(data, "_timeBetweenPulses");
+                            float pulses = Field<bool>(data, "_burstFire") || time <= 0f ? Mathf.Max(1f, burst) : Mathf.Max(1f, Mathf.Round(time / Mathf.Max(0.01f, between)));
+                            int turrets = (AccessTools.Field(typeof(Sector.Spacecraft.NPCWeaponGroup), "_phasers")?.GetValue(phasers) as Array)?.Length ?? 1;
+                            shots = pulses * Mathf.Max(1, turrets);
+                        }
+                        else if (group is Sector.Spacecraft.NPCTorpedoGroup torpedoes)
+                            shots = Mathf.Max(1, (AccessTools.Field(typeof(Sector.Spacecraft.NPCTorpedoGroup), "_launcherTubes")?.GetValue(torpedoes) as Array)?.Length ?? 1);
+                    }
+                    catch { shots = 1f; }
+                    shotsPerVolley[id] = shots;
+                }
+            }
+            return group.PHHLBFLGJFG * shots; // Damage
+        }
+
+        private static T Field<T>(object owner, string name)
+        {
+            var value = owner == null ? null : AccessTools.Field(owner.GetType(), name)?.GetValue(owner);
+            return value is T t ? t : default;
         }
 
         // ---- Phaser range on the approach --------------------------------------------------------------------------------
