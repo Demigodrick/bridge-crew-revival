@@ -126,6 +126,7 @@ namespace StbcRevival
         internal static ConfigEntry<bool> BridgeWalkWalls;
         internal static ConfigEntry<bool> BridgeWalkAnimate;
         internal static ConfigEntry<bool> BridgeWalkTestCorridor;
+        internal static ConfigEntry<UnityEngine.KeyCode> ScienceUseKey;
         internal static ConfigEntry<bool> BridgeLayouts;
         internal static ConfigEntry<bool> BridgeShareLayouts;
         internal static Plugin Instance { get; private set; }
@@ -344,6 +345,8 @@ namespace StbcRevival
                 + "or press the key to stand up or sit down, the left stick walks, the right stick turns, and you can walk around your play space. "
                 + "Crewmates with the mod see you stand and walk. Takes effect after a restart.");
             BridgeWalkKey = Config.Bind("Bridge Walk", "Key", UnityEngine.KeyCode.F6, "Stands you up and sits you back down.");
+            ScienceUseKey = Config.Bind("Science", "UseKey", UnityEngine.KeyCode.F,
+                "Standing at the science console on a monitor: uses it (the view goes to its screen and the mouse is free) and stops using it (Escape does too). None: off.");
             BridgeWalkSpeed = Config.Bind("Bridge Walk", "WalkSpeed", 1.4f, "Walking speed, metres per second.");
             BridgeWalkRunSpeed = Config.Bind("Bridge Walk", "RunSpeed", 2.6f, "Speed with Shift held, metres per second.");
             BridgeWalkMouseSensitivity = Config.Bind("Bridge Walk", "MouseSensitivity", 2f, "How fast the mouse turns you while standing.");
@@ -510,6 +513,7 @@ namespace StbcRevival
         {
             Safely("room browser window", RoomBrowser.OnGUI);
             Safely("text prompt", TextPrompt.OnGUI);
+            Safely("science console prompt", StbcRevival.Science.ScienceUse.OnGUI);
             Safely("ship name prompt", ShipNamePrompt.OnGUI);
         }
     }

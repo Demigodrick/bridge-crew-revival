@@ -340,6 +340,17 @@ Check("  PawnComponent.HAMOMEFCFNB (_playerInfo) (science: the local hands)", ga
 Check("  PlayerInfo.AOLEJMABHPE (IsLocal) (science: the local hands)", game.GetType("PlayerInfo")?.GetProperty("AOLEJMABHPE", Inst));
 Check("  TMPro.EGJGCPILBBH (alignment) Left / Right / Center (science)", game.GetType("TMPro.EGJGCPILBBH") is { } al
     && al.GetField("Left") != null && al.GetField("Right") != null && al.GetField("Center") != null ? al : null);
+// Using the science console standing (ScienceUse)
+var inputAxis = game.GetType("SVR.FEKBGPPHGEP");
+Check("  SVR.FEKBGPPHGEP (InputAxis) Left/RightHandIndexPull, Left/RightHandGrab (science: VR hands at the console)", inputAxis is { } ax
+    && ax.GetField("LeftHandIndexPull") != null && ax.GetField("RightHandIndexPull") != null && ax.GetField("LeftHandGrab") != null && ax.GetField("RightHandGrab") != null ? ax : null);
+Check("  SVR.LONCAPHEAPA (InputAction) ContactLeft/RightIndexTrigger (science: VR finger at the console)", game.GetType("SVR.LONCAPHEAPA") is { } ac
+    && ac.GetField("ContactLeftIndexTrigger") != null && ac.GetField("ContactRightIndexTrigger") != null ? ac : null);
+Check("  HandInteraction.get_MouseTriggerCollider (PLIHOHLOJDI) (science: the monitor's mouse at the console)", handInteraction?.GetProperty("PLIHOHLOJDI", Inst)?.GetMethod);
+Check("  HandInteraction.get_TriggerCollider (DGPEFNGNJDM) (science: the monitor's mouse at the console)", handInteraction?.GetProperty("DGPEFNGNJDM", Inst)?.GetMethod);
+Check("  HandInteraction.Interactable (science: the monitor's mouse at the console)", handInteraction?.GetField("Interactable", Inst));
+Check("  SliderInteraction.get_MinPosition (FCHMAJKOCHF) / get_MaxPosition (EHMILCABDPH) (science: mouse slider drags)", sliderInteraction?.GetProperty("FCHMAJKOCHF", Inst)?.GetMethod != null ? sliderInteraction.GetProperty("EHMILCABDPH", Inst)?.GetMethod : null);
+Check("  NovaPlayerInfo.get_Console (GHJLPNMIOAJ) (science: the hands need your own console on)", game.GetType("NovaPlayerInfo")?.GetProperty("GHJLPNMIOAJ", Inst)?.GetMethod);
 // Host hand-off
 Check("  NetworkStatus.SetError(error, popup, ...) (hand-off: no popup for failed regroup joins)",
     game.GetType("SVR.Network.NetworkStatus")?.GetMethods(BindingFlags.Public | BindingFlags.Static).FirstOrDefault(m => m.Name == "SetError" && m.GetParameters().Length == 4));

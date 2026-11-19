@@ -53,6 +53,8 @@ namespace StbcRevival.Walking
             if (Walker.SwallowEscape && !Input.GetKey(KeyCode.Escape)) Walker.SwallowEscape = false;
             // Keys typed into the mod's text prompt aren't for walking.
             bool typing = TextPrompt.IsOpen;
+            // The science console in reach: its use key, and Escape while using it (swallowed, so it doesn't sit you down).
+            Science.ScienceUse.Tick();
             // In VR, holding B on the right controller does what the key does.
             bool held = Walker.VrOn && Walker.VrToggleHeld();
             if (!typing && (Input.GetKeyDown(Plugin.BridgeWalkKey.Value) || held))
@@ -60,7 +62,7 @@ namespace StbcRevival.Walking
                 if (Walker.Standing) Walker.SitDown("key");
                 else Walker.StandUp();
             }
-            if (!typing && Walker.Standing && Input.GetKeyDown(KeyCode.Escape)) Walker.SitDown("escape");
+            if (!typing && Walker.Standing && !Walker.SwallowEscape && Input.GetKeyDown(KeyCode.Escape)) Walker.SitDown("escape");
             if (walkable && !Walker.Standing && Time.unscaledTime >= nextPrewarm)
             {
                 nextPrewarm = Time.unscaledTime + 2f;
@@ -178,8 +180,14 @@ namespace StbcRevival.Walking
         private static readonly HashSet<Collider> own = new HashSet<Collider>();
         private static CursorLockMode savedLockMode;
         private static bool savedCursorVisible;
-        /// <summary>Sat down with Escape: the game's menu actions stay off until Escape is let go.</summary>
+        /// <summary>Sat down with Escape: the game's menu actions stay off until Escape is let go. (Also set by the
+        /// science console when Escape stops using it, so the same press doesn't sit you down.)</summary>
         public static bool SwallowEscape;
+        /// <summary>Using the science console on a monitor (ScienceUse.Engaged): walking and mouse look pause, as while
+        /// typing, and the camera eases to its screen (ScienceUse.View).</summary>
+        public static bool UsingConsole;
+        // Just back from the console: the mouse's first moves (the cursor locked again) aren't looking around.
+        private static int skipLook;
 
         // The bridge moves with the ship: everything is worked out relative to the character's parent.
         private static Transform Basis => pawn != null ? pawn.parent : null;
@@ -309,8 +317,9 @@ namespace StbcRevival.Walking
             // The bridge's meshes finished reading after you stood up: from now on they carry you.
             if (!floorFromGeometry && Plugin.BridgeWalkCollisions.Value && WalkMesh.ReadyFor(Basis)) floorFromGeometry = true;
             if (InVr) { TickVr(typing); return; }
-            if (typing)
+            if (typing || UsingConsole)
             {
+                if (UsingConsole) skipLook = 2;
                 Speed = Mathf.Lerp(Speed, 0f, 1f - Mathf.Exp(-10f * Time.deltaTime));
                 PlaceCamera();
                 if (Time.unscaledTime >= nextSend) { nextSend = Time.unscaledTime + 1f / 15f; WalkNet.SendState(false); }
@@ -324,6 +333,7 @@ namespace StbcRevival.Walking
                 try { mx = Input.GetAxisRaw("Mouse X"); my = Input.GetAxisRaw("Mouse Y"); }
                 catch { mouseAxisOk = false; Plugin.Log.LogWarning("Bridge walk: no mouse axes; look around with Q/E and Page Up/Down"); }
             }
+            if (skipLook > 0) { skipLook--; mx = my = 0f; }
             float s = Plugin.BridgeWalkMouseSensitivity.Value;
             yaw += mx * s;
             pitch = Mathf.Clamp(pitch - my * s, -80f, 80f);
@@ -353,6 +363,17 @@ namespace StbcRevival.Walking
 
         private static float lastHoldLog = -10f;
 
+        // The 2D camera at your eyes (your heading and pitch), or on its way to or from the science console's screen.
+        private static void EyePose()
+        {
+            Quaternion yawRot = BasisRot * Quaternion.Euler(0, yaw, 0);
+            Vector3 pos = pawn.position + Up * Plugin.BridgeWalkEyeHeight.Value + yawRot * Vector3.forward * 0.12f;
+            Quaternion rot = yawRot * Quaternion.Euler(pitch, 0, 0);
+            Science.ScienceUse.View(ref pos, ref rot);
+            cam.position = pos;
+            cam.rotation = rot;
+        }
+
         /// <summary>
         /// Something of the game's turns the character back toward its seat between the walk's update and the
         /// end of the frame (only as far as the chair swivels), so the body didn't follow your heading: it's turned
@@ -372,9 +393,7 @@ namespace StbcRevival.Walking
         {
             if (!Standing || pawn == null || cam == null) return;
             if (InVr) { PlaceVr(); return; }
-            Quaternion yawRot = BasisRot * Quaternion.Euler(0, yaw, 0);
-            cam.position = pawn.position + Up * Plugin.BridgeWalkEyeHeight.Value + yawRot * Vector3.forward * 0.12f;
-            cam.rotation = yawRot * Quaternion.Euler(pitch, 0, 0);
+            EyePose();
             if (onBridge) ViewscreenRig.Follow(cam, Basis);
             ShuttleView.Follow(cam);
         }
@@ -524,9 +543,7 @@ namespace StbcRevival.Walking
                 if (!Standing || c == null || cam == null || pawn == null) return;
                 if (InVr) { BeforeVrCamera(c); return; }
                 if (c.transform != cam && !c.transform.IsChildOf(cam)) return;
-                Quaternion yawRot = BasisRot * Quaternion.Euler(0, yaw, 0);
-                cam.position = pawn.position + Up * Plugin.BridgeWalkEyeHeight.Value + yawRot * Vector3.forward * 0.12f;
-                cam.rotation = yawRot * Quaternion.Euler(pitch, 0, 0);
+                EyePose();
             };
             Camera.onPreCull += beforeRender;
         }
@@ -1065,6 +1082,7 @@ namespace StbcRevival.Walking
         private static bool Blocks(LONCAPHEAPA a)
         {
             if (Walker.ReadingInput) return false;
+            if (Walker.Standing && Science.ScienceUse.PassesAction(a)) return false; // the index finger's touch, at the science console in VR
             if (Walker.Standing)
                 return a != LONCAPHEAPA.VoiceCommand && a != LONCAPHEAPA.KeyboardAny && a != LONCAPHEAPA.MouseAny && a != LONCAPHEAPA.GamePadAny
                     && a != LONCAPHEAPA.TouchControllersAny && a != LONCAPHEAPA.ViveControllersAny && a != LONCAPHEAPA.MoveControllersAny;
@@ -1073,9 +1091,11 @@ namespace StbcRevival.Walking
             return false;
         }
 
-        private static bool NoAxis(ref float __result)
+        // At the science console in VR, the hands' index-pull and grab get through (ScienceUse.PassesAxis): pokes
+        // and slider drags; the sticks stay the walk's.
+        private static bool NoAxis(FEKBGPPHGEP __0, ref float __result)
         {
-            if (!Walker.Standing || Walker.ReadingInput) return true;
+            if (!Walker.Standing || Walker.ReadingInput || Science.ScienceUse.PassesAxis(__0)) return true;
             __result = 0f;
             return false;
         }

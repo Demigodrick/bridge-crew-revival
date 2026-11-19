@@ -138,6 +138,7 @@ namespace StbcRevival
             Add("no lock", "keine Erfassung");
             Add("In use", "In Benutzung");
             Add("In use by {0}", "Belegt von {0}");
+            Add("{0}: use science console", "{0}: Wissenschaftskonsole benutzen");
             Add("In range:", "In Reichweite:");
             Add("No targets in range", "Keine Ziele in Reichweite");
             Add("Out of range: helm, close to {0} km", "Außer Reichweite: Steuer, auf {0} km heranfliegen");

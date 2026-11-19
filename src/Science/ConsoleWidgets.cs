@@ -609,6 +609,9 @@ namespace StbcRevival
 
         internal IEnumerable<Component> Texts => texts;
 
+        /// <summary>Pressed by the mod's own mouse (ScienceUse, standing at the console on a monitor).</summary>
+        internal void Press() => Pressed("mouse");
+
         private void Start()
         {
             // Awake now: the copy's Toggles set off (not a press).
