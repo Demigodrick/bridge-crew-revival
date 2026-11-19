@@ -40,6 +40,8 @@ A new **Revival Missions** category in the briefing room, next to Campaign and O
   reinforcements on both sides.
 - **Patrol:** a mission that never ends. Hunt raiders, escort freighters, rescue survivors and restock at
   space stations as Starfleet sends you from system to system.
+- **Science console** (Patrol): stand up, walk to the science console and scan readings and wreckage to give
+  your ship small upgrades. Enemies get a little tougher after every assignment.
 - **Stellar Evacuation:** a star is about to erupt. Beam people out of escape pods, ferry them to safety and
   get out before the blast.
 - **Kobayashi Maru:** the game's own no-win test from the campaign, now in any ship: Aegis, Enterprise or
