@@ -33,6 +33,7 @@ namespace StbcRevival
         private const double PushSpeed = 150;          // m/s pushing apart at contact
 
         private static readonly HashSet<AI.AgentShip> ships = new HashSet<AI.AgentShip>();
+        internal static IEnumerable<AI.AgentShip> Ships => ships; // the AI ships spawned now (any team)
         private static readonly List<AI.AgentShip> gone = new List<AI.AgentShip>();
         private static readonly Dictionary<int, float> lastFacing = new Dictionary<int, float>();
         private static readonly AccessTools.FieldRef<AI.AgentShip, Vector3d> MoveVelocity = AccessTools.FieldRefAccess<AI.AgentShip, Vector3d>("KEIEAFFMBPF");
@@ -235,8 +236,12 @@ namespace StbcRevival
     ///
     /// - Grudges fade: the AI's aggro list only ever grew, so a ship kept on whoever it first got angry with. Now what
     ///   it has gained above its starting level (60, the player 110 except in Fleet Battle, a Borg cube 160) fades with a half-life of
-    ///   GrudgeHalfLife, and every hit adds DamageGrudge per point of damage on top of the game's flat 10, so ships turn on
-    ///   whoever is hurting them now. (AgentShip.UpdateTargetAndAgroList and ApplyDamage, JJEBPBHKBIE.)
+    ///   GrudgeHalfLife, so ships turn on whoever is hurting them now. And a hit adds DamageGrudge per point of damage
+    ///   instead of the game's flat 10 a hit (AgentShip.AggroTarget from takeHit): a ship whose weapons land many small
+    ///   hits (the player's beams) no longer builds aggro many times faster than one landing a few big ones. It goes
+    ///   through the blackboard's AddAgro, so the game's player rule (and Fleet Battle's FleetBattleAggro) still apply.
+    ///   (AgentShip.UpdateTargetAndAgroList, AggroTarget and ApplyDamage, JJEBPBHKBIE.) Every TargetLogEvery seconds the
+    ///   log says how many enemy ships are going for the player's ship.
     /// - Attack patterns in a random order: the game tried a ship's patterns in list order and the first that could start
     ///   always ran (the Bird of Prey never orbits). Now every new attack tries them in a shuffled order
     ///   (AgentShip.CreateAttackSubtree, MLJDADGCJPH, built at spawn: ships spawned after the setting changes).
@@ -252,7 +257,10 @@ namespace StbcRevival
         private static bool On => Plugin.EnemyAiFightSmarter?.Value ?? false;
 
         private const float GrudgeHalfLife = 15f;  // seconds
-        private const float DamageGrudge = 0.25f;  // aggro per point of damage dealt
+        private const float DamageGrudge = 0.5f;   // aggro per point of damage dealt (a 100-damage volley: 50, as 5 hits did)
+        private const float FirstHitGrudge = 10f;  // a ship hit by something not on its list yet: the game's 10
+        private const float TargetLogEvery = 30f;  // seconds
+        private static float nextTargetLog;
         private const float FallbackDistance = 5000f, FallbackSpeed = 0.9f;
 
         private static readonly Dictionary<int, float> lastFade = new Dictionary<int, float>();
@@ -285,6 +293,9 @@ namespace StbcRevival
                 if (update == null || damage == null) return false;
                 harmony.Patch(update, postfix: Me(nameof(Aggro_Postfix)));
                 harmony.Patch(damage, postfix: Me(nameof(Damage_Postfix)));
+                var aggro = AccessTools.DeclaredMethod(typeof(AI.AgentShip), "AggroTarget");
+                if (aggro != null) harmony.Patch(aggro, prefix: Me(nameof(AggroTarget_Prefix)));
+                else Plugin.Log.LogWarning("Enemy AI combat: AggroTarget wasn't found; hits add the game's flat 10 as well");
                 return true;
             });
             Try("attack patterns", () =>
@@ -329,6 +340,7 @@ namespace StbcRevival
             try
             {
                 var bb = __instance.NMJIEDJOOCJ;
+                LogTargets();
                 if (bb?.AgroList == null || bb.AgroList.Count == 0) return;
                 float now = Time.time;
                 int id = __instance.GetInstanceID();
@@ -351,15 +363,40 @@ namespace StbcRevival
             catch { }
         }
 
+        // AggroTarget(attacker, 10) is what takeHit and the explosion handler add per hit; missions pass other amounts.
+        // A Borg cube's damage goes through its own ApplyDamage, so it keeps the game's.
+        private static bool AggroTarget_Prefix(AI.AgentShip __instance, float __1) => !(On && __1 == 10f && !(__instance is AI.BorgCube));
+
         private static void Damage_Postfix(AI.AgentShip __instance, float __0, Sector.HOLJLCLENCA __1)
         {
-            if (!On || __1 == null || __0 <= 0f) return;
+            if (!On || __1 == null || __0 <= 0f || __instance is AI.BorgCube) return;
             try
             {
-                var list = __instance.NMJIEDJOOCJ?.AgroList;
-                if (list != null && list.TryGetValue(__1, out var value)) list[__1] = value + __0 * DamageGrudge; // only enemies are on it
+                var bb = __instance.NMJIEDJOOCJ;
+                if (bb?.AgroList == null) return;
+                float grudge = __0 * DamageGrudge + (bb.AgroList.ContainsKey(__1) ? 0f : FirstHitGrudge);
+                bb.AddAgro(__1, grudge, false); // the game's checks (team, same system) and its player rule
             }
             catch { }
+        }
+
+        private static void LogTargets()
+        {
+            float now = Time.time;
+            if (now < nextTargetLog) return;
+            nextTargetLog = now + TargetLogEvery;
+            int enemies = 0, onPlayer = 0, onOthers = 0;
+            foreach (var ship in EnemyAiFlying.Ships)
+            {
+                if (ship == null || !ship.gameObject.activeInHierarchy || !EnemyAiTuning.HostileTeam(ship)) continue;
+                var bb = ship.NMJIEDJOOCJ;
+                if (bb == null) continue;
+                enemies++;
+                if (bb.Target == null) continue;
+                if (ReferenceEquals(bb.Target, bb.PlayerShip)) onPlayer++; else onOthers++;
+            }
+            if (enemies < 2) return;
+            Plugin.Log.LogInfo($"Enemy AI: {enemies} enemy ships: {onPlayer} targeting your ship, {onOthers} other ships, {enemies - onPlayer - onOthers} no target");
         }
 
         // ---- Attack patterns: shuffled, with a fallback ----------------------------------------------------------------

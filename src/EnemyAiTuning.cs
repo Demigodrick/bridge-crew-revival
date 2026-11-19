@@ -100,7 +100,7 @@ namespace StbcRevival
 
         // ---- Fire rate --------------------------------------------------------------------------------------------------
 
-        private static bool HostileTeam(AI.AgentShip ship)
+        internal static bool HostileTeam(AI.AgentShip ship)
         {
             if (teamField == null) return false;
             int team = Convert.ToInt32(teamField.GetValue(ship)); // Sector.Team: 2 Klingon, 4 hostile, 5 Romulan, 6 Borg
