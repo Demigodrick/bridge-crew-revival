@@ -10,7 +10,7 @@ namespace StbcRevival.Science
     /// <summary>
     /// Where the science console stands on each bridge: BepInEx/bridges/science/&lt;layout name&gt;.json (made with the
     /// bridge designer, shipped with the mod; format in SciencePlacementFile). A class bridge of ours
-    /// (Bridge_scene_02-Nova) without a file of its own takes the Aegis's (Bridge_scene_02.json). Everyone reads their
+    /// (Bridge_scene_02-Nova, one of CustomShip.All) without a file of its own takes the Aegis's (Bridge_scene_02.json). Everyone reads their
     /// own shipped copy: a host's layout (BridgeShare) never replaces it, and your own layouts (BridgeLayout) never read
     /// that folder. [Debug] SciencePlacement, when it names a file, is put on whatever bridge is loaded instead.
     ///
@@ -37,6 +37,7 @@ namespace StbcRevival.Science
         private static Transform anchor, stand;
         private static Vector2 size;
         private static float nextLook;
+        private static readonly HashSet<string> warnedModels = new HashSet<string>();
 
         /// <summary>
         /// The loaded bridge has a science console: one is placed, or a placement file for a loaded bridge reads well
@@ -165,7 +166,7 @@ namespace StbcRevival.Science
             catch { return name + ":" + file; }
         }
 
-        /// <summary>The placement file for a layout name: the testing one if set, its own, or for a class's bridge the Aegis's; null if none.</summary>
+        /// <summary>The placement file for a layout name: the testing one if set, its own, or for one of our classes' bridges the Aegis's; null if none.</summary>
         private static string FileFor(string name)
         {
             string test = Plugin.ScienceTestPlacement != null ? Plugin.ScienceTestPlacement.Value : null;
@@ -175,7 +176,8 @@ namespace StbcRevival.Science
             // Only a file right in the science folder.
             if (!string.Equals(Path.GetDirectoryName(file), folder.TrimEnd(Path.DirectorySeparatorChar), StringComparison.OrdinalIgnoreCase)) return null;
             if (File.Exists(file)) return file;
-            if (!name.StartsWith(ClassBridge + "-", StringComparison.Ordinal)) return null;
+            // Only the mod's own classes (CustomShip.All) fly a copy of the Aegis's bridge: anything else gets no console.
+            if (!name.StartsWith(ClassBridge + "-", StringComparison.Ordinal) || CustomShip.Find(name.Substring(ClassBridge.Length + 1)) == null) return null;
             string aegis = Path.Combine(folder, ClassBridge + ".json");
             return File.Exists(aegis) ? aegis : null;
         }
@@ -198,6 +200,10 @@ namespace StbcRevival.Science
                 BridgeLayout.ParseLayout(text, out added); // the added parts, read as a layout's
             }
             catch (Exception e) { Plugin.Log.LogWarning($"Science console: {file} for {name} isn't a placement this version can read: {e.Message}"); return; }
+            // A model is only on the PC it was made on (the designer refuses them): left out, so no one gets a console
+            // that's there for some players only.
+            int models = added.RemoveAll(a => !string.IsNullOrEmpty(a.Model));
+            if (models > 0 && warnedModels.Add(file)) Plugin.Log.LogWarning($"Science console: {Path.GetFileName(file)} has {models} model part(s); left out (only bridge pieces are on every PC)");
 
             holder = new GameObject(HolderName);
             SceneManager.MoveGameObjectToScene(holder, scene);

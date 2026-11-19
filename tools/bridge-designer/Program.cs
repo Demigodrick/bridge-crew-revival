@@ -343,6 +343,11 @@ static string CheckScience(string body)
         var size = screen.GetProperty("size");
         if (size.GetArrayLength() != 2 || size.EnumerateArray().Any(v => v.GetDouble() <= 0 || v.GetDouble() > 5)) return "the screen's size isn't two lengths up to 5 m";
         if (r.GetProperty("stand").GetArrayLength() != 3) return "where to stand isn't x, y, z";
+        // The placement ships to every player; a model is only on this PC, so theirs would have a screen with no console.
+        if (r.TryGetProperty("added", out var added))
+            foreach (var a in added.EnumerateArray())
+                if (a.TryGetProperty("model", out var m) && m.ValueKind == JsonValueKind.String)
+                    return "the console can't be a model (" + m.GetString() + "): other players don't have it. Use a bridge's piece";
         return CheckAdded(r);
     }
     catch (Exception e) { return "not a science placement: " + e.Message; }

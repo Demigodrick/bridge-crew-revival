@@ -987,6 +987,11 @@ $('sciPart').addEventListener('click', () => {
   const a = path?.startsWith('+') && added.get(path.slice(1));
   if (!a || a.from.light) { say('Pick an added part first (Add parts), then use it for the science console.'); return; }
   if (science.ids.has(a.id)) { science.ids.delete(a.id); say('Back in the layout.'); }
+  else if (a.from.model) {
+    // The placement ships to every player; a model is only on this PC, so theirs would have a screen with no console.
+    say('A model can\'t be the science console: other players don\'t have it. Add a piece from a bridge (Add parts) instead.');
+    return;
+  }
   else {
     const first = !consoleFrame().id;
     science.ids.add(a.id);
