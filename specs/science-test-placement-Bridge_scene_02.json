@@ -1,0 +1,41 @@
+{
+  "format": 1,
+  "added": [
+    {
+      "id": "1",
+      "scene": "Bridge_scene_02",
+      "level": 6,
+      "path": "/Bridge/Art/Bridge_StaticEnvironment/Bridge_DetailConsoles_Back_Left",
+      "pivot": [
+        -1.7955,
+        50.3712,
+        6.0992
+      ],
+      "move": [
+        2.1819,
+        0,
+        -9.1448
+      ],
+      "turn": -90,
+      "scale": 1
+    }
+  ],
+  "screen": {
+    "pivot": [
+      0.3865,
+      51.3061,
+      -3.0456
+    ],
+    "turn": -60,
+    "tilt": 20,
+    "size": [
+      0.6,
+      0.4
+    ]
+  },
+  "stand": [
+    0.3865,
+    48.696,
+    -3.0456
+  ]
+}
