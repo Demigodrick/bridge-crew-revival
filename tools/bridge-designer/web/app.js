@@ -1007,13 +1007,62 @@ $('sciPart').addEventListener('click', () => {
   changed(); // the layout changes too: the part leaves it, or comes back
   sciChanged();
 });
+// Screen here: the next click on the bridge puts the screen on that surface, facing out of it at its slope, and
+// sized to the flat face it's on (the vertices of that mesh lying in its plane) when that looks like a screen.
+let sciAiming = false;
 $('sciScreenAt').addEventListener('click', () => {
+  sciAiming = !sciAiming;
+  $('sciScreenAt').classList.toggle('primary', sciAiming);
+  say(sciAiming ? 'Click the console\'s screen: the green screen goes on it.' : 'Screen here: off.');
+});
+// Ahead of everything else on the view (the picked part's gizmo, picking, orbiting): the press is the aim.
+addEventListener('pointerdown', e => {
+  if (!sciAiming || e.target !== canvas || e.button !== 0) return;
+  e.stopPropagation(); e.preventDefault();
+  sciScreenOn(hitAt(e));
+}, true);
+function sciScreenOn(hit) {
+  sciAiming = false;
+  $('sciScreenAt').classList.remove('primary');
+  if (!hit?.face) { say('Nothing there: Screen here again, and click on the console\'s screen.'); return; }
+  const n = hit.face.normal.clone().transformDirection(hit.object.matrixWorld);
+  if (n.dot(ray.ray.direction) > 0) n.negate(); // the side being looked at
+  const tilt = Math.asin(Math.min(1, Math.max(-1, n.y)));
+  const yaw = Math.abs(n.y) > 0.999 ? screenPose().yaw : Math.atan2(n.x, n.z);
+  const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(-tilt, yaw, 0, 'YXZ'));
+  let at = hit.point.clone();
+  // The flat face it's on: its mesh's vertices in this plane, measured along the screen's own across and up.
+  const right = new THREE.Vector3(1, 0, 0).applyQuaternion(q), upv = new THREE.Vector3(0, 1, 0).applyQuaternion(q);
+  const pos = hit.object.geometry?.attributes?.position;
+  let fitted = false;
+  if (pos && pos.count < 200000) {
+    const v = new THREE.Vector3();
+    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+    for (let i = 0; i < pos.count; i++) {
+      v.fromBufferAttribute(pos, i).applyMatrix4(hit.object.matrixWorld).sub(hit.point);
+      if (Math.abs(v.dot(n)) > 0.01) continue;
+      const x = v.dot(right), y = v.dot(upv);
+      if (Math.hypot(x, y) > 2.5) continue;
+      x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y);
+    }
+    const w = x1 - x0, h = y1 - y0;
+    if (w > 0.1 && h > 0.1 && w < 2 && h < 2) {
+      at.addScaledVector(right, (x0 + x1) / 2).addScaledVector(upv, (y0 + y1) / 2);
+      science.w = r4(w); science.h = r4(h);
+      fitted = true;
+    }
+  }
+  at.addScaledVector(n, 0.005); // just off the surface, so it doesn't flicker into it
   const f = consoleFrame();
-  const rel = controls.target.clone().sub(f.at).applyAxisAngle(sciUp, -f.turn);
+  const rel = at.sub(f.at).applyAxisAngle(sciUp, -f.turn);
   science.offset.set(rel.x, rel.y, -rel.z);
+  science.turn = r4((f.turn - yaw) * 180 / Math.PI);
+  science.tilt = r4(tilt * 180 / Math.PI);
   sciFields();
   sciChanged();
-});
+  say(fitted ? 'Screen on that surface, sized to its face. Fine-tune with the boxes if needed.'
+             : 'Screen on that surface (its size kept: set Width and Height).');
+}
 $('sciStandAt').addEventListener('click', () => {
   const at = controls.target.clone();
   const down = new THREE.Raycaster(at.clone().add(new THREE.Vector3(0, 2, 0)), new THREE.Vector3(0, -1, 0), 0, 10);

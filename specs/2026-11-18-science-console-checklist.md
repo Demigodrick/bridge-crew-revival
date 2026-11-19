@@ -17,8 +17,8 @@ Do these bridges: Aegis (`Bridge_scene_02`), Enterprise (`Retro_Bridge_Scene`), 
 - [ ] **Add parts**: choose the bridge to take a console piece from, click **Add**, drag it into place and turn it.
 - [ ] With the new part picked, open **Science console** and click **Use picked part**. Its tag changes to
       "science console".
-- [ ] Line up the green plane with the console's face (the bright side is the side the screen is read from).
-      **Screen here** puts it where the view looks; fine-tune with X/Y/Z, Turn, Tilt, Width and Height.
+- [ ] Click **Screen here**, then click the console's own screen: the green plane goes onto that surface, at its
+      slope and sized to it. Fine-tune with X/Y/Z, Turn, Tilt, Width and Height if needed.
 - [ ] Point the view at the floor where a player should stand and click **Stand here** (a green ring marks it).
 - [ ] Click **Save science placement**. If the toast says your layout lost the part, save the layout too.
 
