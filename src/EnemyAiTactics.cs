@@ -257,8 +257,15 @@ namespace StbcRevival
 
         private static readonly Dictionary<int, float> lastFade = new Dictionary<int, float>();
         private static readonly List<Sector.HOLJLCLENCA> keys = new List<Sector.HOLJLCLENCA>();
-        private static System.Reflection.MethodInfo shieldHealth, canUseGroup;
-        private static System.Reflection.FieldInfo selectorChildren, pickType, pickSecondary, phaserData, phaserRange, threePips;
+        // Typed accessors, made in Patch (these run every AI tick: no reflection boxing there).
+        private static System.Reflection.FieldInfo selectorChildren;
+        private static Func<Sector.FAMOMDAAPCH, float> shieldHealth;
+        private static Func<AI.OLKGIDHOMIG, Sector.Spacecraft.FJKHPJOOAHN, AI.MNIJEDINGOI, bool> canUseGroup;
+        private static AccessTools.FieldRef<AI.OLKGIDHOMIG, Sector.Spacecraft.MDMEPIGBOFJ> pickType;
+        private static AccessTools.FieldRef<AI.OLKGIDHOMIG, bool> pickSecondary;
+        private static AccessTools.FieldRef<Sector.Spacecraft.NPCWeaponGroup, PhaserData> phaserData;
+        private static AccessTools.FieldRef<Sector.Spacecraft.NPCWeaponGroup, float> threePips;
+        private static AccessTools.FieldRef<PhaserData, float> phaserRange;
         private static bool loggedPatterns, loggedTorpedo;
 
         internal static void Patch(Harmony harmony)
@@ -291,11 +298,13 @@ namespace StbcRevival
             Try("torpedo choice", () =>
             {
                 var pick = AccessTools.DeclaredMethod(typeof(AI.OLKGIDHOMIG), "IKLNPCHBLCA"); // PickWeaponGroup.OnUpdate
-                canUseGroup = AccessTools.Method(typeof(AI.OLKGIDHOMIG), "NBABDMBCPNF");        // CanUseWeaponGroup
-                pickType = AccessTools.Field(typeof(AI.OLKGIDHOMIG), "HBDGLAAINBJ");            // _weaponType
-                pickSecondary = AccessTools.Field(typeof(AI.OLKGIDHOMIG), "IJHMKEDAOHJ");       // _isSecondary
-                shieldHealth = AccessTools.Method(typeof(Sector.FAMOMDAAPCH), "get_ShieldHealth"); // TargetInfo
-                if (pick == null || canUseGroup == null || pickType == null || pickSecondary == null || shieldHealth == null) return false;
+                var canUse = AccessTools.Method(typeof(AI.OLKGIDHOMIG), "NBABDMBCPNF");          // CanUseWeaponGroup
+                var shields = AccessTools.Method(typeof(Sector.FAMOMDAAPCH), "get_ShieldHealth"); // TargetInfo
+                if (pick == null || canUse == null || shields == null) return false;
+                canUseGroup = AccessTools.MethodDelegate<Func<AI.OLKGIDHOMIG, Sector.Spacecraft.FJKHPJOOAHN, AI.MNIJEDINGOI, bool>>(canUse);
+                shieldHealth = AccessTools.MethodDelegate<Func<Sector.FAMOMDAAPCH, float>>(shields);
+                pickType = AccessTools.FieldRefAccess<AI.OLKGIDHOMIG, Sector.Spacecraft.MDMEPIGBOFJ>("HBDGLAAINBJ"); // _weaponType
+                pickSecondary = AccessTools.FieldRefAccess<AI.OLKGIDHOMIG, bool>("IJHMKEDAOHJ");                  // _isSecondary
                 harmony.Patch(pick, postfix: Me(nameof(Pick_Postfix)));
                 return true;
             });
@@ -303,10 +312,10 @@ namespace StbcRevival
             {
                 var range = AccessTools.PropertyGetter(typeof(Sector.Spacecraft.NPCWeaponGroup), "Range")
                             ?? AccessTools.Method(typeof(Sector.Spacecraft.NPCWeaponGroup), "get_Range");
-                phaserData = AccessTools.Field(typeof(Sector.Spacecraft.NPCWeaponGroup), "_phaserData");
-                threePips = AccessTools.Field(typeof(Sector.Spacecraft.NPCWeaponGroup), "_threeUnitRangeModifier");
-                phaserRange = phaserData != null ? AccessTools.Field(phaserData.FieldType, "_range") : null;
-                if (range == null || phaserData == null || threePips == null || phaserRange == null) return false;
+                if (range == null) return false;
+                phaserData = AccessTools.FieldRefAccess<Sector.Spacecraft.NPCWeaponGroup, PhaserData>("_phaserData");
+                threePips = AccessTools.FieldRefAccess<Sector.Spacecraft.NPCWeaponGroup, float>("_threeUnitRangeModifier");
+                phaserRange = AccessTools.FieldRefAccess<PhaserData, float>("_range");
                 harmony.Patch(range, postfix: Me(nameof(Range_Postfix)));
                 return true;
             });
@@ -459,10 +468,10 @@ namespace StbcRevival
             try
             {
                 var bb = __0;
-                if ((bool)pickSecondary.GetValue(__instance) || Convert.ToInt32(pickType.GetValue(__instance)) != 0) return; // a pattern asking for one kind
+                if (pickSecondary(__instance) || pickType(__instance) != 0) return; // a pattern asking for one kind
                 if (!(bb.Owner is AI.AgentShip ship) || bb.Target == null) return;
                 var info = bb.Target.GetTargetInfo();
-                if (info == null || (float)shieldHealth.Invoke(info, null) > 0f) return;
+                if (info == null || shieldHealth(info) > 0f) return;
                 var groups = ship.BOKKOEPBHKF; // WeaponGroups
                 if (groups == null || bb.CurrentWeaponGroup >= 0 && bb.CurrentWeaponGroup < groups.Length
                     && groups[bb.CurrentWeaponGroup].FCBJFOCMKEA == Sector.Spacecraft.MDMEPIGBOFJ.Torpedo) return;
@@ -470,7 +479,7 @@ namespace StbcRevival
                 {
                     var group = groups[i];
                     if (group == null || group.FCBJFOCMKEA != Sector.Spacecraft.MDMEPIGBOFJ.Torpedo || !bb.AvailableWeapons.Contains(group)) continue;
-                    if (!(bool)canUseGroup.Invoke(__instance, new object[] { group, bb })) continue;
+                    if (!canUseGroup(__instance, group, bb)) continue;
                     bb.CurrentWeaponGroup = i;
                     if (!loggedTorpedo)
                     {
@@ -490,10 +499,9 @@ namespace StbcRevival
             if (!On || __result <= 0f) return; // 0 pips: no phasers, as the game has it
             try
             {
-                var data = phaserData.GetValue(__instance);
+                var data = phaserData(__instance);
                 if (data == null) return;
-                float full = (float)phaserRange.GetValue(data);
-                float floor = full * (float)threePips.GetValue(__instance);
+                float floor = phaserRange(data) * threePips(__instance);
                 if (__result < floor) __result = floor;
             }
             catch { }
