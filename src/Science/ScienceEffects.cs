@@ -12,8 +12,8 @@ namespace StbcRevival.Science
     /// What the science ledger does to a fight, in a Patrol with the console on (ScienceSession.Active) and nowhere
     /// else. Crew upgrades: the player ship's hits on AI ships (AgentShip.takeHit, both overloads) hit harder, by the
     /// weapons share plus the weak-spot share for the victim's team; its shields take less from each hit
-    /// (BubbleShieldServer.shieldHit); its top speed (SimpleEngineClient.currentMaxSpeed) and top turn rate
-    /// (SimpleEngineClient._maxYawVel while the engine steps) go up; its subsystems' auto-repair adds more. Enemy
+    /// (BubbleShieldServer.shieldHit); its top speed and top turn rate (SimpleEngineClient._maxSpeed and _maxYawVel,
+    /// raised while the engine steps) go up; its subsystems' auto-repair adds more. Enemy
     /// steps: hostile AI ships hit the player ship harder (BaseSpacecraft.takeHit, which PlayerSpacecraft's override
     /// calls once), have more shield (AgentShip.MaxShieldHealth) and fly faster (the move AgentShip.UpdateMoveVelocity
     /// and BorgCube's override work out). Damage, repair and AI flying are the host's; the engine runs where the ship
@@ -22,13 +22,18 @@ namespace StbcRevival.Science
     /// </summary>
     internal static class ScienceEffects
     {
-        private enum Fx { Weapons, EnemyDamage, Shields, EnemyShields, Impulse, Turn, EnemySpeed, Repair, Count }
+        private enum Fx { Weapons, EnemyDamage, Shields, EnemyShields, Impulse, EnemySpeed, Repair, Count }
         private static readonly float[] nextLog = new float[(int)Fx.Count];
 
         private static readonly AccessTools.FieldRef<AI.AgentShip, Vector3d> MoveVelocity =
             AccessTools.FieldRefAccess<AI.AgentShip, Vector3d>("KEIEAFFMBPF"); // _moveVelocity: this step's move, metres
         private static readonly AccessTools.FieldRef<SimpleEngineClient, float> MaxYawVel =
             AccessTools.FieldRefAccess<SimpleEngineClient, float>("_maxYawVel");
+        private static readonly AccessTools.FieldRef<SimpleEngineClient, float> MaxSpeed =
+            AccessTools.FieldRefAccess<SimpleEngineClient, float>("_maxSpeed");
+
+        /// <summary>What an engine step changed, put back after it (Set false: nothing).</summary>
+        private struct EngineSaved { public bool Set; public float Speed, Yaw; }
 
         private static SimpleEngineClient lastEngine; // the engine last asked about, and whether it's a player ship's
         private static bool lastEngineIsPlayer;
@@ -73,11 +78,12 @@ namespace StbcRevival.Science
 
             Hook(harmony, AccessTools.DeclaredMethod(typeof(AI.AgentShip), "get_MaxShieldHealth"), "enemy shields", "AgentShip.MaxShieldHealth (LPAMAFAACEJ) getter", postfix: nameof(MaxShield_Postfix));
 
-            // Crew impulse. currentMaxSpeed (JGAFJNCGLIM) is virtual, so a postfix reaches every reader (the engine's
-            // speed cap and its drag, the consoles). currentMaxYaw (PMJCEJAEPHD) is a 19-byte non-virtual getter that
-            // Mono inlines into the turn drag, so the turn rate is raised by scaling _maxYawVel while the engine steps.
-            Hook(harmony, AccessTools.DeclaredMethod(typeof(SimpleEngineClient), "get_currentMaxSpeed"), "crew impulse (speed)", "SimpleEngineClient.currentMaxSpeed (JGAFJNCGLIM) getter", postfix: nameof(MaxSpeed_Postfix));
-            Hook(harmony, MaxYawVel == null ? null : AccessTools.DeclaredMethod(typeof(SimpleEngineClient), "BatchFixedUpdate"), "crew impulse (turning)", "SimpleEngineClient.BatchFixedUpdate (_maxYawVel)", prefix: nameof(EngineStep_Prefix), finalizer: nameof(EngineStep_Finalizer));
+            // Crew impulse. The getters currentMaxSpeed (JGAFJNCGLIM, maxSpeed x speedModifier) and currentMaxYaw
+            // (PMJCEJAEPHD) are ~19 bytes and final, so Mono may inline them into the engine step and its drag getters;
+            // a postfix there could log while the ship flies no faster. Instead the fields they read, _maxSpeed and
+            // _maxYawVel, are raised for the length of the engine step (BatchFixedUpdate, whose speed cap, drags and
+            // cosmetic bank are their only readers there; nothing writes them after construction) and put back after.
+            Hook(harmony, MaxSpeed == null || MaxYawVel == null ? null : AccessTools.DeclaredMethod(typeof(SimpleEngineClient), "BatchFixedUpdate"), "crew impulse (speed, turning)", "SimpleEngineClient.BatchFixedUpdate (_maxSpeed, _maxYawVel)", prefix: nameof(EngineStep_Prefix), finalizer: nameof(EngineStep_Finalizer));
 
             // Enemy speed: the move worked out by UpdateMoveVelocity (MHHGGHHKMKN), AgentShip's and BorgCube's own
             // (which doesn't call base). _moveVelocity is worked out afresh each step, so scaling it doesn't add up. Ahead
@@ -188,41 +194,36 @@ namespace StbcRevival.Science
         }
 
         // ------------------------------------------------------------------------------------------- crew impulse
-        private static void MaxSpeed_Postfix(SimpleEngineClient __instance, ref float __result)
+        private static void EngineStep_Prefix(SimpleEngineClient __instance, out EngineSaved __state)
         {
+            __state = default(EngineSaved);
             if (!ScienceSession.Active) return;
             try
             {
                 float k = ScienceSession.Ledger.Crew(UpgradeArea.Impulse);
                 if (k <= 0f || !IsPlayerEngine(__instance)) return;
-                float was = __result;
-                __result *= 1f + k;
-                if (Due(Fx.Impulse)) Log($"crew impulse: top speed {was:0.###} -> {__result:0.###}");
-            }
-            catch (Exception) { /* as it was */ }
-        }
-
-        private static void EngineStep_Prefix(SimpleEngineClient __instance, out float __state)
-        {
-            __state = float.NaN;
-            if (!ScienceSession.Active) return;
-            try
-            {
-                float k = ScienceSession.Ledger.Crew(UpgradeArea.Impulse);
-                if (k <= 0f || !IsPlayerEngine(__instance)) return;
+                ref float speed = ref MaxSpeed(__instance);
                 ref float yaw = ref MaxYawVel(__instance);
-                __state = yaw;
+                __state = new EngineSaved { Set = true, Speed = speed, Yaw = yaw };
+                speed *= 1f + k;
                 yaw *= 1f + k;
-                if (Due(Fx.Turn)) Log($"crew impulse: top turn rate {__state:0.##} -> {yaw:0.##}");
+                if (Due(Fx.Impulse)) Log($"crew impulse: top speed {__state.Speed:0.###} -> {speed:0.###}, turn rate {__state.Yaw:0.##} -> {yaw:0.##}");
             }
             catch (Exception) { /* as it was */ }
         }
 
-        private static Exception EngineStep_Finalizer(SimpleEngineClient __instance, float __state, Exception __exception)
+        private static Exception EngineStep_Finalizer(SimpleEngineClient __instance, EngineSaved __state, Exception __exception)
         {
-            if (!float.IsNaN(__state))
-                try { MaxYawVel(__instance) = __state; } catch (Exception) { }
+            if (__state.Set)
+                try { MaxSpeed(__instance) = __state.Speed; MaxYawVel(__instance) = __state.Yaw; } catch (Exception) { }
             return __exception;
+        }
+
+        /// <summary>The Patrol or the room ended: forget the engine looked up (the ship goes with it).</summary>
+        internal static void Forget()
+        {
+            lastEngine = null;
+            lastEngineIsPlayer = false;
         }
 
         private static bool IsPlayerEngine(SimpleEngineClient engine)

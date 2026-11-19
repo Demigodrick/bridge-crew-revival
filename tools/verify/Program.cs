@@ -296,8 +296,7 @@ Check("  BaseSpacecraft.takeHit(Vector3, float, Subsystem, attacker, ...) (scien
 Check("  BubbleShieldServer.shieldHit(float, attacker, out float) (science: crew shields)", game.GetType("Sector.Spacecraft.Subsystems.BubbleShieldServer")?.GetMethods(Decl).FirstOrDefault(m => m.Name == "shieldHit" && m.GetParameters() is { Length: 3 } p && p[0].ParameterType.FullName == "System.Single" && p[2].ParameterType.IsByRef));
 Check("  AgentShip.get_MaxShieldHealth (LPAMAFAACEJ) (science: enemy shields)", agentShip?.GetMethod("get_MaxShieldHealth", Decl));
 var engineClient = game.GetType("Sector.Spacecraft.Subsystems.SimpleEngineClient");
-Check("  SimpleEngineClient.get_currentMaxSpeed (JGAFJNCGLIM) (science: crew impulse)", engineClient?.GetMethod("get_currentMaxSpeed", Decl));
-Check("  SimpleEngineClient.BatchFixedUpdate + _maxYawVel (science: crew turning)", engineClient?.GetMethod("BatchFixedUpdate", Decl, null, Type.EmptyTypes, null) != null ? engineClient.GetField("_maxYawVel", Inst) : null);
+Check("  SimpleEngineClient.BatchFixedUpdate + _maxSpeed + _maxYawVel (science: crew impulse, speed and turning)", engineClient?.GetMethod("BatchFixedUpdate", Decl, null, Type.EmptyTypes, null) != null && engineClient.GetField("_maxSpeed", Inst) != null ? engineClient.GetField("_maxYawVel", Inst) : null);
 Check("  AgentShip.MHHGGHHKMKN (UpdateMoveVelocity) + KEIEAFFMBPF (_moveVelocity) (science: enemy speed)", agentShip?.GetMethod("MHHGGHHKMKN", Decl) != null ? agentShip.GetField("KEIEAFFMBPF", Inst) : null);
 Check("  BorgCube.MHHGGHHKMKN (UpdateMoveVelocity) (science: enemy speed)", game.GetType("AI.BorgCube")?.GetMethod("MHHGGHHKMKN", Decl));
 var subsystemServer = game.GetType("Sector.Spacecraft.Subsystems.SubsystemServer");
