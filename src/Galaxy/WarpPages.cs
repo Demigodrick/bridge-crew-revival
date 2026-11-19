@@ -40,7 +40,6 @@ namespace StbcRevival.Galaxy
         private const string P = "Galaxy pages: ";
         private const string Trench = "The Trench";
         private const float Darken = 0.4f;
-        private const string Helper = "_ScaleAndAxesHelper"; // HandInteraction.Awake's own child object
 
         private sealed class PanelState
         {
@@ -58,8 +57,7 @@ namespace StbcRevival.Galaxy
             public bool Failed;              // restored to the vanilla map: the (hidden) button does nothing
             public bool NoButton;            // the pages work, but this panel has no button (logged why)
             public bool TogglesReset;        // the copy's Toggles set off once it is awake
-            public bool Resetting;           // our own isOn = false, not a press
-            public readonly List<UnityEngine.UI.Toggle> Toggles = new List<UnityEngine.UI.Toggle>();
+            public ConsoleWidgets.Presses Presses; // the copy's Toggles, Buttons and click handlers
             public bool ButtonPending;       // no helm to copy from yet: tried again from Update
             public int ButtonTries;
             public bool MapShown;            // the map's last ShowMap state: follow the ship only on hidden -> shown
@@ -318,10 +316,10 @@ namespace StbcRevival.Galaxy
         {
             var panel = s.Panel;
             var ownConsole = Member(panel, "KHDENOMKIJE", "Console") as Component;
-            var helm = ownConsole as ConsoleHelm ?? FindHelm();
+            var helm = ownConsole as ConsoleHelm ?? ConsoleWidgets.FindHelm();
             if (helm == null) throw new NoHelmYet();
-            var impulse = ModeRoot(helm, "_impulseButton", "_systemToggle", "_localButton", "_warpButton");
-            var warp = ModeRoot(helm, "_warpButton", "_warpToggle", "_localButton", "_impulseButton");
+            var impulse = ConsoleWidgets.ImpulseButton(helm);
+            var warp = ConsoleWidgets.ModeRoot(helm, "_warpButton", "_warpToggle", "_localButton", "_impulseButton");
             if (impulse == null) throw new InvalidOperationException("the helm's IMPULSE button wasn't found");
             bool onHelm = ReferenceEquals(ownConsole, helm);
             Plugin.Log.LogInfo(P + $"{s.Name}: page button copied from {GalaxyCatalogue.PathOf(impulse.transform)}");
@@ -331,7 +329,7 @@ namespace StbcRevival.Galaxy
             // On the helm: under the object holding all three mode buttons (each sits in its own layout group, which
             // would move ours onto it), kept out of that object's layout.
             Transform parent = !onHelm ? (Transform)mapRect
-                : warp != null && Common(impulse.transform, warp.transform) is Transform both && both != impulse.transform && both != warp.transform
+                : warp != null && ConsoleWidgets.Common(impulse.transform, warp.transform) is Transform both && both != impulse.transform && both != warp.transform
                     ? both : impulse.transform.parent;
             var source = impulse.transform as RectTransform;
             Vector2 size = source != null ? source.rect.size : new Vector2(100f, 30f);
@@ -347,18 +345,7 @@ namespace StbcRevival.Galaxy
             frameRect.localScale = new Vector3(ps.x != 0f ? ls.x / ps.x : 1f, ps.y != 0f ? ls.y / ps.y : 1f, ps.z != 0f ? ls.z / ps.z : 1f);
             s.Button = frame;
 
-            var button = UnityEngine.Object.Instantiate(impulse, frameRect, false) as GameObject;
-            if (button == null) throw new InvalidOperationException("copying the IMPULSE button gave nothing");
-            button.name = "Galaxy Page Button Face";
-            if (button.transform is RectTransform face)
-            {
-                face.anchorMin = face.anchorMax = new Vector2(0.5f, 0.5f);
-                face.sizeDelta = size;
-                face.anchoredPosition = new Vector2((face.pivot.x - 0.5f) * size.x, (face.pivot.y - 0.5f) * size.y);
-            }
-            else button.transform.localPosition = Vector3.zero;
-            button.transform.localRotation = Quaternion.identity;
-            button.transform.localScale = Vector3.one;
+            var button = ConsoleWidgets.CopyFace(impulse, frameRect, size, "Galaxy Page Button Face");
             if (!Neutralise(s, button, sameConsole: onHelm))
             {
                 // Never woken (the frame is inactive), so nothing in the game knows about it.
@@ -404,28 +391,9 @@ namespace StbcRevival.Galaxy
                 // Just under the title bar's line (not across it), and in from the frame's rounded corner.
                 frameRect.localPosition = new Vector3(r.xMax - halfW - halfH * 2f, y - halfH * 1.35f, 0f);
             }
-            foreach (var toggle in button.GetComponentsInChildren<UnityEngine.UI.Toggle>(true))
-            {
-                // Any change is a press; it's then set off again (TogglesReset sets it off once awake, not a press).
-                var t = toggle;
-                s.Toggles.Add(t);
-                t.onValueChanged.AddListener(on =>
-                {
-                    if (s.Resetting) return;
-                    Pressed(s, "toggle");
-                    ResetToggles(s);
-                });
-            }
-            foreach (var b in button.GetComponentsInChildren<UnityEngine.UI.Button>(true))
-                b.onClick.AddListener(() => Pressed(s, "button"));
-            int handlers = 0;
-            foreach (var hand in button.GetComponentsInChildren<HandInteraction>(true))
-            {
-                var click = hand.gameObject.GetComponent<PageButtonClick>() ?? hand.gameObject.AddComponent<PageButtonClick>();
-                click.Clicked = () => Pressed(s, "press");
-                handlers++;
-            }
-            if (handlers == 0) button.AddComponent<PageButtonClick>().Clicked = () => Pressed(s, "press");
+            // Any Toggle change is a press; it's then set off again (TogglesReset sets it off once awake, not a press).
+            s.Presses = ConsoleWidgets.WirePresses(button, how => Pressed(s, how), "Galaxy pages: page button press");
+            int handlers = s.Presses.Handlers;
 
             foreach (var c in button.GetComponentsInChildren<Component>(true))
                 if (c is TMPro.TMP_Text || c is UnityEngine.UI.Text) s.Texts.Add(c);
@@ -450,22 +418,7 @@ namespace StbcRevival.Galaxy
             }
         }
 
-        private static void ResetToggles(PanelState s)
-        {
-            s.Resetting = true;
-            try { foreach (var t in s.Toggles) if (t != null && t.isOn) t.isOn = false; }
-            finally { s.Resetting = false; }
-        }
-
-        // The scene's helm console (inactive ones too: a panel can be built before the helm is switched on).
-        private static ConsoleHelm FindHelm()
-        {
-            var found = UnityEngine.Object.FindObjectOfType<ConsoleHelm>();
-            if (found != null) return found;
-            foreach (var h in Resources.FindObjectsOfTypeAll<ConsoleHelm>())
-                if (h != null && h.hideFlags == HideFlags.None && h.gameObject.scene.IsValid()) return h;
-            return null;
-        }
+        private static void ResetToggles(PanelState s) => s.Presses?.ResetToggles();
 
         // The Trench's systems wear a ring under their dot that isn't part of the location button (a region system,
         // and the spike's copy, showed a bare dot). Look for Images in the panel, outside the location buttons, the
@@ -556,86 +509,25 @@ namespace StbcRevival.Galaxy
             foreach (var g in s.RegionMarks) if (g != null && g.activeSelf != (page == 2)) g.SetActive(page == 2);
         }
 
-        // A helm map-mode button's root: its HandInteraction's object, or the smallest object holding both it and its
-        // Toggle when that holds none of the other mode buttons.
-        private static GameObject ModeRoot(ConsoleHelm helm, string buttonField, string toggleField, params string[] others)
-        {
-            var hand = AccessTools.Field(typeof(ConsoleHelm), buttonField)?.GetValue(helm) as Component;
-            if (hand == null) return null;
-            var toggle = AccessTools.Field(typeof(ConsoleHelm), toggleField)?.GetValue(helm) as Component;
-            Transform root = hand.transform;
-            if (toggle != null)
-            {
-                var both = Common(hand.transform, toggle.transform);
-                bool clean = both != null;
-                foreach (var name in others)
-                {
-                    var other = AccessTools.Field(typeof(ConsoleHelm), name)?.GetValue(helm) as Component;
-                    if (other != null && both != null && other.transform.IsChildOf(both)) clean = false;
-                }
-                if (clean) root = both;
-            }
-            return root.gameObject;
-        }
-
-        private static Transform Common(Transform a, Transform b)
-        {
-            for (var t = a; t != null; t = t.parent)
-                if (b.IsChildOf(t)) return t;
-            return null;
-        }
-
         // Before the copy wakes up: no UnityEvent of the original (they set the map mode), out of the mode buttons'
         // toggle group, no copied HandInteraction helpers; away from the helm, no helm hand grid and the panel's own
         // hand restriction (the captain's console is left-hand).
         private static bool Neutralise(PanelState s, GameObject button, bool sameConsole)
         {
-            foreach (var t in button.GetComponentsInChildren<Transform>(true))
-                if (t != null && t != button.transform && t.name.EndsWith(Helper, StringComparison.Ordinal))
-                    UnityEngine.Object.DestroyImmediate(t.gameObject);
-
-            int events = 0;
-            foreach (var behaviour in button.GetComponentsInChildren<MonoBehaviour>(true))
-            {
-                if (behaviour == null) continue;
-                for (var type = behaviour.GetType(); type != null && type != typeof(MonoBehaviour); type = type.BaseType)
-                    foreach (var f in type.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly))
-                    {
-                        if (!typeof(UnityEngine.Events.UnityEventBase).IsAssignableFrom(f.FieldType) || f.FieldType.IsAbstract) continue;
-                        try { f.SetValue(behaviour, Activator.CreateInstance(f.FieldType)); events++; }
-                        catch (Exception e) { Plugin.Log.LogWarning(P + $"{s.Name}: clearing {type.Name}.{f.Name}: {e.Message}"); }
-                    }
-                if (behaviour is EventTrigger trigger && trigger.triggers != null) trigger.triggers.Clear();
-            }
-            foreach (var toggle in button.GetComponentsInChildren<UnityEngine.UI.Toggle>(true)) toggle.group = null;
-
-            // HandAnimator asks each HandInteraction for wrist poses: from its grid when it has one, else from _poses[0]
-            // (no bounds check). Away from the helm, the helm's grid is wrong: take the grid of this panel's own location
-            // template; without one the copy needs poses of its own. With neither, no button.
             var gridField = AccessTools.Field(typeof(HandInteraction), "_grid");
-            var posesField = AccessTools.Field(typeof(HandInteraction), "_poses");
             var side = AccessTools.Field(typeof(HandInteraction), "_sideRestriction");
-            if (gridField == null || posesField == null) { Plugin.Log.LogWarning(P + $"{s.Name}: HandInteraction._grid/_poses not found"); return false; }
             var template = fTemplate?.GetValue(s.Panel) as Component;
             var templateHand = template != null ? template.GetComponentInChildren<HandInteraction>(true) : null;
-            var templateGrid = templateHand != null ? gridField.GetValue(templateHand) as UnityEngine.Object : null;
-            bool usable = true;
-            foreach (var hand in button.GetComponentsInChildren<HandInteraction>(true))
+            var templateGrid = templateHand != null && gridField != null ? gridField.GetValue(templateHand) as UnityEngine.Object : null;
+            var fix = new ConsoleWidgets.HandFix
             {
-                if (!sameConsole)
-                {
-                    gridField.SetValue(hand, templateGrid != null ? templateGrid : null);
-                    if (side != null && templateHand != null) side.SetValue(hand, side.GetValue(templateHand));
-                }
-                var grid = gridField.GetValue(hand) as UnityEngine.Object;
-                int poses = posesField.GetValue(hand) is Array a ? a.Length : 0;
-                bool ok = grid != null || poses > 0;
-                Plugin.Log.LogInfo(P + $"{s.Name}: page button hand interaction {hand.name}: grid {(grid != null ? grid.name : "none")}, "
-                    + $"{poses} pose(s){(sameConsole ? "" : $", template grid {(templateGrid != null ? templateGrid.name : "none")}")}{(ok ? "" : ": no pose source")}");
-                if (!ok) usable = false;
-            }
-            Plugin.Log.LogInfo(P + $"{s.Name}: page button: {events} copied event(s) emptied");
-            return usable;
+                Replace = !sameConsole,
+                Grid = templateGrid,
+                SetSide = !sameConsole && side != null && templateHand != null,
+                Side = !sameConsole && side != null && templateHand != null ? side.GetValue(templateHand) : null,
+                Note = sameConsole ? "" : $", template grid {(templateGrid != null ? templateGrid.name : "none")}",
+            };
+            return ConsoleWidgets.Neutralise(button, P + s.Name, "page button", fix);
         }
 
         private static float WorldWidth(GameObject g) => g != null && g.transform is RectTransform r ? WorldWidth(r) : 0f;
@@ -972,18 +864,6 @@ namespace StbcRevival.Galaxy
                 if (s.Button != null && s.Button.activeSelf) s.Button.SetActive(false);
             }
             catch (Exception e) { Plugin.Log.LogError(P + "hiding the page button: " + e.Message); }
-        }
-    }
-
-    /// <summary>The warp map page button's press (VR poke or mouse click), on its HandInteraction's object.</summary>
-    internal sealed class PageButtonClick : MonoBehaviour, IPointerClickHandler
-    {
-        internal Action Clicked;
-
-        public void OnPointerClick(PointerEventData eventData)
-        {
-            try { Clicked?.Invoke(); }
-            catch (Exception e) { Plugin.Log.LogError("Galaxy pages: page button press: " + e); }
         }
     }
 }

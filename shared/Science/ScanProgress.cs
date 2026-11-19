@@ -7,6 +7,15 @@ namespace StbcRevival.Science
         public bool Locked { get; private set; }
         public bool Done { get { return Value >= 100f; } }
 
+        public ScanProgress() { }
+
+        // Carrying on from where the board has a target (0..100).
+        public ScanProgress(float start)
+        {
+            if (float.IsNaN(start) || start < 0f) start = 0f;
+            Value = start > 100f ? 100f : start;
+        }
+
         public void Advance(float matchA, float matchB, float dt)
         {
             float worst = matchA < matchB ? matchA : matchB;

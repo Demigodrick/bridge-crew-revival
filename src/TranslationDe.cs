@@ -129,6 +129,50 @@ namespace StbcRevival
             Add("repair", "Reparatur");
             Add("damage", "Schaden");
             Add("speed", "Tempo");
+
+            // The console's screen (ScienceScreen, MiniGamePanel, ConsoleText)
+            Add("SCIENCE", "WISSENSCHAFT");
+            Add("SCAN", "ANALYSE");
+            Add("BACK", "ZURÜCK");
+            Add("LOCKED", "ERFASST");
+            Add("no lock", "keine Erfassung");
+            Add("In use", "In Benutzung");
+            Add("In use by {0}", "Belegt von {0}");
+            Add("In range:", "In Reichweite:");
+            Add("No targets in range", "Keine Ziele in Reichweite");
+            Add("Out of range: helm, close to {0} km", "Außer Reichweite: Steuer, auf {0} km heranfliegen");
+            Add("Unidentified reading {0}", "Unbekannte Messung {0}");
+            Add("Upgrades: {0}", "Verbesserungen: {0}");
+            Add("none", "keine");
+            Add("Weapons", "Waffen");
+            Add("Shields", "Schilde");
+            Add("Impulse", "Impuls");
+            Add("Repair", "Reparatur");
+            foreach (var faction in new[]
+            {
+                new[] { "Klingon", "Klingonische Trümmer", "Klingonen" },
+                new[] { "Raider", "Plünderer-Trümmer", "Plünderer" },
+                new[] { "Romulan", "Romulanische Trümmer", "Romulaner" },
+                new[] { "Borg", "Borg-Trümmer", "Borg" },
+                new[] { "Pirate", "Piraten-Trümmer", "Piraten" },
+                new[] { "Hostile", "Feindliche Trümmer", "Feinde" },
+            })
+            {
+                Add(faction[0] + " debris", faction[1]);
+                Add("vs " + faction[0], "gegen " + faction[2]);
+            }
+            Add("Match {0}%", "Übereinstimmung {0}%");
+            Add("Aligned {0} of 3", "{0} von 3 ausgerichtet");
+            Add("Signal {0}%", "Signal {0}%");
+            Add("Frequency", "Frequenz");
+            Add("Amplitude", "Amplitude");
+            Add("Phase", "Phase");
+            Add("Outer ring", "Äußerer Ring");
+            Add("Middle ring", "Mittlerer Ring");
+            Add("Inner ring", "Innerer Ring");
+            Add("Band", "Band");
+            Add("Gain", "Verstärkung");
+            Add("Polarity", "Polarität");
         }
 
         // ---- Stellar Evacuation -----------------------------------------------------------------------

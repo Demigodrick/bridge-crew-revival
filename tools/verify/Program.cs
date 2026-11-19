@@ -315,6 +315,31 @@ Check("  SectorBody.get_sector -> ISector (EGGMAHHMNCE) (science: finding target
 Check("  ISector.GetBodyWithID<T>(SectorId) (science: finding targets)", game.GetType("Sector.EGGMAHHMNCE")?.GetMethods(Inst).FirstOrDefault(m => m.Name == "GetBodyWithID" && m.IsGenericMethodDefinition && m.GetParameters() is { Length: 1 } p && p[0].ParameterType == sectorIdT));
 Check("  AgentShip.get_IsDestroyed (HAFBKMDMMIO) (science: debris only from deaths)", game.GetType("AI.AgentShip")?.GetMethod("get_IsDestroyed", Inst));
 Check("  SystemTransform.get_Forward (science: debris bearing)", game.GetType("SystemTransform")?.GetMethod("get_Forward", Inst));
+// Console widgets (warp map page button, science console screen): copies of the helm's IMPULSE button, throttle and text
+foreach (var f in new[] { "_impulseButton", "_systemToggle", "_localButton", "_warpButton", "_warpToggle", "throttleSlider" })
+    Check($"  ConsoleHelm.{f} (console widgets)", helm?.GetField(f, Inst));
+var handInteraction = game.GetType("HandInteraction");
+foreach (var f in new[] { "_grid", "_poses", "_sideRestriction" })
+    Check($"  HandInteraction.{f} (console widgets)", handInteraction?.GetField(f, Inst));
+Check("  HandInteraction+HandSide.Either (science: both hands)", handInteraction?.GetField("_sideRestriction", Inst)?.FieldType.GetField("Either"));
+Check("  HandInteraction.MaxCountPerConsole (science: the hands' list size)", handInteraction?.GetField("MaxCountPerConsole", AnyS));
+Check("  HandInteraction.get_IsBeingManipulated (JLLBFOIFAKI) (science: sliders a hand holds)", handInteraction?.GetProperty("JLLBFOIFAKI", Inst)?.GetMethod);
+var sliderInteraction = game.GetType("SliderInteraction");
+foreach (var f in new[] { "BDCPELPJBAL", "OnValueChanged", "MinLocalPosition", "MaxLocalPosition", "RecenterSpeed", "SliderMinValue" })
+    Check($"  SliderInteraction.{f} (science: sliders)", sliderInteraction?.GetField(f, Inst));
+Check("  SliderInteraction.Direction = Horizontal (science: sliders)", sliderInteraction?.GetField("Direction", Inst)?.FieldType.GetField("Horizontal"));
+Check("  SliderInteraction.Value (OJKPBPCBPMA) get/set (science: sliders)", sliderInteraction?.GetProperty("OJKPBPCBPMA", Inst) is { } sv && sv.GetMethod != null ? sv.SetMethod : null);
+var handGrid = game.GetType("HandInteractionGrid");
+foreach (var f in new[] { "_topLeftTransform", "_bottomRightTransform", "_positions", "_poseCount" })
+    Check($"  HandInteractionGrid.{f} (science: the screen's hand grid)", handGrid?.GetField(f, Inst));
+var handAnimator = game.GetType("HandAnimator");
+Check("  HandAnimator.DPAFLMHJMEC (_consoleInteractions: List<HandInteraction>) (science: hands use the screen)", handAnimator?.GetField("DPAFLMHJMEC", Inst) is { } ci && ci.FieldType.IsGenericType ? ci : null);
+Check("  HandAnimator.OLMKBPANPIO (_interactionsChanged) (science)", handAnimator?.GetField("OLMKBPANPIO", Inst));
+Check("  HandAnimatorManager.AFBJOJJNCEA (animators) (science)", game.GetType("HandAnimatorManager")?.GetField("AFBJOJJNCEA", Inst));
+Check("  PawnComponent.HAMOMEFCFNB (_playerInfo) (science: the local hands)", game.GetType("PawnComponent")?.GetField("HAMOMEFCFNB", Inst));
+Check("  PlayerInfo.AOLEJMABHPE (IsLocal) (science: the local hands)", game.GetType("PlayerInfo")?.GetProperty("AOLEJMABHPE", Inst));
+Check("  TMPro.EGJGCPILBBH (alignment) Left / Right / Center (science)", game.GetType("TMPro.EGJGCPILBBH") is { } al
+    && al.GetField("Left") != null && al.GetField("Right") != null && al.GetField("Center") != null ? al : null);
 // Host hand-off
 Check("  NetworkStatus.SetError(error, popup, ...) (hand-off: no popup for failed regroup joins)",
     game.GetType("SVR.Network.NetworkStatus")?.GetMethods(BindingFlags.Public | BindingFlags.Static).FirstOrDefault(m => m.Name == "SetError" && m.GetParameters().Length == 4));

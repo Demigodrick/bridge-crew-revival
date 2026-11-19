@@ -45,6 +45,14 @@ namespace StbcRevival.Science
             return faction.TryGetValue(team, out v) ? v : 0f;
         }
 
+        // The teams with weak spots found, in order.
+        public int[] FactionTeams()
+        {
+            List<int> teams = new List<int>(faction.Keys);
+            teams.Sort();
+            return teams.ToArray();
+        }
+
         public float Enemy(EnemyArea a)
         {
             int i = (int)a;

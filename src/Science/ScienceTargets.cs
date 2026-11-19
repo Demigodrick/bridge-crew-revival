@@ -20,6 +20,7 @@ namespace StbcRevival.Science
         public UpgradeArea? Area; // known on the host only (a crewmate gets null)
         public int Team;
         public Vector3d Position;
+        public double Distance;   // from the ship, metres (InRange)
     }
 
     /// <summary>
@@ -261,17 +262,18 @@ namespace StbcRevival.Science
                 {
                     if (Gone(kv.Value) || ScienceSession.Board.IsDone(kv.Key)) continue;
                     Vector3d at = kv.Value.ALPAOOKFIEE.Position;
-                    if (Vector3d.Distance(me, at) > metres) continue;
+                    double d = Vector3d.Distance(me, at);
+                    if (d > metres) continue;
                     if (live.TryGetValue(kv.Key, out var l))
-                        result.Add(new ScienceTarget { Id = l.Target.Id, Name = l.Target.Name, Area = l.Target.Area, Team = l.Target.Team, Position = at });
+                        result.Add(new ScienceTarget { Id = l.Target.Id, Name = l.Target.Name, Area = l.Target.Area, Team = l.Target.Team, Position = at, Distance = d });
                     else
                         result.Add(new ScienceTarget
                         {
-                            Id = kv.Key, Name = kv.Value.ALPAOOKFIEE.BaseName ?? kv.Key, Position = at,
+                            Id = kv.Key, Name = kv.Value.ALPAOOKFIEE.BaseName ?? kv.Key, Position = at, Distance = d,
                             Team = kv.Value.GetTargetInfo() is TargetInfoComponent info ? (int)info.DGGJOECIFAF : 0,
                         });
                 }
-                result.Sort((a, b) => Vector3d.Distance(me, a.Position).CompareTo(Vector3d.Distance(me, b.Position)));
+                result.Sort((a, b) => a.Distance.CompareTo(b.Distance));
             }
             catch (Exception e) { Plugin.Log.LogWarning("Science console: finding targets: " + e.Message); }
             return result;

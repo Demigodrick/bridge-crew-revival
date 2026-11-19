@@ -466,6 +466,7 @@ namespace StbcRevival
             Safely("galaxy room", StbcRevival.Galaxy.GalaxyRoom.Update);
             Safely("restock sync", StbcRevival.Missions.RestockSync.Update);
             Safely("science", StbcRevival.Science.ScienceSession.Update);
+            Safely("science screen", StbcRevival.Science.ScienceScreen.Update);
             Safely("excelsior", Excelsior.Update);
             Safely("ships", CustomShip.Update);
             Safely("defiant", Defiant.Update);
