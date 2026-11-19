@@ -24,7 +24,7 @@ namespace StbcRevival
     ///   A: confirm, skip the captain's log; hold for voice and crew commands.   B: back, close menus.
     ///   X: help.   Y: exterior view.   Right stick click: pause.   Left stick held 1 s: recentre.
     ///   Sticks, triggers and grips: as the game's own Touch controls; a stick flicked sideways changes the spectator camera.
-    /// The game may still show Vive controllers and prompts.
+    /// The game's controls card and button prompts show Touch controllers too (QuestControlsArt).
     /// </summary>
     internal static class QuestControls
     {
@@ -37,6 +37,68 @@ namespace StbcRevival
         private static int sampledFrame = -1;
         private static bool sampled, failed, headsetAccepted;
         private static float nextHeadsetCheck;
+
+        // ---- SteamVR's layout ----
+        // The Touch buttons need SteamVR to use the mod's Quest layout for this game (BepInEx/vr/quest-binding.json): the
+        // installer's Quest question points SteamVR's settings at it, which can only be done with SteamVR closed. So when
+        // the setting is switched in game (REVIVAL SETTINGS), SteamVR's settings are read to say what's still needed.
+
+        /// <summary>After REVIVAL SETTINGS switched the Quest buttons: a popup saying what else it takes.</summary>
+        internal static void TellAboutBinding(bool on)
+        {
+            string text;
+            var layout = SteamVrLayout();
+            if (!on)
+                text = layout == true
+                    ? "Quest controller buttons are off from your next launch. SteamVR still uses the mod's Quest layout for Bridge Crew: run the installer again with SteamVR closed to give it its own back."
+                    : "Quest controller buttons are off from your next launch.";
+            else if (layout == true)
+                text = "Quest controller buttons are on from your next launch.";
+            else
+                text = "Quest controller buttons are on from your next launch. They also need SteamVR to use the mod's Quest layout: "
+                       + "in SteamVR's controller settings for Bridge Crew, choose \"Bridge Crew Revival: Quest controllers\". "
+                       + "Or quit the game and SteamVR and run the installer again.";
+            try { UI.PopupMgr.ShowPopup(Translation.T(text).Replace('|', ' '), null, UI.PDHCCBFJODN.Notification, true); }
+            catch (Exception e) { Plugin.Log.LogInfo("Quest controls: couldn't show the popup: " + e.Message); }
+        }
+
+        /// <summary>
+        /// Whether SteamVR's settings point Bridge Crew's Touch layout at the mod's: true, false, or null when they
+        /// can't be read (no SteamVR settings found).
+        /// </summary>
+        internal static bool? SteamVrLayout()
+        {
+            try
+            {
+                var file = SteamVrSettingsFile();
+                if (file == null) return null;
+                return SteamVrSettings.UsesQuestLayout(System.IO.File.ReadAllText(file));
+            }
+            catch (Exception e)
+            {
+                Plugin.Log.LogInfo("Quest controls: SteamVR's settings couldn't be read: " + e.Message);
+                return null;
+            }
+        }
+
+        // Steam's config/steamvr.vrsettings: Steam's folder from the registry, else up from the game's library.
+        private static string SteamVrSettingsFile()
+        {
+            try
+            {
+                using (var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Valve\Steam"))
+                    if (key?.GetValue("SteamPath") is string steam)
+                    {
+                        var file = System.IO.Path.Combine(System.IO.Path.Combine(steam, "config"), "steamvr.vrsettings");
+                        if (System.IO.File.Exists(file)) return file;
+                    }
+            }
+            catch { /* no registry */ }
+            var library = System.IO.Directory.GetParent(BepInEx.Paths.GameRootPath)?.Parent?.Parent?.FullName; // <library>/steamapps/common/<game>
+            if (library == null) return null;
+            var guess = System.IO.Path.Combine(System.IO.Path.Combine(library, "config"), "steamvr.vrsettings");
+            return System.IO.File.Exists(guess) ? guess : null;
+        }
 
         internal static void Patch(Harmony harmony)
         {

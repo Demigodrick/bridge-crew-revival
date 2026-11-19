@@ -21,6 +21,8 @@
   <ItemGroup>
     <Compile Include="../../src/Gzip.cs" Link="Mod/Gzip.cs" />
     <Compile Include="../../src/Zip.cs" Link="Mod/Zip.cs" />
+    <Compile Include="../../src/SteamVrSettings.cs" Link="Mod/SteamVrSettings.cs" />
+    <Compile Include="../../shared/MiniJson.cs" Link="Shared/MiniJson.cs" />
   </ItemGroup>
 
 </Project>

@@ -71,7 +71,7 @@ any station** in REVIVAL SETTINGS (experimental).
 - **Walk around the bridge in VR** too: hold B on the right controller (with the Quest buttons on) or press
   F6 to stand up, then walk around your room or use the left stick, and turn with the right stick.
 - **Quest controller buttons** for a Meta Quest through SteamVR (Virtual Desktop, Steam Link): A, B, X and Y
-  work as they do through Meta Link. The installer asks whether you want them.
+  work as they do through Meta Link, and the controls card and button prompts show Touch controllers. The installer asks whether you want them.
 - **F10** saves a bug report in one keypress, and if the game crashes, a crash report is saved for you on the next launch.
 - Most of it can be switched on and off from **REVIVAL SETTINGS** on the shuttle console.
 

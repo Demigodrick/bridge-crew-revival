@@ -363,7 +363,7 @@ namespace StbcRevival
             QuestControlsOn = Config.Bind("VR", "QuestControls", false,
                 "Meta Quest controllers through SteamVR (Virtual Desktop, Steam Link): Touch-style buttons, as through Meta Link, instead of the Vive wands' layout. "
                 + "A confirm, B back, X help, Y exterior view, right stick click pause, left stick held to recentre. Needs SteamVR to use the mod's Quest binding "
-                + "(the installer's Quest question sets it up). Only with a Meta/Oculus headset on SteamVR. Takes effect after a restart.");
+                + "(the installer's Quest question sets it up; or choose \"Bridge Crew Revival: Quest controllers\" in SteamVR's controller settings for Bridge Crew). Also in REVIVAL SETTINGS (Quest controller buttons). Only with a Meta/Oculus headset on SteamVR. Takes effect after a restart.");
             VrPerformance = Config.Bind("VR", "Performance", false,
                 "For slower PCs in VR: lighter where it costs most. The briefing room table shows a simplified copy of our ship classes instead of the full-detail ship.");
             SeatWarning = Config.Bind("VR", "SeatWarning", false,
@@ -444,6 +444,7 @@ namespace StbcRevival
             Safely("revival voice patches", () => RevivalVoice.Patch(harmony));
             Safely("revival voice playback patches", () => RevivalPlayback.Patch(harmony));
             Safely("quest controls", () => StbcRevival.QuestControls.Patch(harmony));
+            Safely("quest controls art", () => StbcRevival.QuestControlsArt.Patch(harmony));
             Safely("seat warning", () => Walking.SeatWarning.Patch(harmony));
             Safely("galaxy region", () => StbcRevival.Galaxy.GalaxyRegion.Patch(harmony));
             Safely("galaxy warp map pages", () => StbcRevival.Galaxy.WarpPages.Patch(harmony));
