@@ -61,7 +61,7 @@ button:disabled { opacity: .45; cursor: default; }
 #lightFields { grid-template-columns: repeat(3, 1fr); }
 #fields label, #lightFields label { display: grid; gap: 2px; color: var(--muted); font-size: 11px; }
 #fields input, #lightFields input { width: 100%; font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px; }
-#addParts summary { cursor: pointer; color: var(--accent); font-weight: 600; }
+#addParts summary, #science summary { cursor: pointer; color: var(--accent); font-weight: 600; }
 #addParts[open] { gap: 8px; }
 #parts { list-style: none; margin: 0; padding: 0; max-height: 180px; overflow: auto; border: 1px solid var(--line); border-radius: 6px; }
 #parts li { padding: 3px 8px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -77,3 +77,6 @@ button:disabled { opacity: .45; cursor: default; }
 .tools .row > * { min-width: 0; }
 
 h1 .version { font-weight: 400; letter-spacing: 0; text-transform: none; opacity: 0.6; font-size: 0.85em; margin-left: 0.4em; }
+#sciFields { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+#sciFields label { display: grid; gap: 2px; color: var(--muted); font-size: 11px; }
+#sciFields input { width: 100%; font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px; }

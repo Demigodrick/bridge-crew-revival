@@ -20,6 +20,7 @@
   <!-- The science code the mod shares, compiled here for net8. -->
   <ItemGroup>
     <Compile Include="../../shared/Science/*.cs" Link="Shared/Science/%(Filename).cs" />
+    <Compile Include="../../shared/MiniJson.cs" Link="Shared/MiniJson.cs" />
   </ItemGroup>
 
 </Project>

@@ -9,7 +9,11 @@
 // the mod's (BepInEx/ships/<Class>: the Nova, the Sovereign) has its own copy of the Aegis's bridge, which it flies on,
 // listed as a bridge of its own, with a layout of its own (<scene>-<Class>.json).
 //
-// Usage: dotnet run -- [--game <game folder>] [--port 8770] [--no-open] [--stay] [--web <folder>] [--layouts <folder>] [--models <folder>]
+// Science console placements (where the science console stands on each bridge, shipped with the mod) are saved into
+// the mod's source, assets/bridges/science/<scene>.json, when the designer runs from it (dotnet run in the repo), or to
+// the folder given with --science; otherwise that part of the page is hidden.
+//
+// Usage: dotnet run -- [--game <game folder>] [--port 8770] [--no-open] [--stay] [--web <folder>] [--layouts <folder>] [--models <folder>] [--science <folder>]
 //        (it stops by itself once its page is closed; --stay keeps it running until Ctrl+C)
 //        (the game folder also from $GAME_DIR; otherwise the folder this program is in, if it's in the game's folder
 //        as the installers put it, or the game in your Steam libraries. --web serves the page from a folder,
@@ -28,7 +32,7 @@ string gameDir = Environment.GetEnvironmentVariable("GAME_DIR");
 int port = 8770;
 int? portArg = null;
 bool open = true, stay = false;
-string webArg = null, layoutsArg = null, modelsArg = null;
+string webArg = null, layoutsArg = null, modelsArg = null, scienceArg = null;
 for (int i = 0; i < args.Length; i++)
 {
     if (args[i] == "--game" && i + 1 < args.Length) gameDir = args[++i];
@@ -38,7 +42,8 @@ for (int i = 0; i < args.Length; i++)
     else if (args[i] == "--web" && i + 1 < args.Length) webArg = Path.GetFullPath(args[++i]);
     else if (args[i] == "--layouts" && i + 1 < args.Length) layoutsArg = Path.GetFullPath(args[++i]);
     else if (args[i] == "--models" && i + 1 < args.Length) modelsArg = Path.GetFullPath(args[++i]);
-    else return Fail("usage: bridge-designer [--game <folder>] [--port 8770] [--no-open] [--stay] [--web <folder>] [--layouts <folder>] [--models <folder>]");
+    else if (args[i] == "--science" && i + 1 < args.Length) scienceArg = Path.GetFullPath(args[++i]);
+    else return Fail("usage: bridge-designer [--game <folder>] [--port 8770] [--no-open] [--stay] [--web <folder>] [--layouts <folder>] [--models <folder>] [--science <folder>]");
 }
 // The game: given, beside this program (installed in the game's folder), or in one of Steam's libraries.
 gameDir ??= GameFinder.Find();
@@ -66,6 +71,9 @@ string layouts = layoutsArg ?? Path.Combine(gameDir, "BepInEx", "bridges");
 // Models to add to a bridge (.obj with their .mtl and textures): the mod reads them from the game's folder.
 string models = modelsArg ?? Path.Combine(gameDir, "BepInEx", "bridges", "models");
 Console.WriteLine($"Layouts: {layouts}");
+// The science console's placements: the mod's source (assets/bridges/science), found from where this runs, or given.
+string science = scienceArg ?? ScienceFolder();
+if (science != null) Console.WriteLine($"Science console placements: {science}");
 Console.WriteLine($"Models: {models}{(Directory.Exists(models) ? "" : " (not there yet: put .obj models in it to add them to bridges)")}");
 var cache = new Dictionary<int, byte[]>();
 var lightmaps = new Dictionary<(int, int), byte[]>();
@@ -241,6 +249,37 @@ void Serve(HttpListenerContext ctx)
             }
             res.StatusCode = 405; res.Close(); return;
         }
+        if (path.StartsWith("/api/science/"))
+        {
+            string sceneName = path["/api/science/".Length..];
+            if (!bridges.Any(b => b.Scene == sceneName)) { res.StatusCode = 404; res.Close(); return; }
+            // Not from the mod's source: no placements to make here.
+            if (science == null) { res.StatusCode = 501; Send(res, "text/plain", Encoding.UTF8.GetBytes("only from the mod's source")); return; }
+            string scienceFile = Path.Combine(science, sceneName + ".json");
+            if (ctx.Request.HttpMethod == "GET")
+            {
+                // A class's copy of the Aegis without one of its own: the Aegis's (as the mod does).
+                string read = File.Exists(scienceFile) ? scienceFile : sceneName.StartsWith("Bridge_scene_02-") ? Path.Combine(science, "Bridge_scene_02.json") : null;
+                if (read == null || !File.Exists(read)) { res.StatusCode = 404; res.Close(); return; }
+                res.Headers["X-Science-File"] = Path.GetFileName(read);
+                Send(res, "application/json", File.ReadAllBytes(read));
+                return;
+            }
+            if (ctx.Request.HttpMethod == "POST")
+            {
+                if (ctx.Request.ContentType?.StartsWith("application/json") != true) { res.StatusCode = 415; res.Close(); return; }
+                string body;
+                using (var reader = new StreamReader(ctx.Request.InputStream, Encoding.UTF8)) body = reader.ReadToEnd();
+                string problem = CheckScience(body);
+                if (problem != null) { res.StatusCode = 400; Send(res, "text/plain", Encoding.UTF8.GetBytes(problem)); return; }
+                Directory.CreateDirectory(science);
+                File.WriteAllText(scienceFile, body);
+                Console.WriteLine($"Saved {scienceFile}");
+                Send(res, "text/plain", Encoding.UTF8.GetBytes(scienceFile));
+                return;
+            }
+            res.StatusCode = 405; res.Close(); return;
+        }
         // The page's own files.
         var (type, bytes) = page.Get(path == "/" ? "index.html" : path.TrimStart('/'));
         if (bytes == null) { res.StatusCode = 404; res.Close(); return; }
@@ -269,18 +308,54 @@ static string CheckLayout(string body, string sceneName)
             p.GetProperty("turn").GetDouble();
             p.GetProperty("hidden").GetBoolean();
         }
-        if (r.TryGetProperty("added", out var added))
-            foreach (var a in added.EnumerateArray())
-            {
-                bool model = a.TryGetProperty("model", out var m) && m.ValueKind == JsonValueKind.String;
-                bool piece = a.TryGetProperty("path", out var pp) && pp.ValueKind == JsonValueKind.String && a.TryGetProperty("level", out var lv) && lv.ValueKind == JsonValueKind.Number;
-                if (!model && !piece) return "an added part that's neither a model nor a bridge's piece";
-                foreach (var v in new[] { "pivot", "move" }) if (a.GetProperty(v).GetArrayLength() != 3) return $"added part: {v} isn't x, y, z";
-                a.GetProperty("turn").GetDouble();
-            }
-        return null;
+        return CheckAdded(r);
     }
     catch (Exception e) { return "not a layout: " + e.Message; }
+}
+
+// What's wrong with a layout's (or a science placement's) added parts, or null.
+static string CheckAdded(JsonElement r)
+{
+    if (r.TryGetProperty("added", out var added))
+        foreach (var a in added.EnumerateArray())
+        {
+            bool model = a.TryGetProperty("model", out var m) && m.ValueKind == JsonValueKind.String;
+            bool piece = a.TryGetProperty("path", out var pp) && pp.ValueKind == JsonValueKind.String && a.TryGetProperty("level", out var lv) && lv.ValueKind == JsonValueKind.Number;
+            if (!model && !piece) return "an added part that's neither a model nor a bridge's piece";
+            foreach (var v in new[] { "pivot", "move" }) if (a.GetProperty(v).GetArrayLength() != 3) return $"added part: {v} isn't x, y, z";
+            a.GetProperty("turn").GetDouble();
+        }
+    return null;
+}
+
+// What's wrong with a science console placement from the page, or null (the mod's SciencePlacementFile reads it).
+static string CheckScience(string body)
+{
+    try
+    {
+        using var doc = JsonDocument.Parse(body);
+        var r = doc.RootElement;
+        if (r.GetProperty("format").GetInt32() != 1) return "unknown format";
+        var screen = r.GetProperty("screen");
+        if (screen.GetProperty("pivot").GetArrayLength() != 3) return "the screen's pivot isn't x, y, z";
+        screen.GetProperty("turn").GetDouble();
+        screen.GetProperty("tilt").GetDouble();
+        var size = screen.GetProperty("size");
+        if (size.GetArrayLength() != 2 || size.EnumerateArray().Any(v => v.GetDouble() <= 0 || v.GetDouble() > 5)) return "the screen's size isn't two lengths up to 5 m";
+        if (r.GetProperty("stand").GetArrayLength() != 3) return "where to stand isn't x, y, z";
+        return CheckAdded(r);
+    }
+    catch (Exception e) { return "not a science placement: " + e.Message; }
+}
+
+// The mod's source this runs from (dotnet run in the repo): its assets/bridges/science, or null.
+static string ScienceFolder()
+{
+    foreach (string start in new[] { Directory.GetCurrentDirectory(), AppContext.BaseDirectory })
+        for (var d = new DirectoryInfo(start); d != null; d = d.Parent)
+            if (File.Exists(Path.Combine(d.FullName, "src", "StbcRevival.csproj")) && Directory.Exists(Path.Combine(d.FullName, "assets", "bridges")))
+                return Path.Combine(d.FullName, "assets", "bridges", "science");
+    return null;
 }
 
 static void Send(HttpListenerResponse res, string type, byte[] body)

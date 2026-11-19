@@ -19,10 +19,29 @@ namespace StbcRevival
     /// The files are read on a background thread; the meshes, materials and textures are made on the main thread.
     /// Coordinates: a model's are taken as glTF's and the designer's (right-handed: z flipped for the game, triangles
     /// turned round).
+    ///
+    /// Parts come in named sets, each built and cleared on its own: the layout's (LayoutSet, BridgeLayout) and the
+    /// science console's ("science", SciencePlacement). Putting a layout on again leaves the science console alone,
+    /// and the other way round.
     /// </summary>
-    internal static class BridgeParts
+    internal sealed class BridgeParts
     {
         internal const string RootName = "RevivalAddedPart";
+
+        /// <summary>The set the bridge's layout (BridgeLayout) builds.</summary>
+        internal const string LayoutSet = "layout";
+
+        private static readonly Dictionary<string, BridgeParts> sets = new Dictionary<string, BridgeParts>();
+
+        /// <summary>A set of parts by its name (made the first time it's asked for).</summary>
+        internal static BridgeParts For(string set)
+        {
+            if (!sets.TryGetValue(set, out var parts)) sets[set] = parts = new BridgeParts(set == LayoutSet ? "Bridge layout" : "Bridge parts (" + set + ")");
+            return parts;
+        }
+
+        private readonly string label; // what its log lines start with
+        private BridgeParts(string label) { this.label = label; }
 
         internal sealed class Spec
         {
@@ -53,16 +72,16 @@ namespace StbcRevival
             public string Error;
         }
 
-        private static readonly List<GameObject> built = new List<GameObject>();
-        private static readonly List<UnityEngine.Object> owned = new List<UnityEngine.Object>();
-        private static volatile List<Read> ready;
-        private static Scene target;
-        private static int generation;
+        private readonly List<GameObject> built = new List<GameObject>();
+        private readonly List<UnityEngine.Object> owned = new List<UnityEngine.Object>();
+        private volatile List<Read> ready;
+        private Scene target;
+        private int generation;
 
         private static string ModelFolder => System.IO.Path.Combine(System.IO.Path.Combine(Paths.BepInExRootPath, "bridges"), "models");
 
         /// <summary>Starts reading the parts for this scene (what was built before goes).</summary>
-        internal static void Start(List<Spec> specs, Scene scene)
+        internal void Start(List<Spec> specs, Scene scene)
         {
             Clear();
             if (specs.Count == 0) return;
@@ -88,7 +107,7 @@ namespace StbcRevival
         }
 
         /// <summary>Every frame: builds what's been read.</summary>
-        internal static void Update()
+        internal void Update()
         {
             var results = ready;
             if (results == null) return;
@@ -97,15 +116,15 @@ namespace StbcRevival
             int made = 0;
             foreach (var r in results)
             {
-                if (r.Error != null) { Plugin.Log.LogWarning($"Bridge layout: added part {Describe(r.Spec)}: {r.Error}"); continue; }
+                if (r.Error != null) { Plugin.Log.LogWarning($"{label}: added part {Describe(r.Spec)}: {r.Error}"); continue; }
                 try { if (Build(r)) made++; }
-                catch (Exception e) { Plugin.Log.LogWarning($"Bridge layout: building added part {Describe(r.Spec)}: {e}"); }
+                catch (Exception e) { Plugin.Log.LogWarning($"{label}: building added part {Describe(r.Spec)}: {e}"); }
             }
-            Plugin.Log.LogInfo($"Bridge layout: {made} of {results.Count} added part(s) built");
+            Plugin.Log.LogInfo($"{label}: {made} of {results.Count} added part(s) built");
             try { Walking.WalkMesh.Clear(); } catch { }
         }
 
-        internal static void Clear()
+        internal void Clear()
         {
             generation++;
             ready = null;
@@ -270,7 +289,7 @@ namespace StbcRevival
         }
 
         // ------------------------------------------------------------------------------------------- building
-        private static bool Build(Read r)
+        private bool Build(Read r)
         {
             var spec = r.Spec;
             var root = new GameObject(RootName + " " + spec.Id);
@@ -354,20 +373,20 @@ namespace StbcRevival
                     pieces++;
                 }
             }
-            if (pieces == 0) { UnityEngine.Object.Destroy(root); built.Remove(root); Plugin.Log.LogWarning($"Bridge layout: added part {Describe(spec)}: nothing to draw"); return false; }
+            if (pieces == 0) { UnityEngine.Object.Destroy(root); built.Remove(root); Plugin.Log.LogWarning($"{label}: added part {Describe(spec)}: nothing to draw"); return false; }
             // Turned about up around the pivot, scaled, then moved (as the designer places it).
             float s = spec.Scale > 0.001f ? spec.Scale : 1f;
             Quaternion turn = Quaternion.AngleAxis(spec.Turn, Vector3.up);
             root.transform.localScale = Vector3.one * s;
             root.transform.rotation = turn;
             root.transform.position = spec.Pivot + spec.Move - turn * (spec.Pivot * s);
-            Plugin.Log.LogInfo($"Bridge layout: added {Describe(spec)} ({pieces} piece(s))");
+            Plugin.Log.LogInfo($"{label}: added {Describe(spec)} ({pieces} piece(s))");
             return true;
         }
 
         // A material whose shader isn't loaded (from another bridge): the Standard shader with its colour, texture,
         // normal map and glow.
-        private static Material Fallback(KlingonHeadFiles.MaterialPlan plan)
+        private Material Fallback(KlingonHeadFiles.MaterialPlan plan)
         {
             var m = Plain(Color.white, null);
             m.name = plan.Material.Name;
@@ -394,7 +413,7 @@ namespace StbcRevival
             return m;
         }
 
-        private static Material Plain(Color colour, Texture2D texture)
+        private Material Plain(Color colour, Texture2D texture)
         {
             var m = new Material(Shader.Find("Standard")) { name = RootName, color = colour };
             if (texture != null) m.mainTexture = texture;

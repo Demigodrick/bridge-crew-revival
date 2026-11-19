@@ -57,6 +57,7 @@ namespace StbcRevival
         internal static ConfigEntry<bool> TestLastStand;
         internal static ConfigEntry<bool> ScienceOn;
         internal static ConfigEntry<string> ScienceLedger;
+        internal static ConfigEntry<string> ScienceTestPlacement;
         internal static ConfigEntry<bool> PvpTest;
         internal static ConfigEntry<string> PvpTestShip;
         internal static ConfigEntry<bool> SkipMicCheck;
@@ -275,6 +276,9 @@ namespace StbcRevival
                     new BepInEx.Configuration.AcceptableValueList<string>("", "hunt", "defend", "rescue", "ambush", "escort", "research", "warfare")));
             ScienceOn = Config.Bind("Debug", "ScienceOn", false,
                 "Testing only: the science console counts as available on every bridge, when you host a Patrol.");
+            ScienceTestPlacement = Config.Bind("Debug", "SciencePlacement", "",
+                "Testing only: a science console placement file (as the bridge designer saves them in assets/bridges/science) "
+                + "put on whatever bridge is loaded, instead of the ones that come with the mod. Empty: off.");
             ScienceLedger = Config.Bind("Debug", "ScienceLedger", "",
                 "Testing only: the science upgrades every Patrol you host starts with, as the ledger's wire text "
                 + "(\"SCL1;1;<weapons>,<shields>,<impulse>,<repair>;<team>:<share>,...;<enemy steps>\", shares as fractions: "

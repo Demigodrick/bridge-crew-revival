@@ -113,6 +113,7 @@ function load(b) {
     pieces.sort((a, b) => a.path.localeCompare(b.path));
     buildList();
     await loadLayout();
+    await loadScience();
     applyAll();
     if ($('baked').checked) setBaked(true);
     frame(pieces.filter(p => !p.backdrop));
@@ -231,7 +232,7 @@ function applyPiece(p) {
     p.row.querySelector('input').checked = !hidden;
     p.row.classList.toggle('off', hidden);
     const tag = p.row.querySelector('.tag');
-    tag.textContent = p.added ? (p.light ? 'added light' : 'added') : hidden ? (p.light ? 'off' : 'hidden')
+    tag.textContent = p.added ? (p.light ? 'added light' : science.ids.has(p.added.id) ? 'science console' : 'added') : hidden ? (p.light ? 'off' : 'hidden')
       : o ? (o.k === p.path ? 'changed' : 'in ' + short(o.k)) : p.light ? (p.light.baked ? 'baked light' : 'light') : p.backdrop ? 'backdrop' : '';
     tag.classList.toggle('edit', !!o);
     tag.classList.toggle('lamp', !!p.light && !o);
@@ -358,7 +359,8 @@ async function save() {
       // A chair's station goes with it, moved the same (where its player sits and its consoles stand).
       .concat(stations.filter(s => s.chair).map(s => [s, ownerOf(s.chair)]).filter(([, o]) => o && (o.e.move.lengthSq() > 1e-10 || Math.abs(o.e.turn) > 1e-6))
         .map(([s, { e }]) => ({ path: s.unit, pivot: toGame(e.pivot), move: toGame(e.move), turn: r4(-e.turn * 180 / Math.PI), hidden: false }))),
-    added: [...added.values()].filter(a => !a.from.light).map(a => {
+    // The science console's parts aren't the layout's: they're saved with its placement.
+    added: [...added.values()].filter(a => !a.from.light && !science.ids.has(a.id)).map(a => {
       const e = edits.get('+' + a.id);
       return { id: a.id, ...a.from, pivot: toGame(e.pivot), move: toGame(e.move), turn: r4(-e.turn * 180 / Math.PI), scale: r4(a.scale) };
     }),
@@ -854,6 +856,180 @@ $('addGroup').addEventListener('click', () => {
 });
 $('addParts').addEventListener('toggle', () => { if ($('addParts').open && !$('parts').children.length) fillParts(); });
 
+// ------------------------------------------------------------------------------------------- science console
+// Where the science console stands on this bridge: shipped with the mod (assets/bridges/science/<scene>.json in its
+// source), so this part of the page is there only when the designer runs from the mod's source. Its parts are added
+// parts taken out of the layout (the first one is the console, which the screen sits on). The screen is a translucent
+// plane, bright on the side it's read from, kept from the console's middle in the console's own turn, so it goes
+// where the console goes; where its user stands is a ring on the floor. The file has them in the game's space.
+const science = {
+  ids: new Set(),               // the added parts that are the console's, the console first
+  offset: new THREE.Vector3(),  // the screen's middle from the console's middle, in its turn (the game's axes)
+  turn: 0, tilt: 0,             // the screen's turn from the console's, and its lean back (the game's degrees)
+  w: 0.6, h: 0.4,               // the screen's size in metres
+  stand: null,                  // where its user stands (this page's space)
+  available: false, dirty: false, from: null, sig: null, scene: null,
+};
+const sciUp = new THREE.Vector3(0, 1, 0);
+const sciMark = new THREE.Group();
+const sciPlane = new THREE.Group();
+for (const [side, opacity] of [[THREE.FrontSide, 0.45], [THREE.BackSide, 0.12]])
+  sciPlane.add(new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ color: 0x5ef2a0, transparent: true, opacity, side, depthWrite: false })));
+const sciRing = new THREE.Mesh(new THREE.RingGeometry(0.22, 0.3, 40).rotateX(-Math.PI / 2),
+  new THREE.MeshBasicMaterial({ color: 0x5ef2a0, transparent: true, opacity: 0.85, depthTest: false }));
+sciRing.renderOrder = 10;
+sciMark.add(sciPlane, sciRing);
+sciMark.visible = false;
+scene.add(sciMark);
+
+/** The console's middle and turn as placed now (no console part: the bridge's own origin). */
+function consoleFrame() {
+  const id = [...science.ids].find(i => added.has(i));
+  const e = id && edits.get('+' + id);
+  return e ? { at: e.pivot.clone().add(e.move), turn: e.turn, id } : { at: new THREE.Vector3(), turn: 0, id: null };
+}
+/** The screen's middle and rotation in this page's space (its yaw: radians about up, as a change's turn). */
+function screenPose() {
+  const f = consoleFrame();
+  const at = new THREE.Vector3(science.offset.x, science.offset.y, -science.offset.z).applyAxisAngle(sciUp, f.turn).add(f.at);
+  const yaw = f.turn - science.turn * Math.PI / 180;
+  return { at, yaw, q: new THREE.Quaternion().setFromEuler(new THREE.Euler(-science.tilt * Math.PI / 180, yaw, 0, 'YXZ')) };
+}
+
+/** Every frame: the screen and the ring where they are now (they follow the console as it's moved). */
+function placeScience() {
+  sciMark.visible = science.available && !!root && science.scene === bridge?.scene && (science.ids.size > 0 || !!science.stand || !!science.from);
+  if (!sciMark.visible) return;
+  const p = screenPose();
+  sciPlane.position.copy(p.at);
+  sciPlane.quaternion.copy(p.q);
+  sciPlane.scale.set(science.w, science.h, 1);
+  sciRing.visible = !!science.stand;
+  if (science.stand) sciRing.position.set(science.stand.x, science.stand.y + 0.01, science.stand.z);
+  const f = consoleFrame();
+  const sig = `${f.id}:${f.at.toArray().map(r4)}:${r4(f.turn)}`;
+  if (science.sig !== null && sig !== science.sig) sciChanged();
+  science.sig = sig;
+}
+
+function sciChanged() { science.dirty = true; sciState(); }
+function sciState() {
+  const f = consoleFrame();
+  const a = f.id && added.get(f.id);
+  $('sciState').textContent = [
+    a ? `Console: ${a.piece.name.replace(/^\+ /, '')}` : 'No console part: add one (Add parts), pick it, then Use picked part.',
+    science.stand ? null : 'Where to stand isn\'t set.',
+    science.from && science.from !== `${bridge.scene}.json` ? `From ${science.from}: saving makes this bridge's own.` : null,
+    science.dirty ? 'Unsaved.' : null,
+  ].filter(Boolean).join(' ');
+}
+function sciFields() {
+  const v = { sx: science.offset.x, sy: science.offset.y, sz: science.offset.z, sturn: science.turn, stilt: science.tilt, sw: science.w, sh: science.h };
+  for (const [id, x] of Object.entries(v)) $(id).value = r4(x);
+}
+
+/** This bridge's placement, if it has one (a class's copy of the Aegis without its own: the Aegis's). */
+async function loadScience() {
+  Object.assign(science, { ids: new Set(), turn: 0, tilt: 0, w: 0.6, h: 0.4, stand: null, dirty: false, from: null, sig: null });
+  science.offset.set(0, 0, 0);
+  const res = await fetch(`/api/science/${bridge.scene}`);
+  science.available = res.status !== 501;
+  $('science').hidden = !science.available;
+  if (res.ok) {
+    const f = await res.json();
+    science.from = res.headers.get('X-Science-File');
+    for (const a of f.added ?? []) {
+      // Ids of their own, apart from the layout's.
+      const id = String(a.id).startsWith('s') ? String(a.id) : 's' + a.id;
+      const from = a.model ? { model: a.model } : { scene: a.scene, level: a.level, path: a.path };
+      try { await makeAdded(id, from, a.scale ?? 1); } catch (err) { say(`Couldn't add the science console's ${a.model ?? a.path}: ${err.message}`); continue; }
+      edits.set('+' + id, { pivot: fromGame(a.pivot), move: fromGame(a.move), turn: -a.turn * Math.PI / 180, hidden: false });
+      science.ids.add(id);
+    }
+    const fr = consoleFrame();
+    const rel = fromGame(f.screen.pivot).sub(fr.at).applyAxisAngle(sciUp, -fr.turn);
+    science.offset.set(rel.x, rel.y, -rel.z);
+    science.turn = r4((f.screen.turn ?? 0) + fr.turn * 180 / Math.PI);
+    science.tilt = f.screen.tilt ?? 0;
+    [science.w, science.h] = f.screen.size;
+    science.stand = fromGame(f.stand);
+  }
+  // Shown (and watched for the console moving) once it's all there.
+  science.scene = bridge.scene;
+  science.sig = null;
+  sciFields();
+  sciState();
+}
+
+async function saveScience() {
+  if (!science.stand) { say('Not saved: set where its user stands first (Stand here).'); return; }
+  const p = screenPose();
+  const file = {
+    format: 1,
+    added: [...science.ids].filter(id => added.has(id)).map(id => {
+      const a = added.get(id), e = edits.get('+' + id);
+      return { id: a.id, ...a.from, pivot: toGame(e.pivot), move: toGame(e.move), turn: r4(-e.turn * 180 / Math.PI), scale: r4(a.scale) };
+    }),
+    screen: { pivot: toGame(p.at), turn: r4(-p.yaw * 180 / Math.PI), tilt: r4(science.tilt), size: [r4(science.w), r4(science.h)] },
+    stand: toGame(science.stand),
+  };
+  const res = await fetch(`/api/science/${bridge.scene}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(file, null, 2) });
+  const text = await res.text();
+  if (!res.ok) { say('Not saved: ' + text); return; }
+  science.dirty = false;
+  science.from = `${bridge.scene}.json`;
+  sciState();
+  say('Science placement saved to ' + text + (dirty && file.added.length ? ' (save the layout too: its parts left it)' : ''));
+}
+
+$('sciPart').addEventListener('click', () => {
+  const path = selPath();
+  const a = path?.startsWith('+') && added.get(path.slice(1));
+  if (!a || a.from.light) { say('Pick an added part first (Add parts), then use it for the science console.'); return; }
+  if (science.ids.has(a.id)) { science.ids.delete(a.id); say('Back in the layout.'); }
+  else {
+    const first = !consoleFrame().id;
+    science.ids.add(a.id);
+    if (first) {
+      // The screen starts on top of it, facing as it does: Screen here, or type, to line it up with its face.
+      science.offset.set(0, a.piece.box.getSize(new THREE.Vector3()).y / 2, 0);
+      science.turn = science.tilt = 0;
+      sciFields();
+    }
+    say('Now the science console\'s: line up the screen (Screen here, or type) and set where to stand (Stand here).');
+  }
+  applyPiece(a.piece);
+  changed(); // the layout changes too: the part leaves it, or comes back
+  sciChanged();
+});
+$('sciScreenAt').addEventListener('click', () => {
+  const f = consoleFrame();
+  const rel = controls.target.clone().sub(f.at).applyAxisAngle(sciUp, -f.turn);
+  science.offset.set(rel.x, rel.y, -rel.z);
+  sciFields();
+  sciChanged();
+});
+$('sciStandAt').addEventListener('click', () => {
+  const at = controls.target.clone();
+  const down = new THREE.Raycaster(at.clone().add(new THREE.Vector3(0, 2, 0)), new THREE.Vector3(0, -1, 0), 0, 10);
+  const floor = root && down.intersectObject(root, true).find(h => visibleUp(h.object) && h.face && h.face.normal.y > 0.5);
+  science.stand = new THREE.Vector3(at.x, floor ? floor.point.y : at.y, at.z);
+  sciChanged();
+});
+for (const id of ['sx', 'sy', 'sz', 'sturn', 'stilt', 'sw', 'sh'])
+  $(id).addEventListener('change', () => {
+    const n = (id, d) => { const v = parseFloat($(id).value); return isFinite(v) ? v : d; };
+    science.offset.set(n('sx', 0), n('sy', 0), n('sz', 0));
+    science.turn = n('sturn', 0);
+    science.tilt = Math.min(90, Math.max(-90, n('stilt', 0)));
+    science.w = Math.min(5, Math.max(0.05, n('sw', 0.6)));
+    science.h = Math.min(5, Math.max(0.05, n('sh', 0.4)));
+    sciFields();
+    sciChanged();
+  });
+$('sciSave').addEventListener('click', saveScience);
+addEventListener('beforeunload', e => { if (science.dirty) { e.preventDefault(); e.returnValue = ''; } });
+
 // ------------------------------------------------------------------------------------------- lights
 // Each light is a piece: a marker (a ball in its colour; a baked one's is faint, a wire ball), and for a real-time one
 // its light, roughly as the game lights it (Unity's falloff isn't three.js's: about right a fifth of its range out).
@@ -1058,6 +1234,7 @@ renderer.setAnimationLoop(() => {
   resize();
   fly(Math.min(clock.getDelta(), 0.1));
   controls.update();
+  placeScience();
   renderer.render(scene, camera);
 });
 
@@ -1069,7 +1246,7 @@ const bridges = await (await fetch('/api/bridges')).json();
 // By scene: a ship's own copy of a bridge (Bridge_scene_02-Nova) is the same level as the game's.
 for (const b of bridges) $('bridge').add(new Option(b.name, b.scene));
 $('bridge').addEventListener('change', () => {
-  if (dirty && !confirm('This bridge has unsaved changes. Switch anyway?')) { $('bridge').value = bridge.scene; return; }
+  if ((dirty || science.dirty) && !confirm('This bridge has unsaved changes. Switch anyway?')) { $('bridge').value = bridge.scene; return; }
   load(bridges.find(b => b.scene === $('bridge').value));
 });
 // Parts come from the game's bridges (a ship's copy has the same ones).
