@@ -383,26 +383,43 @@ namespace StbcRevival.Galaxy
 
             if (onHelm)
             {
-                // To the right of WARP, a little more than the buttons' spacing apart.
+                // Side by side (the TOS helm): to the right of WARP, a little more than the buttons' spacing apart.
+                // Stacked (the TNG helm: MODE, LOCAL, IMPULSE, WARP down the side): in the free space above MODE.
                 Vector3 impulseAt = Centre(impulse), warpAt = warp != null ? Centre(warp) : impulseAt + impulse.transform.right * WorldWidth(impulse) * 1.1f;
-                frameRect.position = warpAt + (warpAt - impulseAt) * 1.15f;
+                Vector3 step = warpAt - impulseAt;
+                bool stacked = Mathf.Abs(Vector3.Dot(step, impulse.transform.up)) > Mathf.Abs(Vector3.Dot(step, impulse.transform.right));
+                frameRect.position = stacked ? impulseAt - step * 3f : warpAt + step * 1.15f;
             }
             else
             {
                 // At the right of the map's title bar, the same share of the map's width as on the helm.
                 var helmPanel = helm.GetComponentInChildren<WarpPanel>(true);
                 var helmMap = helmPanel != null ? fMapRect.GetValue(helmPanel) as RectTransform : null;
+                // Sized against the map: the helm's share (at most a fifth); the TNG panel has its own fixed size.
+                bool tng = GalaxyCatalogue.PathOf(mapRect).Contains("_Tng");
                 float share = helmMap != null && WorldWidth(helmMap) > 0f && WorldWidth(impulse) > 0f ? WorldWidth(impulse) / WorldWidth(helmMap) : 0.15f;
-                float want = share * WorldWidth(mapRect), have = WorldWidth(frameRect);
+                share = tng ? 0.35f : Mathf.Min(share, 0.2f); // TNG: of what it draws (glow included), about 0.28 of the map to the eye
+                // Measured by what's drawn: the TNG button's images reach well past its own rectangle.
+                float want = share * WorldWidth(mapRect), have = tng ? Mathf.Max(WorldWidth(frameRect), DrawnWidth(button, frameRect.right)) : WorldWidth(frameRect);
+                Plugin.Log.LogInfo(P + $"{s.Name}: page button {have:0.###} wide (rectangle {WorldWidth(frameRect):0.###}), wanted {want:0.###} (share {share:0.###})");
                 if (have > 0f && want > 0f) frameRect.localScale = frameRect.localScale * (want / have);
                 frameRect.localRotation = Quaternion.identity;
                 var r = mapRect.rect;
                 float halfW = size.x * frameRect.localScale.x / 2f, halfH = size.y * frameRect.localScale.y / 2f;
                 float y = r.yMax + halfH * 1.5f;
-                if (fLocationLabel != null && fLocationLabel.GetValue(panel) is Component label && label != null)
+                Component label = fLocationLabel != null ? fLocationLabel.GetValue(panel) as Component : null;
+                if (label != null)
                     y = mapRect.InverseTransformPoint(label.transform.position).y;
-                // Just under the title bar's line (not across it), and in from the frame's rounded corner.
-                frameRect.localPosition = new Vector3(r.xMax - halfW - halfH * 2f, y - halfH * 1.35f, 0f);
+                if (tng)
+                {
+                    // TNG: on the CURRENT LOCATION row, past the label and short of the readout numbers at the right.
+                    if (label != null && label.transform is RectTransform lr)
+                        y = mapRect.InverseTransformPoint(lr.TransformPoint(lr.rect.center)).y;
+                    frameRect.localPosition = new Vector3(r.xMin + r.width * 0.53f, y, 0f);
+                }
+                else
+                    // TOS: just under the title bar's line (not across it), and in from the frame's rounded corner.
+                    frameRect.localPosition = new Vector3(r.xMax - halfW - halfH * 2f, y - halfH * 1.35f, 0f);
             }
             foreach (var toggle in button.GetComponentsInChildren<UnityEngine.UI.Toggle>(true))
             {
@@ -648,6 +665,23 @@ namespace StbcRevival.Galaxy
             return (c[0] + c[2]) / 2f;
         }
 
+        // World width along an axis of everything a button draws (its images), not just its own rectangle.
+        private static float DrawnWidth(GameObject g, Vector3 axis)
+        {
+            float min = float.MaxValue, max = float.MinValue;
+            var c = new Vector3[4];
+            foreach (var image in g.GetComponentsInChildren<UnityEngine.UI.Image>(true))
+            {
+                image.rectTransform.GetWorldCorners(c);
+                foreach (var p in c)
+                {
+                    float d = Vector3.Dot(p, axis.normalized);
+                    if (d < min) min = d;
+                    if (d > max) max = d;
+                }
+            }
+            return max > min ? max - min : 0f;
+        }
         private static float WorldWidth(RectTransform r)
         {
             var c = new Vector3[4];
