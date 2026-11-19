@@ -61,6 +61,7 @@ namespace StbcRevival
         internal static ConfigEntry<bool> PvpTest;
         internal static ConfigEntry<string> PvpTestShip;
         internal static ConfigEntry<bool> SkipMicCheck;
+        internal static ConfigEntry<bool> SkipVrSetup;
         internal static ConfigEntry<bool> HideFullCrews;
         internal static ConfigEntry<bool> HideCrewsInMission;
         internal static ConfigEntry<CrewContent> CrewContentFilter;
@@ -197,6 +198,8 @@ namespace StbcRevival
                 "One run only (the installer sets this): log in to Ubisoft, copy your Ubisoft cloud save into the local save, then quit. Needs Ubisoft Connect signed in. Switches itself off afterwards.");
             SkipMicCheck = Config.Bind("Startup", "SkipMicCheck", false,
                 "Skip the microphone check the game shows when you start. Your mic still works; set it up in the game's options.");
+            SkipVrSetup = Config.Bind("Startup", "SkipVrSetup", true,
+                "Skip the \"press any button\" controller screen and the VR recenter prompt at launch. The game still waits for a controller to be found, and the controller and headset warnings still work. Press the recenter button if your view is off.");
             ExcelsiorTest = Config.Bind("Ships", "Excelsior", false,
                 "Test: when you host, the crew flies an Excelsior-class ship, with the training holodeck as its bridge for now.");
             PlayerShip = Config.Bind("Ships", "PlayerShip", "Aegis",

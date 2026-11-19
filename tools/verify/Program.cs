@@ -128,6 +128,17 @@ Check("IntroSequence.GBDBONKGDOM() (next element) + _elements/_curNdx/_skipIsOn"
     && introSequence.GetField("_elements", Inst) is not null && introSequence.GetField("_curNdx", Inst) is not null
     && introSequence.GetField("_skipIsOn", Inst) is not null ? introSequence : null);
 Check("MovieIntroElement", game.GetType("MovieIntroElement"));
+var controllerCheck = game.GetType("ControllerCheckElement");
+Check("SkipVrSetup: ControllerCheckElement.Update + MNBMEFCBKKH/NLEGMCICILA (bool)",
+    controllerCheck?.GetMethod("Update", Inst) is not null && controllerCheck.GetField("MNBMEFCBKKH", Inst)?.FieldType.FullName == "System.Boolean"
+    && controllerCheck.GetField("NLEGMCICILA", Inst)?.FieldType.FullName == "System.Boolean" ? controllerCheck : null);
+Check("SkipVrSetup: InputManager.UpdateActiveController(bool) returns bool",
+    game.GetType("SVR.InputManager")?.GetMethod("UpdateActiveController", Inst) is { } uac && uac.ReturnType.FullName == "System.Boolean" ? uac : null);
+var centerView = game.GetType("CenterViewIntroElement");
+Check("SkipVrSetup: CenterViewIntroElement.LateUpdate + ANDHFMCAMMM(VRRecenteredEvent) + NDDFIMFHMKI (Transform)",
+    centerView?.GetMethod("LateUpdate", Inst) is not null
+    && centerView.GetMethod("ANDHFMCAMMM", Inst) is { } recentered && recentered.GetParameters().Length == 1 && recentered.GetParameters()[0].ParameterType.Name == "MDKKOKIMCEN"
+    && centerView.GetField("NDDFIMFHMKI", Inst)?.FieldType.FullName == "UnityEngine.Transform" ? centerView : null);
 
 var pauseMenu = game.GetType("UI.PauseMenuUI");
 Check("PauseMenuUI.NLDKOENAFNJ (pane switch) + _pauseMenuGlobal",

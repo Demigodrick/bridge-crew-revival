@@ -55,6 +55,7 @@ namespace StbcRevival
             },
             Switch("Skip intro videos", () => Plugin.SkipIntro, restart: true),
             Switch("Skip mic check", () => Plugin.SkipMicCheck, restart: true),
+            Switch("Skip VR setup", () => Plugin.SkipVrSetup, restart: true),
             Switch("Voice commands", () => Plugin.VoiceCommands, restart: true),
             Switch("Voice orders from any station", () => Plugin.VoiceAnyStation),
             // Which Klingon captain's head the creator's KLINGON wears (wearing one or not is the creator's).
