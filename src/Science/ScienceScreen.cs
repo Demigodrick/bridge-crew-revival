@@ -18,8 +18,9 @@ namespace StbcRevival.Science
     ///   Upgrades: ...                             (always)
     ///
     /// What the screen does is ConsoleFlow's (shared, unit-tested); this renders it and passes taps and slider moves on.
-    /// Being within reach (registering the controls with the hands) is ScienceUse's: it calls Register/Unregister and
-    /// Show/Hide.
+    /// Being within reach (registering the controls with the hands) is ScienceUse's: it calls ConsoleWidgets.Register and
+    /// Unregister with Interactions, and Leave. The screen is always drawn while it exists (Update makes it only while
+    /// the console is on).
     /// </summary>
     internal sealed class ScienceScreen : IScienceLink
     {
@@ -76,7 +77,6 @@ namespace StbcRevival.Science
         private readonly MiniGamePanel[] panels = new MiniGamePanel[2];
         private readonly RectTransform barFill;
 
-        private bool visible = true;
         private ScreenMode shownMode = (ScreenMode)(-1);
         private MiniGame boundA;
         private IList<ScienceTarget> targets = new List<ScienceTarget>();
@@ -175,9 +175,6 @@ namespace StbcRevival.Science
         /// <summary>The local player holds the console (is scanning, or paused out of range).</summary>
         internal bool InUse => flow.InUse(claimant, localActor);
 
-        internal void Show() { visible = true; if (root != null && !root.activeSelf) root.SetActive(true); }
-        internal void Hide() { visible = false; if (root != null && root.activeSelf) root.SetActive(false); }
-
         /// <summary>Back to the list, the scan's progress reported and the console freed (the player left it).</summary>
         internal void Leave() => flow.Leave();
 
@@ -194,7 +191,6 @@ namespace StbcRevival.Science
             if (flow.TargetId != id) RefreshTargets(now); // a scan began or ended: the list and state again
 
             if (now >= nextKeep) { nextKeep = now + KeepEvery; ConsoleWidgets.KeepRegistered(); }
-            if (!visible) return;
             Render(now);
         }
 

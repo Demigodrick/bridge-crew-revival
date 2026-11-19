@@ -10,11 +10,12 @@ namespace StbcRevival.Science
         public const float BonusRate = 1.8f;
         // Turning a sweep ring turns its neighbour by this share of the change.
         public const float RingNudge = 1f / 3f;
-        // Crew sharing a scan: each extra crew member's step, and its cap.
+        // What one finished scan adds to its area (or to weapons against a faction), and the most an area can reach.
         public const float CrewStep = 0.05f;
         public const float CrewCap = 0.50f;
-        // Enemy ships present add this much each.
+        // What each completed assignment adds to the enemy, to one area in turn (damage, shields, speed).
         public const float EnemyStep = 0.03f;
+        // How far the console's targets can be scanned from, metres.
         public const float RangeMetres = 20000f;
     }
 }
