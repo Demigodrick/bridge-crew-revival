@@ -234,6 +234,10 @@ namespace StbcRevival
     /// Enemy ships fight smarter (setting EnemyAI.FightSmarter; host only). tools/xref/ai/combat.md (branch ai-map) has
     /// the game's targeting, weapons and attack patterns these change.
     ///
+    /// - Closer ships count for more: each time a ship updates its aggro list, every body on it gets up to ClosenessBonus
+    ///   for being near (none at the edge of the aggro radius). Without it a ship kept on whatever it had noticed first,
+    ///   and it noticed the player's ship first (found by the player's own detection radius, not the 40 km others are),
+    ///   so in Fleet Battle the enemy fleet all went for the player even with the player bonus off and no shots fired.
     /// - Grudges fade: the AI's aggro list only ever grew, so a ship kept on whoever it first got angry with. Now what
     ///   it has gained above its starting level (60, the player 110 except in Fleet Battle, a Borg cube 160) fades with a half-life of
     ///   GrudgeHalfLife, so ships turn on whoever is hurting them now. And a hit adds DamageGrudge per point of damage
@@ -260,6 +264,8 @@ namespace StbcRevival
         private const float DamageGrudge = 0.5f;   // aggro per point of damage dealt (a 100-damage volley: 50, as 5 hits did)
         private const float FirstHitGrudge = 10f;  // a ship hit by something not on its list yet: the game's 10
         private const float TargetLogEvery = 30f;  // seconds
+        private const float ClosenessBonus = 60f;  // aggro for a body alongside, less with distance (none at the aggro radius)
+        private static readonly List<Sector.HOLJLCLENCA> gone = new List<Sector.HOLJLCLENCA>();
         private static float nextTargetLog;
         private const float FallbackDistance = 5000f, FallbackSpeed = 0.9f;
 
@@ -334,6 +340,11 @@ namespace StbcRevival
 
         // ---- Fading grudges ------------------------------------------------------------------------------------------
 
+        // Per ship, per body on its aggro list: the closeness bonus last added, and the value it was written as (to tell a
+        // body the game removed and put back, whose value then has no bonus in it, from one still on the list).
+        private sealed class Closeness { public float Bonus, Written; }
+        private static readonly Dictionary<int, Dictionary<Sector.HOLJLCLENCA, Closeness>> closeness = new Dictionary<int, Dictionary<Sector.HOLJLCLENCA, Closeness>>();
+
         private static void Aggro_Postfix(AI.AgentShip __instance)
         {
             if (!On) return;
@@ -342,22 +353,44 @@ namespace StbcRevival
                 var bb = __instance.NMJIEDJOOCJ;
                 LogTargets();
                 if (bb?.AgroList == null || bb.AgroList.Count == 0) return;
+                var me = __instance.ALPAOOKFIEE;
+                if (me == null) return;
                 float now = Time.time;
                 int id = __instance.GetInstanceID();
                 float since = lastFade.TryGetValue(id, out var then) ? now - then : 0f;
                 lastFade[id] = now;
-                if (since <= 0f || since > 5f) return;
-                float keep = Mathf.Pow(0.5f, since / GrudgeHalfLife);
+                float keep = since > 0f && since <= 5f ? Mathf.Pow(0.5f, since / GrudgeHalfLife) : 1f;
                 // The game's own +50 for the player's ship (taken off in Fleet Battle: FleetBattleAggro).
                 float playerBonus = Missions.RevivalMissions.Selected == typeof(Missions.FleetBattleSequence) ? 0f : 50f;
+                float reach = Mathf.Sqrt(Mathf.Max(1f, __instance.JJFKCBLIBCB)); // aggro radius, metres
+                if (!closeness.TryGetValue(id, out var bonuses)) closeness[id] = bonuses = new Dictionary<Sector.HOLJLCLENCA, Closeness>();
                 keys.Clear();
                 keys.AddRange(bb.AgroList.Keys);
                 foreach (var key in keys)
                 {
                     if (key == null) continue;
-                    float floor = 60f + (ReferenceEquals(key, bb.PlayerShip) ? playerBonus : 0f) + (key is AI.BorgCube ? 100f : 0f);
                     float value = bb.AgroList[key];
-                    if (value > floor) bb.AgroList[key] = floor + (value - floor) * keep;
+                    // Take off the closeness bonus this ship added last time, if the value still has it.
+                    if (bonuses.TryGetValue(key, out var last) && value >= last.Written - 0.01f) value -= last.Bonus;
+                    // Fade the grudge above the starting level.
+                    float floor = 60f + (ReferenceEquals(key, bb.PlayerShip) ? playerBonus : 0f) + (key is AI.BorgCube ? 100f : 0f);
+                    if (value > floor) value = floor + (value - floor) * keep;
+                    // Closer bodies count for more: up to ClosenessBonus alongside, none at the edge of the aggro radius.
+                    float bonus = 0f;
+                    var them = key.ALPAOOKFIEE;
+                    if (them != null && them.System == me.System)
+                        bonus = ClosenessBonus * Mathf.Clamp01(1f - (float)(them.Position - me.Position).magnitude / reach);
+                    value += bonus;
+                    bb.AgroList[key] = value;
+                    if (last == null) bonuses[key] = last = new Closeness();
+                    last.Bonus = bonus;
+                    last.Written = value;
+                }
+                if (bonuses.Count > bb.AgroList.Count) // bodies the game took off the list
+                {
+                    gone.Clear();
+                    foreach (var key in bonuses.Keys) if (key == null || !bb.AgroList.ContainsKey(key)) gone.Add(key);
+                    foreach (var key in gone) bonuses.Remove(key);
                 }
             }
             catch { }
