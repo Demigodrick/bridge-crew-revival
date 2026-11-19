@@ -53,7 +53,8 @@ namespace StbcRevival.Science
         static byte[] IdBytes(string id)
         {
             if (!ScanBoard.ValidId(id)) return null;
-            byte[] idb = Utf8.GetBytes(id);
+            byte[] idb;
+            try { idb = Utf8.GetBytes(id); } catch (Exception) { return null; } // a lone surrogate
             return idb.Length <= ScanBoard.MaxIdLength ? idb : null;
         }
 

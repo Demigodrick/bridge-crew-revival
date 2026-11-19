@@ -11,8 +11,8 @@ namespace StbcRevival.Science
     // What a completed target grants. The host looks this up; the client never says.
     internal sealed class TargetInfo
     {
-        public UpgradeArea? Area;
-        public int Team;
+        public UpgradeArea? Area = null; // set by the targets (Task 5)
+        public int Team = 0;
     }
 
     // The mission-wide upgrades earned by science scans. Published as a room property by the host.
@@ -53,7 +53,7 @@ namespace StbcRevival.Science
         public void AddFactionScan(int team)
         {
             float v;
-            faction.TryGetValue(team, out v);
+            if (!faction.TryGetValue(team, out v) && faction.Count >= MaxFactions) return;
             faction[team] = Step(v);
         }
 

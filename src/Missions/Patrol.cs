@@ -101,6 +101,7 @@ namespace StbcRevival.Missions
         {
             Completed = 0;
             PatrolWarfareAggro.Clear(); // from a patrol quit mid-battle
+            StbcRevival.Science.ScienceSession.PatrolStarted();
             player = Objective.FFKKADIEOGP;
             Objective.AddStep("patrol", Task.MFLJBKCDBMC.WithSubtaskCoroutine(Patrol));
         }
@@ -169,7 +170,7 @@ namespace StbcRevival.Missions
                 foreach (var step in run) yield return step;
                 yield return Task.BCJDEKKIHDD.RemoveAllMarkers();
 
-                if (succeeded) completed++; else failed++;
+                if (succeeded) { completed++; StbcRevival.Science.ScienceSession.AssignmentCompleted(); } else failed++;
                 Completed = completed;
                 Plugin.Log.LogInfo($"Patrol: {JobName(job)} {(succeeded ? "complete" : abandoned ? "abandoned" : "failed")}; {completed} done, {failed} failed");
                 ResultRow(completed);

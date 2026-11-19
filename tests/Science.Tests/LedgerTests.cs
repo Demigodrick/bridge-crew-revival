@@ -61,3 +61,18 @@ public class LedgerTests
         Assert.Equal(0, l.EnemySteps);
     }
 }
+
+public class LedgerHardeningTests
+{
+    [Fact]
+    public void AddFactionScan_IgnoresNewTeamsBeyondSixteen()
+    {
+        var l = new Ledger();
+        for (int t = 0; t < 20; t++) l.AddFactionScan(t);
+        Assert.Equal(0.05f, l.CrewVsFaction(15), 0.0001f);
+        Assert.Equal(0f, l.CrewVsFaction(16));
+        l.AddFactionScan(3); // a known team still counts
+        Assert.Equal(0.10f, l.CrewVsFaction(3), 0.0001f);
+        Assert.Equal(0.05f, Ledger.FromWire(l.ToWire()).CrewVsFaction(15), 0.0001f);
+    }
+}

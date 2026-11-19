@@ -55,6 +55,7 @@ namespace StbcRevival
         internal static ConfigEntry<bool> CheckForUpdates;
         internal static ConfigEntry<bool> AutoUpdate;
         internal static ConfigEntry<bool> TestLastStand;
+        internal static ConfigEntry<bool> ScienceOn;
         internal static ConfigEntry<bool> PvpTest;
         internal static ConfigEntry<string> PvpTestShip;
         internal static ConfigEntry<bool> SkipMicCheck;
@@ -271,6 +272,8 @@ namespace StbcRevival
                     "Testing only: every assignment Patrol offers is this one, when you host. Empty: Starfleet's usual mix "
                     + "(a Warfare Anomaly about one time in twenty).",
                     new BepInEx.Configuration.AcceptableValueList<string>("", "hunt", "defend", "rescue", "ambush", "escort", "research", "warfare")));
+            ScienceOn = Config.Bind("Debug", "ScienceOn", false,
+                "Testing only: the science console counts as available on every bridge, when you host a Patrol.");
             TestLastStand = Config.Bind("Debug", "TestLastStand", false,
                 "Testing only: every Ongoing Voyage you host runs the Revival mission Last Stand instead.");
             PvpTest = Config.Bind("Debug", "PvpTest", false,
@@ -453,6 +456,7 @@ namespace StbcRevival
             Safely("galaxy catalogue", StbcRevival.Galaxy.GalaxyCatalogue.Update);
             Safely("galaxy room", StbcRevival.Galaxy.GalaxyRoom.Update);
             Safely("restock sync", StbcRevival.Missions.RestockSync.Update);
+            Safely("science", StbcRevival.Science.ScienceSession.Update);
             Safely("excelsior", Excelsior.Update);
             Safely("ships", CustomShip.Update);
             Safely("defiant", Defiant.Update);

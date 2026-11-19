@@ -156,3 +156,13 @@ public class ScienceWireTests
         Assert.False(ScienceWire.TryRead(nan, out m));
     }
 }
+
+public class ScienceWireHardeningTests
+{
+    [Fact]
+    public void Encoders_ReturnNullForLoneSurrogate()
+    {
+        Assert.Null(ScienceWire.Report("a\ud800b", 1f));
+        Assert.Null(ScienceWire.Complete("a\udc00"));
+    }
+}

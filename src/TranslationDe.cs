@@ -7,6 +7,7 @@ namespace StbcRevival
             Missions();
             Patrol();
             Evacuation();
+            Science();
             Settings();
             Crews();
             Notices();
@@ -113,6 +114,21 @@ namespace StbcRevival
             Add(english.Replace("{0}", ""), german.Replace("{0}", ""));
             Add(english.Replace("{0}", " (marked; set an impulse course)"), german.Replace("{0}", " (markiert; Impulskurs setzen)"));
             Add(english.Replace("{0}", " near {0} (set an impulse course)"), german.Replace("{0}", " bei {0} (Impulskurs setzen)"));
+        }
+
+        // ---- Science console --------------------------------------------------------------------------
+
+        private static void Science()
+        {
+            Add("{0} analysed: {1} +{2}%", "{0} analysiert: {1} +{2}%");
+            Add("{0} analysed: weak spots +{1}%", "{0} analysiert: Schwachstellen +{1}%");
+            Add("Enemy {0} +{1}%", "Feind {0} +{1}%");
+            Add("weapons", "Waffen");
+            Add("shields", "Schilde");
+            Add("impulse", "Impuls");
+            Add("repair", "Reparatur");
+            Add("damage", "Schaden");
+            Add("speed", "Tempo");
         }
 
         // ---- Stellar Evacuation -----------------------------------------------------------------------
