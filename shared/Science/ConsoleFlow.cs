@@ -67,7 +67,9 @@ namespace StbcRevival.Science
         {
             int seed = MiniGamePick.SeedOf(id);
             MiniGameKind[] kinds = MiniGamePick.For(seed);
-            return new[] { MiniGame.Create(kinds[0], seed), MiniGame.Create(kinds[1], unchecked(seed * 31 + 7)) };
+            var games = new[] { MiniGame.Create(kinds[0], seed), MiniGame.Create(kinds[1], unchecked(seed * 31 + 7)) };
+            games[(seed >> 3) & 1].Steady = true; // only one of the two drifts (which one: from the id too)
+            return games;
         }
 
         /// <summary>

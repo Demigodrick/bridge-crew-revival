@@ -15,7 +15,9 @@ namespace StbcRevival.Science
         public int ControlCount { get { return Controls; } }
         public float GetControl(int i) { return c[i]; }
         public virtual void SetControl(int i, float v) { c[i] = Clamp01(v); }
-        public void Tick(float t) { time = t; }
+        // A steady game's target holds still: a scan drifts only one of its two games, so the player has one to chase.
+        public bool Steady { get; set; }
+        public void Tick(float t) { time = Steady ? 0f : t; }
         public abstract float Match { get; }
         // Where control i has to be right now (tests and hints).
         internal abstract float Target(int i);

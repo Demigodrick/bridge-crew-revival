@@ -127,7 +127,8 @@ namespace StbcRevival.Science
     /// </summary>
     internal static class MiniGameArt
     {
-        internal const int W = 256, H = 128;
+        internal const int W = 512, H = 256;
+        private const float K = H / 128f; // the mockup's sizes were for a 128-high picture
         private const float Tau = 6.2831853f;
 
         private static readonly Color32 Back = new Color32(3, 11, 20, 255);
@@ -139,12 +140,13 @@ namespace StbcRevival.Science
         private static readonly Color32 MeterOn = new Color32(79, 179, 255, 255);
         private static readonly Color32 MeterOff = new Color32(13, 35, 55, 255);
 
-        private static readonly float[] Radii = { 54f, 40f, 26f };
-        private const float RingHalf = 3.5f, Gap = 0.35f;
+        private static readonly float[] Radii = { 54f * K, 40f * K, 26f * K };
+        private const float RingHalf = 3.5f * K, Gap = 0.35f;
 
         // Each pixel's distance from the middle and angle (y up), for the rings: worked out once.
         private static float[] radius, angle;
         private static uint noise = 2463534242u;
+        private static readonly float[] ys = new float[W + 1];
 
         internal static void Draw(MiniGame game, float t, Color32[] px)
         {
@@ -161,44 +163,46 @@ namespace StbcRevival.Science
         {
             float tf = 1f + 7f * g.Target(0), ta = 0.1f + 0.9f * g.Target(1), tp = Tau * g.Target(2);
             float f = 1f + 7f * g.GetControl(0), a = 0.1f + 0.9f * g.GetControl(1), p = Tau * g.GetControl(2);
-            Wave(px, tf, ta, tp, 0.12f, 2.5f, Faint);
-            Wave(px, f, a, p, 0f, 1f, Bright);
+            Wave(px, tf, ta, tp, 0.12f, 2.5f * K, Faint);
+            Wave(px, f, a, p, 0f, 0.9f * K, Bright);
         }
 
-        // A wave across the picture: amp * sin(u * freq + phase) for u in 0..2pi (plus noise), -1..1 filling 84% of the height.
+        // A wave across the picture: amp * sin(u * freq + phase) for u in 0..2pi (plus noise, a new value every few
+        // pixels as in the mockup), -1..1 filling 84% of the height.
         private static void Wave(Color32[] px, float freq, float amp, float phase, float noisy, float half, Color32 c)
         {
-            float last = 0f;
-            for (int x = 0; x < W; x++)
+            int step = noisy > 0f ? (int)(2 * K) : 2, n = W / step;
+            for (int k = 0; k <= n; k++)
             {
-                float u = x / (float)W * Tau;
-                float v = H / 2f + (amp * Mathf.Sin(u * freq + phase) + (noisy > 0f ? (Random01() - 0.5f) * noisy : 0f)) * H * 0.42f;
-                Column(px, x, x == 0 ? v : last, v, half, c);
-                last = v;
+                float u = k * step / (float)W * Tau;
+                ys[k] = H / 2f + (amp * Mathf.Sin(u * freq + phase) + (noisy > 0f ? (Random01() - 0.5f) * noisy : 0f)) * H * 0.42f;
             }
+            Polyline(px, step, n, half, c);
         }
 
         private static void Sweep(SweepGame g, Color32[] px)
         {
             if (radius == null) Tables();
-            for (int y = H / 2; y < H - 2; y++) px[y * W + W / 2] = Amber; // the mark, straight up
+            Segment(px, W / 2f, H / 2f, W / 2f, H - 2 * K, 0.6f * K, Amber); // the mark, straight up
             for (int r = 0; r < 3; r++)
             {
                 float turn = MiniGame.Wrap01(g.GetControl(r) - g.Target(r)) * Tau; // 0 when lined up
                 float gapAt = Tau / 4f - turn;                                     // turning clockwise from the top
                 Color32 c = g.RingOff(r) < 10f ? RingOn : RingOff;
                 float lo = Radii[r] - RingHalf, hi = Radii[r] + RingHalf;
-                int y0 = Mathf.Max(0, (int)(H / 2f - hi) - 1), y1 = Mathf.Min(H - 1, (int)(H / 2f + hi) + 1);
-                int x0 = Mathf.Max(0, (int)(W / 2f - hi) - 1), x1 = Mathf.Min(W - 1, (int)(W / 2f + hi) + 1);
+                int y0 = Mathf.Max(0, (int)(H / 2f - hi) - 2), y1 = Mathf.Min(H - 1, (int)(H / 2f + hi) + 2);
+                int x0 = Mathf.Max(0, (int)(W / 2f - hi) - 2), x1 = Mathf.Min(W - 1, (int)(W / 2f + hi) + 2);
                 for (int y = y0; y <= y1; y++)
                     for (int x = x0; x <= x1; x++)
                     {
                         int i = y * W + x;
                         float d = radius[i];
-                        if (d < lo || d > hi) continue;
+                        float cover = Mathf.Min(d - lo, hi - d) + 0.5f; // soft by a pixel at both edges
+                        if (cover <= 0f) continue;
                         float off = angle[i] - gapAt;
                         off -= Tau * Mathf.Floor((off + Mathf.PI) / Tau); // -pi..pi
-                        if (Mathf.Abs(off) > Gap) px[i] = c;
+                        cover = Mathf.Min(cover, (Mathf.Abs(off) - Gap) * d + 0.5f); // and at the gap's ends
+                        if (cover > 0f) Blend(px, i, c, cover);
                     }
             }
         }
@@ -206,33 +210,61 @@ namespace StbcRevival.Science
         private static void Tuning(MiniGame g, float t, Color32[] px)
         {
             float q = g.Match;
-            const int meterTop = 16;
+            float meterTop = 16f * K;
             float mid = (H + meterTop) / 2f, room = H - meterTop;
-            float last = 0f;
-            for (int x = 0; x < W; x++)
+            int step = (int)(2 * K), n = W / step;
+            for (int k = 0; k <= n; k++)
             {
-                float v = mid + (Random01() - 0.5f) * room * (1f - q) * 0.9f + Mathf.Sin(x * 0.11f + t * 3f) * room * 0.3f * q;
-                Column(px, x, x == 0 ? v : last, v, 0.8f, Bright);
-                last = v;
+                float x = k * step;
+                ys[k] = mid + (Random01() - 0.5f) * room * (1f - q) * 0.9f + Mathf.Sin(x / K * 0.11f + t * 3f) * room * 0.3f * q;
             }
+            Polyline(px, step, n, 0.8f * K, Bright);
             // The meter: 20 steps along the bottom, lit up to the match.
-            const int steps = 20, gap = 3;
-            float step = (W - gap) / (float)steps;
+            const int steps = 20;
+            float gap = 3f * K, cell = (W - gap) / steps;
             for (int s = 0; s < steps; s++)
             {
                 Color32 c = s < q * steps ? MeterOn : MeterOff;
-                int xa = (int)(gap + s * step), xb = (int)(gap + (s + 1) * step) - gap;
-                for (int y = 2; y < meterTop - 3; y++)
+                int xa = (int)(gap + s * cell), xb = (int)(gap + (s + 1) * cell - gap);
+                for (int y = (int)(2 * K); y < (int)(meterTop - 3 * K); y++)
                     for (int x = xa; x < xb; x++) px[y * W + x] = c;
             }
         }
 
-        // A column of a line from y a to y b (and half a width either side).
-        private static void Column(Color32[] px, int x, float a, float b, float half, Color32 c)
+        // Joined segments through ys[0..n], `step` pixels apart, `half` wide either side, with soft edges.
+        private static void Polyline(Color32[] px, int step, int n, float half, Color32 c)
         {
-            int lo = Mathf.Max(0, Mathf.FloorToInt(Mathf.Min(a, b) - half));
-            int hi = Mathf.Min(H - 1, Mathf.CeilToInt(Mathf.Max(a, b) + half));
-            for (int y = lo; y <= hi; y++) px[y * W + x] = c;
+            for (int k = 0; k < n; k++) Segment(px, k * step, ys[k], (k + 1) * step, ys[k + 1], half, c);
+        }
+
+        // A line from (ax, ay) to (bx, by), `half` wide either side, its edges softened over a pixel (round ends, so
+        // joined segments meet without notches).
+        private static void Segment(Color32[] px, float ax, float ay, float bx, float by, float half, Color32 c)
+        {
+            float pad = half + 1f;
+            int x0 = Mathf.Max(0, Mathf.FloorToInt(Mathf.Min(ax, bx) - pad)), x1 = Mathf.Min(W - 1, Mathf.CeilToInt(Mathf.Max(ax, bx) + pad));
+            int y0 = Mathf.Max(0, Mathf.FloorToInt(Mathf.Min(ay, by) - pad)), y1 = Mathf.Min(H - 1, Mathf.CeilToInt(Mathf.Max(ay, by) + pad));
+            float dx = bx - ax, dy = by - ay, len2 = dx * dx + dy * dy;
+            for (int y = y0; y <= y1; y++)
+                for (int x = x0; x <= x1; x++)
+                {
+                    float px0 = x + 0.5f - ax, py0 = y + 0.5f - ay;
+                    float u = len2 > 0f ? Mathf.Clamp01((px0 * dx + py0 * dy) / len2) : 0f;
+                    float ex = px0 - u * dx, ey = py0 - u * dy;
+                    float cover = half + 0.5f - Mathf.Sqrt(ex * ex + ey * ey);
+                    if (cover > 0f) Blend(px, y * W + x, c, cover);
+                }
+        }
+
+        // Paints c over a pixel by how much of it is covered (0..1), never lighter than a fuller cover already there.
+        private static void Blend(Color32[] px, int i, Color32 c, float cover)
+        {
+            if (cover >= 1f) { px[i] = c; return; }
+            var b = px[i];
+            var mixed = Color32.Lerp(Back, c, cover);
+            // Over the back: the mix; over something already drawn: whichever is nearer the new colour's full strength.
+            if (b.r == Back.r && b.g == Back.g && b.b == Back.b) px[i] = mixed;
+            else px[i] = Color32.Lerp(b, c, cover);
         }
 
         private static void Tables()

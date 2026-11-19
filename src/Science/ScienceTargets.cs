@@ -267,6 +267,7 @@ namespace StbcRevival.Science
             notices.Clear();
             shown.Clear(); // the panel's lines go with the mission
             found.Clear();
+            shrunk.Clear();
             ship = null;
             spawnManager = null;
             sector = null;
@@ -303,6 +304,49 @@ namespace StbcRevival.Science
             }
             catch (Exception e) { Plugin.Log.LogWarning("Science console: finding targets: " + e.Message); }
             return result;
+        }
+
+        /// <summary>
+        /// Every machine, about once a second while the console is on: debris props (a space station's wreckage) are far
+        /// bigger than the ship that died, so each is shrunk, once, to half the player's ship's size. Only how it looks
+        /// here: its id, position and targeting are the game's as before.
+        /// </summary>
+        internal static void ShrinkDebris()
+        {
+            if (!ScienceSession.Active) return;
+            try
+            {
+                Lookup();
+                if (Gone(ship)) return;
+                foreach (var kv in found)
+                {
+                    var body = kv.Value;
+                    if (Gone(body) || !shrunk.Add(body.GetInstanceID())) continue;
+                    string name = live.TryGetValue(kv.Key, out var l) ? l.Target.Name : body.ALPAOOKFIEE.BaseName;
+                    if (name == null || !name.EndsWith(" debris", StringComparison.Ordinal)) continue;
+                    float own = Size(ship.gameObject), size = Size(body.gameObject);
+                    if (own <= 0f || size <= 0f) { Plugin.Log.LogInfo($"Science console: {name}: no size to go by (it {size:0.#}, ship {own:0.#})"); continue; }
+                    float want = own * 0.5f;
+                    if (size > want) body.transform.localScale *= want / size;
+                    Plugin.Log.LogInfo($"Science console: {name} {size:0.#} across, the ship {own:0.#}: {(size > want ? "shrunk to " + want.ToString("0.#") : "left as it is")}");
+                }
+            }
+            catch (Exception e) { Plugin.Log.LogWarning("Science console: shrinking debris: " + e.Message); }
+        }
+
+        private static readonly HashSet<int> shrunk = new HashSet<int>();
+
+        // The biggest extent of what's drawn of it (its renderers, but not particle effects).
+        private static float Size(GameObject go)
+        {
+            bool any = false;
+            var b = new Bounds();
+            foreach (var r in go.GetComponentsInChildren<Renderer>(false))
+            {
+                if (r is ParticleSystemRenderer || !r.enabled) continue;
+                if (!any) { b = r.bounds; any = true; } else b.Encapsulate(r.bounds);
+            }
+            return any ? Mathf.Max(b.size.x, Mathf.Max(b.size.y, b.size.z)) : 0f;
         }
 
         // Once a second: the board's ids matched to bodies (the host's own, else the sector's by SectorId), and the ship.

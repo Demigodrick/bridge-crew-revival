@@ -91,4 +91,32 @@ public class MiniGameTests
         for (float t = 0f; t <= 60f; t += 0.1f) { g.Tick(t); if (g.Match < min) min = g.Match; }
         Assert.True(min < 0.7f, "min over 60 s: " + min);
     }
+
+    [Theory]
+    [InlineData(MiniGameKind.Signal)]
+    [InlineData(MiniGameKind.Sweep)]
+    [InlineData(MiniGameKind.Tuning)]
+    public void Steady_HoldsStill(MiniGameKind k)
+    {
+        var g = MiniGame.Create(k, 7);
+        g.Steady = true;
+        g.Tick(0f);
+        Perfect(g);
+        for (float t = 0f; t <= 60f; t += 0.5f) { g.Tick(t); Assert.True(g.Match > 0.99f, $"at {t} s: {g.Match}"); }
+    }
+
+    [Fact]
+    public void AScan_DriftsOnlyOneGame()
+    {
+        int first = 0;
+        for (int n = 0; n < 200; n++)
+        {
+            var g = ConsoleFlow.GamesFor("id" + n);
+            Assert.True(g[0].Steady != g[1].Steady, "exactly one steady for id" + n);
+            if (!g[0].Steady) first++;
+            var again = ConsoleFlow.GamesFor("id" + n);
+            Assert.Equal(g[0].Steady, again[0].Steady);
+        }
+        Assert.InRange(first, 50, 150); // both sides get to drift
+    }
 }

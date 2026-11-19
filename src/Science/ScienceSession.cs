@@ -216,6 +216,7 @@ namespace StbcRevival.Science
             {
                 nextActive = now + ReadEvery;
                 Active = Ledger.On && RevivalMissions.Selected == typeof(PatrolSequence) && StbcRevival.Walking.Bridge.OnBridge();
+                ScienceTargets.ShrinkDebris();
             }
             var room = Room;
             if (room == null)

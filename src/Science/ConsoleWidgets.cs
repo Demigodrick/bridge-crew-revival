@@ -280,6 +280,7 @@ namespace StbcRevival
             });
             copy.transform.localPosition = slider.MinLocalPosition;
             copy.SetActive(true);
+            KnobOnly(copy, track, acrossHalf * s);
             return slider;
         }
 
@@ -473,6 +474,69 @@ namespace StbcRevival
         {
             float a = Mathf.Abs(from.lossyScale.x), b = Mathf.Abs(to.lossyScale.x);
             return a > 0f && b > 0f ? a / b : 1f;
+        }
+
+        private static readonly FieldInfo TriggerField = AccessTools.Field(typeof(HandInteraction), "LHLHCOKENFJ");      // _trigger
+        private static readonly FieldInfo MouseTriggerField = AccessTools.Field(typeof(HandInteraction), "JMLDIGCLEKF"); // _mouseTrigger
+
+        /// <summary>
+        /// The throttle's handle turned to run along a track hangs its grip across the rows below, where it covers their
+        /// sliders. Keep only the round knob: hide every picture of it that isn't centred on the knob or that leaves its
+        /// own row, and bring the hand's and the mouse's grab boxes in to the knob (run after it woke: they're made then).
+        /// </summary>
+        private static void KnobOnly(GameObject copy, RectTransform track, float knobHalf)
+        {
+            try
+            {
+                Rect row = track.rect;
+                Vector3 origin = track.InverseTransformPoint(copy.transform.position);
+                float radius = knobHalf > 0f ? knobHalf : row.height / 2f;
+                int hidden = 0;
+                foreach (var g in copy.GetComponentsInChildren<UnityEngine.UI.Graphic>(true))
+                {
+                    if (g == null || g.gameObject == copy || !g.gameObject.activeSelf) continue;
+                    var rt = g.rectTransform;
+                    var corners = new Vector3[4];
+                    rt.GetWorldCorners(corners);
+                    float y0 = float.MaxValue, y1 = float.MinValue;
+                    Vector3 centre = Vector3.zero;
+                    foreach (var c in corners)
+                    {
+                        var t = track.InverseTransformPoint(c);
+                        y0 = Mathf.Min(y0, t.y); y1 = Mathf.Max(y1, t.y);
+                        centre += t / 4f;
+                    }
+                    float off = Vector2.Distance(new Vector2(centre.x, centre.y), new Vector2(origin.x, origin.y));
+                    bool leaves = y0 < row.yMin - 0.001f || y1 > row.yMax + 0.001f;
+                    bool hide = leaves || off > radius * 0.9f;
+                    Plugin.Log.LogInfo(P + $"slider picture {g.name}: {(y1 - y0):0.###} high, {off:0.###} from the knob (knob {radius:0.###}, row {row.height:0.###}){(hide ? ": hidden" : "")}");
+                    if (hide) { g.gameObject.SetActive(false); hidden++; }
+                }
+                var hand = copy.GetComponent<HandInteraction>();
+                foreach (var f in new[] { TriggerField, MouseTriggerField })
+                    if (hand != null && f?.GetValue(hand) is Transform box) FitBox(box, track, origin.y, Mathf.Min(row.height, radius * 2.4f));
+                Plugin.Log.LogInfo(P + $"slider: {hidden} picture(s) of the throttle's grip hidden");
+            }
+            catch (Exception e) { Plugin.Log.LogWarning(P + "slider knob: " + e.Message); }
+        }
+
+        // A grab box (a unit box scaled by its transform) no taller across the track than `height`, centred on the knob's line.
+        private static void FitBox(Transform box, RectTransform track, float y, float height)
+        {
+            int across = 0; float most = 0f;
+            for (int i = 0; i < 3; i++)
+            {
+                var e = Vector3.zero; e[i] = 1f;
+                float h = Mathf.Abs(track.InverseTransformVector(box.TransformVector(e)).y);
+                if (h > most) { most = h; across = i; }
+            }
+            if (most > height && most > 0f)
+            {
+                var scale = box.localScale; scale[across] *= height / most; box.localScale = scale;
+            }
+            float dy = y - track.InverseTransformPoint(box.position).y;
+            box.position += track.TransformVector(new Vector3(0f, dy, 0f));
+            Plugin.Log.LogInfo(P + $"slider grab box {box.name}: {most:0.###} -> {Mathf.Min(most, height):0.###} high across, moved {dy:0.###}");
         }
 
         // Half the handle's extent along its travel and across it (its own rectangle, in its parent's units), so it
