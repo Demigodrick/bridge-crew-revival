@@ -136,6 +136,7 @@ namespace StbcRevival.Missions
             FleetBattleNoCloak.Patch(harmony);
             PatrolWarfareAggro.Patch(harmony);
             FleetBattleArmor.Patch(harmony);
+            FleetBattleAggro.Patch(harmony);
             LastStandBridgeRepair.Patch(harmony);
             MissionMaps.Patch(harmony);
         }

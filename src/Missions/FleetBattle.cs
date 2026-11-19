@@ -16,8 +16,8 @@ namespace StbcRevival.Missions
     /// Fleet Battle (Revival Missions): a Starfleet fleet and yours against a Klingon or Romulan fleet,
     /// [Revival] FleetBattleSize ships a side (30 by default). Allies form up around you, the enemy arrives
     /// ahead: every ally is ordered to attack an enemy ship, and the enemy picks its own targets (the game's
-    /// own aggro: whatever's in range, and what hits it), sending a third as many again as reinforcements when
-    /// it's down to half, up to twice;
+    /// own aggro: whatever's in range, and what hits it, with no preference for your ship: FleetBattleAggro),
+    /// sending a third as many again as reinforcements when it's down to half, up to twice;
     /// Starfleet sends five of its own as they arrive. Your ship takes 40% less damage
     /// (FleetBattleArmor).
     /// The allied fleet arrives a little battle-worn (85% hull). Won when
