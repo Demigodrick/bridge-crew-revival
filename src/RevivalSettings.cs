@@ -84,6 +84,8 @@ namespace StbcRevival
             // Host only: the enemy AI runs on the host.
             Switch("Enemy AI bug fixes", () => Plugin.EnemyAiFixes),
             Switch("Enemy AI thinks faster", () => Plugin.EnemyAiThinkFaster),
+            Switch("Enemy AI flies better", () => Plugin.EnemyAiFlyBetter),
+            Switch("Enemy AI fights smarter", () => Plugin.EnemyAiFightSmarter),
             new Entry
             {
                 Text = () => Translation.T("Ship name") + ": " + (ShipName.Own.Length == 0 ? Translation.T("the game's") : ShipName.Own),
