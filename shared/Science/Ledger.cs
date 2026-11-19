@@ -30,6 +30,13 @@ namespace StbcRevival.Science
         public bool On;
         public int EnemySteps { get; private set; }
 
+        // The game's Team enum as ints: None 0, Federation 1, Klingon 2, NeutralFriendly 3, NeutralHostile 4, Romulan 5, Borg 6.
+        // Hostile: Klingon, NeutralHostile, Romulan, Borg.
+        public static bool IsHostileTeam(int team)
+        {
+            return team == 2 || team == 4 || team == 5 || team == 6;
+        }
+
         public float Crew(UpgradeArea a) { return crew[(int)a]; }
 
         public float CrewVsFaction(int team)

@@ -156,12 +156,12 @@ namespace StbcRevival.Science
                 Ledger.AddScan(a);
                 Say(name + " analysed: " + AreaText(a) + " +" + Pct(Ledger.Crew(a)) + "%");
             }
-            else if (info.Team != 0)
+            else if (Ledger.IsHostileTeam(info.Team))
             {
                 Ledger.AddFactionScan(info.Team);
                 Say(name + " analysed: weak spots +" + Pct(Ledger.CrewVsFaction(info.Team)) + "%");
             }
-            else WarnOnce("nogrant", "Science console: " + id + " gives nothing (no area, no team)");
+            else WarnOnce("nogrant", "Science console: " + id + " gives nothing (no area, no hostile team)");
         }
 
         private static string AreaText(UpgradeArea a) => a.ToString().ToLowerInvariant();
