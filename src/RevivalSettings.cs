@@ -86,6 +86,18 @@ namespace StbcRevival
             Switch("Enemy AI thinks faster", () => Plugin.EnemyAiThinkFaster),
             Switch("Enemy AI flies better", () => Plugin.EnemyAiFlyBetter),
             Switch("Enemy AI fights smarter", () => Plugin.EnemyAiFightSmarter),
+            // Host only: how fast enemy ships fire, a share of the game's rate.
+            new Entry
+            {
+                Text = () => $"Enemy fire rate: {Plugin.EnemyAiFireRate.Value * 100f:0}%",
+                Press = () =>
+                {
+                    var rates = EnemyAiTuning.FireRates;
+                    int at = Array.FindIndex(rates, r => Mathf.Approximately(r, Plugin.EnemyAiFireRate.Value));
+                    Plugin.EnemyAiFireRate.Value = rates[(at + 1) % rates.Length];
+                    Plugin.Log.LogInfo($"Revival settings: enemy fire rate {Plugin.EnemyAiFireRate.Value:0.##}");
+                },
+            },
             new Entry
             {
                 Text = () => Translation.T("Ship name") + ": " + (ShipName.Own.Length == 0 ? Translation.T("the game's") : ShipName.Own),

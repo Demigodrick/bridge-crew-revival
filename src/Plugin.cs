@@ -81,6 +81,7 @@ namespace StbcRevival
         internal static ConfigEntry<bool> EnemyAiThinkFaster;
         internal static ConfigEntry<bool> EnemyAiFlyBetter;
         internal static ConfigEntry<bool> EnemyAiFightSmarter;
+        internal static ConfigEntry<float> EnemyAiFireRate;
         internal static ConfigEntry<string> TestPatrolAssignment;
         internal static ConfigEntry<int> EvacuationMinutes;
         internal static ConfigEntry<bool> VoiceCommands;
@@ -268,6 +269,9 @@ namespace StbcRevival
                 "Enemy ships turn on whoever is hurting them now, mix up their attack patterns, keep firing between attack runs "
                 + "instead of wandering off, use torpedoes once your shields are down, and keep some phaser range on their "
                 + "approach. Host only.");
+            EnemyAiFireRate = Config.Bind("EnemyAI", "FireRate", 1f,
+                "How fast enemy ships (Klingon, Romulan, pirate, Borg) fire, as a share of the game's: 0.75, 1, 1.25 or 1.5 "
+                + "(any value from 0.25 to 4 works here). Applies to ships that spawn after a change. Host only.");
             EvacuationMinutes = Config.Bind("Revival", "EvacuationMinutes", 15,
                 "Stellar Evacuation: minutes until the star erupts (3-30), the last of them to warp out.");
             MapOverride = Config.Bind("Debug", "MapOverride", "",
@@ -417,6 +421,7 @@ namespace StbcRevival
             Safely("enemy AI think rate", StbcRevival.EnemyAiThinkRate.Apply);
             Safely("enemy AI flying", () => StbcRevival.EnemyAiFlying.Patch(harmony));
             Safely("enemy AI combat", () => StbcRevival.EnemyAiCombat.Patch(harmony));
+            Safely("enemy AI tuning", () => StbcRevival.EnemyAiTuning.Patch(harmony));
             EnemyAiThinkFaster.SettingChanged += (_, __) => Safely("enemy AI think rate", StbcRevival.EnemyAiThinkRate.Apply);
             SteamMode.Install(harmony);
             ShuttleControls.Install();
