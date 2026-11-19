@@ -45,7 +45,7 @@ namespace StbcRevival.Missions
         internal const string Title = "FLEET BATTLE";
 
         // Mostly light ships, so the fight isn't one-sided (the cruisers outclass the raiders they meet).
-        private static readonly string[] Starfleet =
+        internal static readonly string[] Starfleet =
         {
             "Sector/Ships/Ship - Saladin", "Sector/Ships/Ship - Saladin", "Sector/Ships/Ship - Raleigh", "Sector/Ships/Ship - Huxley",
         };
@@ -217,7 +217,7 @@ namespace StbcRevival.Missions
         private static readonly System.Reflection.FieldInfo RechargeDownWait = HarmonyLib.AccessTools.Field(typeof(AI.AgentShip), "_shieldDownRechargeWaitTime");
         private static bool loggedAllyShields;
 
-        private static void AllyShields(BodyRef ally)
+        internal static void AllyShields(BodyRef ally)
         {
             try
             {
