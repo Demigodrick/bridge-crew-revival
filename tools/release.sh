@@ -4,8 +4,10 @@
 # Builds locally (the mod compiles against the game's own DLLs, which can't go in the repo or CI),
 # then uploads BridgeCrewRevival.zip and its .sha256. The installers fetch
 # releases/latest/download/BridgeCrewRevival.zip, so the asset names must stay fixed.
-# The two DLLs, rnnoise.dll, speexdsp.dll, the ship models' files and their SHA256SUMS go up too: the in-game updater
-# (UpdateCheck.cs) fetches those, as Unity 5.4's .NET can't open a zip.
+# The in-game updater (UpdateCheck.cs, ReleaseZip.cs) reads the files it needs out of the zip with range requests,
+# checked against SHA256SUMS, which lists every file it may fetch (the DLLs, the native libraries, the ship models
+# and the second sector). The two DLLs and SHA256SUMS also go up as assets of their own: updaters from 0.7.46 and
+# older fetch those, and the new version they install then fetches the rest from the zip.
 # It also updates docs/version.txt (the in-game update check reads it from the website), commits and
 # pushes that, so the site announces the new version once the release exists.
 set -euo pipefail
@@ -34,22 +36,18 @@ rm -rf "$out" && mkdir -p "$out"
 cp "$zip" "$out/BridgeCrewRevival.zip"
 (cd "$out" && sha256sum BridgeCrewRevival.zip > BridgeCrewRevival.zip.sha256)
 cp "$root/dist/BridgeCrewRevival-$version/plugins/StbcRevival.dll" "$root/dist/BridgeCrewRevival-$version/plugins/StbcCore.dll" "$out/"
-# Revival voice's native libraries too: the in-game updater puts them in BepInEx/native (on update, or when missing).
-cp "$root/dist/BridgeCrewRevival-$version/native/rnnoise.dll" "$root/dist/BridgeCrewRevival-$version/native/speexdsp.dll" "$out/"
-(cd "$out" && sha256sum StbcRevival.dll StbcCore.dll rnnoise.dll speexdsp.dll > SHA256SUMS)
-assets=("$out/BridgeCrewRevival.zip" "$out/BridgeCrewRevival.zip.sha256" "$out/StbcRevival.dll" "$out/StbcCore.dll" "$out/rnnoise.dll" "$out/speexdsp.dll")
-# Our ship models (BepInEx/ships) and the second sector's galaxy file (BepInEx/galaxies) too, each file an asset of
-# its own named with dots for the slashes ("ships.Nova.Nova.obj") and listed in SHA256SUMS by its path
-# ("ships/Nova/Nova.obj"): the updater fetches the missing ones at launch and the changed ones on an update.
+(cd "$out" && sha256sum StbcRevival.dll StbcCore.dll > SHA256SUMS)
+# Revival voice's native libraries: the in-game updater puts them in BepInEx/native (on update, or when missing).
+(cd "$root/dist/BridgeCrewRevival-$version/native" && sha256sum rnnoise.dll speexdsp.dll >> "$out/SHA256SUMS")
+assets=("$out/BridgeCrewRevival.zip" "$out/BridgeCrewRevival.zip.sha256" "$out/StbcRevival.dll" "$out/StbcCore.dll")
+# Our ship models (BepInEx/ships) and the second sector's galaxy file (BepInEx/galaxies), listed by their path in the
+# zip's folder ("ships/Nova/Nova.obj"): the updater fetches the missing ones at launch and the changed ones on an update.
 for d in ships galaxies; do
   dir="$root/dist/BridgeCrewRevival-$version/$d"
   [ -d "$dir" ] || continue
   while IFS= read -r -d '' f; do
     rel="$d/${f#"$dir"/}"
-    name="${rel//\//.}"
-    cp "$f" "$out/$name"
     printf '%s  %s\n' "$(sha256sum "$f" | cut -d' ' -f1)" "$rel" >> "$out/SHA256SUMS"
-    assets+=("$out/$name")
   done < <(find "$dir" -type f -print0 | sort -z)
 done
 assets+=("$out/SHA256SUMS")
