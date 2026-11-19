@@ -55,7 +55,7 @@ namespace StbcRevival.Science
 
         private static int clientClaimant;
         private static string seenRoom;
-        private static bool hooked, adopted;
+        private static bool hooked, adopted, patrolSeen; // patrolSeen: this room has had a Patrol (or its state), so it gets published
         private static float nextPublish, nextRead, nextActive;
         private static string sentLedger, sentBoard;
         private static int sentClaimant = -1;
@@ -66,6 +66,8 @@ namespace StbcRevival.Science
         /// <summary>A Patrol began (host): a fresh ledger and board, the console on if this bridge has one.</summary>
         internal static void PatrolStarted()
         {
+            if (!IsHost) return;
+            patrolSeen = true;
             Ledger = new Ledger { On = SciencePlacement.HasForCurrentBridge || (Plugin.ScienceOn != null && Plugin.ScienceOn.Value) };
             Board = new ScanBoard();
             adopted = true; // ours now: not to be replaced by what the room still holds
@@ -74,6 +76,16 @@ namespace StbcRevival.Science
             nextPublish = 0f;
             Active = Ledger.On;
             Plugin.Log.LogInfo("Science console: " + (Ledger.On ? "on" : "off") + " for this Patrol");
+        }
+
+        /// <summary>The Patrol ended (every machine): the console is off again and the totals are forgotten; the host publishes that.</summary>
+        internal static void PatrolEnded()
+        {
+            Ledger = new Ledger();
+            Board = new ScanBoard();
+            clientClaimant = 0;
+            Active = false;
+            nextPublish = 0f;
         }
 
         /// <summary>An assignment was completed (host): the enemy grows a step stronger.</summary>
@@ -115,9 +127,9 @@ namespace StbcRevival.Science
         // ------------------------------------------------------------------------------------------- host: judging
         private static void OnEvent(byte code, object content, int sender)
         {
-            if (code != Code || !IsHost) return;
             try
             {
+                if (code != Code || !IsHost) return;
                 ScienceMsg m;
                 if (!(content is byte[] b) || !ScienceWire.TryRead(b, out m)) return;
                 Apply(sender, m);
@@ -127,7 +139,7 @@ namespace StbcRevival.Science
 
         private static void Apply(int sender, ScienceMsg m)
         {
-            if (!Ledger.On) return;
+            if (!Active) return;
             float now = Time.unscaledTime;
             switch (m.Kind)
             {
@@ -183,13 +195,18 @@ namespace StbcRevival.Science
             if (now >= nextActive)
             {
                 nextActive = now + ReadEvery;
-                Active = Ledger.On && RevivalMissions.Selected == typeof(PatrolSequence);
+                Active = Ledger.On && RevivalMissions.Selected == typeof(PatrolSequence) && StbcRevival.Walking.Bridge.OnBridge();
             }
             var room = Room;
-            if (room == null) { seenRoom = null; return; }
+            if (room == null)
+            {
+                if (seenRoom != null) { seenRoom = null; ResetRoomState(); }
+                return;
+            }
             string name = room.GetType().GetMethod("get_name", All)?.Invoke(room, null) as string;
             if (name != seenRoom)
             {
+                if (seenRoom != null) ResetRoomState(); // another room: nothing of the last one carries over
                 seenRoom = name;
                 adopted = false;
                 sentLedger = sentBoard = readLedger = readBoard = null;
@@ -199,7 +216,7 @@ namespace StbcRevival.Science
             if (host)
             {
                 if (!adopted) { adopted = true; Adopt(room); }
-                if (now >= nextPublish) { nextPublish = now + PublishEvery; Publish(room, now); }
+                if (patrolSeen && now >= nextPublish) { nextPublish = now + PublishEvery; Publish(room, now); }
             }
             else
             {
@@ -215,10 +232,22 @@ namespace StbcRevival.Science
         {
             string u = Prop(room, KeyLedger) as string, p = Prop(room, KeyBoard) as string;
             if (string.IsNullOrEmpty(u)) return;
+            patrolSeen = true;
             Ledger = Ledger.FromWire(u);
             Board = ScanBoard.FromWire(p);
             sentLedger = u; sentBoard = p;
             Plugin.Log.LogInfo("Science console: took over the room's state");
+        }
+
+        private static void ResetRoomState()
+        {
+            Ledger = new Ledger();
+            Board = new ScanBoard();
+            clientClaimant = 0;
+            Active = false;
+            patrolSeen = false;
+            sentLedger = sentBoard = readLedger = readBoard = null;
+            sentClaimant = -1;
         }
 
         private static void Publish(object room, float now)
