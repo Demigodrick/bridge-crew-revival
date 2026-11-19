@@ -234,7 +234,7 @@ namespace StbcRevival
     /// the game's targeting, weapons and attack patterns these change.
     ///
     /// - Grudges fade: the AI's aggro list only ever grew, so a ship kept on whoever it first got angry with. Now what
-    ///   it has gained above its starting level (60, the player 110, a Borg cube 160) fades with a half-life of
+    ///   it has gained above its starting level (60, the player 110 except in Fleet Battle, a Borg cube 160) fades with a half-life of
     ///   GrudgeHalfLife, and every hit adds DamageGrudge per point of damage on top of the game's flat 10, so ships turn on
     ///   whoever is hurting them now. (AgentShip.UpdateTargetAndAgroList and ApplyDamage, JJEBPBHKBIE.)
     /// - Attack patterns in a random order: the game tried a ship's patterns in list order and the first that could start
@@ -336,12 +336,14 @@ namespace StbcRevival
                 lastFade[id] = now;
                 if (since <= 0f || since > 5f) return;
                 float keep = Mathf.Pow(0.5f, since / GrudgeHalfLife);
+                // The game's own +50 for the player's ship (taken off in Fleet Battle: FleetBattleAggro).
+                float playerBonus = Missions.RevivalMissions.Selected == typeof(Missions.FleetBattleSequence) ? 0f : 50f;
                 keys.Clear();
                 keys.AddRange(bb.AgroList.Keys);
                 foreach (var key in keys)
                 {
                     if (key == null) continue;
-                    float floor = 60f + (ReferenceEquals(key, bb.PlayerShip) ? 50f : 0f) + (key is AI.BorgCube ? 100f : 0f);
+                    float floor = 60f + (ReferenceEquals(key, bb.PlayerShip) ? playerBonus : 0f) + (key is AI.BorgCube ? 100f : 0f);
                     float value = bb.AgroList[key];
                     if (value > floor) bb.AgroList[key] = floor + (value - floor) * keep;
                 }
