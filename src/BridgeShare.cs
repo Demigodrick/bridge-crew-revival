@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.IO.Compression;
 using System.Reflection;
 using System.Text;
 using UnityEngine;
@@ -163,34 +162,10 @@ namespace StbcRevival
             catch (Exception ex) { Plugin.Log.LogWarning("Bridge layout: receiving: " + ex.Message); }
         }
 
-        private static byte[] Zip(string text)
-        {
-            using (var ms = new MemoryStream())
-            {
-                using (var z = new GZipStream(ms, CompressionMode.Compress))
-                {
-                    var b = Encoding.UTF8.GetBytes(text);
-                    z.Write(b, 0, b.Length);
-                }
-                return ms.ToArray();
-            }
-        }
+        // Gzip, in managed code: the game's Mono has no MonoPosixHelper, so GZipStream throws there. The same
+        // format as before (players on 0.7.45 and earlier unzip it with GZipStream).
+        private static byte[] Zip(string text) => Gzip.Pack(Encoding.UTF8.GetBytes(text));
 
-        private static string Unzip(byte[] zip)
-        {
-            using (var z = new GZipStream(new MemoryStream(zip), CompressionMode.Decompress))
-            using (var outp = new MemoryStream())
-            {
-                var buf = new byte[8192];
-                int n, total = 0;
-                while ((n = z.Read(buf, 0, buf.Length)) > 0)
-                {
-                    total += n;
-                    if (total > 4 * MaxBytes) throw new InvalidDataException("unzips too big");
-                    outp.Write(buf, 0, n);
-                }
-                return Encoding.UTF8.GetString(outp.ToArray());
-            }
-        }
+        private static string Unzip(byte[] zip) => Encoding.UTF8.GetString(Gzip.Unpack(zip, 4 * MaxBytes));
     }
 }
