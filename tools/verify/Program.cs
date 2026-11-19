@@ -287,6 +287,22 @@ foreach (var m in new[] { "MEOMCEOEBAC", "MBHACAKGEGM" })
 // Fleet Battle: player ships take less damage
 foreach (var ty in new[] { "Sector.Spacecraft.Subsystems.HullServer", "Sector.Spacecraft.Subsystems.SubsystemServer" })
     Check($"  {ty.Substring(ty.LastIndexOf('.') + 1)}.systemHit(float) (Fleet Battle armour)", game.GetType(ty)?.GetMethods(Inst | BindingFlags.DeclaredOnly).FirstOrDefault(x => x.Name == "systemHit" && x.GetParameters().Length == 1));
+// Science console effects (Patrol): upgrades and enemy steps
+const BindingFlags Decl = Inst | BindingFlags.DeclaredOnly;
+var agentShip = game.GetType("AI.AgentShip");
+Check("  AgentShip.takeHit(Ray, float, float, Subsystem, attacker, ...) (science: crew weapons, phasers)", agentShip?.GetMethods(Decl).FirstOrDefault(m => m.Name == "takeHit" && m.GetParameters() is { Length: >= 5 } p && p[0].ParameterType.FullName == "UnityEngine.Ray" && p[2].ParameterType.FullName == "System.Single" && !p[4].ParameterType.IsValueType));
+Check("  AgentShip.takeHit(Vector3, float, Subsystem, attacker, ...) (science: crew weapons, torpedoes)", agentShip?.GetMethods(Decl).FirstOrDefault(m => m.Name == "takeHit" && m.GetParameters() is { Length: >= 4 } p && p[0].ParameterType.FullName == "UnityEngine.Vector3" && p[1].ParameterType.FullName == "System.Single" && !p[3].ParameterType.IsValueType));
+Check("  BaseSpacecraft.takeHit(Vector3, float, Subsystem, attacker, ...) (science: enemy damage)", game.GetType("Sector.Spacecraft.BaseSpacecraft")?.GetMethods(Decl).FirstOrDefault(m => m.Name == "takeHit" && m.GetParameters() is { Length: >= 4 } p && p[0].ParameterType.FullName == "UnityEngine.Vector3" && p[1].ParameterType.FullName == "System.Single" && !p[3].ParameterType.IsValueType));
+Check("  BubbleShieldServer.shieldHit(float, attacker, out float) (science: crew shields)", game.GetType("Sector.Spacecraft.Subsystems.BubbleShieldServer")?.GetMethods(Decl).FirstOrDefault(m => m.Name == "shieldHit" && m.GetParameters() is { Length: 3 } p && p[0].ParameterType.FullName == "System.Single" && p[2].ParameterType.IsByRef));
+Check("  AgentShip.get_MaxShieldHealth (LPAMAFAACEJ) (science: enemy shields)", agentShip?.GetMethod("get_MaxShieldHealth", Decl));
+var engineClient = game.GetType("Sector.Spacecraft.Subsystems.SimpleEngineClient");
+Check("  SimpleEngineClient.get_currentMaxSpeed (JGAFJNCGLIM) (science: crew impulse)", engineClient?.GetMethod("get_currentMaxSpeed", Decl));
+Check("  SimpleEngineClient.BatchFixedUpdate + _maxYawVel (science: crew turning)", engineClient?.GetMethod("BatchFixedUpdate", Decl, null, Type.EmptyTypes, null) != null ? engineClient.GetField("_maxYawVel", Inst) : null);
+Check("  AgentShip.MHHGGHHKMKN (UpdateMoveVelocity) + KEIEAFFMBPF (_moveVelocity) (science: enemy speed)", agentShip?.GetMethod("MHHGGHHKMKN", Decl) != null ? agentShip.GetField("KEIEAFFMBPF", Inst) : null);
+Check("  BorgCube.MHHGGHHKMKN (UpdateMoveVelocity) (science: enemy speed)", game.GetType("AI.BorgCube")?.GetMethod("MHHGGHHKMKN", Decl));
+var subsystemServer = game.GetType("Sector.Spacecraft.Subsystems.SubsystemServer");
+Check("  SubsystemServer.PPBDHDJCFKF (AutoRepair) + subsystemAutoRepairPoints (science: crew repair)", subsystemServer?.GetMethod("PPBDHDJCFKF", Decl) != null ? subsystemServer.GetField("subsystemAutoRepairPoints", Inst) : null);
+Check("  TargetInfoComponent.get_TeamID (DGGJOECIFAF) (science: victim's team)", game.GetType("Sector.TargetInfoComponent")?.GetMethod("get_TeamID", Inst));
 // Host hand-off
 Check("  NetworkStatus.SetError(error, popup, ...) (hand-off: no popup for failed regroup joins)",
     game.GetType("SVR.Network.NetworkStatus")?.GetMethods(BindingFlags.Public | BindingFlags.Static).FirstOrDefault(m => m.Name == "SetError" && m.GetParameters().Length == 4));

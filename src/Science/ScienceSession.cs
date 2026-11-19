@@ -68,7 +68,7 @@ namespace StbcRevival.Science
         {
             if (!IsHost) return;
             patrolSeen = true;
-            Ledger = new Ledger { On = SciencePlacement.HasForCurrentBridge || (Plugin.ScienceOn != null && Plugin.ScienceOn.Value) };
+            Ledger = TestLedger() ?? new Ledger { On = SciencePlacement.HasForCurrentBridge || (Plugin.ScienceOn != null && Plugin.ScienceOn.Value) };
             Board = new ScanBoard();
             adopted = true; // ours now: not to be replaced by what the room still holds
             sentLedger = sentBoard = null;
@@ -76,6 +76,22 @@ namespace StbcRevival.Science
             nextPublish = 0f;
             Active = Ledger.On;
             Plugin.Log.LogInfo("Science console: " + (Ledger.On ? "on" : "off") + " for this Patrol");
+        }
+
+        // [Debug] ScienceLedger: a ledger to start the Patrol with (switched on), or null when unset or not a ledger.
+        private static Ledger TestLedger()
+        {
+            string wire = Plugin.ScienceLedger?.Value?.Trim();
+            if (string.IsNullOrEmpty(wire)) return null;
+            Ledger l = Ledger.FromWire(wire);
+            if (!l.On && l.ToWire() == new Ledger().ToWire()) // what FromWire gives for anything malformed
+            {
+                Plugin.Log.LogWarning("Science console: [Debug] ScienceLedger isn't a ledger (" + wire + "); ignored");
+                return null;
+            }
+            l.On = true;
+            Plugin.Log.LogInfo("Science console: testing with the ledger " + l.ToWire() + " from [Debug] ScienceLedger");
+            return l;
         }
 
         /// <summary>The Patrol ended (every machine): the console is off again and the totals are forgotten; the host publishes that.</summary>
