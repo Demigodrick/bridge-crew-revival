@@ -28,11 +28,53 @@ namespace StbcRevival
             var seated = AccessTools.Method(typeof(AI.USSAegisCrew), "BGNJBHLOFJF");     // OnPlayerSeatedEvent
             if (stations != null) harmony.Patch(stations, postfix: new HarmonyMethod(typeof(PvpCrewMenu), nameof(Stations_Postfix)));
             if (seated != null) harmony.Patch(seated, prefix: new HarmonyMethod(typeof(PvpCrewMenu), nameof(Seated_Prefix)));
+            var buttons = AccessTools.Method(typeof(GazeTargetCrewBotUI), "NPIMFNINENI"); // UpdateStationButtons
+            if (buttons != null) harmony.Patch(buttons, postfix: new HarmonyMethod(typeof(PvpCrewMenu), nameof(Buttons_Postfix)));
+            else Plugin.Log.LogWarning("PvP: the crew menu's station buttons weren't found; a station the other ship's player holds can't be picked from it");
             if (stations == null || seated == null) Plugin.Log.LogWarning("PvP: the crew menu's stations or the crew's seat count weren't found; crew orders may not work");
             else Plugin.Log.LogInfo("PvP: crew menus and crews count only their own ship's players");
         }
 
         private static bool On => PvpLobby.InPvpRoom && PvpPrototype.Active;
+
+        // The crew menu's station buttons (Flight Control, Operations, Tactical: moving to that station) are off for
+        // any station a player holds (GazeTargetCrewBotUI.UpdateStationButtons), whatever their ship: a captain
+        // couldn't move to helm while the other ship's player sat at theirs. Only your own ship's players count.
+        private static readonly string[] ButtonFields = { "_helmStationButton", "_engineerStationButton", "_tacticalStationButton" };
+        private static readonly string[] ProxyFields = { "LCOOLCBNLDN", "PPEEAIPDBNE", "HEOKEBEBIJK" }; // _consoleInteractionListenerProxy2, 3, (1)
+        private static readonly FLCHMJJDKDL[] ButtonRoles = { FLCHMJJDKDL.Helm, FLCHMJJDKDL.Engineering, FLCHMJJDKDL.Tactical };
+
+        private static void Buttons_Postfix(GazeTargetCrewBotUI __instance)
+        {
+            if (!On || __instance == null) return;
+            try
+            {
+                string myShip = PvpShips.Mine ?? "A";
+                var taken = new System.Collections.Generic.HashSet<FLCHMJJDKDL>();   // by a player on your ship (you included)
+                var theirs = new System.Collections.Generic.HashSet<FLCHMJJDKDL>();  // by the other ship's only
+                foreach (var player in Tracked.All<NovaPlayerInfo>())
+                {
+                    if (player == null || (player.AOMGCCGDJJC && !player.AOLEJMABHPE) || !(player.Station is NovaStation station)) continue; // bots
+                    bool own = player.AOLEJMABHPE || PvpShips.Of(PvpShips.Player(player.NJNHJKEPFAK)) == myShip;
+                    (own ? taken : theirs).Add(station.OGBAPMIPPID);
+                }
+                for (int i = 0; i < ButtonRoles.Length; i++)
+                {
+                    var role = ButtonRoles[i];
+                    if (!theirs.Contains(role) || taken.Contains(role)) continue;
+                    if (AccessTools.Field(typeof(GazeTargetCrewBotUI), ButtonFields[i])?.GetValue(__instance) is UnityEngine.Behaviour button && button != null)
+                        button.enabled = true;
+                    var proxy = AccessTools.Field(typeof(GazeTargetCrewBotUI), ProxyFields[i])?.GetValue(__instance);
+                    var state = proxy == null ? null : AccessTools.Property(proxy.GetType(), "COHKAHJKNII"); // MyState
+                    if (state != null) state.SetValue(proxy, Enum.Parse(state.PropertyType, "Valid"), null);
+                    if (told.Add("button" + role)) Plugin.Log.LogInfo($"PvP: crew menu's {role} station button on (held only by the other ship's player)");
+                }
+            }
+            catch (Exception e)
+            {
+                if (told.Add("buttonerror")) Plugin.Log.LogWarning("PvP: the crew menu's station buttons: " + (e.InnerException ?? e).Message);
+            }
+        }
 
         private static void Stations_Postfix(NonVRCrewBotManager __instance)
         {
