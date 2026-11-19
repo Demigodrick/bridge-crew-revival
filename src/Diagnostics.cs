@@ -110,8 +110,16 @@ namespace StbcRevival
         }
 
         /// <summary>Called every frame from the plugin; logs a state summary when it changes (at most every 5 s).</summary>
+        private static float lastFrameAt;
+
         internal static void Heartbeat(Type photonNetwork)
         {
+            // A frame that held the game up (loading screens aside, the camera is still): its length, in the log
+            // between what ran before and after it.
+            float now = Time.realtimeSinceStartup;
+            if (lastFrameAt > 0f && now - lastFrameAt > 0.2f)
+                Plugin.Log.LogInfo($"[diag] slow frame: {(now - lastFrameAt) * 1000f:0} ms, {now:0.0} s after launch, scene {UnityEngine.SceneManagement.SceneManager.GetActiveScene().name}");
+            lastFrameAt = now;
             if (Time.realtimeSinceStartup < nextHeartbeat) return;
             nextHeartbeat = Time.realtimeSinceStartup + 5f;
             try

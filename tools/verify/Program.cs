@@ -129,11 +129,14 @@ Check("IntroSequence.GBDBONKGDOM() (next element) + _elements/_curNdx/_skipIsOn"
     && introSequence.GetField("_skipIsOn", Inst) is not null ? introSequence : null);
 Check("MovieIntroElement", game.GetType("MovieIntroElement"));
 var controllerCheck = game.GetType("ControllerCheckElement");
-Check("SkipVrSetup: ControllerCheckElement.Update + MNBMEFCBKKH/NLEGMCICILA (bool)",
-    controllerCheck?.GetMethod("Update", Inst) is not null && controllerCheck.GetField("MNBMEFCBKKH", Inst)?.FieldType.FullName == "System.Boolean"
+Check("SkipVrSetup: ControllerCheckElement.Update + AIPFLEFJDPA() + MNBMEFCBKKH/NLEGMCICILA (bool)",
+    controllerCheck?.GetMethod("Update", Inst) is not null && controllerCheck.GetMethod("AIPFLEFJDPA", Inst)?.ReturnType.FullName == "System.Boolean" && controllerCheck.GetField("MNBMEFCBKKH", Inst)?.FieldType.FullName == "System.Boolean"
     && controllerCheck.GetField("NLEGMCICILA", Inst)?.FieldType.FullName == "System.Boolean" ? controllerCheck : null);
 Check("SkipVrSetup: InputManager.UpdateActiveController(bool) returns bool",
     game.GetType("SVR.InputManager")?.GetMethod("UpdateActiveController", Inst) is { } uac && uac.ReturnType.FullName == "System.Boolean" ? uac : null);
+var vrSetupInput = game.GetType("SVR.InputManager");
+Check("SkipVrSetup: InputManager IHNHENLGKBO/FAKBNJECKGI/OMHIFCDEJLK (bool: keyboard+mouse, motion controllers, usable)",
+    new[] { "IHNHENLGKBO", "FAKBNJECKGI", "OMHIFCDEJLK" }.All(f => vrSetupInput?.GetField(f, Inst)?.FieldType.FullName == "System.Boolean") ? vrSetupInput : null);
 var centerView = game.GetType("CenterViewIntroElement");
 Check("SkipVrSetup: CenterViewIntroElement.LateUpdate + ANDHFMCAMMM(VRRecenteredEvent) + NDDFIMFHMKI (Transform)",
     centerView?.GetMethod("LateUpdate", Inst) is not null

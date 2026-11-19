@@ -52,7 +52,7 @@ namespace StbcRevival
             return false;
         }
 
-        private static bool IsSplash(IntroElement element) =>
+        internal static bool IsSplash(IntroElement element) =>
             element.GetType() == typeof(IntroElement) || element.GetType().Name == "MovieIntroElement";
     }
 }

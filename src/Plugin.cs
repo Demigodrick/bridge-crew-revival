@@ -62,6 +62,7 @@ namespace StbcRevival
         internal static ConfigEntry<string> PvpTestShip;
         internal static ConfigEntry<bool> SkipMicCheck;
         internal static ConfigEntry<bool> SkipVrSetup;
+        internal static ConfigEntry<string> LastControlsDesktop, LastControlsVr;
         internal static ConfigEntry<bool> HideFullCrews;
         internal static ConfigEntry<bool> HideCrewsInMission;
         internal static ConfigEntry<CrewContent> CrewContentFilter;
@@ -191,7 +192,7 @@ namespace StbcRevival
             SkipUplay = Config.Bind("Login", "SkipUplay", true,
                 "Use the game's built-in no-platform login mode: no Uplay client, no Ubisoft account, no Ubisoft online services.");
             SkipIntro = Config.Bind("Startup", "SkipIntro", true,
-                "Skip the logo and movie screens at launch and go straight to the shuttle. Connection, controller and headset checks still run.");
+                "Skip the logo and movie screens at launch and go straight to the shuttle, and don't flash the Connecting box when the connection is quick. Connection, controller and headset checks still run.");
             LocalSave = Config.Bind("Game", "LocalSave", true,
                 "Keep the game's settings (avatar appearance, options, progress flags) in BepInEx/config/stbc.revival.save.json. The game only ever saved these to Ubisoft's servers.");
             FetchUbisoftSave = Config.Bind("Import", "FetchUbisoftSave", false,
@@ -200,6 +201,10 @@ namespace StbcRevival
                 "Skip the microphone check the game shows when you start. Your mic still works; set it up in the game's options.");
             SkipVrSetup = Config.Bind("Startup", "SkipVrSetup", true,
                 "Skip the \"press any button\" controller screen and the VR recenter prompt at launch. The game still waits for a controller to be found, and the controller and headset warnings still work. Press the recenter button if your view is off.");
+            LastControlsDesktop = Config.Bind("Startup", "LastControlsDesktop", "",
+                "Set by the game (with SkipVrSetup): the controls you last used on the flat screen (KeyboardMouse or Gamepad), which the game starts with.");
+            LastControlsVr = Config.Bind("Startup", "LastControlsVr", "",
+                "Set by the game (with SkipVrSetup): the controls you last used in VR (MotionControllers, Gamepad or KeyboardMouse), which the game starts with.");
             ExcelsiorTest = Config.Bind("Ships", "Excelsior", false,
                 "Test: when you host, the crew flies an Excelsior-class ship, with the training holodeck as its bridge for now.");
             PlayerShip = Config.Bind("Ships", "PlayerShip", "Aegis",
@@ -537,7 +542,10 @@ namespace StbcRevival
             {
                 if (failedOnce.Add(what)) Log.LogError($"{what} failed (logged once): {e}");
             }
-            Walking.StutterTrace.Add(what, System.Diagnostics.Stopwatch.GetTimestamp() - started);
+            long took = System.Diagnostics.Stopwatch.GetTimestamp() - started;
+            Walking.StutterTrace.Add(what, took);
+            if (took > System.Diagnostics.Stopwatch.Frequency / 10 && Diagnostics.Value) // 100 ms
+                Log.LogInfo($"[diag] slow step: {what} took {took * 1000 / System.Diagnostics.Stopwatch.Frequency} ms");
             MemoryLog.After(what, before);
         }
 
