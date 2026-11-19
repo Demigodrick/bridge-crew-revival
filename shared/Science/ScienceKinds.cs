@@ -2,7 +2,7 @@ using System;
 
 namespace StbcRevival.Science
 {
-    // What the things the console scans are: the area a Patrol reading gives, a debris field's name, and where
+    // What the things the console scans are: the area a Patrol reading gives and its kind's name, a debris field's name, and where
     // the mission spawner has to put debris for it to land where a ship died.
     internal static class ScienceKinds
     {
@@ -18,6 +18,29 @@ namespace StbcRevival.Science
                 default: return null;
             }
         }
+
+        // A reading's kind as the crew is told it ("Graviton stream analysed: ..."), as Patrol's Discoveries name them.
+        public static string ReadingName(int kind)
+        {
+            switch (kind)
+            {
+                case 0: return "Protomatter";
+                case 1: return "String fragment";
+                case 2: return "Graviton stream";
+                case 3: return "Verteron pocket";
+                default: return null;
+            }
+        }
+
+        // The kind a reading of this area is (ReadingArea the other way round; each area is one kind).
+        public static int ReadingKind(UpgradeArea area)
+        {
+            for (int k = 0; k < 4; k++) if (ReadingArea(k) == area) return k;
+            return -1;
+        }
+
+        // The name for a reading of this area, or null.
+        public static string ReadingNameFor(UpgradeArea area) { return ReadingName(ReadingKind(area)); }
 
         // The game's teams as ints (Ledger.IsHostileTeam); pirates are 7 and 8.
         public static string Faction(int team)

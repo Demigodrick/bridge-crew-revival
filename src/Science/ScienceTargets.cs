@@ -43,8 +43,11 @@ namespace StbcRevival.Science
         private const int ReadingsPerSite = 3;
         private const float ReadingMin = 6000f, ReadingSpread = 9000f; // metres out from the site (its surface for a body)
         private const float Every = 1f; // the host's loop and everyone's lookups, seconds
+        private const float NoticeFor = 6f; // seconds a notice stays on the objectives panel
+        private const int MaxNotices = 8;   // queued, not yet shown
 
         private sealed class Live { public ScienceTarget Target; public SectorBody Body; public Map.SystemRoot System; }
+        private sealed class Shown { public string Text; public float Until; }
         private struct Death { public Vector3d Position; public int Team; }
 
         // Host
@@ -57,6 +60,8 @@ namespace StbcRevival.Science
         private static FFEMIIJDFMK.LCHKEJBPNEF<EEKAKKNBAIH> onDied; // EventManager.EventDelegate<BodyDiedEvent>, kept
         private static SectorSpawnManager spawnManager;
         private static EGGMAHHMNCE sector; // ISector: bodies by SectorId
+        private static readonly Queue<string> notices = new Queue<string>(); // ScienceSession.Notice, to put on the panel
+        private static readonly List<Shown> shown = new List<Shown>();      // on the panel now
 
         // Everyone: the board's bodies, looked up once a second
         private static readonly List<KeyValuePair<string, SectorBody>> found = new List<KeyValuePair<string, SectorBody>>();
@@ -101,7 +106,8 @@ namespace StbcRevival.Science
 
         // ------------------------------------------------------------------------------------------- host: the loop
         /// <summary>The whole Patrol, on the host: spawns debris where hostile ships died, unspawns what was scanned
-        /// or is out of the ship's system, and keeps the board's list up to date.</summary>
+        /// or is out of the ship's system, keeps the board's list up to date, and shows the console's notices
+        /// (ScienceSession.Notice) on the objectives panel for a few seconds each, as Patrol's other short lines.</summary>
         internal static IEnumerator<Step> DebrisLoop(ObjectiveApi objective, TaskBuilders task, BodyRef player)
         {
             for (;;)
@@ -109,6 +115,7 @@ namespace StbcRevival.Science
                 yield return task.KNMMMJOOBHC.WithTime(Every);
                 if (!ScienceSession.IsHost) continue;
                 Hook();
+                foreach (var step in Notices(task)) yield return step;
                 var system = objective.KALBLMGFNIN;
                 bool changed = DropOutside(system);
                 foreach (string id in liveOrder.ToArray())
@@ -147,7 +154,7 @@ namespace StbcRevival.Science
             if (hooked) return;
             hooked = true;
             ScienceSession.ResolveTarget = id => live.TryGetValue(id, out var l) ? new TargetInfo { Area = l.Target.Area, Team = l.Target.Team } : null;
-            ScienceSession.TargetName = id => live.TryGetValue(id, out var l) ? l.Target.Name : id;
+            ScienceSession.Notice += text => { if (notices.Count < MaxNotices) notices.Enqueue(text); };
             try
             {
                 onDied = OnDied;
@@ -174,7 +181,7 @@ namespace StbcRevival.Science
         {
             if (body == null || body.ALPAOOKFIEE == null) { Plugin.Log.LogWarning("Science console: a target didn't spawn"); return false; }
             string id = IdOf(body);
-            if (sector == null) sector = body.PKGJIOJBMBP;
+            sector = body.PKGJIOJBMBP; // the body's own: never one left from an earlier sector
             if (!ScanBoard.ValidId(id) || live.ContainsKey(id))
             {
                 Plugin.Log.LogWarning("Science console: a target's id " + id + " is taken; unspawned");
@@ -234,12 +241,31 @@ namespace StbcRevival.Science
 
         private static void Publish() => ScienceSession.HostSetTargets(liveOrder);
 
+        // Notices that have had their time come off the panel; new ones go on (one already there just stays longer).
+        private static IEnumerable<Step> Notices(TaskBuilders task)
+        {
+            float now = Time.unscaledTime;
+            List<Shown> over = shown.FindAll(x => now >= x.Until); // taken off first: the list may change while a step runs
+            shown.RemoveAll(x => now >= x.Until);
+            foreach (Shown x in over) yield return task.NECMCDDOFJB.RemoveSubDirective(Missions.PatrolObjective.Directive, x.Text);
+            while (notices.Count > 0)
+            {
+                string text = notices.Dequeue();
+                Shown same = shown.Find(x => x.Text == text);
+                if (same != null) { same.Until = now + NoticeFor; continue; }
+                shown.Add(new Shown { Text = text, Until = now + NoticeFor });
+                yield return task.NECMCDDOFJB.AddSubDirectives(Missions.PatrolObjective.Directive, text);
+            }
+        }
+
         /// <summary>The Patrol or the room ended: nothing is a target any more (the bodies go with the mission).</summary>
         internal static void Forget()
         {
             live.Clear();
             liveOrder.Clear();
             deaths.Clear();
+            notices.Clear();
+            shown.Clear(); // the panel's lines go with the mission
             found.Clear();
             ship = null;
             spawnManager = null;

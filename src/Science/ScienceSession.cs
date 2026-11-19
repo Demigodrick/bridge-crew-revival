@@ -24,12 +24,11 @@ namespace StbcRevival.Science
         private const BindingFlags Static = BindingFlags.Public | BindingFlags.Static;
         private const BindingFlags All = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
 
-        /// <summary>Set by the targets (Task 5): what a target grants. Null until then, so nothing is granted.</summary>
+        /// <summary>Set by the targets (ScienceTargets): what a target grants. Null until then, so nothing is granted.</summary>
         internal static Func<string, TargetInfo> ResolveTarget = null;
-        /// <summary>Set by the targets (Task 5): a target's display name for notices (the id if unset).</summary>
-        internal static Func<string, string> TargetName = null;
 
-        /// <summary>A line to show the whole crew (raised on the host; the game carries it to every console).</summary>
+        /// <summary>A line to show the whole crew (raised on the host): ScienceTargets puts it on the objectives panel
+        /// for a while; it also goes to every console as a message.</summary>
         internal static event Action<string> Notice;
 
         internal static Ledger Ledger { get; private set; } = new Ledger();
@@ -102,6 +101,7 @@ namespace StbcRevival.Science
         {
             Ledger = new Ledger();
             Board = new ScanBoard();
+            readLedger = readBoard = null; // a crewmate reads the room's state again, even if its text is the same as before
             clientClaimant = 0;
             Active = false;
             nextPublish = 0f;
@@ -181,18 +181,17 @@ namespace StbcRevival.Science
             try { info = ResolveTarget?.Invoke(id); }
             catch (Exception e) { WarnOnce("resolve", "Science console: looking up a target: " + e.Message); }
             if (info == null) { WarnOnce("unresolved", "Science console: a scan finished on a target nothing knows (" + id + "); nothing granted"); return; }
-            string name = id;
-            try { name = TargetName?.Invoke(id) ?? id; } catch (Exception) { }
+            // Named by what it is, not by the target's own name ("Graviton stream analysed: shields +5%").
             if (info.Area.HasValue)
             {
                 UpgradeArea a = info.Area.Value;
                 Ledger.AddScan(a);
-                Say(name + " analysed: " + AreaText(a) + " +" + Pct(Ledger.Crew(a)) + "%");
+                Say((ScienceKinds.ReadingNameFor(a) ?? "Reading") + " analysed: " + AreaText(a) + " +" + Pct(Ledger.Crew(a)) + "%");
             }
             else if (Ledger.IsHostileTeam(info.Team))
             {
                 Ledger.AddFactionScan(info.Team);
-                Say(name + " analysed: weak spots +" + Pct(Ledger.CrewVsFaction(info.Team)) + "%");
+                Say(ScienceKinds.DebrisName(info.Team) + " analysed: weak spots +" + Pct(Ledger.CrewVsFaction(info.Team)) + "%");
             }
             else WarnOnce("nogrant", "Science console: " + id + " gives nothing (no area, no hostile team)");
         }
@@ -224,7 +223,7 @@ namespace StbcRevival.Science
                 if (seenRoom != null) { seenRoom = null; ResetRoomState(); }
                 return;
             }
-            string name = room.GetType().GetMethod("get_name", All)?.Invoke(room, null) as string;
+            string name = RoomName(room);
             if (name != seenRoom)
             {
                 if (seenRoom != null) ResetRoomState(); // another room: nothing of the last one carries over
@@ -306,7 +305,20 @@ namespace StbcRevival.Science
 
         // ------------------------------------------------------------------------------------------- Photon
         private static Type Photon => Patches.PhotonNetworkType;
-        private static object Room => Photon?.GetMethod("get_room", Static)?.Invoke(null, null);
+        private static MethodInfo getRoom, getRoomName, getProps;
+        private static Type roomType;
+        private static object Room => (getRoom ?? (getRoom = Photon?.GetMethod("get_room", Static)))?.Invoke(null, null);
+
+        // The room's name and custom properties (their getters looked up once for the room's type).
+        private static void RoomMethods(object room)
+        {
+            if (room.GetType() == roomType) return;
+            roomType = room.GetType();
+            getRoomName = roomType.GetMethod("get_name", All);
+            getProps = roomType.GetMethod("get_customProperties", All);
+        }
+
+        private static string RoomName(object room) { RoomMethods(room); return getRoomName?.Invoke(room, null) as string; }
         private static bool InRoom => GetInRoom?.Invoke(null, null) is bool b && b;
         private static MethodInfo getInRoom;
         private static MethodInfo GetInRoom => getInRoom ?? (getInRoom = Photon?.GetMethod("get_inRoom", Static));
@@ -315,8 +327,11 @@ namespace StbcRevival.Science
 
         private static int MasterActor => ActorOf(Photon?.GetMethod("get_masterClient", Static)?.Invoke(null, null)) ?? -1;
 
-        private static object Prop(object room, string key) =>
-            room.GetType().GetMethod("get_customProperties", All)?.Invoke(room, null) is IDictionary props && props.Contains(key) ? props[key] : null;
+        private static object Prop(object room, string key)
+        {
+            RoomMethods(room);
+            return getProps?.Invoke(room, null) is IDictionary props && props.Contains(key) ? props[key] : null;
+        }
 
         private static void WarnOnce(string kind, string text)
         {

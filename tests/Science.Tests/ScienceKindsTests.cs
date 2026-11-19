@@ -18,6 +18,21 @@ public class ScienceKindsTests
     }
 
     [Theory]
+    [InlineData(0, "Protomatter")] [InlineData(1, "String fragment")]
+    [InlineData(2, "Graviton stream")] [InlineData(3, "Verteron pocket")]
+    public void ReadingName_ByProp_AndByItsArea(int kind, string name)
+    {
+        Assert.Equal(name, ScienceKinds.ReadingName(kind));
+        Assert.Equal(name, ScienceKinds.ReadingNameFor(ScienceKinds.ReadingArea(kind).Value));
+    }
+
+    [Theory] [InlineData(-1)] [InlineData(4)]
+    public void ReadingName_UnknownPropGivesNone(int kind)
+    {
+        Assert.Null(ScienceKinds.ReadingName(kind));
+    }
+
+    [Theory]
     [InlineData(2, "Klingon debris")] [InlineData(4, "Raider debris")] [InlineData(5, "Romulan debris")]
     [InlineData(6, "Borg debris")] [InlineData(7, "Pirate debris")] [InlineData(8, "Pirate debris")] [InlineData(9, "Hostile debris")]
     public void DebrisName_ByTeam(int team, string name)

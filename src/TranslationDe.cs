@@ -143,6 +143,11 @@ namespace StbcRevival
             Add("No targets in range", "Keine Ziele in Reichweite");
             Add("Out of range: helm, close to {0} km", "Außer Reichweite: Steuer, auf {0} km heranfliegen");
             Add("Unidentified reading {0}", "Unbekannte Messung {0}");
+            Add("Protomatter", "Protomaterie");
+            Add("String fragment", "Stringfragment");
+            Add("Graviton stream", "Gravitonstrom");
+            Add("Verteron pocket", "Verteron-Tasche");
+            Add("Reading", "Messung");
             Add("Upgrades: {0}", "Verbesserungen: {0}");
             Add("none", "keine");
             Add("Weapons", "Waffen");

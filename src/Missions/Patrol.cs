@@ -57,7 +57,7 @@ namespace StbcRevival.Missions
     public sealed class PatrolObjective : MissionObjective
     {
         internal const string Title = "PATROL";
-        private const string Directive = "Patrol: carry out Starfleet's assignments";
+        internal const string Directive = "Patrol: carry out Starfleet's assignments"; // the science console's notices go under it too
         private const double RepairRange = 5000;   // metres from a station
         private const float RepairCooldown = 60f;  // seconds between station repairs
         private const double AmbushRange = 10000;  // metres from the freighter when the ambush is sprung
