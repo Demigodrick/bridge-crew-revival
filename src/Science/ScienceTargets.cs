@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using HarmonyLib;
 using Sector;
 using Sector.Spacecraft;
 using UnityEngine;
@@ -268,6 +269,7 @@ namespace StbcRevival.Science
             shown.Clear(); // the panel's lines go with the mission
             found.Clear();
             shrunk.Clear();
+            newborn.Clear();
             ship = null;
             spawnManager = null;
             sector = null;
@@ -324,17 +326,84 @@ namespace StbcRevival.Science
                     if (Gone(body) || !shrunk.Add(body.GetInstanceID())) continue;
                     string name = live.TryGetValue(kv.Key, out var l) ? l.Target.Name : body.ALPAOOKFIEE.BaseName;
                     if (name == null || !name.EndsWith(" debris", StringComparison.Ordinal)) continue;
-                    float own = Size(ship.gameObject), size = Size(body.gameObject);
-                    if (own <= 0f || size <= 0f) { Plugin.Log.LogInfo($"Science console: {name}: no size to go by (it {size:0.#}, ship {own:0.#})"); continue; }
-                    float want = own * 0.5f;
-                    if (size > want) body.transform.localScale *= want / size;
-                    Plugin.Log.LogInfo($"Science console: {name} {size:0.#} across, the ship {own:0.#}: {(size > want ? "shrunk to " + want.ToString("0.#") : "left as it is")}");
+                    if (!Shrink(body, name, true)) continue;
                 }
             }
             catch (Exception e) { Plugin.Log.LogWarning("Science console: shrinking debris: " + e.Message); }
         }
 
         private static readonly HashSet<int> shrunk = new HashSet<int>();
+
+        // Half the ship's size; false when there's nothing to measure yet (it's left for another go).
+        private static bool Shrink(SectorBody body, string name, bool logNoSize)
+        {
+            float own = Size(ship.gameObject), size = Size(body.gameObject);
+            if (own <= 0f || size <= 0f)
+            {
+                if (logNoSize) Plugin.Log.LogInfo($"Science console: {name}: no size to go by (it {size:0.#}, ship {own:0.#})");
+                return false;
+            }
+            float want = own * 0.5f;
+            if (size > want) body.transform.localScale *= want / size;
+            Plugin.Log.LogInfo($"Science console: {name} {size:0.#} across, the ship {own:0.#}: {(size > want ? "shrunk to " + want.ToString("0.#") : "left as it is")}");
+            return true;
+        }
+
+        // ---- debris shrunk on the frame it appears ----
+        // The once-a-second pass above showed it at full size for a second or two; every new sector body is noted as
+        // the game makes it (SectorBody.Awake, on every machine), and the debris prop among them is shrunk on the first
+        // frame it can be measured. The pass above stays as the fallback.
+        private const string DebrisObject = "Debris - SpaceStation 03"; // DebrisPrefab's object name ("...(Clone)")
+        private const float NewbornFor = 5f;
+        private struct Newborn { public SectorBody Body; public float Since; }
+        private static readonly List<Newborn> newborn = new List<Newborn>();
+        private static bool caughtOne;
+
+        internal static void Patch(Harmony harmony)
+        {
+            try
+            {
+                var awake = AccessTools.Method(typeof(SectorBody), "Awake");
+                if (awake == null) { Plugin.Log.LogWarning("Science console: SectorBody.Awake not found: debris is shrunk within a second"); return; }
+                harmony.Patch(awake, postfix: new HarmonyMethod(typeof(ScienceTargets), nameof(Awake_Postfix)));
+            }
+            catch (Exception e) { Plugin.Log.LogWarning("Science console: debris hook: " + e.Message); }
+        }
+
+        private static void Awake_Postfix(SectorBody __instance)
+        {
+            try
+            {
+                if (__instance == null || !ScienceSession.Active) return;
+                if (__instance.gameObject.name.IndexOf(DebrisObject, StringComparison.Ordinal) < 0) return;
+                newborn.Add(new Newborn { Body = __instance, Since = Time.unscaledTime });
+            }
+            catch { }
+        }
+
+        /// <summary>Every frame: debris made since the last frame, shrunk as soon as it can be measured.</summary>
+        internal static void ShrinkNewDebris()
+        {
+            if (newborn.Count == 0) return;
+            if (!ScienceSession.Active) { newborn.Clear(); return; }
+            try
+            {
+                if (Gone(ship)) ship = UnityEngine.Object.FindObjectOfType<PlayerSpacecraft>();
+                if (Gone(ship)) return;
+                float now = Time.unscaledTime;
+                for (int i = newborn.Count - 1; i >= 0; i--)
+                {
+                    var body = newborn[i].Body;
+                    if (body == null || now - newborn[i].Since > NewbornFor) { newborn.RemoveAt(i); continue; }
+                    if (shrunk.Contains(body.GetInstanceID())) { newborn.RemoveAt(i); continue; }
+                    if (!Shrink(body, "debris " + body.gameObject.name, false)) continue;
+                    shrunk.Add(body.GetInstanceID());
+                    newborn.RemoveAt(i);
+                    if (!caughtOne) { caughtOne = true; Plugin.Log.LogInfo("Science console: debris shrunk on the frame it appeared"); }
+                }
+            }
+            catch (Exception e) { newborn.Clear(); Plugin.Log.LogWarning("Science console: shrinking new debris: " + e.Message); }
+        }
 
         // The biggest extent of what's drawn of it (its renderers, but not particle effects).
         private static float Size(GameObject go)

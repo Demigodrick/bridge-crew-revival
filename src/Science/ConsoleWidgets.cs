@@ -248,8 +248,96 @@ namespace StbcRevival
             CutOutside(face);
             Usable(face);
             button.Init(face, label, onPress);
+            FillSlot(face);
             frame.gameObject.SetActive(true);
             return button;
+        }
+
+
+        // ---- Light text ------------------------------------------------------------------------------------------------
+        // A text drawn light on the screen's dark background. Its colour alone isn't enough: a bridge's lettering can
+        // take its colour from a vertex gradient or from its font material's face colour (the Enterprise-D's is dark
+        // LCARS lettering), so those are made white too.
+        internal static readonly Color32 LightText = new Color32(225, 238, 255, 255);
+        private static readonly FieldInfo TmpGradientOn = AccessTools.Field(typeof(TMPro.TMP_Text), "m_enableVertexGradient");
+        private static readonly FieldInfo TmpFaceColor = AccessTools.Field(typeof(TMPro.TMP_Text), "m_faceColor");
+        private static readonly FieldInfo TmpOverrideTags = AccessTools.Field(typeof(TMPro.TMP_Text), "m_overrideHtmlColors");
+        private static bool loggedText;
+
+        internal static void Light(TMPro.TMP_Text tmp)
+        {
+            if (tmp == null) return;
+            try
+            {
+                var graphic = (UnityEngine.UI.Graphic)tmp;
+                var before = graphic.material;
+                if (!loggedText)
+                {
+                    loggedText = true;
+                    Plugin.Log.LogInfo(P + $"text {tmp.name}: colour {graphic.color}, gradient {TmpGradientOn?.GetValue(tmp)}, face {TmpFaceColor?.GetValue(tmp)}, "
+                        + $"material {(before != null ? before.name + " (" + before.shader.name + ")" + (before.HasProperty("_FaceColor") ? " face " + before.GetColor("_FaceColor") : "") : "none")}");
+                }
+                graphic.color = LightText;
+                TmpGradientOn?.SetValue(tmp, false);
+                TmpFaceColor?.SetValue(tmp, new Color32(255, 255, 255, 255));
+                TmpOverrideTags?.SetValue(tmp, true);
+                if (before != null && before.HasProperty("_FaceColor") && before.GetColor("_FaceColor").maxColorComponent < 0.9f)
+                {
+                    var m = new Material(before) { name = before.name + " (science, light)" };
+                    m.SetColor("_FaceColor", Color.white);
+                    graphic.material = m;
+                }
+                graphic.SetAllDirty();
+            }
+            catch (Exception e) { Plugin.Log.LogWarning(P + "light text: " + e.Message); }
+        }
+
+        // ---- A button face that fills its slot ---------------------------------------------------------------------------
+        // Some bridges' buttons (the Enterprise-D's LCARS pills) draw their shape at a fixed spot beside the face rather
+        // than across it, so the copy's shape stood apart from its label and its grab box from both. Pictures lying mostly
+        // outside the face are hidden and a plain button colour fills the face instead; the texts are made light and the
+        // grab boxes cover the face (once the game has made them).
+        internal static readonly Color32 ButtonColour = new Color32(38, 84, 128, 255);
+
+        private static void FillSlot(GameObject face)
+        {
+            if (!(face.transform is RectTransform rect)) return;
+            Rect r = rect.rect;
+            int hidden = 0;
+            var corners = new Vector3[4];
+            foreach (var g in face.GetComponentsInChildren<UnityEngine.UI.Graphic>(true))
+            {
+                if (g == null || g is TMPro.TMP_Text || g is UnityEngine.UI.Text || !g.gameObject.activeSelf) continue;
+                g.rectTransform.GetWorldCorners(corners);
+                float x0 = float.MaxValue, x1 = float.MinValue, y0 = float.MaxValue, y1 = float.MinValue;
+                foreach (var c in corners)
+                {
+                    var t = rect.InverseTransformPoint(c);
+                    x0 = Mathf.Min(x0, t.x); x1 = Mathf.Max(x1, t.x); y0 = Mathf.Min(y0, t.y); y1 = Mathf.Max(y1, t.y);
+                }
+                float area = (x1 - x0) * (y1 - y0);
+                float ox = Mathf.Max(0f, Mathf.Min(x1, r.xMax) - Mathf.Max(x0, r.xMin));
+                float oy = Mathf.Max(0f, Mathf.Min(y1, r.yMax) - Mathf.Max(y0, r.yMin));
+                if (area > 0f && ox * oy < area * 0.5f) { g.gameObject.SetActive(false); hidden++; }
+            }
+            if (hidden > 0)
+            {
+                var back = new GameObject("Science Button Back", typeof(RectTransform));
+                back.layer = face.layer;
+                var br = (RectTransform)back.transform;
+                br.SetParent(rect, false);
+                br.SetAsFirstSibling();
+                Stretch(br);
+                br.localRotation = Quaternion.identity;
+                br.localScale = Vector3.one;
+                var image = back.AddComponent<UnityEngine.UI.Image>();
+                image.color = ButtonColour;
+                image.raycastTarget = false;
+            }
+            foreach (var tmp in face.GetComponentsInChildren<TMPro.TMP_Text>(true)) Light(tmp);
+            foreach (var hand in face.GetComponentsInChildren<HandInteraction>(true))
+                pendingBoxes.Add(new PendingBox { Hand = hand, Track = rect, Fill = true });
+            Plugin.Log.LogInfo(P + $"button: {hidden} picture(s) outside its face hidden{(hidden > 0 ? ", a plain face drawn" : "")}");
         }
 
         /// <summary>
@@ -328,7 +416,7 @@ namespace StbcRevival
             tmp.OIKALDNFGKE = "";             // text
             // Light on the screen's dark background whatever the helm's own text is (the Enterprise-D's is dark LCARS
             // lettering, made to sit on its bright panels).
-            tmp.color = new Color32(225, 238, 255, 255);
+            Light(tmp);
             copy.SetActive(true);
             return tmp;
         }
@@ -546,7 +634,7 @@ namespace StbcRevival
 
         // The game makes a slider's grab boxes in its Awake, which only runs once the screen is shown, so they're fitted
         // when they exist (ScienceScreen.Update calls this every frame).
-        private sealed class PendingBox { public HandInteraction Hand; public RectTransform Track; public float Y, Height; public float Since = -1f; }
+        private sealed class PendingBox { public HandInteraction Hand; public RectTransform Track; public float Y, Height; public bool Fill; public float Since = -1f; }
         private static readonly List<PendingBox> pendingBoxes = new List<PendingBox>();
         private static readonly FieldInfo TriggerScaleField = AccessTools.Field(typeof(HandInteraction), "_triggerScale");
         private static readonly FieldInfo TriggerShapeField = AccessTools.Field(typeof(HandInteraction), "_triggerShape");
@@ -572,8 +660,8 @@ namespace StbcRevival
                 }
                 try
                 {
-                    FitBox(trigger, p.Track, p.Y, p.Height);
-                    FitBox(mouse, p.Track, p.Y, p.Height);
+                    if (p.Fill) { FillBox(trigger, p.Track); FillBox(mouse, p.Track); }
+                    else { FitBox(trigger, p.Track, p.Y, p.Height); FitBox(mouse, p.Track, p.Y, p.Height); }
                     // The game puts the hand trigger back to these every frame on some sliders; keep them in step.
                     // An AutoBox one also resizes its width to its parent's every frame: make it a plain box.
                     if (TriggerShapeField != null && TriggerShapeField.GetValue(p.Hand)?.ToString() == "AutoBox")
@@ -584,6 +672,31 @@ namespace StbcRevival
                 catch (Exception e) { Plugin.Log.LogWarning(P + "slider grab box: " + e.Message); }
                 pendingBoxes.RemoveAt(i);
             }
+        }
+
+        // A grab box (a unit box scaled by its transform, in its parent's space) across the whole of a rectangle, keeping
+        // its depth along the rectangle's facing.
+        private static void FillBox(Transform box, RectTransform rect)
+        {
+            var parent = box.parent;
+            if (parent == null) return;
+            var corners = new Vector3[4];
+            rect.GetWorldCorners(corners);
+            Vector3 min = Vector3.one * float.MaxValue, max = Vector3.one * float.MinValue;
+            foreach (var c in corners) { var t = parent.InverseTransformPoint(c); min = Vector3.Min(min, t); max = Vector3.Max(max, t); }
+            var normal = parent.InverseTransformDirection(rect.forward);
+            int n = 0;
+            for (int i = 1; i < 3; i++) if (Mathf.Abs(normal[i]) > Mathf.Abs(normal[n])) n = i;
+            Vector3 pos = box.localPosition, scale = box.localScale, was = scale;
+            for (int i = 0; i < 3; i++)
+            {
+                if (i == n) continue;
+                pos[i] = (min[i] + max[i]) / 2f;
+                scale[i] = Mathf.Max(max[i] - min[i], 1e-4f) * Mathf.Sign(scale[i] == 0f ? 1f : scale[i]);
+            }
+            box.localPosition = pos;
+            box.localScale = scale;
+            Plugin.Log.LogInfo(P + $"button grab box {box.name}: {was} -> {scale}");
         }
 
         // A grab box (a unit box scaled by its transform) no taller across the track than `height`, centred on the knob's line.

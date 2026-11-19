@@ -210,6 +210,7 @@ namespace StbcRevival.Science
         internal static void Update()
         {
             if (!hooked) { hooked = true; NDIOGIGMPBH.OnEventCall += OnEvent; }
+            ScienceTargets.ShrinkNewDebris();
             float now = Time.unscaledTime;
             bool host = IsHost;
             if (now >= nextActive)
