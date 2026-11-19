@@ -143,7 +143,8 @@ namespace StbcRevival
                     foreach (var native in NativeFiles)
                         if (!File.Exists(NativePath(native))) Plugin.Instance.StartCoroutine(FetchNative(Plugin.Version, native));
                 }
-                // Our ship models (BepInEx/ships) and galaxy file (BepInEx/galaxies): any of this version's that's missing, once a launch.
+                // Our ship models (BepInEx/ships), galaxy file (BepInEx/galaxies) and science console positions
+                // (BepInEx/bridges/science): any of this version's that's missing, once a launch.
                 if (!downloading && !shipsTried)
                 {
                     shipsTried = true;
@@ -275,8 +276,8 @@ namespace StbcRevival
         private const float ShipSeconds = 900f; // a large model on a slow line
         private static string LocalPath(string path) => Path.Combine(Paths.BepInExRootPath, path.Replace('/', Path.DirectorySeparatorChar));
 
-        // A path from SHA256SUMS that's one of ours and safe to write, plain names only: ships/<ship>/<file> or
-        // galaxies/<file>.json.
+        // A path from SHA256SUMS that's one of ours and safe to write, plain names only: ships/<ship>/<file>,
+        // galaxies/<file>.json or bridges/science/<file>.json.
         internal static bool IsAssetPath(string path)
         {
             if (path.Contains("..") || path.Contains("\\")) return false;
@@ -285,6 +286,9 @@ namespace StbcRevival
             foreach (var part in parts) if (part.Length == 0) return false;
             if (parts[0] == "ships") return parts.Length == 3;
             if (parts[0] == "galaxies") return parts.Length == 2 && parts[1].EndsWith(".json", StringComparison.Ordinal);
+            // The science console's positions (BepInEx/bridges/science): the mod's own, never a player's layout files,
+            // which sit one folder up.
+            if (parts[0] == "bridges") return parts.Length == 3 && parts[1] == "science" && parts[2].EndsWith(".json", StringComparison.Ordinal);
             return false;
         }
 

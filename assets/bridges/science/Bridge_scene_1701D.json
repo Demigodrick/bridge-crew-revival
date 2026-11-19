@@ -1,0 +1,41 @@
+{
+  "format": 1,
+  "added": [
+    {
+      "id": "1",
+      "scene": "Bridge_scene_1701D",
+      "level": 21,
+      "path": "/EnvironmentArt/Environment_Static/BridgeTNG_Tony/Consoles",
+      "pivot": [
+        0,
+        51.6262,
+        4.5357
+      ],
+      "move": [
+        0,
+        0,
+        0.0143
+      ],
+      "turn": 0,
+      "scale": 1
+    }
+  ],
+  "screen": {
+    "pivot": [
+      -2.44,
+      51.7662,
+      4.73
+    ],
+    "turn": -22,
+    "tilt": 0,
+    "size": [
+      0.48,
+      0.34
+    ]
+  },
+  "stand": [
+    -2.2242,
+    50.4203,
+    4.1198
+  ]
+}

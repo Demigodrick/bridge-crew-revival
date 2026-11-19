@@ -306,6 +306,9 @@ namespace StbcRevival
             tmp.ACEGMMMIHCN = fontSize;       // fontSize
             tmp.GADKGKMKHCE = false;          // enableWordWrapping
             tmp.OIKALDNFGKE = "";             // text
+            // Light on the screen's dark background whatever the helm's own text is (the Enterprise-D's is dark LCARS
+            // lettering, made to sit on its bright panels).
+            tmp.color = new Color32(225, 238, 255, 255);
             copy.SetActive(true);
             return tmp;
         }
@@ -513,11 +516,54 @@ namespace StbcRevival
                     if (hide) { g.gameObject.SetActive(false); hidden++; }
                 }
                 var hand = copy.GetComponent<HandInteraction>();
-                foreach (var f in new[] { TriggerField, MouseTriggerField })
-                    if (hand != null && f?.GetValue(hand) is Transform box) FitBox(box, track, origin.y, Mathf.Min(row.height, radius * 2.4f));
+                if (hand != null) pendingBoxes.Add(new PendingBox { Hand = hand, Track = track, Y = origin.y, Height = Mathf.Min(row.height, radius * 2.4f) });
+                else Plugin.Log.LogWarning(P + "slider: no hand interaction on the copy, its grab box stays the helm's");
+                FitPendingBoxes();
                 Plugin.Log.LogInfo(P + $"slider: {hidden} picture(s) of the throttle's grip hidden");
             }
             catch (Exception e) { Plugin.Log.LogWarning(P + "slider knob: " + e.Message); }
+        }
+
+        // The game makes a slider's grab boxes in its Awake, which only runs once the screen is shown, so they're fitted
+        // when they exist (ScienceScreen.Update calls this every frame).
+        private sealed class PendingBox { public HandInteraction Hand; public RectTransform Track; public float Y, Height; public float Since = -1f; }
+        private static readonly List<PendingBox> pendingBoxes = new List<PendingBox>();
+        private static readonly FieldInfo TriggerScaleField = AccessTools.Field(typeof(HandInteraction), "_triggerScale");
+        private static readonly FieldInfo TriggerShapeField = AccessTools.Field(typeof(HandInteraction), "_triggerShape");
+        private static readonly FieldInfo TriggerPositionField = AccessTools.Field(typeof(HandInteraction), "_triggerLocalPosition");
+
+        internal static void FitPendingBoxes()
+        {
+            for (int i = pendingBoxes.Count - 1; i >= 0; i--)
+            {
+                var p = pendingBoxes[i];
+                if (p.Hand == null || p.Track == null) { pendingBoxes.RemoveAt(i); continue; }
+                var trigger = TriggerField?.GetValue(p.Hand) as Transform;
+                var mouse = MouseTriggerField?.GetValue(p.Hand) as Transform;
+                if (trigger == null || mouse == null)
+                {
+                    if (p.Since < 0f) p.Since = Time.unscaledTime;
+                    else if (Time.unscaledTime - p.Since > 30f)
+                    {
+                        Plugin.Log.LogWarning(P + $"slider {p.Hand.name}: no grab box after 30 s, it stays the helm's");
+                        pendingBoxes.RemoveAt(i);
+                    }
+                    continue;
+                }
+                try
+                {
+                    FitBox(trigger, p.Track, p.Y, p.Height);
+                    FitBox(mouse, p.Track, p.Y, p.Height);
+                    // The game puts the hand trigger back to these every frame on some sliders; keep them in step.
+                    // An AutoBox one also resizes its width to its parent's every frame: make it a plain box.
+                    if (TriggerShapeField != null && TriggerShapeField.GetValue(p.Hand)?.ToString() == "AutoBox")
+                        TriggerShapeField.SetValue(p.Hand, Enum.Parse(TriggerShapeField.FieldType, "Box"));
+                    TriggerScaleField?.SetValue(p.Hand, trigger.localScale);
+                    TriggerPositionField?.SetValue(p.Hand, trigger.localPosition);
+                }
+                catch (Exception e) { Plugin.Log.LogWarning(P + "slider grab box: " + e.Message); }
+                pendingBoxes.RemoveAt(i);
+            }
         }
 
         // A grab box (a unit box scaled by its transform) no taller across the track than `height`, centred on the knob's line.

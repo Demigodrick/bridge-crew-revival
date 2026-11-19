@@ -36,9 +36,33 @@ namespace StbcRevival.Science
         private static int failures;
         private static float nextTry;
 
+        // An opaque plate just behind the screen. The UI draws see-through, so on a bridge whose console has glowing
+        // art (the Enterprise-D's) that art showed through; a solid surface hides what's behind.
+        private static void SolidBacking(RectTransform canvas, Vector2 units, float metresPerUnit)
+        {
+            var plate = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            plate.name = "Science Screen Backing";
+            var collider = plate.GetComponent<Collider>();
+            if (collider != null) UnityEngine.Object.DestroyImmediate(collider); // nothing to block the hands' or mouse's triggers
+            plate.layer = canvas.gameObject.layer;
+            plate.transform.SetParent(canvas, false);
+            plate.transform.localRotation = Quaternion.identity;
+            plate.transform.localScale = new Vector3(units.x, units.y, 1f);
+            plate.transform.localPosition = new Vector3(0f, 0f, 0.001f / Mathf.Max(metresPerUnit, 1e-6f)); // 1 mm behind the screen
+            var shader = Shader.Find("Unlit/Color") ?? Shader.Find("Unlit/Texture") ?? Shader.Find("Standard");
+            var material = new Material(shader) { name = "Science Screen Backing", color = new Color32(16, 38, 62, 255) };
+            if (shader != null && shader.name == "Standard") { material.SetFloat("_Glossiness", 0f); material.SetFloat("_Metallic", 0f); }
+            var r = plate.GetComponent<MeshRenderer>();
+            r.sharedMaterial = material;
+            r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            r.receiveShadows = false;
+            Plugin.Log.LogInfo(P + $"screen backing: {(shader != null ? shader.name : "no shader")}");
+        }
+
         /// <summary>Every frame: builds the screen when there's an anchor and the console is on, takes it down when not.</summary>
         internal static void Update()
         {
+            ConsoleWidgets.FitPendingBoxes();
             var anchor = SciencePlacement.ScreenAnchor;
             bool want = anchor != null && ScienceSession.Active;
             if (Current != null && (!want || Current.anchor != anchor || Current.root == null))
@@ -111,7 +135,8 @@ namespace StbcRevival.Science
                 var grid = ConsoleWidgets.MakeGrid(canvasRect);
                 gridObject = grid is Component g ? g.gameObject : null;
 
-                Box(canvasRect, "Back", 0f, 0f, 1f, 1f).gameObject.AddComponent<Image>().color = new Color32(7, 20, 34, 240);
+                SolidBacking(canvasRect, new Vector2(Units, height), size.x / Units);
+                Box(canvasRect, "Back", 0f, 0f, 1f, 1f).gameObject.AddComponent<Image>().color = new Color32(16, 38, 62, 255);
                 SetText(ConsoleWidgets.CloneLabel(Box(canvasRect, "Title", 0.03f, 0.9f, 0.5f, 0.98f), TitleFont), Translation.T("SCIENCE"));
                 status = Aligned(ConsoleWidgets.CloneLabel(Box(canvasRect, "Status", 0.5f, 0.9f, 0.97f, 0.98f), BodyFont), "Right");
                 upgrades = ConsoleWidgets.CloneLabel(Box(canvasRect, "Upgrades", 0.03f, 0.02f, 0.97f, 0.09f), BodyFont);
