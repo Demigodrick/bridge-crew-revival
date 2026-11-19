@@ -308,7 +308,12 @@ Check("  Sector.EEKAKKNBAIH (BodyDiedEvent).Died (science: debris)", bodyDied?.G
 Check("  CIFDOFLFGEA (Events).AddListener<T>(FFEMIIJDFMK+LCHKEJBPNEF<T>) (science: debris)", game.GetType("CIFDOFLFGEA")?.GetMethods(PS).FirstOrDefault(m => m.Name == "AddListener" && m.IsGenericMethodDefinition && m.GetParameters() is { Length: 1 } p && p[0].ParameterType.Name.StartsWith("LCHKEJBPNEF") && p[0].ParameterType.DeclaringType?.Name == "FFEMIIJDFMK"));
 var unspawnReason = game.GetType("Sector.JBFDKPHCLFC");
 Check("  SectorSpawnManager.UnspawnBody(SectorBody, JBFDKPHCLFC) + UnspawnReason.Other (science: scanned targets)", unspawnReason?.GetField("Other") != null ? game.GetType("Sector.SectorSpawnManager")?.GetMethod("UnspawnBody", new[] { game.GetType("Sector.SectorBody")!, unspawnReason }) : null);
-Check("  SectorBody.get_guid (FLOBHLBHLLJ) (science: target ids)", game.GetType("Sector.SectorBody")?.GetMethod("get_guid", Inst));
+var sectorBodyT = game.GetType("Sector.SectorBody");
+var sectorIdT = game.GetType("Sector.CFOKIEECCHC");
+Check("  SectorBody.get_id -> SectorId (CFOKIEECCHC) with .value and ctor(int) (science: target ids)", sectorBodyT?.GetMethod("get_id", Inst)?.ReturnType == sectorIdT && sectorIdT?.GetField("value", Inst) != null ? sectorIdT.GetConstructor(new[] { mlc.CoreAssembly!.GetType("System.Int32")! }) : null);
+Check("  SectorBody.get_sector -> ISector (EGGMAHHMNCE) (science: finding targets)", sectorBodyT?.GetMethod("get_sector", Inst)?.ReturnType == game.GetType("Sector.EGGMAHHMNCE") ? sectorBodyT : null);
+Check("  ISector.GetBodyWithID<T>(SectorId) (science: finding targets)", game.GetType("Sector.EGGMAHHMNCE")?.GetMethods(Inst).FirstOrDefault(m => m.Name == "GetBodyWithID" && m.IsGenericMethodDefinition && m.GetParameters() is { Length: 1 } p && p[0].ParameterType == sectorIdT));
+Check("  AgentShip.get_IsDestroyed (HAFBKMDMMIO) (science: debris only from deaths)", game.GetType("AI.AgentShip")?.GetMethod("get_IsDestroyed", Inst));
 Check("  SystemTransform.get_Forward (science: debris bearing)", game.GetType("SystemTransform")?.GetMethod("get_Forward", Inst));
 // Host hand-off
 Check("  NetworkStatus.SetError(error, popup, ...) (hand-off: no popup for failed regroup joins)",

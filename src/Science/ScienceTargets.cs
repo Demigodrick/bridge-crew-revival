@@ -11,7 +11,8 @@ using TaskBuilders = Mission.Scripting.Framework.Tasks.FNICGFPIEOL; // MissionOb
 
 namespace StbcRevival.Science
 {
-    /// <summary>A thing the science console can scan. Id is the body's guid, the same on every machine.</summary>
+    /// <summary>A thing the science console can scan. Id is the body's SectorId (SectorBody.id.value), the same on every
+    /// machine (the game's own RPCs name bodies by it; SectorBody.guid is the prefab's, shared by every copy).</summary>
     internal sealed class ScienceTarget
     {
         public string Id;
@@ -54,6 +55,7 @@ namespace StbcRevival.Science
         private static bool hooked;
         private static FFEMIIJDFMK.LCHKEJBPNEF<EEKAKKNBAIH> onDied; // EventManager.EventDelegate<BodyDiedEvent>, kept
         private static SectorSpawnManager spawnManager;
+        private static EGGMAHHMNCE sector; // ISector: bodies by SectorId
 
         // Everyone: the board's bodies, looked up once a second
         private static readonly List<KeyValuePair<string, SectorBody>> found = new List<KeyValuePair<string, SectorBody>>();
@@ -71,11 +73,12 @@ namespace StbcRevival.Science
             var bodies = new List<BodyRef>();
             var kinds = new List<int>();
             float angle = random.Next(0, 360);
-            for (int i = 0; i < ReadingsPerSite; i++)
+            int count = Math.Min(ReadingsPerSite, ScanBoard.MaxTargets - live.Count);
+            for (int i = 0; i < count; i++)
             {
                 var body = new BodyRef();
                 int kind = random.Next(Missions.PatrolObjective.Scannables.Length);
-                angle += 360f / ReadingsPerSite + random.Next(-25, 25);
+                angle += 360f / count + random.Next(-25, 25);
                 float distance = ReadingMin + (float)random.NextDouble() * ReadingSpread;
                 if (site != player) distance = Missions.PatrolObjective.OffSurface(site, distance);
                 yield return task.BFMBGDIDKEI.UsingSpawner(objective.MNKGANNGIKK.WithPrefab(Missions.PatrolObjective.Scannables[kind]).InSystem(system)
@@ -84,10 +87,15 @@ namespace StbcRevival.Science
                 bodies.Add(body);
                 kinds.Add(kind);
             }
-            yield return task.KNMMMJOOBHC.WithTime(1f); // fully in, with their guids
+            yield return task.KNMMMJOOBHC.WithTime(1f); // fully in, with their ids
+            var ids = new List<string>();
             for (int i = 0; i < bodies.Count; i++)
-                Add(bodies[i].AHMPFHDGMKJ as SectorBody, system, ScienceKinds.ReadingArea(kinds[i]), 0);
+            {
+                var sb = bodies[i].AHMPFHDGMKJ as SectorBody;
+                if (Add(sb, system, ScienceKinds.ReadingArea(kinds[i]), 0)) ids.Add(IdOf(sb) + " " + ScienceKinds.ReadingArea(kinds[i]));
+            }
             Publish();
+            Plugin.Log.LogInfo($"Science console: {ids.Count} of {count} readings, ids {string.Join(", ", ids.ToArray())}");
         }
 
         // ------------------------------------------------------------------------------------------- host: the loop
@@ -153,6 +161,7 @@ namespace StbcRevival.Science
             try
             {
                 if (!ScienceSession.Active || !ScienceSession.IsHost || !(e?.Died is AI.AgentShip dead)) return;
+                if (!dead.HAFBKMDMMIO) return; // IsDestroyed: a death, not a scripted despawn
                 int team = dead.GetTargetInfo() is TargetInfoComponent info ? (int)info.DGGJOECIFAF : 0;
                 if (!Ledger.IsHostileTeam(team) || dead.ALPAOOKFIEE == null) return;
                 if (deaths.Count < ScanBoard.MaxTargets) deaths.Enqueue(new Death { Position = dead.ALPAOOKFIEE.Position, Team = team });
@@ -163,8 +172,14 @@ namespace StbcRevival.Science
         private static bool Add(SectorBody body, Map.SystemRoot system, UpgradeArea? area, int team, string name = null)
         {
             if (body == null || body.ALPAOOKFIEE == null) { Plugin.Log.LogWarning("Science console: a target didn't spawn"); return false; }
-            string id = body.FLOBHLBHLLJ.ToString();
-            if (!ScanBoard.ValidId(id) || live.ContainsKey(id)) return false;
+            string id = IdOf(body);
+            if (sector == null) sector = body.PKGJIOJBMBP;
+            if (!ScanBoard.ValidId(id) || live.ContainsKey(id))
+            {
+                Plugin.Log.LogWarning("Science console: a target's id " + id + " is taken; unspawned");
+                Unspawn(body); // not left behind untracked
+                return false;
+            }
             live[id] = new Live
             {
                 Body = body, System = system,
@@ -188,7 +203,11 @@ namespace StbcRevival.Science
             var body = live[id].Body;
             live.Remove(id);
             liveOrder.Remove(id);
-            if (!Is(body, id)) return; // already gone (or its pooled object reused)
+            if (Is(body, id)) Unspawn(body); // else already gone (or its id now names another body)
+        }
+
+        private static void Unspawn(SectorBody body)
+        {
             try
             {
                 if (spawnManager == null) spawnManager = UnityEngine.Object.FindObjectOfType<SectorSpawnManager>();
@@ -199,8 +218,18 @@ namespace StbcRevival.Science
 
         private static bool Gone(SectorBody body) => body == null || body.ALPAOOKFIEE == null;
 
-        // Still that target: there, and not a pooled object the spawner has since reused for another body.
-        private static bool Is(SectorBody body, string id) => !Gone(body) && body.FLOBHLBHLLJ.ToString() == id;
+        private static string IdOf(SectorBody body) => body.CDLFNBGDJIB.value.ToString(System.Globalization.CultureInfo.InvariantCulture); // id (SectorId)
+
+        // The body the sector has registered under this id now, or null (unspawned bodies are taken out of it).
+        private static SectorBody Find(string id)
+        {
+            if (sector == null || !int.TryParse(id, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out int v)) return null;
+            var body = sector.GetBodyWithID<SectorBody>(new CFOKIEECCHC(v)); // SectorId
+            return Gone(body) ? null : body;
+        }
+
+        // Still that target: the sector still has this very body under its id (not unspawned, its id not reused).
+        private static bool Is(SectorBody body, string id) => !Gone(body) && Find(id) == body;
 
         private static void Publish() => ScienceSession.HostSetTargets(liveOrder);
 
@@ -213,6 +242,7 @@ namespace StbcRevival.Science
             found.Clear();
             ship = null;
             spawnManager = null;
+            sector = null;
             nextLookup = 0f;
         }
 
@@ -247,27 +277,18 @@ namespace StbcRevival.Science
             return result;
         }
 
-        // Once a second: the board's ids matched to bodies (the host's own, else a search of the scene by guid, only
-        // when one isn't known yet), and the ship.
+        // Once a second: the board's ids matched to bodies (the host's own, else the sector's by SectorId), and the ship.
         private static void Lookup()
         {
             float now = Time.unscaledTime;
             if (now < nextLookup) return;
             nextLookup = now + Every;
             if (Gone(ship)) ship = UnityEngine.Object.FindObjectOfType<PlayerSpacecraft>();
-            var known = new Dictionary<string, SectorBody>();
-            foreach (var kv in found) if (Is(kv.Value, kv.Key)) known[kv.Key] = kv.Value;
+            if (!Gone(ship)) sector = ship.PKGJIOJBMBP;
             found.Clear();
-            SectorBody[] scene = null;
             foreach (string id in ScienceSession.Board.Ids())
             {
-                SectorBody body;
-                if (live.TryGetValue(id, out var l)) body = l.Body;
-                else if (!known.TryGetValue(id, out body))
-                {
-                    scene = scene ?? UnityEngine.Object.FindObjectsOfType<SectorBody>();
-                    body = Array.Find(scene, b => Is(b, id));
-                }
+                SectorBody body = live.TryGetValue(id, out var l) ? l.Body : Find(id);
                 if (Is(body, id)) found.Add(new KeyValuePair<string, SectorBody>(id, body));
             }
         }

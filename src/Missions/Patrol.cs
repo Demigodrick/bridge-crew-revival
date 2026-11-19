@@ -108,7 +108,7 @@ namespace StbcRevival.Missions
 
         private IEnumerator<Step> Patrol()
         {
-            if (StbcRevival.Science.ScienceSession.Ledger.On) // the science console's targets, for the whole patrol
+            if (StbcRevival.Science.ScienceSession.Ledger.On) // the console is on for this patrol: its targets' loop, for the whole patrol (it checks Active itself)
             {
                 Objective.AddStep("science targets", Task.MFLJBKCDBMC.WithSubtaskCoroutine(() => StbcRevival.Science.ScienceTargets.DebrisLoop(Objective, Task, player)));
                 yield return Task.KKALNAMJCNH.WithName("science targets");
