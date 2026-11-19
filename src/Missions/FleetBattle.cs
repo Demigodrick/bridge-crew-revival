@@ -15,8 +15,9 @@ namespace StbcRevival.Missions
     /// <summary>
     /// Fleet Battle (Revival Missions): a Starfleet fleet and yours against a Klingon or Romulan fleet,
     /// [Revival] FleetBattleSize ships a side (30 by default). Allies form up around you, the enemy arrives
-    /// ahead: every ally is ordered to attack an enemy ship, and the enemy hunts in packs of five (one ship in
-    /// eight comes for you), sending a third as many again as reinforcements when it's down to half, up to twice;
+    /// ahead: every ally is ordered to attack an enemy ship, and the enemy picks its own targets (the game's
+    /// own aggro: whatever's in range, and what hits it), sending a third as many again as reinforcements when
+    /// it's down to half, up to twice;
     /// Starfleet sends five of its own as they arrive. Your ship takes 40% less damage
     /// (FleetBattleArmor).
     /// The allied fleet arrives a little battle-worn (85% hull). Won when
@@ -96,12 +97,12 @@ namespace StbcRevival.Missions
 
             // Balance (from the logged hull and shields: with fire spread over thirty ships no allied shield
             // ever broke): allied ships can be destroyed (some Starfleet ships spawn invulnerable, as mission
-            // allies) and have weak shields; the enemy fleet has strong ones and hunts in packs (see EnemyTarget),
-            // and sends reinforcements when it's down to half.
+            // allies) and have weak shields; the enemy fleet has strong ones, picks its own targets, and sends
+            // reinforcements when it's down to half.
             foreach (var step in ReadyAllies(allies)) yield return step;
 
             var enemies = new List<BodyRef>();
-            foreach (var step in SpawnEnemies(size, empire, enemies, allies)) yield return step;
+            foreach (var step in SpawnEnemies(size, empire, enemies)) yield return step;
             foreach (var ally in allies)
                 yield return Task.NDFEDBHFGFB.TellAI(ally).ToAddObjectives(enemies[random.Next(enemies.Count)]).OfObjectiveType(AIObjective.Attack);
             int reinforcements = 0;
@@ -123,14 +124,11 @@ namespace StbcRevival.Missions
                     Plugin.Log.LogInfo($"Fleet battle: enemies {Condition(liveEnemies)}; allies {Condition(liveAllies)}");
                 if (liveEnemies.Count == enemiesLeft && liveAllies.Count == alliesLeft) continue;
 
-                // Ships whose target died go after a survivor (re-ordering everyone is cheap and keeps it simple).
+                // Allies whose target died go after a survivor (re-ordering everyone is cheap and keeps it simple);
+                // the enemy finds its own.
                 if (liveEnemies.Count < enemiesLeft && liveEnemies.Count > 0)
                     foreach (var ally in liveAllies)
                         yield return Task.NDFEDBHFGFB.TellAI(ally).ToAddObjectives(liveEnemies[random.Next(liveEnemies.Count)]).OfObjectiveType(AIObjective.Attack);
-                if (liveAllies.Count < alliesLeft)
-                    for (int i = 0; i < liveEnemies.Count; i++)
-                        yield return Task.NDFEDBHFGFB.TellAI(liveEnemies[i]).ToAddObjectives(EnemyTarget(i, liveAllies))
-                            .OfObjectiveType(AIObjective.Attack);
 
                 // Reinforcements whenever the enemy is down to half, up to twice: a third as many again each time,
                 // warping in ahead (half was too many).
@@ -144,7 +142,7 @@ namespace StbcRevival.Missions
                     int extra = Math.Max(1, size / 3);
                     Plugin.Log.LogInfo($"Fleet battle: {extra} enemy reinforcements");
                     var more = new List<BodyRef>();
-                    foreach (var step in SpawnEnemies(extra, empire, more, liveAllies.Count > 0 ? liveAllies : allies)) yield return step;
+                    foreach (var step in SpawnEnemies(extra, empire, more)) yield return step;
                     enemies.AddRange(more);
                     liveEnemies.AddRange(more);
                     foreach (var ship in more) spawnedAt[ship] = UnityEngine.Time.time;
@@ -208,9 +206,10 @@ namespace StbcRevival.Missions
             }
         }
 
-        // Enemy ships at the far side of the field, facing you, with strong shields and their orders; a flagship
-        // among them for every six ships.
-        private IEnumerable<Step> SpawnEnemies(int count, int empire, List<BodyRef> into, List<BodyRef> allies)
+        // Enemy ships at the far side of the field, facing you, with strong shields; a flagship among them for every
+        // six ships. No orders: they pick their targets as the game's AI does (everything is inside their 40 km aggro
+        // radius), so whoever's near or shooting at them.
+        private IEnumerable<Step> SpawnEnemies(int count, int empire, List<BodyRef> into)
         {
             int first = enemyCount;
             for (int i = 0; i < count; i++)
@@ -223,17 +222,9 @@ namespace StbcRevival.Missions
                 yield return Task.BFMBGDIDKEI.UsingSpawner(MakeSpawner(prefab, EnemyNames[empire], enemyCount++, Tag.Enemy))
                     .AtAngleAndDistanceFromBody(player, angle, distance).FaceOtherBody(player).OutputTo(ship);
             }
-            for (int i = 0; i < into.Count; i++)
-            {
-                yield return Task.OFNIKPPKOGI.TellAI(into[i]).ToSetShieldStrength(AI.IDCAFFBNKFO.Strong);
-                yield return Task.NDFEDBHFGFB.TellAI(into[i]).ToAddObjectives(EnemyTarget(first + i, allies)).OfObjectiveType(AIObjective.Attack);
-            }
+            foreach (var ship in into)
+                yield return Task.OFNIKPPKOGI.TellAI(ship).ToSetShieldStrength(AI.IDCAFFBNKFO.Strong);
         }
-
-        // Enemies hunt in packs of five, each pack on one allied ship, so shields actually break; one ship in
-        // eight comes for the player instead (one in six was too many).
-        private BodyRef EnemyTarget(int index, List<BodyRef> allies) =>
-            allies.Count == 0 || index % 8 == 0 ? player : allies[(index / 5) % allies.Count];
 
         // When each ship appeared: a ship counts as alive for its first seconds, before its body is set.
         private readonly Dictionary<BodyRef, float> spawnedAt = new Dictionary<BodyRef, float>();
