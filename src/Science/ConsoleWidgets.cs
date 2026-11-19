@@ -66,6 +66,26 @@ namespace StbcRevival
         internal static GameObject ImpulseButton(ConsoleHelm helm) =>
             ModeRoot(helm, "_impulseButton", "_systemToggle", "_localButton", "_warpButton");
 
+        /// <summary>
+        /// The button the science screen copies: the helm's IMPULSE button, or, on a helm that doesn't link one (the
+        /// original series Enterprise's, whose map views are physical buttons), the SYSTEM tab of the touch panel it
+        /// keeps switched off (TouchPanelCanvas/BasePanel/Mode Buttons/System: the same kind of button as the Aegis's).
+        /// </summary>
+        internal static GameObject SourceButton(ConsoleHelm helm)
+        {
+            var impulse = ImpulseButton(helm);
+            if (impulse != null) return impulse;
+            GameObject any = null;
+            foreach (var h in helm.GetComponentsInChildren<HandInteraction>(true))
+            {
+                var parent = h.transform.parent;
+                if (parent == null || parent.name != "Mode Buttons") continue;
+                if (h.name == "System") return h.gameObject;
+                if (any == null) any = h.gameObject;
+            }
+            return any;
+        }
+
         internal static Transform Common(Transform a, Transform b)
         {
             for (var t = a; t != null; t = t.parent)
@@ -212,7 +232,7 @@ namespace StbcRevival
         internal static ConsoleButton CloneButton(Transform parent, string label, Action onPress, UnityEngine.Object grid = null)
         {
             var helm = FindHelm();
-            var source = helm != null ? ImpulseButton(helm) : null;
+            var source = helm != null ? SourceButton(helm) : null;
             if (source == null) throw new InvalidOperationException("the helm's IMPULSE button wasn't found");
             var frame = Frame(parent, "Science Button");
             var slot = (RectTransform)parent;
@@ -288,7 +308,7 @@ namespace StbcRevival
         internal static TMPro.TMP_Text CloneLabel(Transform parent, float fontSize)
         {
             var helm = FindHelm();
-            var button = helm != null ? ImpulseButton(helm) : null;
+            var button = helm != null ? SourceButton(helm) : null;
             var source = button != null ? button.GetComponentInChildren<TMPro.TMP_Text>(true) : null;
             if (source == null) throw new InvalidOperationException("the IMPULSE button's text wasn't found");
             var copy = UnityEngine.Object.Instantiate(source.gameObject, parent, false) as GameObject;
@@ -323,7 +343,7 @@ namespace StbcRevival
         internal static UnityEngine.Object MakeGrid(RectTransform screen)
         {
             var helm = FindHelm();
-            var button = helm != null ? ImpulseButton(helm) : null;
+            var button = helm != null ? SourceButton(helm) : null;
             var hand = button != null ? button.GetComponentInChildren<HandInteraction>(true) : null;
             var gridField = AccessTools.Field(typeof(HandInteraction), "_grid");
             var source = hand != null ? gridField?.GetValue(hand) as Component : null;

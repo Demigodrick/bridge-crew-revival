@@ -320,12 +320,14 @@ namespace StbcRevival
             BridgeLights.Start(lights, scene);
             if (layout.Count == 0) return;
             var byPath = Index();
+            Dictionary<string, List<Transform>> everywhere = null; // every loaded scene's objects, if needed
             int on = 0, missing = 0, refused = 0;
             foreach (var p in layout)
             {
                 var c = new Change { Path = p.Path, Pivot = p.Pivot, Move = p.Move, Turn = p.Turn, Hidden = p.Hidden, Light = p.Light };
                 var t = Resolve(byPath, c.Path, c.Pivot);
-                if (t == null) { missing++; Plugin.Log.LogInfo($"Bridge layout: {c.Path} isn't in this bridge"); continue; }
+                if (t == null) t = ResolveMoved(ref everywhere, c.Path, c.Pivot);
+                if (t == null) { missing++; Plugin.Log.LogInfo($"Bridge layout: {c.Path} isn't in this bridge{Lookalikes(ref everywhere, c.Path)}"); continue; }
                 string why = StationProblem(t);
                 if (why != null) { refused++; Plugin.Log.LogInfo($"Bridge layout: {c.Path} {why}: left out"); continue; }
                 if (c.Hidden && t.GetComponentInChildren<NovaStation>(true) != null) { c.Hidden = false; Plugin.Log.LogInfo($"Bridge layout: {c.Path} is a station: it can move, not hide"); }
@@ -393,6 +395,72 @@ namespace StbcRevival
             }
             foreach (var root in scene.GetRootGameObjects()) Go(root.transform);
             return map;
+        }
+
+        // Every loaded scene's objects by path (our own copies left out).
+        private static Dictionary<string, List<Transform>> IndexAll()
+        {
+            var map = new Dictionary<string, List<Transform>>();
+            void Go(Transform t)
+            {
+                if (t.name == CopyName) return;
+                string p = Walking.Bridge.Path(t);
+                if (!map.TryGetValue(p, out var l)) map[p] = l = new List<Transform>();
+                l.Add(t);
+                foreach (Transform c in t) Go(c);
+            }
+            for (int i = 0; i < SceneManager.sceneCount; i++)
+            {
+                var s = SceneManager.GetSceneAt(i);
+                if (s.isLoaded) foreach (var root in s.GetRootGameObjects()) Go(root.transform);
+            }
+            return map;
+        }
+
+        /// <summary>The path without its top object ("/Bridge_Visual/Art/Walls" for "/BridgeFunctional/Bridge_Visual/Art/Walls").</summary>
+        internal static string BelowTop(string path)
+        {
+            int i = path.IndexOf('/', 1);
+            return i < 0 ? null : path.Substring(i);
+        }
+
+        /// <summary>
+        /// An object the game has put somewhere else since the bridge's file: its top object renamed (the original
+        /// series Enterprise's BridgeFunctional is Bridge in the game), or put under another object, or into another
+        /// loaded scene. One whose path is the file's below its top object, or ends with the file's; nearest the pivot.
+        /// Logged where it was found.
+        /// </summary>
+        private static Transform ResolveMoved(ref Dictionary<string, List<Transform>> everywhere, string path, Vector3 pivot)
+        {
+            if (everywhere == null) everywhere = IndexAll();
+            Transform best = null;
+            string at = null;
+            float bestD = float.MaxValue;
+            string below = BelowTop(path);
+            foreach (var kv in everywhere)
+            {
+                bool renamed = below != null && below.Length > 1 && BelowTop(kv.Key) == below;
+                bool under = kv.Key.Length > path.Length && kv.Key.EndsWith(path, StringComparison.Ordinal);
+                if (!renamed && !under) continue;
+                foreach (var t in kv.Value)
+                {
+                    float d = (Middle(t) - pivot).sqrMagnitude;
+                    if (d < bestD) { bestD = d; best = t; at = kv.Key; }
+                }
+            }
+            if (best != null) Plugin.Log.LogInfo($"Bridge layout: {path} is at {at} in {best.gameObject.scene.name} in the game");
+            return best;
+        }
+
+        // For a path not found: where objects of its name are, if any (to see how the game has it).
+        private static string Lookalikes(ref Dictionary<string, List<Transform>> everywhere, string path)
+        {
+            if (everywhere == null) everywhere = IndexAll();
+            string name = "/" + path.Substring(path.LastIndexOf('/') + 1);
+            var found = new List<string>();
+            foreach (var key in everywhere.Keys)
+                if (key.EndsWith(name, StringComparison.Ordinal) && found.Count < 4) found.Add(key);
+            return found.Count == 0 ? $" (nothing named {name.Substring(1)} is loaded)" : $" (objects of its name: {string.Join(", ", found.ToArray())})";
         }
 
         private static Transform Resolve(Dictionary<string, List<Transform>> byPath, string path, Vector3 pivot)
@@ -645,15 +713,19 @@ namespace StbcRevival
                 seatsDone.Add(seat.GetInstanceID());
                 Vector3 at = chair.bounds.center;
                 Change by = null;
-                float best = 0.6f;
+                float best = 0.6f, bestSize = float.MaxValue;
                 foreach (var c in changes)
                 {
-                    if (!c.HasBounds || !c.Moved || c.T == null) continue;
-                    // Where the piece was: the NPC's chair inside it, seen from above.
+                    // A hidden piece takes no one with it (nobody sits in what isn't there).
+                    if (!c.HasBounds || !c.Moved || c.Hidden || c.T == null) continue;
+                    // Where the piece was: the NPC's chair inside it, seen from above. Of pieces it's as near to, the
+                    // smallest: a chair, not the walls around the whole bridge.
                     Vector3 middle = c.BaseBounds.center, half = c.BaseBounds.extents;
                     float dx = Mathf.Max(0f, Mathf.Abs(at.x - middle.x) - half.x), dz = Mathf.Max(0f, Mathf.Abs(at.z - middle.z) - half.z);
                     float d = Mathf.Sqrt(dx * dx + dz * dz);
-                    if (d < best && Mathf.Abs(at.y - middle.y) < 1.5f) { best = d; by = c; }
+                    float size = half.x * half.z;
+                    if (Mathf.Abs(at.y - middle.y) >= 1.5f || d >= 0.6f) continue;
+                    if (d < best - 0.01f || (d <= best + 0.01f && size < bestSize)) { best = d; bestSize = size; by = c; }
                 }
                 if (by == null) continue;
                 var t = seat.transform;
@@ -702,6 +774,7 @@ namespace StbcRevival
         }
 
         private static readonly Dictionary<string, List<Piece>> byPath = new Dictionary<string, List<Piece>>();
+        private static readonly Dictionary<string, List<Piece>> byPathBelowTop = new Dictionary<string, List<Piece>>(); // the game may rename a top object
         private static readonly Dictionary<long, MeshAsset> meshes = new Dictionary<long, MeshAsset>();
         private static readonly HashSet<long> wanted = new HashSet<long>();
         private static int scene = -1;
@@ -718,7 +791,7 @@ namespace StbcRevival
             scene = buildIndex;
             done = false;
             Error = null;
-            lock (meshes) { byPath.Clear(); meshes.Clear(); wanted.Clear(); }
+            lock (meshes) { byPath.Clear(); byPathBelowTop.Clear(); meshes.Clear(); wanted.Clear(); }
             file = Path.Combine(Application.dataPath, "level" + buildIndex);
             reading = true;
             string path = file;
@@ -783,6 +856,12 @@ namespace StbcRevival
                     {
                         if (!byPath.TryGetValue(p, out var l)) byPath[p] = l = new List<Piece>();
                         l.Add(piece);
+                        string below = BridgeLayout.BelowTop(p);
+                        if (below != null)
+                        {
+                            if (!byPathBelowTop.TryGetValue(below, out var lb)) byPathBelowTop[below] = lb = new List<Piece>();
+                            lb.Add(piece);
+                        }
                     }
                     count++;
                 }
@@ -792,7 +871,13 @@ namespace StbcRevival
 
         internal static List<Piece> At(string path)
         {
-            lock (meshes) return byPath.TryGetValue(path, out var l) ? l : null;
+            lock (meshes)
+            {
+                if (byPath.TryGetValue(path, out var l)) return l;
+                // The game renamed its top object: the same object below it.
+                string below = BridgeLayout.BelowTop(path);
+                return below != null && byPathBelowTop.TryGetValue(below, out var lb) ? lb : null;
+            }
         }
 
         /// <summary>Whether a combined mesh is read; if not, it's asked for.</summary>
