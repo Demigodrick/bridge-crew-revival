@@ -126,7 +126,8 @@ namespace StbcRevival
                 var netCoreInstance = netCore?.GetFields(All).FirstOrDefault(f => f.IsStatic && f.FieldType == netCore)?.GetValue(null);
                 var connecting = netCoreInstance == null ? "?" : netCore.GetMethod("IsConnecting", All)?.Invoke(netCoreInstance, null)?.ToString();
 
-                var status = AccessTools.TypeByName("SVR.Network.NetworkStatus");
+                // NetworkStatus reads NetworkCore's instance, which isn't made for the first frames: not asked until then.
+                var status = netCoreInstance == null ? null : AccessTools.TypeByName("SVR.Network.NetworkStatus");
                 var scenes = string.Join(",", Enumerable.Range(0, SceneManager.sceneCount).Select(i => SceneManager.GetSceneAt(i).name).ToArray());
 
                 var line = $"phase={phase} scenes=[{scenes}] loading={Get(AccessTools.TypeByName("NetworkLoadLevel"), "IsCurrentlyLoading")} " +
@@ -142,7 +143,7 @@ namespace StbcRevival
             }
             catch (Exception e)
             {
-                Plugin.Log.LogWarning("[diag] heartbeat failed: " + e.Message);
+                Plugin.Log.LogWarning("[diag] heartbeat failed: " + (e is TargetInvocationException && e.InnerException != null ? e.InnerException : e).Message);
             }
         }
     }
