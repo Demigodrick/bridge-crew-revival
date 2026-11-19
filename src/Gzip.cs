@@ -44,7 +44,7 @@ namespace StbcRevival
             if ((flags & 16) != 0) pos = SkipZero(gz, pos); // FCOMMENT
             if ((flags & 2) != 0) pos += 2; // FHCRC
             Need(gz, pos);
-            var inflater = new Inflater(gz, pos, maxBytes);
+            var inflater = new Inflater(gz, pos, maxBytes, 0);
             var data = inflater.Run();
             int end = inflater.BytePos;
             Need(gz, end + 8);
@@ -53,12 +53,24 @@ namespace StbcRevival
             return data;
         }
 
+        /// <summary>
+        /// Raw deflate data (a zip entry's) from src[pos], unpacking to exactly size bytes; InvalidDataException if
+        /// it's bad or unpacks to any other size.
+        /// </summary>
+        internal static byte[] Inflate(byte[] src, int pos, int size)
+        {
+            var data = new Inflater(src, pos, size, size).Run();
+            if (data.Length != size) throw new InvalidDataException("deflate data unpacks to the wrong size");
+            return data;
+        }
+
         private sealed class Inflater
         {
             private readonly byte[] src;
             private readonly int maxBytes;
             private int pos, bitBuf, bitCount;
-            private readonly List<byte> outp = new List<byte>();
+            private byte[] outp;
+            private int count;
 
             private static readonly int[] LenBase = { 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 19, 23, 27, 31, 35, 43, 51, 59, 67, 83, 99, 115, 131, 163, 195, 227, 258 };
             private static readonly int[] LenExtra = { 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 0 };
@@ -66,7 +78,12 @@ namespace StbcRevival
             private static readonly int[] DistExtra = { 0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13 };
             private static readonly int[] CodeOrder = { 16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15 };
 
-            internal Inflater(byte[] src, int pos, int maxBytes) { this.src = src; this.pos = pos; this.maxBytes = maxBytes; }
+            // size: the expected output, when known (a zip entry), so the buffer is the right size from the start.
+            internal Inflater(byte[] src, int pos, int maxBytes, int size)
+            {
+                this.src = src; this.pos = pos; this.maxBytes = maxBytes;
+                outp = new byte[size > 0 ? size : Math.Min(maxBytes, Math.Max(1024, src.Length * 4))];
+            }
 
             /// <summary>The byte after the deflate data (the gzip trailer's start).</summary>
             internal int BytePos => pos;
@@ -84,7 +101,10 @@ namespace StbcRevival
                     else throw new InvalidDataException("bad deflate block");
                 } while (!last);
                 bitBuf = 0; bitCount = 0; // the rest of the last byte is padding
-                return outp.ToArray();
+                if (count == outp.Length) return outp;
+                var result = new byte[count];
+                Buffer.BlockCopy(outp, 0, result, 0, count);
+                return result;
             }
 
             private int Bits(int n)
@@ -102,8 +122,14 @@ namespace StbcRevival
 
             private void Put(byte b)
             {
-                if (outp.Count >= maxBytes) throw new InvalidDataException("unpacks too big");
-                outp.Add(b);
+                if (count == outp.Length)
+                {
+                    if (count >= maxBytes) throw new InvalidDataException("unpacks too big");
+                    var bigger = new byte[(int)Math.Min(maxBytes, Math.Max(1024L, count * 2L))];
+                    Buffer.BlockCopy(outp, 0, bigger, 0, count);
+                    outp = bigger;
+                }
+                outp[count++] = b;
             }
 
             private void Stored()
@@ -204,8 +230,8 @@ namespace StbcRevival
                     int d = Decode(dist);
                     if (d >= 30) throw new InvalidDataException("bad deflate distance");
                     int back = DistBase[d] + Bits(DistExtra[d]);
-                    if (back > outp.Count) throw new InvalidDataException("deflate distance too far");
-                    int from = outp.Count - back;
+                    if (back > count) throw new InvalidDataException("deflate distance too far");
+                    int from = count - back;
                     for (int i = 0; i < len; i++) Put(outp[from + i]);
                 }
             }
@@ -226,7 +252,7 @@ namespace StbcRevival
 
         private static uint ReadUInt(byte[] b, int at) => (uint)(b[at] | b[at + 1] << 8 | b[at + 2] << 16 | b[at + 3] << 24);
 
-        private static uint Crc(byte[] data)
+        internal static uint Crc(byte[] data)
         {
             uint crc = 0xFFFFFFFFu;
             foreach (var b in data) crc = CrcTable[(crc ^ b) & 0xFF] ^ (crc >> 8);
