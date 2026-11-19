@@ -310,8 +310,7 @@ namespace StbcRevival
             });
             Try("approach phaser range", () =>
             {
-                var range = AccessTools.PropertyGetter(typeof(Sector.Spacecraft.NPCWeaponGroup), "Range")
-                            ?? AccessTools.Method(typeof(Sector.Spacecraft.NPCWeaponGroup), "get_Range");
+                var range = AccessTools.DeclaredMethod(typeof(Sector.Spacecraft.NPCWeaponGroup), "get_Range"); // the property itself is scrambled
                 if (range == null) return false;
                 phaserData = AccessTools.FieldRefAccess<Sector.Spacecraft.NPCWeaponGroup, PhaserData>("_phaserData");
                 threePips = AccessTools.FieldRefAccess<Sector.Spacecraft.NPCWeaponGroup, float>("_threeUnitRangeModifier");
