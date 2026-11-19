@@ -8,6 +8,7 @@
 //   find <method>                  methods with that name
 //   type <Type> [all]              fields and live methods of a type (all: dead ones too)
 //   src <Type> [method]            decompile a type's live methods, or one method
+//   il <Type> <method>             a method's IL (obfuscated names, as a Harmony transpiler sees them)
 //   callers <Type> <method>        live methods calling it
 //   callertypes <Type> <method>    live callers grouped by type
 //   fieldrefs <Type> <field>       live methods using a field
@@ -165,6 +166,13 @@ switch (args[0])
         foreach (var m in t.Methods.Where(m => live.Contains(m) || args.Length > 2)) Console.WriteLine("  " + L(m));
         break;
     }
+    case "il":
+        foreach (var m in M(args[1], args[2]).Where(m => m.HasBody))
+        {
+            Console.WriteLine("// " + L(m));
+            foreach (var i in m.Body.Instructions) Console.WriteLine("  " + i);
+        }
+        break;
     case "src":
     {
         var t = T(args[1]);

@@ -77,6 +77,12 @@ namespace StbcRevival
         internal static ConfigEntry<UnityEngine.KeyCode> PictureKey;
         internal static ConfigEntry<string> GalaxyRegionName;
         internal static ConfigEntry<int> FleetBattleSize;
+        internal static ConfigEntry<bool> EnemyAiFixes;
+        internal static ConfigEntry<bool> EnemyAiThinkFaster;
+        internal static ConfigEntry<bool> EnemyAiFlyBetter;
+        internal static ConfigEntry<bool> EnemyAiFightSmarter;
+        internal static ConfigEntry<float> EnemyAiFireRate;
+        internal static ConfigEntry<bool> EnemyAiGroupTactics;
         internal static ConfigEntry<string> TestPatrolAssignment;
         internal static ConfigEntry<int> EvacuationMinutes;
         internal static ConfigEntry<bool> VoiceCommands;
@@ -249,6 +255,27 @@ namespace StbcRevival
                 + "The host carries every crew order out, so the host needs this version of the mod.");
             FleetBattleSize = Config.Bind("Revival", "FleetBattleSize", 30,
                 "Fleet Battle: ships on each side (1-60). Big battles are heavy on the host's computer; lower it if the game stutters.");
+            EnemyAiFixes = Config.Bind("EnemyAI", "BugFixes", true,
+                "Fix bugs in the game's own enemy ship AI: shields and Borg hull regenerating at their real rate however many "
+                + "ships there are, wandering that always turned the same way, searching for a lost ship where it was last "
+                + "seen instead of where it really is, collision checks, sniper aiming, ram and target picks. Host only.");
+            EnemyAiThinkFaster = Config.Bind("EnemyAI", "ThinkFaster", true,
+                "Let enemy ships make decisions several times as often in big fights (the game gives all AI ships one update "
+                + "a frame between them). Costs some of the host's CPU in large battles. Host only.");
+            EnemyAiFlyBetter = Config.Bind("EnemyAI", "FlyBetter", true,
+                "Enemy ships slow down to turn instead of overshooting, ease off as they arrive, turn at the same rate however "
+                + "many ships there are (and while stopped), and keep their distance from each other and from your ship instead "
+                + "of flying through them. Host only.");
+            EnemyAiFightSmarter = Config.Bind("EnemyAI", "FightSmarter", true,
+                "Enemy ships turn on whoever is hurting them now, mix up their attack patterns, keep firing between attack runs "
+                + "instead of wandering off, use torpedoes once your shields are down, and keep some phaser range on their "
+                + "approach. Host only.");
+            EnemyAiFireRate = Config.Bind("EnemyAI", "FireRate", 1f,
+                "How fast enemy ships (Klingon, Romulan, pirate, Borg) fire, as a share of the game's: 0.75, 1, 1.25 or 1.5 "
+                + "(any value from 0.25 to 4 works here). Applies to ships that spawn after a change. Host only.");
+            EnemyAiGroupTactics = Config.Bind("EnemyAI", "GroupTactics", true,
+                "Enemy fleets fight in squads: wingmen (a flagship has a bigger escort) go for what their leader is attacking "
+                + "and for whoever hits their leader, and regroup when it's destroyed. Host only.");
             EvacuationMinutes = Config.Bind("Revival", "EvacuationMinutes", 15,
                 "Stellar Evacuation: minutes until the star erupts (3-30), the last of them to warp out.");
             MapOverride = Config.Bind("Debug", "MapOverride", "",
@@ -394,6 +421,13 @@ namespace StbcRevival
             Safely("seat warning", () => Walking.SeatWarning.Patch(harmony));
             Safely("galaxy region", () => StbcRevival.Galaxy.GalaxyRegion.Patch(harmony));
             Safely("galaxy warp map pages", () => StbcRevival.Galaxy.WarpPages.Patch(harmony));
+            Safely("enemy AI fixes", () => StbcRevival.EnemyAiFixes.Patch(harmony));
+            Safely("enemy AI think rate", StbcRevival.EnemyAiThinkRate.Apply);
+            Safely("enemy AI flying", () => StbcRevival.EnemyAiFlying.Patch(harmony));
+            Safely("enemy AI combat", () => StbcRevival.EnemyAiCombat.Patch(harmony));
+            Safely("enemy AI tuning", () => StbcRevival.EnemyAiTuning.Patch(harmony));
+            Safely("enemy AI extras", () => StbcRevival.EnemyAiExtras.Patch(harmony));
+            EnemyAiThinkFaster.SettingChanged += (_, __) => Safely("enemy AI think rate", StbcRevival.EnemyAiThinkRate.Apply);
             SteamMode.Install(harmony);
             ShuttleControls.Install();
 
@@ -413,6 +447,7 @@ namespace StbcRevival
             HangWatchdog.Beat(); // first: the watchdog only needs to know a frame ran
             Walking.StutterTrace.FrameStart(); // the frame that just ended, while standing (Bridge Walk)
             Safely("tracked objects check", Tracked.Update);
+            Safely("enemy AI squads", StbcRevival.EnemyAiSquads.Update);
             Safely("openssl sha fix", OpenSslShaFix.Apply);
             if (!deferredApplied)
             {

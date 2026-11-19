@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using HarmonyLib;
 
 namespace StbcRevival.Missions
@@ -9,9 +10,13 @@ namespace StbcRevival.Missions
     /// Fleet Battle runs it does nothing. Decloaking is left alone.
     /// The same for the Romulans of Patrol's Warfare Anomaly while they fight the Borg (PatrolWarfareAggro.Ships):
     /// cloaking, they stalled the battle (the cubes lost their targets while the Romulans' shields came back).
+    /// And Patrol's intercept flagship (Ships), which the crew has to find and destroy.
     /// </summary>
     internal static class FleetBattleNoCloak
     {
+        /// <summary>Other ships that mustn't cloak (their SectorBody): Patrol's intercept flagship, which the crew has to find.</summary>
+        internal static readonly HashSet<object> Ships = new HashSet<object>();
+
         internal static void Patch(Harmony harmony)
         {
             var cloak = AccessTools.Method(typeof(AI.AgentShip), "CPMKGMJPINE");
@@ -25,7 +30,7 @@ namespace StbcRevival.Missions
 
         private static bool Cloak_Prefix(AI.AgentShip __instance)
         {
-            try { return RevivalMissions.Selected != typeof(FleetBattleSequence) && !PatrolWarfareAggro.Ships.Contains(__instance); }
+            try { return RevivalMissions.Selected != typeof(FleetBattleSequence) && !PatrolWarfareAggro.Ships.Contains(__instance) && !Ships.Contains(__instance); }
             catch { return true; }
         }
     }
