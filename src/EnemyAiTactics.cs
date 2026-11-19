@@ -238,6 +238,8 @@ namespace StbcRevival
     ///   for being near (none at the edge of the aggro radius). Without it a ship kept on whatever it had noticed first,
     ///   and it noticed the player's ship first (found by the player's own detection radius, not the 40 km others are),
     ///   so in Fleet Battle the enemy fleet all went for the player even with the player bonus off and no shots fired.
+    /// - A crowd counts against a target: each other AI ship already targeting a body takes CrowdPenalty off it (never
+    ///   below KeepAbove), so a fleet spreads its fire instead of a pack chasing one ship (the player's, running away).
     /// - Grudges fade: the AI's aggro list only ever grew, so a ship kept on whoever it first got angry with. Now what
     ///   it has gained above its starting level (60, the player 110 except in Fleet Battle, a Borg cube 160) fades with a half-life of
     ///   GrudgeHalfLife, so ships turn on whoever is hurting them now. And a hit adds DamageGrudge per point of damage
@@ -265,6 +267,11 @@ namespace StbcRevival
         private const float FirstHitGrudge = 10f;  // a ship hit by something not on its list yet: the game's 10
         private const float TargetLogEvery = 30f;  // seconds
         private const float ClosenessBonus = 60f;  // aggro for a body alongside, less with distance (none at the aggro radius)
+        private const float CrowdPenalty = 20f;    // aggro off a body for each other ship already targeting it
+        private const float KeepAbove = 51f;       // the penalty never takes a body below this (the game's threshold is 50)
+        private const float CrowdCountEvery = 0.5f;
+        private static readonly Dictionary<Sector.HOLJLCLENCA, int> targetedBy = new Dictionary<Sector.HOLJLCLENCA, int>();
+        private static float nextCrowdCount = -1f;
         private static readonly List<Sector.HOLJLCLENCA> gone = new List<Sector.HOLJLCLENCA>();
         private static float nextTargetLog;
         private const float FallbackDistance = 5000f, FallbackSpeed = 0.9f;
@@ -352,6 +359,7 @@ namespace StbcRevival
             {
                 var bb = __instance.NMJIEDJOOCJ;
                 LogTargets();
+                CountTargets();
                 if (bb?.AgroList == null || bb.AgroList.Count == 0) return;
                 var me = __instance.ALPAOOKFIEE;
                 if (me == null) return;
@@ -380,7 +388,15 @@ namespace StbcRevival
                     var them = key.ALPAOOKFIEE;
                     if (them != null && them.System == me.System)
                         bonus = ClosenessBonus * Mathf.Clamp01(1f - (float)(them.Position - me.Position).magnitude / reach);
+                    float before = value;
                     value += bonus;
+                    // Each other ship already on this body counts against it, so a fleet spreads its fire.
+                    if (targetedBy.TryGetValue(key, out int on))
+                    {
+                        int others = ReferenceEquals(bb.Target, key) ? on - 1 : on;
+                        if (others > 0) value = Mathf.Max(value - CrowdPenalty * others, Mathf.Min(value, KeepAbove));
+                    }
+                    bonus = value - before; // what this pass added (or took off), to take back next time
                     bb.AgroList[key] = value;
                     if (last == null) bonuses[key] = last = new Closeness();
                     last.Bonus = bonus;
@@ -411,6 +427,22 @@ namespace StbcRevival
                 bb.AddAgro(__1, grudge, false); // the game's checks (team, same system) and its player rule
             }
             catch { }
+        }
+
+        // How many AI ships are targeting each body, recounted every CrowdCountEvery seconds.
+        private static void CountTargets()
+        {
+            float now = Time.time;
+            if (now < nextCrowdCount) return;
+            nextCrowdCount = now + CrowdCountEvery;
+            targetedBy.Clear();
+            foreach (var ship in EnemyAiFlying.Ships)
+            {
+                if (ship == null || !ship.gameObject.activeInHierarchy) continue;
+                var target = ship.NMJIEDJOOCJ?.Target;
+                if (target == null) continue;
+                targetedBy[target] = targetedBy.TryGetValue(target, out int n) ? n + 1 : 1;
+            }
         }
 
         private static void LogTargets()
