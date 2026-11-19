@@ -28,7 +28,9 @@ namespace StbcRevival
         internal const string Website = "https://demigodrick.github.io/bridge-crew-revival/";
         private const float TimeoutSeconds = 15f;
 
-        private const float SettleSeconds = 10f;
+        // On the shuttle this long before the popup: the game's popup manager comes with the shuttle's menu (and
+        // ShowPopup says when it isn't there yet), so only a moment, for the view to come up from the load.
+        private const float SettleSeconds = 1f;
         private const string Releases = "https://github.com/Demigodrick/bridge-crew-revival/releases/download/v";
         private static readonly string[] Files = { "StbcRevival.dll", "StbcCore.dll" };
         // Revival voice's native libraries (not plugins): in BepInEx/native, where the installer puts them. The updater
@@ -77,7 +79,11 @@ namespace StbcRevival
             }
             // Only on the shuttle (never in a briefing room or mission), and only once it has settled: a popup
             // shown while the shuttle console is still loading goes nowhere.
-            if (newer != null && !offered && !downloading && Time.realtimeSinceStartup - onShuttleSince >= SettleSeconds) Offer();
+            // With AutoUpdate, as soon as the DLLs are in: the ship models may still be checked and fetched after it
+            // (closing the game then is fine: the first launch after an in-game update checks them in full).
+            if (newer != null && !offered && (!downloading || installed != null)
+                && Time.realtimeSinceStartup - onShuttleSince >= SettleSeconds)
+                Offer();
         }
 
         /// <summary>At startup: the DLLs an update replaced last time.</summary>
@@ -477,17 +483,18 @@ namespace StbcRevival
             }
         }
 
+        // ShowPopup is false when the game has no popup manager yet: tried again next frame.
         private static void Offer()
         {
-            offered = true;
-            if (installed != null)
-            {
-                OfferRestart();
-                return;
-            }
+            offered = installed != null ? OfferRestart() : OfferWebsite();
+            if (offered) Plugin.Log.LogInfo($"Update: popup shown {Time.realtimeSinceStartup - onShuttleSince:F1} s after reaching the shuttle");
+        }
+
+        private static bool OfferWebsite()
+        {
             try
             {
-                UI.PopupMgr.ShowPopup(
+                return UI.PopupMgr.ShowPopup(
                     Translation.T($"Bridge Crew Revival {newer} is available. You have {Plugin.Version}.\n\n" +
                     "Open the website to update? This closes the game; run the installer again from there."),
                     new UI.LGNBEBILNCL(yes =>
@@ -502,14 +509,15 @@ namespace StbcRevival
             catch (Exception e)
             {
                 Plugin.Log.LogInfo("Update check: couldn't show the popup: " + e.Message);
+                return true; // not again every frame
             }
         }
 
-        private static void OfferRestart()
+        private static bool OfferRestart()
         {
             try
             {
-                UI.PopupMgr.ShowPopup(
+                return UI.PopupMgr.ShowPopup(
                     Translation.T($"Bridge Crew Revival has been updated to {installed}. It starts the next time you launch the game.\n\n" +
                     "Close the game now?"),
                     new UI.LGNBEBILNCL(yes =>
@@ -523,6 +531,7 @@ namespace StbcRevival
             catch (Exception e)
             {
                 Plugin.Log.LogInfo("Update: couldn't show the popup: " + e.Message);
+                return true; // not again every frame
             }
         }
 
