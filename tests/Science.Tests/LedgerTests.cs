@@ -81,7 +81,7 @@ public class HostileTeamTests
 {
     [Theory]
     [InlineData(0, false)] [InlineData(1, false)] [InlineData(2, true)] [InlineData(3, false)]
-    [InlineData(4, true)] [InlineData(5, true)] [InlineData(6, true)] [InlineData(7, false)] [InlineData(-1, false)]
+    [InlineData(4, true)] [InlineData(5, true)] [InlineData(6, true)] [InlineData(7, true)] [InlineData(8, true)] [InlineData(-1, false)]
     public void IsHostileTeam(int team, bool hostile)
     {
         Assert.Equal(hostile, Ledger.IsHostileTeam(team));
