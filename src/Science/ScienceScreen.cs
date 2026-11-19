@@ -113,7 +113,7 @@ namespace StbcRevival.Science
         {
             this.anchor = anchor;
             var helm = ConsoleWidgets.FindHelm();
-            var impulse = helm != null ? ConsoleWidgets.ImpulseButton(helm) : null;
+            var impulse = helm != null ? ConsoleWidgets.SourceButton(helm) : null;
             if (impulse == null) throw new InvalidOperationException("no helm console to copy the controls from yet");
             Vector2 size = SciencePlacement.ScreenSize;
             if (size.x <= 0f || size.y <= 0f) throw new InvalidOperationException("the placement gives the screen no size");
@@ -179,7 +179,7 @@ namespace StbcRevival.Science
                 flow = new ConsoleFlow(this);
                 root.SetActive(true);
                 interactions.AddRange(root.GetComponentsInChildren<HandInteraction>(true));
-                Plugin.Log.LogInfo(P + $"screen made on {anchor.parent?.name}: {size.x:0.##} x {size.y:0.##} m, {interactions.Count} control(s), "
+                Plugin.Log.LogInfo(P + $"screen made on {anchor.parent?.name}: {size.x:0.##} x {size.y:0.##} m, {interactions.Count} control(s) copied from the helm's {impulse.name}, "
                     + (grid != null ? "its own hand grid" : "the helm's hand poses"));
             }
             catch
