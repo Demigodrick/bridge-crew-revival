@@ -69,11 +69,12 @@ namespace StbcRevival
             else harmony.Patch(received, prefix: new HarmonyMethod(typeof(RevivalVoice), nameof(VoiceEvent_Prefix)));
         }
 
-        // A crewmate's game voice through the host while their Revival voice plays: let go, as PvpRelay does.
+        // The game's voice chat is off while Revival voice runs: anyone's game voice is let go unplayed, as PvpRelay
+        // does (crewmates are heard through Revival voice only).
         private static bool VoiceEvent_Prefix(byte __0, object __1, int __2, bool __runOriginal)
         {
             if (!__runOriginal) return false; // another prefix already let it go
-            if (__0 != VoiceEvent || !RevivalPlayback.Live(__2)) return true;
+            if (__0 != VoiceEvent || !Active) return true;
             if (__1 is SVR.Network.PLPKPDFOLDL packet) SVR.Network.PLPKPDFOLDL.Release(packet); // back to its pool, as the game does
             return false;
         }
@@ -132,7 +133,7 @@ namespace StbcRevival
                 if (now != peer.On)
                 {
                     if (now) Plugin.Log.LogInfo($"Revival voice: {peer.Name} now on Revival voice");
-                    else Plugin.Log.LogInfo($"Revival voice: {peer.Name} back on game voice ({why})");
+                    else Plugin.Log.LogInfo($"Revival voice: {peer.Name} can't be heard or hear you ({why}; the game's voice chat is off)");
                 }
                 peer.On = now;
                 peer.Why = why;
@@ -280,7 +281,7 @@ namespace StbcRevival
             if (VoiceCapture.Capturing) Plugin.Log.LogInfo("Revival voice: your microphone: " + VoiceCapture.Describe());
             foreach (var peer in peers.Values)
             {
-                string mode = peer.On ? "Revival voice" : "game voice (" + peer.Why + ")";
+                string mode = peer.On ? "Revival voice" : "no voice (" + peer.Why + "; the game's voice chat is off)";
                 string reported = peer.ReportedLoss >= 0 && time - peer.ReportedAt < LogEvery
                     ? $"they lose {peer.ReportedLoss}% of yours, jitter {peer.ReportedJitter} ms"
                     : "no loss report from them";
@@ -300,7 +301,7 @@ namespace StbcRevival
                 peer.Sent = peer.Received = 0;
                 peer.Pings = peer.Pongs = peer.RttSum = peer.RttMax = 0;
             }
-            foreach (var name in without) Plugin.Log.LogInfo($"Revival voice: {name}: game voice (no mod)");
+            foreach (var name in without) Plugin.Log.LogInfo($"Revival voice: {name}: no voice (no mod; the game's voice chat is off)");
         }
 
         private static void Stop()

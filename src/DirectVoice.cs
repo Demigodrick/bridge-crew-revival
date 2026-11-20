@@ -121,7 +121,15 @@ namespace StbcRevival
         // Crewmates on Revival voice get neither: they hear us through it instead.
         private static bool SendEvent_Prefix(SVR.Network.BHMFCLKJOAD __0, object __1, SVR.Network.KPLNDEOBNNJ __2, SVR.Network.GDFONJHIBGH __4, ref bool __result)
         {
-            if (Convert.ToInt32(__0) != VoiceEvent || !(__1 is SVR.Network.PLPKPDFOLDL frame) || !Linked) return true;
+            if (Convert.ToInt32(__0) != VoiceEvent || !(__1 is SVR.Network.PLPKPDFOLDL frame)) return true;
+            // The game's voice chat is off while Revival voice runs: never sent, to anyone (nor played: RevivalVoice).
+            if (Plugin.RevivalVoiceActive)
+            {
+                SVR.Network.PLPKPDFOLDL.Release(frame); // what Photon's serializer would have done after sending it
+                __result = true;
+                return false;
+            }
+            if (!Linked) return true;
             if (Convert.ToInt32(__2) != 0) return true; // not "Others" (the game's debug echo)
             var now = routes;
             bool revival = RevivalVoice.SendsToAnyone;
@@ -134,7 +142,9 @@ namespace StbcRevival
                 var kept = new List<int>(viaHost.Length);
                 for (int i = 0; i < viaHost.Length; i++)
                     if (now.ViaHostSteam[i] == 0 || !RevivalVoice.SendsTo(now.ViaHostSteam[i])) kept.Add(viaHost[i]);
-                if (direct.Length == 0 && kept.Count == viaHost.Length) return true; // nobody on Revival voice after all
+                // Nobody on Revival voice after all: the game's own send. (Compared with before: with everyone on Revival
+                // voice both lists are empty, which isn't "nobody": game voice went to everyone as well.)
+                if (direct.Length == now.Direct.Length && kept.Count == viaHost.Length) return true;
                 viaHost = kept.ToArray();
             }
             if (direct.Length > 0)
