@@ -127,17 +127,27 @@ namespace StbcRevival
                 harmony.Patch(playbook, postfix: new HarmonyMethod(typeof(CrewOrders), nameof(PlaybookState_Postfix)));
             target = AccessTools.TypeByName("AI.OILEJOBJAEJ");                                          // TargetSubsystemMenuItem
             targetSubsystem = target == null ? null : AccessTools.Field(target, "AMEKCDKAADF");          // _subsystem
+            targetDefault = target == null ? null : AccessTools.Field(target, "BEMHFHGACFM");            // _defaultSubsystem
             Plugin.Log.LogInfo($"Crew orders: a forwarding game's crew menu offers every order ({states} menu kinds"
                                + $"{(playbookOn == null ? ", not the playbook" : "")}{(targetSubsystem == null ? ", target orders by their type" : "")})");
         }
 
-        private static FieldInfo menuCommand, menuEnabled, menuVisible, targetSubsystem;
+        private static FieldInfo menuCommand, menuEnabled, menuVisible, targetSubsystem, targetDefault;
         private static MethodInfo playbookOn, playbookShown;
         private static Type target;
 
-        private static void MenuState_Postfix(object __instance)
+        // Only once the item's own check is done (its outermost OnUpdateMenuState): forced on inside the base
+        // check, an item went on to read what isn't there yet (Scan Target read the captain's target as the menu
+        // first set up, before the bridge: a NullReferenceException that cut that setup short).
+        private static readonly Dictionary<Type, Type> outermost = new Dictionary<Type, Type>();
+
+        private static void MenuState_Postfix(object __instance, MethodBase __originalMethod)
         {
-            if (!Forwarding || __instance == null) return;
+            if (!Forwarding || __instance == null || __originalMethod == null) return;
+            var type = __instance.GetType();
+            if (!outermost.TryGetValue(type, out var declaring))
+                outermost[type] = declaring = AccessTools.Method(type, "OnUpdateMenuState")?.DeclaringType;
+            if (declaring != __originalMethod.DeclaringType) return;
             if (menuVisible.GetValue(__instance) is bool shown && shown) menuEnabled.SetValue(__instance, true);
         }
 
@@ -154,7 +164,9 @@ namespace StbcRevival
         private static string TargetCommand(object item)
         {
             if (targetSubsystem == null || item == null || !target.IsInstanceOfType(item)) return null;
-            switch (targetSubsystem.GetValue(item)?.ToString())
+            // Halting a subsystem's targeting once its check ran (its type says so); else the subsystem it's for.
+            if (menuCommand.GetValue(item)?.ToString() == "CeaseTargeting") return "CeaseTargeting";
+            switch ((targetDefault?.GetValue(item) ?? targetSubsystem.GetValue(item))?.ToString())
             {
                 case "Engines": return "TargetEngines";
                 case "Phasers": case "Lauchers": return "TargetWeapons";
