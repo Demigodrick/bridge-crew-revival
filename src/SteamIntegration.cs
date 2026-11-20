@@ -31,7 +31,6 @@ namespace StbcRevival
 
         internal static void Update()
         {
-            if (!Plugin.SteamPresence.Value) return;
             if (!initialized)
             {
                 if (!SteamName.SteamInitialized()) return;

@@ -12,7 +12,7 @@ namespace StbcRevival
     /// the game's own texts become it for the whole crew with the mod: the captain's console header (USS AEGIS
     /// (NX-1787), on the Enterprise-D USS Enterprise (NCC 1701-D)), "USS Aegis" in the briefing room's mission texts.
     /// The host's name goes on the room as a property ("SHN"); out of a room your own is used. Empty: the game's names.
-    /// Set in the Revival settings (the desktop prompt, or SteamVR's keyboard in VR) or in the config.
+    /// Set from the briefing console's ship name button (ShipNameBox) or in the config.
     /// </summary>
     internal static class ShipName
     {
@@ -174,19 +174,6 @@ namespace StbcRevival
                 if (registry.Length > 0) __result = System.Text.RegularExpressions.Regex.Replace(__result, @"NCC[\s\-]1701[\s\-]D|NX[\s\-]1787", registry);
             }
             catch { }
-        }
-
-        /// <summary>Asks for a new name (the settings' row): the desktop prompt, or SteamVR's keyboard in VR.</summary>
-        internal static void Ask()
-        {
-            const string what = "Ship name, registry (e.g. USS Cosmo, NCC-91234); empty for the game's";
-            Action<string> done = text =>
-            {
-                Set(text, false);
-                Plugin.Log.LogInfo($"Revival settings: ship name \"{Plugin.ShipName.Value}\"");
-            };
-            if (UnityEngine.VR.VRSettings.enabled && UnityEngine.VR.VRSettings.loadedDeviceName == "OpenVR") VrKeyboard.Open(Translation.T("Ship name"), 40, done);
-            else TextPrompt.Ask(Translation.T(what), false, done);
         }
     }
 }

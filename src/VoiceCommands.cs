@@ -13,7 +13,7 @@ using UnityEngine;
 namespace StbcRevival
 {
     /// <summary>
-    /// [Voice] VoiceCommands (prototype): the captain's spoken orders, back without IBM Watson.
+    /// Voice commands: the captain's spoken orders, back without IBM Watson.
     /// The game's voice orders streamed the microphone to Watson's speech-to-text and conversation services
     /// (through Ubisoft's backend), then turned the answer into a crew command (CommandManager.TriggerCommand).
     /// Here the recognition runs offline on this PC (Vosk, listening only for known phrases) and the phrase
@@ -528,7 +528,6 @@ namespace StbcRevival
 
         internal static void Patch(Harmony harmony)
         {
-            if (!Plugin.VoiceCommands.Value) return;
             var vrm = typeof(VoiceRecognitionManager);
             var using_ = AccessTools.Method(vrm, "get_UsingVoiceRecognition"); // its property is renamed; the getter kept its name
             var update = AccessTools.Method(vrm, "Update");
@@ -717,7 +716,7 @@ namespace StbcRevival
         // Main thread, every frame: act on a finished recognition.
         internal static void Update()
         {
-            keyHeld = Plugin.VoiceCommands.Value && Input.GetKey(Plugin.PushToTalkKey.Value);
+            keyHeld = Input.GetKey(Plugin.PushToTalkKey.Value);
             CrewOrders.Update();
             SendAfterPlot();
             if (!pendingResult) return;

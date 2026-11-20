@@ -6,7 +6,7 @@ using UnityEngine;
 namespace StbcRevival
 {
     /// <summary>
-    /// Enemy ships fly better (setting EnemyAI.FlyBetter; host only, where the AI runs). tools/xref/ai/movement.md
+    /// Enemy ships fly better (host only, where the AI runs). tools/xref/ai/movement.md
     /// (branch ai-map) has the game's movement model these change.
     ///
     /// - Throttle: the game flew every leg at the speed its tree asked for whatever the heading, so with turning circles of
@@ -26,7 +26,7 @@ namespace StbcRevival
     /// </summary>
     internal static class EnemyAiFlying
     {
-        private static bool On => Plugin.EnemyAiFlyBetter?.Value ?? false;
+        private static bool On => true; // part of the mod (no longer a setting)
 
         private const float MinTurnThrottle = 0.35f;   // speed share when facing straight away from where it's going
         private const double EaseDistance = 3000;       // metres from the nav point where a ship out of combat eases off
@@ -243,7 +243,7 @@ namespace StbcRevival
     }
 
     /// <summary>
-    /// Enemy ships fight smarter (setting EnemyAI.FightSmarter; host only). tools/xref/ai/combat.md (branch ai-map) has
+    /// Enemy ships fight smarter (host only). tools/xref/ai/combat.md (branch ai-map) has
     /// the game's targeting, weapons and attack patterns these change.
     ///
     /// - Closer ships count for more: each time a ship updates its aggro list, every body on it gets up to ClosenessBonus
@@ -272,7 +272,7 @@ namespace StbcRevival
     /// </summary>
     internal static class EnemyAiCombat
     {
-        private static bool On => Plugin.EnemyAiFightSmarter?.Value ?? false;
+        private static bool On => true; // part of the mod (no longer a setting)
 
         private const float GrudgeHalfLife = 15f;  // seconds
         private const float DamageGrudge = 0.5f;   // aggro per point of damage dealt (a 100-damage volley: 50, as 5 hits did)

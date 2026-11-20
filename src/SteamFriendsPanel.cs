@@ -54,7 +54,7 @@ namespace StbcRevival
         private static readonly AccessTools.FieldRef<Friend, CFEAJIENMGO> Platform = AccessTools.FieldRefAccess<Friend, CFEAJIENMGO>("<JNPNEMLBCHA>k__BackingField");
         private static string lastSignature;
 
-        internal static bool Enabled => SteamMode.Enabled && Plugin.SteamPresence.Value;
+        internal static bool Enabled => SteamMode.Enabled;
 
         internal static void Patch(Harmony harmony)
         {

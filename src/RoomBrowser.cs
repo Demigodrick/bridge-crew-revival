@@ -194,7 +194,7 @@ namespace StbcRevival
                     GUIUtility.systemCopyBuffer = SteamMode.Enabled ? SteamMode.ShareCode(current) : Code(current);
                     status = SteamMode.Enabled ? "Share code copied: anyone with it can join, Steam friends or not." : "Room code copied.";
                 }
-                if (Plugin.SteamPresence.Value && SteamIntegration.Joinable && GUILayout.Button(Translation.T("Invite Steam friends"), GUILayout.Width(180)))
+                if (SteamIntegration.Joinable && GUILayout.Button(Translation.T("Invite Steam friends"), GUILayout.Width(180)))
                 {
                     SteamIntegration.OpenInviteOverlay();
                     status = "In the Steam overlay, right-click a friend and choose \"Invite to Game\".";

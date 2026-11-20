@@ -132,7 +132,6 @@ PlayerName = Picard      # otherwise your Steam name
 SkipIntro = true         # straight to the shuttle
 
 [Voice]
-VoiceCommands = true
 Engine = Revival         # Game = the game's own voice chat
 NoiseSuppression = true  # filter background noise out of your mic
 AutoGain = true          # even out quiet and loud voices

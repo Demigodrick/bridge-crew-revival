@@ -82,18 +82,8 @@ namespace StbcRevival
         internal static ConfigEntry<UnityEngine.KeyCode> PictureKey;
         internal static ConfigEntry<string> GalaxyRegionName;
         internal static ConfigEntry<int> FleetBattleSize;
-        internal static ConfigEntry<bool> EnemyAiFixes;
-        internal static ConfigEntry<bool> EnemyAiThinkFaster;
-        internal static ConfigEntry<bool> EnemyAiFlyBetter;
-        internal static ConfigEntry<bool> EnemyAiFightSmarter;
-        internal static ConfigEntry<float> EnemyAiFireRate;
-        internal static ConfigEntry<bool> EnemyAiGroupTactics;
-        internal static ConfigEntry<bool> CrewHelmHoldsRange;
-        internal static ConfigEntry<bool> CrewQuickTorpedoes;
-        internal static ConfigEntry<bool> CrewAutoPower;
         internal static ConfigEntry<string> TestPatrolAssignment;
         internal static ConfigEntry<int> EvacuationMinutes;
-        internal static ConfigEntry<bool> VoiceCommands;
         internal static ConfigEntry<UnityEngine.KeyCode> PushToTalkKey;
         internal static ConfigEntry<VoiceLanguageChoice> VoiceLanguage;
         internal static ConfigEntry<bool> VoiceAnyStation;
@@ -101,7 +91,6 @@ namespace StbcRevival
         internal static ConfigEntry<bool> ShuttleWasd;
         internal static ConfigEntry<float> ControllerGraceSeconds;
         internal static ConfigEntry<bool> QuestControlsOn;
-        internal static ConfigEntry<bool> SeatWarning;
         internal static ConfigEntry<bool> VrPerformance;
         internal static ConfigEntry<VrDeviceChoice> VrDevice;
         internal static ConfigEntry<int> VoiceJitterBufferMs;
@@ -154,7 +143,6 @@ namespace StbcRevival
         internal static ConfigEntry<UnityEngine.KeyCode> BrowserKey;
         internal static ConfigEntry<bool> ShortRoomCodes;
         internal static ConfigEntry<bool> VrRoomPanels;
-        internal static ConfigEntry<bool> SteamPresence;
         internal static ConfigEntry<string> PublicServerAddress;
 
         private void Awake()
@@ -255,11 +243,6 @@ namespace StbcRevival
             KlingonHeadChoice = Config.Bind("Avatar", "KlingonHeadChoice", Math.Max(1, KlingonHead.Value),
                 new ConfigDescription("Which Klingon captain's head the character creator's KLINGON wears: 1 the captain, 2 the flagship's captain "
                                       + "(Revival settings changes it).", new AcceptableValueRange<int>(1, 2)));
-            VoiceCommands = Config.Bind("Voice", "VoiceCommands", true,
-                "Experimental: the captain's spoken orders without IBM Watson, recognised offline on this PC. Hold the game's voice "
-                + "command button (or PushToTalkKey) as captain and give an order, as with the original Watson voice commands: "
-                + "speed, prepare/engage warp or impulse, shields, fire, target, scan, repair, power, optimize, disrupt, and more. "
-                + "Needs BepInEx/vosk (libvosk.dll and a model folder; the installer sets it up). Takes effect after a restart.");
             PushToTalkKey = Config.Bind("Voice", "PushToTalkKey", UnityEngine.KeyCode.V,
                 "Hold to give a voice order as captain (as well as the game's own voice button, which depends on your controllers).");
             VoiceLanguage = Config.Bind("Voice", "VoiceLanguage", VoiceLanguageChoice.English,
@@ -271,37 +254,6 @@ namespace StbcRevival
                 + "The host carries every crew order out, so the host needs this version of the mod.");
             FleetBattleSize = Config.Bind("Revival", "FleetBattleSize", 30,
                 "Fleet Battle: ships on each side (1-60). Big battles are heavy on the host's computer; lower it if the game stutters.");
-            EnemyAiFixes = Config.Bind("EnemyAI", "BugFixes", true,
-                "Fix bugs in the game's own enemy ship AI: shields and Borg hull regenerating at their real rate however many "
-                + "ships there are, wandering that always turned the same way, searching for a lost ship where it was last "
-                + "seen instead of where it really is, collision checks, sniper aiming, ram and target picks. Host only.");
-            EnemyAiThinkFaster = Config.Bind("EnemyAI", "ThinkFaster", true,
-                "Let enemy ships make decisions several times as often in big fights (the game gives all AI ships one update "
-                + "a frame between them). Costs some of the host's CPU in large battles. Host only.");
-            EnemyAiFlyBetter = Config.Bind("EnemyAI", "FlyBetter", true,
-                "Enemy ships slow down to turn instead of overshooting, ease off as they arrive, turn at the same rate however "
-                + "many ships there are (and while stopped), and keep their distance from each other and from your ship instead "
-                + "of flying through them. Host only.");
-            EnemyAiFightSmarter = Config.Bind("EnemyAI", "FightSmarter", true,
-                "Enemy ships turn on whoever is hurting them now, mix up their attack patterns, keep firing between attack runs "
-                + "instead of wandering off, use torpedoes once your shields are down, and keep some phaser range on their "
-                + "approach. Host only.");
-            EnemyAiFireRate = Config.Bind("EnemyAI", "FireRate", 1f,
-                "How fast enemy ships (Klingon, Romulan, pirate, Borg) fire, as a share of the game's: 0.75, 1, 1.25 or 1.5 "
-                + "(any value from 0.25 to 4 works here). Applies to ships that spawn after a change. Host only.");
-            EnemyAiGroupTactics = Config.Bind("EnemyAI", "GroupTactics", true,
-                "Enemy fleets fight in squads: wingmen (a flagship has a bigger escort) go for what their leader is attacking "
-                + "and for whoever hits their leader, and regroup when it's destroyed. Host only.");
-            CrewHelmHoldsRange = Config.Bind("CrewAI", "HelmHoldsRange", true,
-                "The AI helm, attacking a ship, closes to phaser range, then slows to a stop facing it (and backs off if it gets "
-                + "very close) instead of ramming it at full speed. Only when an AI crew member is at helm. Host only.");
-            CrewQuickTorpedoes = Config.Bind("CrewAI", "QuickTorpedoes", true,
-                "The AI tactical officer fires torpedoes about a second sooner, and fires them without the ship having a move "
-                + "order. Only when an AI crew member is at tactical; the shorter wait applies from the next system. Host only.");
-            CrewAutoPower = Config.Bind("CrewAI", "AutoPower", true,
-                "The AI engineer reroutes power by itself: offense in a fight, defense when the shields are low, balanced "
-                + "afterwards. A captain's power order holds until a fight starts or ends. Only when an AI crew member is at "
-                + "engineering. Host only.");
             EvacuationMinutes = Config.Bind("Revival", "EvacuationMinutes", 15,
                 "Stellar Evacuation: minutes until the star erupts (3-30), the last of them to warp out.");
             MapOverride = Config.Bind("Debug", "MapOverride", "",
@@ -379,9 +331,6 @@ namespace StbcRevival
                 + "(the installer's Quest question sets it up; or choose \"Bridge Crew Revival: Quest controllers\" in SteamVR's controller settings for Bridge Crew). Also in REVIVAL SETTINGS (Quest controller buttons). Only with a Meta/Oculus headset on SteamVR. Takes effect after a restart.");
             VrPerformance = Config.Bind("VR", "Performance", false,
                 "For slower PCs in VR: lighter where it costs most. The briefing room table shows a simplified copy of our ship classes instead of the full-detail ship.");
-            SeatWarning = Config.Bind("VR", "SeatWarning", false,
-                "The game's out-of-bounds warning while seated: the view fades out when your head moves away from your seat or close to your own body. "
-                + "Off by default. Always off while you stand and walk in VR. Your headset's own boundary isn't affected.");
             VrDevice = Config.Bind("VR", "Device", VrDeviceChoice.Auto,
                 "Which VR runtime the game starts: the game tries Oculus first, which crashes some headsets that aren't Oculus Rifts (a Quest through Virtual Desktop). SteamVR = try SteamVR first; Oculus = the game's own order; Auto = SteamVR first when the game is launched with -vrmode openvr or the Oculus runtime (the Oculus/Meta app) is missing or won't load. Whenever SteamVR goes first, Oculus is only tried after it if its runtime loads.");
             ShuttleWasd = Config.Bind("Shuttle", "WasdControls", false,
@@ -430,9 +379,6 @@ namespace StbcRevival
             ShortRoomCodes = Config.Bind("Rooms", "ShortRoomCodes", true,
                 "Give new rooms short 6-character codes (e.g. K7QX2M) instead of GUIDs, so they're easy to share for private matches.");
 
-            SteamPresence = Config.Bind("Steam", "Presence", true,
-                "Show your crew in Steam (rich presence) and let Steam friends use Join Game / Invite to Game. " +
-                "Friends see your room code, including for private matches.");
             PublicServerAddress = Config.Bind("Steam", "PublicServerAddress", "",
                 "Optional host:port of your server as friends reach it (e.g. 203.0.113.10:4530). Added to Steam joins " +
                 "so a friend on a different server is told which one to use.");
@@ -468,7 +414,6 @@ namespace StbcRevival
             Safely("enemy AI tuning", () => StbcRevival.EnemyAiTuning.Patch(harmony));
             Safely("enemy AI extras", () => StbcRevival.EnemyAiExtras.Patch(harmony));
             Safely("crew AI", () => StbcRevival.CrewAi.Patch(harmony));
-            EnemyAiThinkFaster.SettingChanged += (_, __) => Safely("enemy AI think rate", StbcRevival.EnemyAiThinkRate.Apply);
             SteamMode.Install(harmony);
             ShuttleControls.Install();
 

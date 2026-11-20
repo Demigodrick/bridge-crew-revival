@@ -6,7 +6,7 @@ using UnityEngine;
 namespace StbcRevival
 {
     /// <summary>
-    /// Stage 6 of the enemy AI work: enemy ships fight in squads (setting EnemyAI.GroupTactics; host only, where the AI
+    /// Stage 6 of the enemy AI work: enemy ships fight in squads (host only, where the AI
     /// runs). Every SquadEvery seconds the hostile AI ships (Klingon, Romulan, pirate; not Borg cubes) of each side, in
     /// each system where a side has at least MinFleet ships, are put in squads: the biggest ships lead (a flagship leads
     /// up to FlagshipWingmen, any other ship up to Wingmen), and every other ship joins the nearest squad with room whose
@@ -22,7 +22,7 @@ namespace StbcRevival
     /// </summary>
     internal static class EnemyAiSquads
     {
-        private static bool On => Plugin.EnemyAiGroupTactics?.Value ?? false;
+        private static bool On => true; // part of the mod (no longer a setting)
 
         private const float SquadEvery = 2f;            // seconds between squad updates
         private const int MinFleet = 4;                 // ships a side needs in a system before it forms squads
