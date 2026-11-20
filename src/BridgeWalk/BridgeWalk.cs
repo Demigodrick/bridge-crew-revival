@@ -910,7 +910,7 @@ namespace StbcRevival.Walking
             {
                 if (r.Info == null || r.Info.PawnObject == null) r.Info = Bridge.ByActor(r.Actor);
                 if (r.Info == null) { if (Time.unscaledTime - r.LastHeard > 30f) (gone ?? (gone = new List<int>())).Add(r.Actor); continue; }
-                if (!r.Standing) continue;
+                if (!r.Standing || r.Info.PawnObject == null) continue; // no character yet (a scene loading)
                 var pawn = r.Info.PawnObject.transform;
                 if (!r.HasCurrent) { r.Current = r.Target; r.CurrentYaw = r.TargetYaw; r.HasCurrent = true; }
                 float k = 1f - Mathf.Exp(-12f * Time.deltaTime);
