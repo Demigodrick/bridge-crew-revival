@@ -6,8 +6,8 @@ namespace StbcRevival.Science
         // A scan only progresses while both mini games match at least this well.
         public const float LockThreshold = 0.70f;
         // Scan progress per second at the lock threshold, and the extra gained going from there to a perfect match.
-        public const float BaseRate = 1.0f;
-        public const float BonusRate = 1.8f;
+        public const float BaseRate = 2.0f;
+        public const float BonusRate = 3.6f;
         // Turning a sweep ring turns its neighbour by this share of the change.
         public const float RingNudge = 1f / 3f;
         // What one finished scan adds to its area (or to weapons against a faction), and the most an area can reach.

@@ -169,7 +169,8 @@ namespace StbcRevival.Science
                 barFill = Box(bar, "Fill", 0f, 0f, 0f, 1f);
                 barFill.gameObject.AddComponent<Image>().color = new Color32(79, 179, 255, 255);
                 scanValue = ConsoleWidgets.CloneLabel(Box(page, "Scan Value", 0.62f, 0.1f, 0.8f, 0.2f), BodyFont);
-                ConsoleWidgets.CloneButton(Box(page, "Back Button", 0.82f, 0.02f, 1f, 0.2f), Translation.T("BACK"), () => flow.Leave(), grid);
+                var back = ConsoleWidgets.CloneButton(Box(page, "Back Button", 0.82f, 0.02f, 1f, 0.2f), Translation.T("BACK"), () => flow.Leave(), grid);
+                foreach (var c in back.Texts) { RowText(back.Face.transform, c); if (c is TMPro.TMP_Text t) Aligned(t, "Center"); }
 
                 // Out of range / busy
                 messagePage = Box(canvasRect, "Message", 0.05f, 0.35f, 0.95f, 0.65f).gameObject;

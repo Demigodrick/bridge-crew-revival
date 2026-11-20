@@ -34,13 +34,13 @@ public class ScanProgressTests
     }
 
     [Fact]
-    public void Advance_PerfectFinishesIn30To45Seconds()
+    public void Advance_PerfectFinishesIn15To25Seconds()
     {
         float perfect = TimeToFinish(1f, 1f);
-        Assert.InRange(perfect, 30f, 45f);
+        Assert.InRange(perfect, 15f, 25f);
         float bare = TimeToFinish(0.7f, 0.7f);
         Assert.True(bare >= perfect);
-        Assert.True(bare <= 120f);
+        Assert.True(bare <= 60f);
     }
 
     [Fact]
