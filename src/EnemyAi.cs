@@ -10,7 +10,7 @@ using UnityEngine;
 namespace StbcRevival
 {
     /// <summary>
-    /// Fixes for bugs in the game's enemy ship AI (setting EnemyAI.BugFixes). The AI only runs on the host, so these only
+    /// Fixes for bugs in the game's enemy ship AI. The AI only runs on the host, so these only
     /// matter there. Each fix is a small patch on one method, and each checks the setting when it runs, so turning the
     /// setting off puts the game's own behaviour back (the Snipe and Ram fixes apply to ships spawned after the change).
     /// tools/xref/AI.md (branch ai-map) explains the AI and where each bug was found.
@@ -35,7 +35,7 @@ namespace StbcRevival
     /// </summary>
     internal static class EnemyAiFixes
     {
-        private static bool On => Plugin.EnemyAiFixes?.Value ?? false;
+        private static bool On => true; // part of the mod (no longer a setting)
 
         internal static void Patch(Harmony harmony)
         {
@@ -355,7 +355,7 @@ namespace StbcRevival
     }
 
     /// <summary>
-    /// Enemy ships think more often (setting EnemyAI.ThinkFaster). The game runs every AI ship's behaviour tree (and its
+    /// Enemy ships think more often. The game runs every AI ship's behaviour tree (and its
     /// target scan, shields and hacks) in one round-robin group, BehaviorLogic, which runs one task a frame between all of
     /// them: with 20 ships each one decided about every 23rd frame. UpdateScheduler (FNPDNCICIMB) gives each group a
     /// share of its tasks to run a frame (s_updatePercents, NOJNLDJAPIG; BehaviorLogic's is 0, so 0 + 1 task). This sets
@@ -377,7 +377,7 @@ namespace StbcRevival
                 var scheduler = AccessTools.TypeByName("FNPDNCICIMB"); // UpdateScheduler
                 var percents = (float[])AccessTools.Field(scheduler, "NOJNLDJAPIG").GetValue(null);
                 if (gameShare < 0f) gameShare = percents[BehaviorLogic];
-                float share = Plugin.EnemyAiThinkFaster.Value ? Share : gameShare;
+                float share = Share;
                 percents[BehaviorLogic] = share; // groups made from now on
                 // A group made already keeps the share it was made with: set it there too.
                 var groups = (IDictionary)AccessTools.Field(scheduler, "DFHCGBHKIHC").GetValue(null); // s_roundRobinUpdateGroups

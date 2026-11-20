@@ -56,7 +56,6 @@ namespace StbcRevival
             Switch("Skip intro videos", () => Plugin.SkipIntro, restart: true),
             Switch("Skip mic check", () => Plugin.SkipMicCheck, restart: true),
             Switch("Skip VR setup", () => Plugin.SkipVrSetup, restart: true),
-            Switch("Voice commands", () => Plugin.VoiceCommands, restart: true),
             Switch("Voice orders from any station", () => Plugin.VoiceAnyStation),
             // Which Klingon captain's head the creator's KLINGON wears (wearing one or not is the creator's).
             new Entry
@@ -82,35 +81,7 @@ namespace StbcRevival
                 },
             },
             Switch("Name plates", () => Plugin.NamePlates),
-            // Host only: the enemy AI runs on the host.
-            Switch("Enemy AI bug fixes", () => Plugin.EnemyAiFixes),
-            Switch("Enemy AI thinks faster", () => Plugin.EnemyAiThinkFaster),
-            Switch("Enemy AI flies better", () => Plugin.EnemyAiFlyBetter),
-            Switch("Enemy AI fights smarter", () => Plugin.EnemyAiFightSmarter),
-            Switch("Enemy AI group tactics", () => Plugin.EnemyAiGroupTactics),
-            Switch("AI helm holds weapons range", () => Plugin.CrewHelmHoldsRange),
-            Switch("AI tactical: quicker torpedoes", () => Plugin.CrewQuickTorpedoes),
-            Switch("AI engineer sets power", () => Plugin.CrewAutoPower),
-            // Host only: how fast enemy ships fire, a share of the game's rate.
-            new Entry
-            {
-                Text = () => $"Enemy fire rate: {Plugin.EnemyAiFireRate.Value * 100f:0}%",
-                Press = () =>
-                {
-                    var rates = EnemyAiTuning.FireRates;
-                    int at = Array.FindIndex(rates, r => Mathf.Approximately(r, Plugin.EnemyAiFireRate.Value));
-                    Plugin.EnemyAiFireRate.Value = rates[(at + 1) % rates.Length];
-                    Plugin.Log.LogInfo($"Revival settings: enemy fire rate {Plugin.EnemyAiFireRate.Value:0.##}");
-                },
-            },
-            new Entry
-            {
-                Text = () => Translation.T("Ship name") + ": " + (ShipName.Own.Length == 0 ? Translation.T("the game's") : ShipName.Own),
-                Press = ShipName.Ask,
-            },
             Switch("Public crews in VR", () => Plugin.VrRoomPanels),
-            // The game's fade-out when your head leaves your seat (never the headset's own boundary).
-            Switch("VR seat warning", () => Plugin.SeatWarning),
             // Lighter where it costs most in VR (for now the briefing table's hologram: a simplified copy of our ships).
             Switch("VR performance", () => Plugin.VrPerformance),
             // Meta Quest through SteamVR: the Touch buttons (and pictures). It needs SteamVR to use the mod's Quest layout
@@ -138,7 +109,6 @@ namespace StbcRevival
             },
             Switch("Hide full crews", () => Plugin.HideFullCrews),
             Switch("Hide crews on a mission", () => Plugin.HideCrewsInMission),
-            Switch("Show my crew in Steam", () => Plugin.SteamPresence),
             Switch("Check for updates", () => Plugin.CheckForUpdates),
             new Entry
             {
@@ -368,13 +338,18 @@ namespace StbcRevival
         private static readonly FieldInfo PopupObject = AccessTools.Field(AnimatorType, "IFEKJBGJJOI");
         private static readonly FieldInfo PopupControls = AccessTools.Field(AnimatorType, "JCBMFLAAFND");
         private static readonly FieldInfo ControlsChanged = AccessTools.Field(AnimatorType, "OLMKBPANPIO");
+        // HandAnimatorManager.Instance and its animators (AFBJOJJNCEA). Looked up once: OfferRows runs every frame
+        // while the page is open, and finding a type by name searches every type the game has.
+        private static readonly Type AnimatorManagerType = AccessTools.TypeByName("HandAnimatorManager");
+        private static readonly MethodInfo AnimatorManagerInstance = AccessTools.Method(AnimatorManagerType, "get_Instance");
+        private static readonly FieldInfo Animators = AccessTools.Field(AnimatorManagerType, "AFBJOJJNCEA");
 
         private static void OfferRows(ConsoleMainMenu menu, Page page)
         {
             var first = page.Rows.FirstOrDefault(r => r != null)?.GetComponentInChildren<HandInteraction>(true);
             if (first == null || PopupControls == null || !(Field(menu, "_regionSelectGO") is GameObject region)) return;
-            var manager = AccessTools.Method(AccessTools.TypeByName("HandAnimatorManager"), "get_Instance")?.Invoke(null, null);
-            if (!(AccessTools.Field(manager?.GetType(), "AFBJOJJNCEA")?.GetValue(manager) is System.Collections.IDictionary animators)) return;
+            var manager = AnimatorManagerInstance?.Invoke(null, null);
+            if (manager == null || !(Animators?.GetValue(manager) is System.Collections.IDictionary animators)) return;
             foreach (var animator in animators.Keys)
             {
                 if (!(PopupShown?.GetValue(animator) is true) || !(PopupObject?.GetValue(animator) is GameObject popup) || popup == null) continue;
@@ -434,7 +409,14 @@ namespace StbcRevival
                 SetText(heading, Title.ToUpperInvariant());
         }
 
-        private static object Field(ConsoleMainMenu menu, string name) => AccessTools.Field(typeof(ConsoleMainMenu), name)?.GetValue(menu);
+        private static readonly Dictionary<string, FieldInfo> menuFields = new Dictionary<string, FieldInfo>();
+
+        // ConsoleMainMenu's field by name, looked up once (used every frame while the page is open).
+        private static object Field(ConsoleMainMenu menu, string name)
+        {
+            if (!menuFields.TryGetValue(name, out var field)) menuFields[name] = field = AccessTools.Field(typeof(ConsoleMainMenu), name);
+            return field?.GetValue(menu);
+        }
 
         private static Component[] Texts(GameObject root) =>
             root.GetComponentsInChildren<Component>(true).Where(c => c != null && c.GetType().Name == "TextMeshProUGUI").ToArray();

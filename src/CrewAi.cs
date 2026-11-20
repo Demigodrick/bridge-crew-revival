@@ -11,17 +11,17 @@ namespace StbcRevival
     /// engineering) are built in code each time the ship arrives in a system (SetUp), and each only runs while a bot holds
     /// that station, so these changes never touch a player's own station. Host only, like all the crew AI.
     ///
-    /// - Helm holds weapons range (CrewAI.HelmHoldsRange): with weapons cleared to fire and a ship as its destination,
+    /// - Helm holds weapons range (always on): with weapons cleared to fire and a ship as its destination,
     ///   the game's helm ran at full throttle straight at it, overshooting and ramming. Now it closes at full speed to
     ///   phaser range, eases off to a stop by half that range with its nose on the target, and backs away at half the
     ///   ordered speed inside 30 % of it. (Circling was left out: it puts the target off the beam, where the phaser arcs
     ///   may not reach.) Replaces the full-throttle SetHelmThrottle (JLFCNDMPFBN) beside the NavMarker throttle steps in
     ///   BuildHelmTree (LNFHNLIBBHI) with a wrapper that runs the game's node at another scale.
-    /// - Quicker torpedoes (CrewAI.QuickTorpedoes): the tactical bot waited 1.5 s with its hand on the button before each
+    /// - Quicker torpedoes (always on): the tactical bot waited 1.5 s with its hand on the button before each
     ///   torpedo (now 0.4 s), and only fired torpedoes while the crew had a destination order (IsSlotValid(Destination)),
     ///   so "fire torpedoes" without a move order did nothing. The destination is now needed only for depth charges,
     ///   which aim at it. BuildTacticalTree (BCCLPBBHKIF); the waits apply from the next system after a change.
-    /// - Engineering sets power itself (CrewAI.AutoPower): the engineering bot only rerouted power when the captain
+    /// - Engineering sets power itself (always on): the engineering bot only rerouted power when the captain
     ///   ordered it. Now it picks the captain's own reroute profiles: Offense in a fight, Defense when the shields fall
     ///   below 30 % (back to Offense above 70 %), Balanced once no enemy has been within 25 km for 10 s; at most one change
     ///   every 15 s. A captain's power order holds until the situation changes (a fight starts or ends). Runs beside
@@ -71,10 +71,9 @@ namespace StbcRevival
                 shieldHealth = AccessTools.MethodDelegate<Func<Sector.FAMOMDAAPCH, float>>(health);
                 shieldMax = AccessTools.MethodDelegate<Func<Sector.FAMOMDAAPCH, float>>(max);
             }
-            Plugin.Log.LogInfo($"Crew AI: {ok} of 3 trees patched (helm holds range {On(Plugin.CrewHelmHoldsRange)}, quick torpedoes {On(Plugin.CrewQuickTorpedoes)}, automatic power {On(Plugin.CrewAutoPower)})");
+            Plugin.Log.LogInfo($"Crew AI: {ok} of 3 trees patched");
         }
 
-        private static string On(BepInEx.Configuration.ConfigEntry<bool> entry) => entry.Value ? "on" : "off";
 
         // ---- Tree walking ----------------------------------------------------------------------------------------------
 
@@ -160,11 +159,10 @@ namespace StbcRevival
         }
 
         // The ship the helm is closing on while weapons are cleared to fire, and how far it is; null when the helm is
-        // doing anything else (moving to a place, evading, weapons held, the setting off).
+        // doing anything else (moving to a place, evading, weapons held).
         private static AI.AgentShip Engaged(AI.MNIJEDINGOI bb, out double distance, out SystemTransform me, out SystemTransform them)
         {
             distance = 0; me = null; them = null;
-            if (!Plugin.CrewHelmHoldsRange.Value) return null;
             var orders = Orders;
             if (orders == null) return null;
             if (!orders.TryGetValue(AI.IAHDEGHOPAK.MoveMode, out var mode) || mode == null || mode.moveMode != AI.LMHJLBGOFGM.NavMarker) return null;
@@ -212,7 +210,6 @@ namespace StbcRevival
         private static void Tactical_Postfix(AI.GGCBOJKCOMJ __result)
         {
             int checks = 0, waits = 0;
-            bool quick = Plugin.CrewQuickTorpedoes.Value;
             try
             {
                 Walk(__result, node =>
@@ -226,7 +223,6 @@ namespace StbcRevival
                             kids[i] = new TorpedoDestination(valid);
                             checks++;
                         }
-                        if (!quick) continue;
                         // The wait before firing: a Wait(1.5) in the sequence, or in its selector (the Enterprise-D's is 0.5).
                         if (Shorten(kids[i])) waits++;
                         else if (kids[i] is AI.EPMNKCFGGAG && Kids(kids[i]) is AI.GGCBOJKCOMJ[] options)
@@ -266,7 +262,7 @@ namespace StbcRevival
             protected override AI.LECHLIEBBEM IKLNPCHBLCA(AI.MNIJEDINGOI bb, AI.LECHLIEBBEM childResult)
             {
                 var result = game.ProcessUpdate(bb, AI.LECHLIEBBEM.NONE, false);
-                if (result != AI.LECHLIEBBEM.Fail || !Plugin.CrewQuickTorpedoes.Value) return result;
+                if (result != AI.LECHLIEBBEM.Fail) return result;
                 try
                 {
                     var tactical = Bridge.KHFJCHHMFHN;
@@ -326,7 +322,7 @@ namespace StbcRevival
             float now = Time.time;
             if (now < nextCheck) return;
             nextCheck = now + PowerCheckEvery;
-            if (!Plugin.CrewAutoPower.Value || Loader.JCEFNOJHCKO || powerExecute == null) return; // the original series has no rerouting
+            if (Loader.JCEFNOJHCKO || powerExecute == null) return; // the original series has no rerouting
             var crew = bb?.Owner as AI.USSAegisCrew;
             var body = crew?.AHMPFHDGMKJ;
             var me = body?.ALPAOOKFIEE;

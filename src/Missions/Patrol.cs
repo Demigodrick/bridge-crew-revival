@@ -199,7 +199,7 @@ namespace StbcRevival.Missions
         // growing with the assignments done) cruise between the system's bodies, starting at the site. As you arrive
         // a Starfleet task force warps in alongside you, one ship for each of theirs bar the flagship, with Fleet
         // Battle's allied shields, and goes for the enemy fleet. The flagship doesn't cloak (FleetBattleNoCloak). Won
-        // when the flagship is destroyed: its escort and the task force then warp out. (With EnemyAI.GroupTactics the escort forms squads round the flagship.)
+        // when the flagship is destroyed: its escort and the task force then warp out. (The escort forms squads round the flagship.)
         private const int InterceptEscorts = 7, InterceptMaxEscorts = 11;
         private static readonly string[] InterceptEmpires = { "Klingon", "Romulan" };
         private static readonly string[] InterceptFlagships = { "Sector/Ships/Ship - Klingon Flagship", "Sector/Ships/Ship - Romulan DDeridex" };

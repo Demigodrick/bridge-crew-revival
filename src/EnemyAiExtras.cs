@@ -12,18 +12,18 @@ namespace StbcRevival
     /// The smaller enemy AI changes after stage 5, each under the setting it belongs with (all host only, where the AI
     /// runs, except the turret lock-on, which every game works out):
     ///
-    /// Bug fixes (EnemyAI.BugFixes):
+    /// Bug fixes:
     /// - Turret lock-on: BeamTurret.UpdateLockOn set LockedOn from each of its emitters in turn, so only the last one
     ///   counted. Now it's locked on when any emitter has the target in its arc.
     /// - A phaser hit on a ship other than the weapon's target (a burst landing after the target changed, or a bolt
     ///   hitting a ship in the way) did no damage (AgentShip.OnPhaserAttackResultsEvent). Now it damages that ship if it
     ///   is on another team; friendly ships in the way still take nothing.
     ///
-    /// Fights smarter (EnemyAI.FightSmarter):
+    /// Fights smarter:
     /// - With an AI ship's shields down, a phaser hit on a subsystem took all of the damage into that subsystem and none
     ///   into the hull (AgentShip.takeHit(Ray...)). Now SubsystemShare goes to the subsystem and the rest to the hull.
     ///
-    /// Flies better (EnemyAI.FlyBetter):
+    /// Flies better:
     /// - Collision rays: the forward rays were spread over the middle third of the hull's width (CastCollisionRays'
     ///   NextRayOffset, GNNKBPMLPFI). Now over the whole width.
     /// - Navigation exclusion zones (planets, stations, anomalies a mission marks): only Borg cubes and the Planet
@@ -35,9 +35,10 @@ namespace StbcRevival
     /// </summary>
     internal static class EnemyAiExtras
     {
-        private static bool Fixes => Plugin.EnemyAiFixes?.Value ?? false;
-        private static bool Smarter => Plugin.EnemyAiFightSmarter?.Value ?? false;
-        private static bool Flying => Plugin.EnemyAiFlyBetter?.Value ?? false;
+        // Part of the mod (no longer settings).
+        private static bool Fixes => true;
+        private static bool Smarter => true;
+        private static bool Flying => true;
 
         private const float SubsystemShare = 0.6f; // of a phaser hit on a subsystem with the shields down; the rest to the hull
         private const float RayWidth = 3f;         // the game's ray offsets reach a third of the hull's half-width: x3
