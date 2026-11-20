@@ -14716,3 +14716,21 @@ RedShirtManager::JKCAFFGNCFO = _alertState?  # synced bool; red alert or impact 
 ConsoleBriefingRoom::BBIIGMGKLOE = _beginMusicPlayed
 NovaSpawnManager::EDHNBFPKFHF = _npcsSpawned  # set after SpawnNPCs; serialized last; ProcessPendingSpawns' third flag
 DistributedSystems::IAEABKMLNJH = _tasks  # List<DSTask>; the master serializes it in NetworkSerialize
+
+# ---- Startup screens and input modes (worked out for Skip VR setup, 2026-11-19) --------------------------------
+ControllerCheckElement::MNBMEFCBKKH = _controllersFound  # AreControllersConnected passed: DisplayControllerMessage started
+ControllerCheckElement::NLEGMCICILA = _waitingForPress   # DisplayControllerMessage's timer ran out: "Press any button"
+CenterViewIntroElement::NDDFIMFHMKI = _camera            # Camera.main's transform, set together with the prompt's listeners
+NetConnectIntroElement::BHNHIGCBAOB = _stepTimeoutAt     # Time.time + ConnectionStepTimeout; the cancel button shows after it
+MouseCursorCustomize::AFALBNMGNDK = _cursorVisible       # SetCursorVisible / IsVisible; ApplyCursor shows it only for KeyboardMouse
+SVR.InputManager::IHNHENLGKBO = _keyboardMouseUsed       # over a gamepad: GetCurrentControllerType says KeyboardMouse
+SVR.InputManager::FAKBNJECKGI = _handTrackingWanted      # motion controllers over a gamepad (config "handTracking"); UpdateActiveController switches it
+SVR.InputManager::OMHIFCDEJLK = _vrControllersConnected  # set by UpdateVRControllersConnected
+SVR.InputManager::HEMODKHOPCJ = _mousePositionLocked     # LockMousePositionThisFrame (KeyboardMouse only); hides the cursor
+SVR.InputManager::BKAGOEMEEDC = _hasFocus                # OnApplicationFocus; ShouldUpdateInput on a monitor
+SVR.InputManager::MBNEKGOOHNP = _dashboardVisible        # SetDashboardVisible (the VR runtime's menu); stops input and vibration
+SVR.InputManager::KEIMOJFBODG = _cursorLockFrames        # RefreshCursorLockNextFrame sets 2; SetlockState when it counts down to 0
+SVR.InputManager::AOCOFMMGIOP = _gamepadAnyHeld          # UpdateActiveController: last frame's, for press edges
+SVR.InputManager::MJMMBPMGPJI = _keyboardAnyHeld         # UpdateActiveController: last frame's, for press edges
+SVR.InputManager::KPNOFJJOHGH = _mouseAnyHeld            # UpdateActiveController: last frame's, for press edges
+SVR.InputManager::IEIBJLPEIED = _handTrackersAnyHeld     # UpdateActiveController: last frame's, for press edges
