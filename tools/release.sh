@@ -5,8 +5,8 @@
 # then uploads BridgeCrewRevival.zip and its .sha256. The installers fetch
 # releases/latest/download/BridgeCrewRevival.zip, so the asset names must stay fixed.
 # The in-game updater (UpdateCheck.cs, ReleaseZip.cs) reads the files it needs out of the zip with range requests,
-# checked against SHA256SUMS, which lists every file it may fetch (the DLLs, the native libraries, the ship models
-# and the second sector). The two DLLs and SHA256SUMS also go up as assets of their own: updaters from 0.7.46 and
+# checked against SHA256SUMS, which lists every file it may fetch (the DLLs, the native libraries, the ship models,
+# the second sector and the bridge designer). The two DLLs and SHA256SUMS also go up as assets of their own: updaters from 0.7.46 and
 # older fetch those, and the new version they install then fetches the rest from the zip.
 # It also updates docs/version.txt (the in-game update check reads it from the website), commits and
 # pushes that, so the site announces the new version once the release exists.
@@ -50,6 +50,13 @@ for d in ships galaxies bridges/science; do
     rel="$d/${f#"$dir"/}"
     printf '%s  %s\n' "$(sha256sum "$f" | cut -d' ' -f1)" "$rel" >> "$out/SHA256SUMS"
   done < <(find "$dir" -type f ! -name README.md -print0 | sort -z)
+done
+# The bridge designer (designer/ in the zip): the updater puts it in BepInEx/bridges when it's missing or changed,
+# Linux's under Wine/Proton, else Windows'. "Bridge Designer.exe" has a space: the updater reads the rest of the line
+# as the name (updaters up to 0.8.0 skip such lines).
+for f in "bridge-designer" "Bridge Designer.exe"; do
+  path="$root/dist/BridgeCrewRevival-$version/designer/$f"
+  if [ -f "$path" ]; then printf '%s  %s\n' "$(sha256sum "$path" | cut -d' ' -f1)" "designer/$f" >> "$out/SHA256SUMS"; fi
 done
 assets+=("$out/SHA256SUMS")
 

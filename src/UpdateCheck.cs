@@ -149,8 +149,8 @@ namespace StbcRevival
                     foreach (var native in NativeFiles)
                         if (!File.Exists(NativePath(native))) Plugin.Instance.StartCoroutine(FetchNative(Plugin.Version, native));
                 }
-                // Our ship models (BepInEx/ships), galaxy file (BepInEx/galaxies) and science console positions
-                // (BepInEx/bridges/science): any of this version's that's missing, once a launch.
+                // Our ship models (BepInEx/ships), galaxy file (BepInEx/galaxies), science console positions and the bridge designer
+                // (BepInEx/bridges): any of this version's that's missing, once a launch.
                 if (!downloading && !shipsTried)
                 {
                     shipsTried = true;
@@ -259,8 +259,13 @@ namespace StbcRevival
             var expected = new Dictionary<string, string>();
             foreach (var line in (sums ?? "").Split('\n'))
             {
-                var parts = line.Trim().Split(new[] { ' ', '*' }, StringSplitOptions.RemoveEmptyEntries);
-                if (parts.Length == 2) expected[parts[1]] = parts[0].ToLowerInvariant();
+                // "<hash>  <name>" (or "<hash> *<name>"): the name is the rest of the line, spaces and all
+                // ("designer/Bridge Designer.exe").
+                var text = line.Trim();
+                int space = text.IndexOf(' ');
+                if (space <= 0) continue;
+                var name = text.Substring(space + 1).TrimStart(' ', '*');
+                if (name.Length > 0) expected[name] = text.Substring(0, space).ToLowerInvariant();
             }
             return expected;
         }
@@ -281,6 +286,15 @@ namespace StbcRevival
         private static bool shipsTried;
         private const float ShipSeconds = 900f; // a large model on a slow line
         private static string LocalPath(string path) => Path.Combine(Paths.BepInExRootPath, path.Replace('/', Path.DirectorySeparatorChar));
+
+        // The bridge designer (designer/ in the zip): the installers put it in BepInEx/bridges, beside the layouts it
+        // saves; the updater does too, when it's missing (a player who only ever updated in game never had it) or
+        // changed on an update. One program: the Linux one under Wine/Proton (it runs outside the game), else Windows'.
+        private const string DesignerWindows = "designer/Bridge Designer.exe";
+        private const string DesignerLinux = "designer/bridge-designer";
+        private static string designer;
+        private static string Designer => designer ?? (designer = CrashReport.UnderWine() ? DesignerLinux : DesignerWindows);
+        private static string DesignerPath => Path.Combine(Path.Combine(Paths.BepInExRootPath, "bridges"), Designer.Substring("designer/".Length));
 
         // A path from SHA256SUMS that's one of ours and safe to write, plain names only: ships/<ship>/<file>,
         // galaxies/<file>.json or bridges/science/<file>.json.
@@ -306,6 +320,7 @@ namespace StbcRevival
             var wanted = new List<KeyValuePair<string, string>>();
             var all = ParseSums(sums);
             foreach (var kv in all) if (IsAssetPath(kv.Key)) wanted.Add(kv);
+            if (all.TryGetValue(Designer, out var designerHash)) wanted.Add(new KeyValuePair<string, string>(Designer, designerHash));
             // The full check (once a version) takes in the native libraries too: an older updater that brought this
             // version may have left changed ones behind (it fetched each from an asset of its own, which releases
             // no longer have).
@@ -349,11 +364,15 @@ namespace StbcRevival
                 try
                 {
                     if (data == null || data.Length == 0 || Hash(data) != kv.Value) throw new Exception("it doesn't match its checksum");
-                    var local = LocalPath(kv.Key);
+                    var local = Local(kv.Key);
                     Directory.CreateDirectory(Path.GetDirectoryName(local));
                     File.WriteAllBytes(local + ".new", data);
-                    if (File.Exists(local)) File.Delete(local);
-                    File.Move(local + ".new", local);
+                    if (kv.Key == Designer) ReplaceDesigner(local);
+                    else
+                    {
+                        if (File.Exists(local)) File.Delete(local);
+                        File.Move(local + ".new", local);
+                    }
                     Plugin.Log.LogInfo($"Update: {kv.Key} put in place ({data.Length / 1024} KB); used from the next launch");
                 }
                 catch (Exception e) { allDone = false; Plugin.Log.LogInfo($"Update: {kv.Key} not installed ({e.Message})"); }
@@ -362,7 +381,42 @@ namespace StbcRevival
             if (checkChanged && allDone) MarkSynced(version);
         }
 
-        private static string Local(string path) => Array.IndexOf(NativeFiles, path) >= 0 ? NativePath(path) : LocalPath(path);
+        private static string Local(string path) =>
+            Array.IndexOf(NativeFiles, path) >= 0 ? NativePath(path) : path == Designer ? DesignerPath : LocalPath(path);
+
+        // The designer from local + ".new": a copy still open can't be deleted on Windows but can be renamed (it
+        // keeps running from .old, deleted next time). The Linux one is made runnable: under Wine a file is written
+        // without Linux's run permission, and Wine starts Linux programs (chmod) as they are.
+        private static void ReplaceDesigner(string local)
+        {
+            try { if (File.Exists(local + ".old")) File.Delete(local + ".old"); } catch { }
+            if (File.Exists(local))
+            {
+                try { File.Delete(local); }
+                catch { File.Move(local, local + ".old"); }
+            }
+            File.Move(local + ".new", local);
+            if (Designer != DesignerLinux) return;
+            try
+            {
+                var chmod = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("/bin/chmod", "+x \"" + UnixPath(local) + "\"")
+                    { UseShellExecute = false, CreateNoWindow = true });
+                if (chmod != null && !chmod.WaitForExit(5000)) Plugin.Log.LogInfo("Update: chmod of the bridge designer didn't finish");
+            }
+            catch (Exception e)
+            {
+                Plugin.Log.LogInfo($"Update: the bridge designer couldn't be made runnable ({e.Message}); run: chmod +x \"{UnixPath(local)}\"");
+            }
+        }
+
+        // A Windows path under Wine as Linux sees it: drive Z: is the Linux root (Proton's default); anything else is
+        // left as it is.
+        private static string UnixPath(string path)
+        {
+            var full = Path.GetFullPath(path);
+            if (full.Length > 2 && char.ToUpperInvariant(full[0]) == 'Z' && full[1] == ':') return full.Substring(2).Replace('\\', '/');
+            return full.Replace('\\', '/');
+        }
 
         // Which version's files were last checked in full (ship models, the sector and the native libraries against
         // that release's SHA256SUMS), by the update that brought it or the first launch after: an updater from 0.7.46
