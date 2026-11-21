@@ -58,7 +58,6 @@ namespace StbcRevival
         internal static ConfigEntry<bool> ScienceOn;
         internal static ConfigEntry<string> ScienceLedger;
         internal static ConfigEntry<string> ScienceTestPlacement;
-        internal static ConfigEntry<bool> PvpTest;
         internal static ConfigEntry<string> PvpTestShip;
         internal static ConfigEntry<bool> SkipMicCheck;
         internal static ConfigEntry<bool> SkipVrSetup;
@@ -287,8 +286,6 @@ namespace StbcRevival
                 + "\"SCL1;1;0.5,0,0,0;;28\" is weapons +50% and enemy damage +30%). The console is on. Empty: off.");
             TestLastStand = Config.Bind("Debug", "TestLastStand", false,
                 "Testing only: every Ongoing Voyage you host runs the Revival mission Last Stand instead.");
-            PvpTest = Config.Bind("Debug", "PvpTest", false,
-                "Testing only: adds PVP to the main menu's game modes: Quick match for two crews of up to four, ship against ship. Players joining a PvP crew don't need it.");
             PvpSeparateSpace = Config.Bind("Debug", "PvpSeparateSpace", true,
                 "Testing only: in the PvP test, the crew of the ship the host isn't on keeps its own space around its ship, and either ship can use impulse. Off: both crews share the host's space, as the game does.");
             PvpTestShip = Config.Bind("Debug", "PvpTestShip", "Auto",

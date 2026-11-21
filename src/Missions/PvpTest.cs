@@ -14,7 +14,7 @@ using Team = Sector.DGGJOECIFAF;
 namespace StbcRevival.Missions
 {
     /// <summary>
-    /// PvP test (phase 1 of player-vs-player, a debug mission: [Debug] PvpTest shows it in the briefing): a second
+    /// PvP test (phase 1 of player-vs-player, a PvP room's mission, from the main menu's PVP game mode): a second
     /// player ship, "PvP B", spawns ahead of yours on the Klingon team, both ships targetable and attackable by
     /// phasers and torpedoes. Each player's game stays on its own ship (PvpPrototype); the first
     /// player to join after the host crews the second (PvpShips). It ends when either ship is destroyed, naming the winner (a win on the host when its ship wins).

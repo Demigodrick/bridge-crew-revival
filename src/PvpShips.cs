@@ -11,7 +11,7 @@ namespace StbcRevival
     /// 3: two on A, one on B; 4: two each). [Debug] PvpTestShip = A or B overrides it for your own game (Auto:
     /// the rule).
     /// Each game publishes its ship as the player property "PVP", so the host knows who is where even with
-    /// an override. A player whose game hasn't published one (the PvP test off: [Debug] PvpTest) counts as on A,
+    /// an override. A player whose game hasn't published one (a Revival from before PvP was for everyone) counts as on A,
     /// where their game puts them as the normal game does, and the host is told when the test starts.
     /// </summary>
     internal static class PvpShips
