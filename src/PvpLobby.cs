@@ -13,9 +13,8 @@ using UnityEngine.UI;
 namespace StbcRevival
 {
     /// <summary>
-    /// PvP from the main menu: a PVP game mode next to Quick, Solo, Private and Tutorial ([Debug] PvpTest shows
-    /// it). It runs the game's own Quick match with its own game mode and room size: rooms say their mode in the
-    /// listed room property C3 (Quick 0, Solo 1, Private 2, Tutorial 3), and Quick match only joins rooms of its
+    /// PvP from the main menu: a PVP game mode next to Quick, Solo, Private and Tutorial, for everyone. It runs
+    /// the game's own Quick match with its own game mode and room size: rooms say their mode in the listed room property C3 (Quick 0, Solo 1, Private 2, Tutorial 3), and Quick match only joins rooms of its
     /// own mode and size, so PvP finds a waiting PvP crew (eight seats) or hosts one, and never a co-op crew.
     ///  - The menu: the toggle is a copy of Quick's (same toggle group). While it's picked the menu's own mode
     ///    is "none" (COUNT), so picking another mode afterwards works as before; Play runs Quick, and the
@@ -62,7 +61,6 @@ namespace StbcRevival
 
         private static void MenuStart_Postfix(ConsoleMainMenu __instance)
         {
-            if (!Plugin.PvpTest.Value) return;
             var menu = __instance;
             try
             {
