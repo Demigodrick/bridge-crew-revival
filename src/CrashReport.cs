@@ -383,7 +383,7 @@ namespace StbcRevival
 
         private static bool? wine;
 
-        private static bool UnderWine()
+        internal static bool UnderWine()
         {
             if (wine == null)
             {
