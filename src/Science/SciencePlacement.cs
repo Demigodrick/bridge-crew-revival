@@ -200,10 +200,10 @@ namespace StbcRevival.Science
                 BridgeLayout.ParseLayout(text, out added); // the added parts, read as a layout's
             }
             catch (Exception e) { Plugin.Log.LogWarning($"Science console: {file} for {name} isn't a placement this version can read: {e.Message}"); return; }
-            // A model is only on the PC it was made on (the designer refuses them): left out, so no one gets a console
-            // that's there for some players only.
-            int models = added.RemoveAll(a => !string.IsNullOrEmpty(a.Model));
-            if (models > 0 && warnedModels.Add(file)) Plugin.Log.LogWarning($"Science console: {Path.GetFileName(file)} has {models} model part(s); left out (only bridge pieces are on every PC)");
+            // A model or a bundle's prefab is only on the PC it was made on (the designer refuses them): left out, so no
+            // one gets a console that's there for some players only.
+            int models = added.RemoveAll(a => !string.IsNullOrEmpty(a.Model) || !string.IsNullOrEmpty(a.Bundle));
+            if (models > 0 && warnedModels.Add(file)) Plugin.Log.LogWarning($"Science console: {Path.GetFileName(file)} has {models} model or bundle part(s); left out (only bridge pieces are on every PC)");
 
             holder = new GameObject(HolderName);
             SceneManager.MoveGameObjectToScene(holder, scene);

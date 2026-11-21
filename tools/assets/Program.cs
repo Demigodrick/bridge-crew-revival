@@ -11,13 +11,36 @@
 //   prefab <file> <renderer path ID>  the renderer's prefab: its root's name and children (local position, rotation)
 //   fit <file> <renderer path ID>     where each bind pose puts the head mesh's middle, against the eyes in Head space
 //   mesh <file> <name or path ID>              a mesh's counts: vertices, channels, bind poses, blend shapes, sub-meshes
-//   glb <scene file> [out.glb]       a scene's drawn objects, textured, as binary glTF (Export.cs), e.g. glb level6 aegis.glb
+//   glb <scene file> [out.glb] [root] a scene's drawn objects (or one prefab's: its root GameObject's path ID), textured, as binary glTF (Export.cs), e.g. glb level6 aegis.glb
+//   bundle <bundle> <folder>          a Unity 5.4 asset bundle unpacked into the folder (Bundle.cs), each serialized file's objects counted
 using StbcRevival;
 
 var gameDir = Environment.GetEnvironmentVariable("GAME_DIR")
               ?? Path.Combine(Environment.GetEnvironmentVariable("HOME")!, ".local/share/Steam/steamapps/common/Star Trek Bridge Crew");
 if (args.Length < 2) { Console.Error.WriteLine("usage: see the comment at the top of Program.cs"); return 1; }
 var file = Path.IsPathRooted(args[1]) ? args[1] : Path.Combine(gameDir, "stbc_Data", args[1]);
+if (args[0] == "bundle")
+{
+    if (args.Length < 3) { Console.Error.WriteLine("usage: bundle <bundle> <folder>"); return 1; }
+    foreach (var name in Bundle.Unpack(file, args[2]))
+    {
+        string at = Path.Combine(args[2], name);
+        Console.Write($"{name}: {new FileInfo(at).Length / 1024} KB");
+        try
+        {
+            using var f = new AssetFile(at);
+            Console.WriteLine($", Unity {f.UnityVersion}, {f.Objects.Count} objects: " + string.Join(", ", f.Objects.GroupBy(o => o.ClassId).OrderByDescending(g => g.Count()).Take(8).Select(g => $"{g.Count()}x{g.Key}")) + "; externals: " + string.Join(", ", f.Externals));
+        }
+        catch (Exception e) { Console.WriteLine(" (" + e.Message + ")"); }
+    }
+    foreach (var name in Directory.GetFiles(args[2]))
+    {
+        try { using var f = new AssetFile(name); foreach (var (asset, link) in BundleContents.Read(f)) Console.WriteLine($"asset {asset}: {link}"); } catch { }
+    }
+    foreach (var (name, inFile, root) in BundleContents.Prefabs(args[2], Directory.GetFiles(args[2]).Select(Path.GetFileName)!))
+        Console.WriteLine($"prefab {name}: {inFile} #{root}");
+    return 0;
+}
 using var assets = new AssetFile(file);
 
 switch (args[0])
@@ -117,7 +140,7 @@ switch (args[0])
         {
             var go = Go(t.GameObject);
             var classes = string.Join(",", go.Components.Select(c => c.Key).Where(k => k != 4 && k != 224));
-            Console.WriteLine($"{new string(' ', level * 2)}{go.Name} {F(t.Position)}{(classes.Length > 0 ? " [" + classes + "]" : "")}{(t.Children.Count > 0 ? $" {t.Children.Count} children" : "")}");
+            Console.WriteLine($"{new string(' ', level * 2)}{go.Name} #{t.GameObject.PathId} {F(t.Position)}{(classes.Length > 0 ? " [" + classes + "]" : "")}{(t.Children.Count > 0 ? $" {t.Children.Count} children" : "")}");
             if (level + 1 < depth) foreach (var c in t.Children) Show(Tr(c), level + 1);
         }
         foreach (var e in assets.Objects.Where(o => o.ClassId == 4 || o.ClassId == 224))
@@ -286,7 +309,15 @@ switch (args[0])
         break;
     }
     case "glb":
-        return GlbExport.Run(Path.GetDirectoryName(file)!, Path.GetFileName(file), args.Length > 2 ? args[2] : Path.GetFileName(file) + ".glb");
+    {
+        // [root GameObject path ID]: one prefab's objects (a bundle's file, unpacked with "bundle"); the game's files fill in its links.
+        var (glb, summary) = GlbExport.Build(Path.GetDirectoryName(file)!, Path.GetFileName(file), Path.Combine(gameDir, "stbc_Data"), args.Length > 3 ? long.Parse(args[3]) : 0);
+        string outPath = args.Length > 2 ? args[2] : Path.GetFileName(file) + ".glb";
+        File.WriteAllBytes(outPath, glb);
+        Console.WriteLine($"{outPath}: {glb.Length / 1048576.0:0.0} MB");
+        Console.Write(summary);
+        return 0;
+    }
     default:
         Console.Error.WriteLine("unknown command " + args[0]);
         return 1;

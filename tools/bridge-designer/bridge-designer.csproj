@@ -21,6 +21,7 @@
     <!-- The mod's own reader and the glb exporter (tools/assets), so the designer sees what the game has. -->
     <Compile Include="../../src/AssetFile.cs" />
     <Compile Include="../assets/Export.cs" />
+    <Compile Include="../assets/Bundle.cs" />
     <!-- The page, built into the program (one file to hand out) (the web option serves it from a folder instead). -->
     <EmbeddedResource Include="web/**" LogicalName="web/%(RecursiveDir)%(Filename)%(Extension)" />
   </ItemGroup>

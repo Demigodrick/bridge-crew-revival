@@ -11,10 +11,11 @@ namespace StbcRevival
 {
     /// <summary>
     /// Parts added to a bridge by its layout (BridgeLayout): a piece (or group) of any bridge, read from that bridge's
-    /// scene file, or a model (.obj, with its .mtl and textures) from BepInEx/bridges/models. Only what's drawn is
-    /// built (meshes and materials, no scripts or colliders), lit by the bridge's light probes like anything that
-    /// moves. Placed as the layout says: turned about up around its pivot (its middle where its own bridge, or its
-    /// model file, has it), scaled, and moved.
+    /// scene file, a model (.obj, with its .mtl and textures) from BepInEx/bridges/models, or a prefab from a Unity
+    /// asset bundle in BepInEx/bridges/bundles (BundleParts). For a piece or a model only what's drawn is built (meshes
+    /// and materials, no scripts or colliders), lit by the bridge's light probes like anything that moves; a prefab
+    /// comes as it was built (its colliders and lights too). Placed as the layout says: turned about up around its
+    /// pivot (its middle where its own bridge, its model file or its prefab has it), scaled, and moved.
     ///
     /// The files are read on a background thread; the meshes, materials and textures are made on the main thread.
     /// Coordinates: a model's are taken as glTF's and the designer's (right-handed: z flipped for the game, triangles
@@ -45,7 +46,7 @@ namespace StbcRevival
 
         internal sealed class Spec
         {
-            public string Id, Scene, Path, Model;
+            public string Id, Scene, Path, Model, Bundle, Asset;
             public int Level = -1;
             public Vector3 Pivot, Move;
             public float Turn, Scale = 1f;
@@ -96,7 +97,8 @@ namespace StbcRevival
                     var r = new Read { Spec = spec };
                     try
                     {
-                        if (!string.IsNullOrEmpty(spec.Model)) ReadModel(r, models);
+                        if (!string.IsNullOrEmpty(spec.Bundle)) { } // loaded by Unity on the main thread (BundleParts)
+                        else if (!string.IsNullOrEmpty(spec.Model)) ReadModel(r, models);
                         else ReadPiece(r, dataDir);
                     }
                     catch (Exception e) { r.Error = e.Message; }
@@ -134,7 +136,7 @@ namespace StbcRevival
             owned.Clear();
         }
 
-        private static string Describe(Spec s) => s.Model != null ? "model " + s.Model : $"{s.Path} from {s.Scene}";
+        private static string Describe(Spec s) => s.Bundle != null ? $"{s.Asset} from bundle {s.Bundle}" : s.Model != null ? "model " + s.Model : $"{s.Path} from {s.Scene}";
 
         // ------------------------------------------------------------------------------------------- reading
         private static void ReadPiece(Read r, string dataDir)
@@ -296,6 +298,7 @@ namespace StbcRevival
             SceneManager.MoveGameObjectToScene(root, target);
             built.Add(root);
             int pieces = 0;
+            if (spec.Bundle != null) pieces += BundleParts.Instantiate(spec.Bundle, spec.Asset, root.transform);
             if (r.Drawn != null)
                 foreach (var d in r.Drawn)
                 {

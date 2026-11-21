@@ -89,14 +89,15 @@ namespace StbcRevival
                     var spec = new BridgeParts.Spec
                     {
                         Id = Str("id") ?? k.ToString(),
-                        Scene = Str("scene"), Path = Str("path"), Model = Str("model"),
+                        Scene = Str("scene"), Path = Str("path"), Model = Str("model"), Bundle = Str("bundle"), Asset = Str("asset"),
                         Level = o.TryGetValue("level", out var lv) && lv is double ld ? (int)ld : -1,
                         Pivot = VecOf(o, "pivot", $"added part {k}"),
                         Move = VecOf(o, "move", $"added part {k}"),
                         Turn = o.TryGetValue("turn", out var t) && t is double td ? (float)td : 0f,
                         Scale = o.TryGetValue("scale", out var sc) && sc is double sd ? (float)sd : 1f,
                     };
-                    if (spec.Model == null && (spec.Path == null || spec.Level < 0)) throw new FormatException($"added part {k}: neither a model nor a bridge's piece (path and level)");
+                    if (spec.Bundle != null && spec.Asset == null) throw new FormatException($"added part {k}: a bundle but no asset (prefab) in it");
+                    if (spec.Model == null && spec.Bundle == null && (spec.Path == null || spec.Level < 0)) throw new FormatException($"added part {k}: neither a model, a bundle's prefab nor a bridge's piece (path and level)");
                     added.Add(spec);
                 }
             }
