@@ -64,6 +64,7 @@ namespace StbcRevival
             if (Time.unscaledTime - awaySince < 2f) return;
             toldAway = true;
             Plugin.Log.LogInfo($"PvP: [seat] your view is turned {off:0}° from your chair's facing at " + Describe(me, station));
+            StraightenRig(me, view.transform.parent); // if it's the rig that's turned, not your looking around
         }
 
         // The desktop camera keeps its own turn (FPSCamera: mouse look) and puts it straight only when your console
@@ -75,10 +76,26 @@ namespace StbcRevival
             {
                 var camera = me?.PawnObject == null ? null : me.PawnObject.GetComponentInChildren<SVR.FPSCamera>(true);
                 if (camera == null || CameraReset == null) return;
+                StraightenRig(me, camera.transform.parent);
                 CameraReset.Invoke(camera, null);
                 Plugin.Log.LogInfo("PvP: [seat] view put straight for the new chair");
             }
             catch (System.Exception e) { Plugin.Log.LogWarning("PvP: [seat] putting the view straight: " + (e.InnerException ?? e).Message); }
+        }
+
+        // The camera's rig (Character Camera Root, the FPSCamera's parent) is only ever placed by the game (its
+        // position each frame), never turned. After a move from one table to the other it was seen facing away from
+        // the body: "chair 315°, body 315°, view 135°, local turn 0°", and putting the camera straight inside it
+        // left you facing the wall. Turned back to the chair's facing when it's more than 90° off.
+        private static void StraightenRig(NovaPlayerInfo me, Transform rig)
+        {
+            var station = me?.Station as NovaStation;
+            if (rig == null || station == null) return;
+            float off = Mathf.DeltaAngle(Yaw(rig), Yaw(station.transform));
+            if (Mathf.Abs(off) <= 90f) return;
+            string parent = rig.parent == null ? "nothing" : $"'{rig.parent.name}' {Yaw(rig.parent):0}°";
+            rig.Rotate(station.transform.up, off, Space.World);
+            Plugin.Log.LogWarning($"PvP: [seat] the camera rig '{rig.name}' faced {off:0}° away from your chair (under {parent}); turned back to it");
         }
 
         private static string Describe(NovaPlayerInfo me, NovaStation station)
@@ -86,7 +103,8 @@ namespace StbcRevival
             var pawn = me.PawnObject;
             var view = Camera.main;
             string body = pawn == null ? "no body" : $"body {Yaw(pawn.transform):0}° at {pawn.transform.position}";
-            string look = view == null ? "no camera" : $"view {Yaw(view.transform):0}° (camera '{view.name}' under '{(view.transform.parent == null ? "nothing" : view.transform.parent.name)}', local turn {view.transform.localEulerAngles.y:0}°)";
+            var rig = view == null ? null : view.transform.parent;
+            string look = view == null ? "no camera" : $"view {Yaw(view.transform):0}° (camera '{view.name}' under '{(rig == null ? "nothing" : rig.name)}' {(rig == null ? 0f : Yaw(rig)):0}° in '{(rig == null || rig.parent == null ? "nothing" : rig.parent.name)}', local turn {view.transform.localEulerAngles.y:0}°)";
             return $"{station.name}: chair {Yaw(station.transform):0}° at {station.transform.position}; {body}; {look}";
         }
 
