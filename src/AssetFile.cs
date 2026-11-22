@@ -44,13 +44,20 @@ namespace StbcRevival
             if (version != 15 || bigEndian) throw new NotSupportedException($"{path}: format version {version}{(bigEndian ? ", big-endian" : "")}; only Unity 5.4's version 15 is read");
             UnityVersion = ReadCString();
             reader.ReadInt32(); // platform
-            if (reader.ReadByte() != 0) throw new NotSupportedException($"{path}: has type trees; this reader only knows the layouts without them");
+            // Type trees (each type's field layout): a bundle's files have them, the game's own don't. Skipped: the
+            // layouts are Unity 5.4's, written out here, whichever file they're in.
+            bool typeTrees = reader.ReadByte() != 0;
             int types = reader.ReadInt32();
             for (int i = 0; i < types; i++)
             {
                 int classId = reader.ReadInt32();
                 if (classId < 0) reader.ReadBytes(16); // a script's type: its script hash
                 reader.ReadBytes(16);                  // the type's hash
+                if (typeTrees)
+                {
+                    int nodes = reader.ReadInt32(), strings = reader.ReadInt32();
+                    reader.BaseStream.Position += (long)nodes * 24 + strings;
+                }
             }
             int count = reader.ReadInt32();
             for (int i = 0; i < count; i++)

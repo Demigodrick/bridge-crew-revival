@@ -55,9 +55,17 @@ internal static class GlbExport
     }
 
     /// <summary>A scene as a .glb in memory, and what was and wasn't in it.</summary>
-    public static (byte[] glb, string summary) Build(string dataDir, string sceneFile)
+    public static (byte[] glb, string summary) Build(string dataDir, string sceneFile) => Build(dataDir, sceneFile, null, 0);
+
+    /// <summary>
+    /// A file's drawn objects as a .glb: a scene's (root 0), or one prefab's (the objects under the GameObject with
+    /// path ID <paramref name="root"/>), as in an asset bundle unpacked into <paramref name="dataDir"/> (Bundle). The
+    /// files it links to are looked for there (names as links have them, any case), then in the game's data folder
+    /// <paramref name="gameData"/> and its Resources (Unity's built-in meshes and shaders).
+    /// </summary>
+    public static (byte[] glb, string summary) Build(string dataDir, string sceneFile, string gameData, long root)
     {
-        var x = new Exporter(dataDir, sceneFile);
+        var x = new Exporter(dataDir, sceneFile, gameData, root);
         try
         {
             x.Export();
@@ -68,7 +76,8 @@ internal static class GlbExport
 
     private sealed class Exporter : IDisposable
     {
-        private readonly string dataDir;
+        private readonly string dataDir, gameData;
+        private readonly long rootGo;
         private readonly AssetFile scene;
         private readonly Dictionary<string, AssetFile> files = new();
         private readonly Dictionary<(string, long), MeshAsset> meshes = new();
@@ -84,9 +93,11 @@ internal static class GlbExport
         private readonly SortedDictionary<string, int> problems = new();
         private Vector3 sceneMin = new(float.MaxValue), sceneMax = new(float.MinValue);
 
-        public Exporter(string dataDir, string sceneFile)
+        public Exporter(string dataDir, string sceneFile, string gameData = null, long root = 0)
         {
             this.dataDir = dataDir;
+            this.gameData = gameData;
+            rootGo = root;
             scene = new AssetFile(Path.Combine(dataDir, sceneFile));
             files[sceneFile] = scene;
         }
@@ -100,10 +111,27 @@ internal static class GlbExport
         {
             if (link.FileId == 0) return (from, Path.GetFileName(from.Path));
             var name = from.FileOf(link);
-            // Unity's built-in meshes and textures are in Resources/ ("unity default resources").
-            string at = File.Exists(Path.Combine(dataDir, name)) ? Path.Combine(dataDir, name) : Path.Combine(dataDir, "Resources", name);
-            if (!files.TryGetValue(name, out var f)) files[name] = f = new AssetFile(at);
+            if (!files.TryGetValue(name, out var f)) files[name] = f = new AssetFile(Locate(dataDir, gameData, name));
             return (f, name);
+        }
+
+        /// <summary>
+        /// Where a linked file is: in the folder (any case: a bundle's links are lower case, "archive:/cab-…/cab-…"),
+        /// else the game's data folder, else Resources in either (Unity's built-in meshes and textures, "unity default
+        /// resources").
+        /// </summary>
+        internal static string Locate(string dataDir, string gameData, string name)
+        {
+            name = Path.GetFileName(name);
+            foreach (var dir in new[] { dataDir, gameData, gameData == null ? null : Path.Combine(gameData, "Resources"), Path.Combine(dataDir, "Resources") })
+            {
+                if (dir == null || !Directory.Exists(dir)) continue;
+                string at = Path.Combine(dir, name);
+                if (File.Exists(at)) return at;
+                var any = Directory.EnumerateFiles(dir).FirstOrDefault(f => string.Equals(Path.GetFileName(f), name, StringComparison.OrdinalIgnoreCase));
+                if (any != null) return any;
+            }
+            return Path.Combine(dataDir, name);
         }
 
         // ------------------------------------------------------------------------------------------- the scene
@@ -130,6 +158,17 @@ internal static class GlbExport
                 r.ReadUInt16();                 // tag
                 bool active = r.ReadBoolean();  // is active
                 trs[e.PathId] = new Tr { Id = e.PathId, Father = t.Father.IsNull ? 0 : t.Father.PathId, Go = t.GameObject.PathId, Pos = t.Position, Rot = t.Rotation, Scale = t.Scale, Name = go.Name, Active = active, Components = go.Components };
+            }
+            // One prefab: only what's under its root GameObject.
+            if (rootGo != 0)
+            {
+                var top = trs.Values.FirstOrDefault(t => t.Go == rootGo) ?? throw new InvalidDataException($"no object {rootGo} in {Path.GetFileName(scene.Path)}");
+                bool Under(Tr t)
+                {
+                    for (var a = t; a != null; a = a.Father != 0 && trs.TryGetValue(a.Father, out var f) ? f : null) if (a == top) return true;
+                    return false;
+                }
+                foreach (var id in trs.Values.Where(t => !Under(t)).Select(t => t.Id).ToList()) trs.Remove(id);
             }
             var world = new Dictionary<long, Matrix4x4>();
             Matrix4x4 World(Tr t)
@@ -221,10 +260,12 @@ internal static class GlbExport
                     // A batched piece's second UVs in the combined mesh already point into the lightmap (Unity applied
                     // its scale and offset when it batched them).
                     if (isBatched && lightmap >= 0) lightmapST = new[] { 1f, 1f, 0f, 0f };
+                    var m = isBatched ? Matrix4x4.Identity : World(t);
+                    // Scaled to nothing (a hidden UI piece, say): not drawn, and a viewer can't take such a matrix apart.
+                    if (MathF.Abs(m.GetDeterminant()) < 1e-12f) { skippedOther++; Problem("scaled to nothing"); continue; }
                     int gm = GltfMesh(mname, mf.Mesh.PathId, mesh, subs, mr.Materials, path, lightmap, lightmapST);
                     if (gm < 0) { skippedOther++; continue; }
                     var node = new JsonObject { ["name"] = path, ["mesh"] = gm };
-                    var m = isBatched ? Matrix4x4.Identity : World(t);
                     if (!m.IsIdentity) node["matrix"] = Matrix(Flip(m));
                     node["extras"] = new JsonObject { ["path"] = path, ["batched"] = isBatched, ["mesh"] = mesh.Name, ["file"] = mname };
                     if (lightmap >= 0) node["extras"]["lightmap"] = lightmap;
@@ -478,7 +519,7 @@ internal static class GlbExport
 
         internal static byte[] StreamOf(string dataDir, TextureAsset t)
         {
-            using var s = new FileStream(Path.Combine(dataDir, t.StreamPath), FileMode.Open, FileAccess.Read, FileShare.Read);
+            using var s = new FileStream(Locate(dataDir, null, t.StreamPath), FileMode.Open, FileAccess.Read, FileShare.Read);
             s.Position = t.StreamOffset;
             var bytes = new byte[t.StreamSize];
             s.ReadExactly(bytes);
@@ -489,7 +530,7 @@ internal static class GlbExport
 
         private byte[] Stream(TextureAsset t)
         {
-            using var s = new FileStream(Path.Combine(dataDir, t.StreamPath), FileMode.Open, FileAccess.Read, FileShare.Read);
+            using var s = new FileStream(Locate(dataDir, gameData, t.StreamPath), FileMode.Open, FileAccess.Read, FileShare.Read);
             s.Position = t.StreamOffset;
             var bytes = new byte[t.StreamSize];
             s.ReadExactly(bytes);

@@ -9,7 +9,8 @@
 // Moving: drag a picked piece itself across the floor (Shift: up and down), or the gizmo's arrows, or its ring to
 // turn; arrows and Page Up/Down nudge, [ and ] turn; or type the values. Shift+click picks several to move together.
 //
-// Adding parts: a piece (or group) of any bridge, or a model (.obj) from BepInEx/bridges/models, placed where the
+// Adding parts: a piece (or group) of any bridge, a model (.obj) from BepInEx/bridges/models, or a prefab from a Unity
+// asset bundle in BepInEx/bridges/bundles (shown from a .glb the designer makes of it), placed where the
 // view is looking. An added part is a piece with the path "+id": moved, turned and scaled like any other (Delete
 // takes it away); the layout lists it under "added", and the mod builds it in the game.
 //
@@ -48,7 +49,7 @@ let bridge = null;        // { level, scene, name }
 let root = null;          // the loaded bridge
 let pieces = [];          // { obj, path, name, backdrop, box (as the game has it), base (its matrix), row }
 let edits = new Map();    // path -> { pivot, move (Vector3), turn (radians about up), hidden }
-let added = new Map();    // id -> { id, from: { scene, level, path } | { model }, scale, piece }
+let added = new Map();    // id -> { id, from: { scene, level, path } | { model } | { bundle, asset }, scale, piece }
 let nextId = 1;
 const extras = new THREE.Group(); // the added parts
 // Stations (where players sit): { unit (the station's own group: moves only as a whole), seat (Vector3), chair (the
@@ -333,8 +334,8 @@ async function loadLayout() {
     nextId = Math.max(nextId, (parseInt(l.id) || 0) + 1);
   }
   for (const a of layout.added ?? []) {
-    const from = a.model ? { model: a.model } : { scene: a.scene, level: a.level, path: a.path };
-    try { await makeAdded(a.id, from, a.scale ?? 1); } catch (err) { say(`Couldn't add ${a.model ?? a.path}: ${err.message}`); continue; }
+    const from = fromSaved(a);
+    try { await makeAdded(a.id, from, a.scale ?? 1); } catch (err) { say(`Couldn't add ${partName(from)}: ${err.message}`); continue; }
     edits.set('+' + a.id, { pivot: fromGame(a.pivot), move: fromGame(a.move), turn: -a.turn * Math.PI / 180, hidden: false });
     nextId = Math.max(nextId, (parseInt(a.id) || 0) + 1);
   }
@@ -473,7 +474,7 @@ function refreshSelection() {
   const lamp = sel.length === 1 ? pieces.find(p => p.path === path && p.light) : null;
   for (const [id, light, piece] of [['infoMesh', 'Light', 'Mesh'], ['infoSize', 'Reach', 'Size'], ['infoMats', 'Colour', 'Materials']])
     $(id).previousElementSibling.textContent = lamp ? light : piece;
-  $('infoMesh').textContent = lamp ? describeLight(lamp) : one?.added ? (one.added.from.model ? `model ${one.added.from.model}` : `${short(one.added.from.path)} from ${bridges.find(b => b.level === one.added.from.level && !b.scene.includes('-'))?.name ?? one.added.from.scene}`)
+  $('infoMesh').textContent = lamp ? describeLight(lamp) : one?.added ? (one.added.from.model ? `model ${one.added.from.model}` : one.added.from.bundle ? `${prefabName(one.added.from.asset)} from bundle ${one.added.from.bundle}` : `${short(one.added.from.path)} from ${bridges.find(b => b.level === one.added.from.level && !b.scene.includes('-'))?.name ?? one.added.from.scene}`)
     : one ? `${one.obj.userData.mesh ?? '?'} (${one.obj.userData.file ?? '?'})` : '—';
   const lv = lamp && lightValues(lamp);
   $('infoSize').textContent = lv ? `reaches ${lv.range.toFixed(1)} m · intensity ${lv.intensity.toFixed(2)}` : `${size.x.toFixed(2)} × ${size.y.toFixed(2)} × ${size.z.toFixed(2)} m`;
@@ -720,29 +721,39 @@ function sourceScene(level) {
   return sourceCache.get(level);
 }
 let partPick = null; // { from, label }
+let partFill = 0;     // the latest list asked for: an older one still reading leaves the list alone
 
 async function fillParts() {
-  const src = $('source').value;
+  const src = $('source').value, fill = ++partFill;
   $('parts').replaceChildren();
   partPick = null;
   $('addPart').disabled = $('addGroup').disabled = true;
   const rows = [];
   if (src === 'models') {
     const models = await (await fetch('/api/models')).json();
+    if (fill !== partFill) return;
     if (!models.length) { const li = document.createElement('li'); li.className = 'muted'; li.textContent = 'No models yet: put .obj files (with their .mtl and textures) in BepInEx/bridges/models.'; $('parts').append(li); return; }
     for (const m of models) rows.push({ label: m, from: { model: m } });
+  } else if (src === 'bundles') {
+    const list = await (await fetch('/api/bundles')).json();
+    if (fill !== partFill) return;
+    if (!list.length) { const li = document.createElement('li'); li.className = 'muted'; li.textContent = 'No bundles yet: put Unity 5.4 asset bundles (built with chunk-based compression) in BepInEx/bridges/bundles.'; $('parts').append(li); return; }
+    for (const b of list) {
+      if (b.error) { const li = document.createElement('li'); li.className = 'muted'; li.textContent = `${b.file}: ${b.error}`; $('parts').append(li); }
+      for (const p of b.prefabs) rows.push({ label: `${prefabName(p)} (${b.file})`, from: { bundle: b.file, asset: p } });
+    }
   } else {
     const b = bridges.find(x => x.level === +src);
     const sc = await sourceScene(b.level);
     sc.traverse(o => { if (o.userData.path && !helper.test(o.userData.path)) rows.push({ label: o.userData.path.split('/').slice(-2).join(' / '), from: { scene: b.scene, level: b.level, path: o.userData.path } }); });
     rows.sort((a, c) => a.label.localeCompare(c.label));
   }
-  if (src !== $('source').value) return; // changed while reading
+  if (fill !== partFill) return; // asked again while reading
   const frag = document.createDocumentFragment();
   for (const r of rows) {
     const li = document.createElement('li');
     li.textContent = r.label;
-    li.title = r.from.path ?? r.from.model;
+    li.title = r.from.path ?? r.from.model ?? r.from.asset;
     li.addEventListener('click', () => {
       for (const x of $('parts').children) x.classList.remove('sel');
       li.classList.add('sel');
@@ -761,7 +772,15 @@ function filterParts() {
   for (const li of $('parts').children) li.hidden = q !== '' && !li.textContent.toLowerCase().includes(q) && !(li.title ?? '').toLowerCase().includes(q);
 }
 
-/** Makes an added part's objects (from its bridge's copy, or its model file) and its piece; resolves when it's there. */
+/** An added part's source as a layout file has it: a model, a bundle's prefab, or a bridge's piece. */
+function fromSaved(a) {
+  return a.model ? { model: a.model } : a.bundle ? { bundle: a.bundle, asset: a.asset } : { scene: a.scene, level: a.level, path: a.path };
+}
+/** A prefab's short name: "assets/bridges/MyBridge.prefab" is "MyBridge". */
+function prefabName(asset) { return (asset ?? '').split('/').pop().replace(/\.prefab$/i, ''); }
+function partName(from) { return from.model ?? (from.bundle ? `${prefabName(from.asset)} (${from.bundle})` : from.path); }
+
+/** Makes an added part's objects (from its bridge's copy, its model file or its bundle) and its piece; resolves when it's there. */
 async function makeAdded(id, from, scale) {
   if (from.light) {
     const piece = makeLamp({ path: '+' + id, kind: 'point', baked: false, ...AddedLight, at: [0, 0, 0], dir: [0, -1, 0] });
@@ -786,6 +805,13 @@ async function makeAdded(id, from, scale) {
       loader.setMaterials(mtl);
     } catch { /* no .mtl: plain grey */ }
     group.add(loader.parse(objText));
+  } else if (from.bundle) {
+    // A bundle's prefab, made into a .glb by the designer (in the game's space, as the bridges are).
+    const url = `/api/bundle.glb?file=${encodeURIComponent(from.bundle)}&prefab=${encodeURIComponent(from.asset)}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(await res.text() || `the bundle couldn't be read (${res.status})`);
+    const g = await new GLTFLoader().parseAsync(await res.arrayBuffer(), '');
+    group.add(g.scene);
   } else {
     const sc = await sourceScene(from.level);
     sc.traverse(o => {
@@ -801,7 +827,7 @@ async function makeAdded(id, from, scale) {
   group.updateMatrixWorld(true);
   extras.add(group);
   const box = new THREE.Box3().setFromObject(group);
-  const label = from.model ?? from.path.split('/').slice(-2).join(' / ');
+  const label = from.model ?? (from.bundle ? prefabName(from.asset) : from.path.split('/').slice(-2).join(' / '));
   const piece = { obj: group, path: '+' + id, name: '+ ' + label, backdrop: false, box, base: new THREE.Matrix4(), added: null };
   const a = { id: String(id), from, scale, piece };
   piece.added = a;
@@ -834,7 +860,7 @@ async function addPart(from) {
   // A model stands on the floor under where the view is looking; a bridge's part keeps its own height (the bridges'
   // floors are at about the same height).
   let dy = 0;
-  if (from.model || from.light) {
+  if (from.model || from.bundle || from.light) {
     const down = new THREE.Raycaster(at.clone().add(new THREE.Vector3(0, 2, 0)), new THREE.Vector3(0, -1, 0), 0, 10);
     const floor = root && down.intersectObject(root, true).find(h => visibleUp(h.object) && h.face && h.face.normal.y > 0.5);
     // A light: 2 m above the floor.
@@ -844,7 +870,7 @@ async function addPart(from) {
   applyPiece(a.piece);
   changed();
   select('+' + id);
-  say(from.light ? 'Added a light: drag it where you want it (Page Up/Down: higher, lower).' : `Added ${from.model ?? short(from.path)}: drag it where you want it.`);
+  say(from.light ? 'Added a light: drag it where you want it (Page Up/Down: higher, lower).' : `Added ${from.model ?? (from.bundle ? prefabName(from.asset) : short(from.path))}: drag it where you want it.`);
 }
 
 $('source').addEventListener('change', fillParts);
@@ -941,8 +967,8 @@ async function loadScience() {
     for (const a of f.added ?? []) {
       // Ids of their own, apart from the layout's.
       const id = String(a.id).startsWith('s') ? String(a.id) : 's' + a.id;
-      const from = a.model ? { model: a.model } : { scene: a.scene, level: a.level, path: a.path };
-      try { await makeAdded(id, from, a.scale ?? 1); } catch (err) { say(`Couldn't add the science console's ${a.model ?? a.path}: ${err.message}`); continue; }
+      const from = fromSaved(a);
+      try { await makeAdded(id, from, a.scale ?? 1); } catch (err) { say(`Couldn't add the science console's ${partName(from)}: ${err.message}`); continue; }
       edits.set('+' + id, { pivot: fromGame(a.pivot), move: fromGame(a.move), turn: -a.turn * Math.PI / 180, hidden: false });
       science.ids.add(id);
     }
@@ -987,7 +1013,7 @@ $('sciPart').addEventListener('click', () => {
   const a = path?.startsWith('+') && added.get(path.slice(1));
   if (!a || a.from.light) { say('Pick an added part first (Add parts), then use it for the science console.'); return; }
   if (science.ids.has(a.id)) { science.ids.delete(a.id); say('Back in the layout.'); }
-  else if (a.from.model) {
+  else if (a.from.model || a.from.bundle) {
     // The placement ships to every player; a model is only on this PC, so theirs would have a screen with no console.
     say('A model can\'t be the science console: other players don\'t have it. Add a piece from a bridge (Add parts) instead.');
     return;
@@ -1306,6 +1332,7 @@ $('bridge').addEventListener('change', () => {
 // Parts come from the game's bridges (a ship's copy has the same ones).
 for (const b of bridges.filter(x => !x.scene.includes('-'))) $('source').add(new Option(b.name, b.level));
 $('source').add(new Option('Models (BepInEx/bridges/models)', 'models'));
+$('source').add(new Option('Bundles (BepInEx/bridges/bundles)', 'bundles'));
 const first = bridges.find(b => b.scene === 'Bridge_scene_02') ?? bridges[0];
 if (first) { $('bridge').value = first.scene; load(first); }
 else $('stats').textContent = 'No bridges found in the game\'s files.';

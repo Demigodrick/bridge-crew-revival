@@ -13,7 +13,7 @@
 // the mod's source, assets/bridges/science/<scene>.json, when the designer runs from it (dotnet run in the repo), or to
 // the folder given with --science; otherwise that part of the page is hidden.
 //
-// Usage: dotnet run -- [--game <game folder>] [--port 8770] [--no-open] [--stay] [--web <folder>] [--layouts <folder>] [--models <folder>] [--science <folder>]
+// Usage: dotnet run -- [--game <game folder>] [--port 8770] [--no-open] [--stay] [--web <folder>] [--layouts <folder>] [--models <folder>] [--bundles <folder>] [--science <folder>]
 //        (it stops by itself once its page is closed; --stay keeps it running until Ctrl+C)
 //        (the game folder also from $GAME_DIR; otherwise the folder this program is in, if it's in the game's folder
 //        as the installers put it, or the game in your Steam libraries. --web serves the page from a folder,
@@ -32,7 +32,7 @@ string gameDir = Environment.GetEnvironmentVariable("GAME_DIR");
 int port = 8770;
 int? portArg = null;
 bool open = true, stay = false;
-string webArg = null, layoutsArg = null, modelsArg = null, scienceArg = null;
+string webArg = null, layoutsArg = null, modelsArg = null, bundlesArg = null, scienceArg = null;
 for (int i = 0; i < args.Length; i++)
 {
     if (args[i] == "--game" && i + 1 < args.Length) gameDir = args[++i];
@@ -42,8 +42,9 @@ for (int i = 0; i < args.Length; i++)
     else if (args[i] == "--web" && i + 1 < args.Length) webArg = Path.GetFullPath(args[++i]);
     else if (args[i] == "--layouts" && i + 1 < args.Length) layoutsArg = Path.GetFullPath(args[++i]);
     else if (args[i] == "--models" && i + 1 < args.Length) modelsArg = Path.GetFullPath(args[++i]);
+    else if (args[i] == "--bundles" && i + 1 < args.Length) bundlesArg = Path.GetFullPath(args[++i]);
     else if (args[i] == "--science" && i + 1 < args.Length) scienceArg = Path.GetFullPath(args[++i]);
-    else return Fail("usage: bridge-designer [--game <folder>] [--port 8770] [--no-open] [--stay] [--web <folder>] [--layouts <folder>] [--models <folder>] [--science <folder>]");
+    else return Fail("usage: bridge-designer [--game <folder>] [--port 8770] [--no-open] [--stay] [--web <folder>] [--layouts <folder>] [--models <folder>] [--bundles <folder>] [--science <folder>]");
 }
 // The game: given, beside this program (installed in the game's folder), or in one of Steam's libraries.
 gameDir ??= GameFinder.Find();
@@ -75,6 +76,10 @@ Console.WriteLine($"Layouts: {layouts}");
 string science = scienceArg ?? ScienceFolder();
 if (science != null) Console.WriteLine($"Science console placements: {science}");
 Console.WriteLine($"Models: {models}{(Directory.Exists(models) ? "" : " (not there yet: put .obj models in it to add them to bridges)")}");
+// Unity asset bundles to add prefabs from (built with Unity 5.4, LZ4): the mod loads them from the game's folder.
+string bundles = bundlesArg ?? Path.Combine(gameDir, "BepInEx", "bridges", "bundles");
+Console.WriteLine($"Bundles: {bundles}{(Directory.Exists(bundles) ? "" : " (not there yet: put Unity 5.4 asset bundles in it to add their prefabs to bridges)")}");
+var unpacked = new Dictionary<string, (DateTime stamp, string folder, List<(string name, string file, long root)> prefabs, string error)>();
 var cache = new Dictionary<int, byte[]>();
 var lightmaps = new Dictionary<(int, int), byte[]>();
 HttpListener listener = null;
@@ -209,6 +214,37 @@ void Serve(HttpListenerContext ctx)
             Send(res, "application/json", Encoding.UTF8.GetBytes(new JsonArray(list.Select(f => (JsonNode)f).ToArray()).ToJsonString()));
             return;
         }
+        if (path == "/api/bundles")
+        {
+            // Each bundle in the folder and the prefabs it offers (or why it can't be read).
+            var list = new JsonArray();
+            if (Directory.Exists(bundles))
+                foreach (var f in Directory.GetFiles(bundles).Select(Path.GetFileName).Where(BundleFile).OrderBy(f => f))
+                {
+                    var u = Unpacked(f);
+                    list.Add((JsonNode)new JsonObject { ["file"] = f, ["prefabs"] = new JsonArray(u.prefabs.Select(x => (JsonNode)x.name).ToArray()), ["error"] = u.error });
+                }
+            Send(res, "application/json", Encoding.UTF8.GetBytes(list.ToJsonString()));
+            return;
+        }
+        if (path == "/api/bundle.glb")
+        {
+            // One prefab of a bundle as a .glb, in the game's space as the bridges are (the mod puts it where its root says).
+            string file = ctx.Request.QueryString["file"], prefab = ctx.Request.QueryString["prefab"];
+            if (file == null || prefab == null || !BundleFile(file) || file != Path.GetFileName(file) || !File.Exists(Path.Combine(bundles, file))) { res.StatusCode = 404; res.Close(); return; }
+            var u = Unpacked(file);
+            var hit = u.prefabs.FirstOrDefault(x => x.name == prefab);
+            if (hit.name == null) { res.StatusCode = 404; Send(res, "text/plain; charset=utf-8", Encoding.UTF8.GetBytes(u.error ?? $"{prefab} isn't in {file}")); return; }
+            try
+            {
+                var (glb, summary) = GlbExport.Build(u.folder, hit.file, dataDir, hit.root);
+                Console.WriteLine($"{file}: {prefab}: {glb.Length / 1048576.0:0.0} MB");
+                Console.Write(summary);
+                Send(res, "model/gltf-binary", glb);
+            }
+            catch (Exception e) { res.StatusCode = 500; Send(res, "text/plain; charset=utf-8", Encoding.UTF8.GetBytes(e.Message)); }
+            return;
+        }
         if (path.StartsWith("/api/models/"))
         {
             // A model's own files (the .obj, its .mtl and textures), from the models folder only.
@@ -321,7 +357,8 @@ static string CheckAdded(JsonElement r)
         {
             bool model = a.TryGetProperty("model", out var m) && m.ValueKind == JsonValueKind.String;
             bool piece = a.TryGetProperty("path", out var pp) && pp.ValueKind == JsonValueKind.String && a.TryGetProperty("level", out var lv) && lv.ValueKind == JsonValueKind.Number;
-            if (!model && !piece) return "an added part that's neither a model nor a bridge's piece";
+            bool prefab = a.TryGetProperty("bundle", out var bu) && bu.ValueKind == JsonValueKind.String && a.TryGetProperty("asset", out var asset) && asset.ValueKind == JsonValueKind.String;
+            if (!model && !piece && !prefab) return "an added part that's neither a model, a bundle's prefab nor a bridge's piece";
             foreach (var v in new[] { "pivot", "move" }) if (a.GetProperty(v).GetArrayLength() != 3) return $"added part: {v} isn't x, y, z";
             a.GetProperty("turn").GetDouble();
         }
@@ -470,4 +507,31 @@ static void OpenBrowser(string url)
         else Process.Start("xdg-open", url);
     }
     catch { }
+}
+
+// A bundle in the bundles folder: any file but Unity's .manifest and .meta beside it, and hidden ones.
+static bool BundleFile(string name) => !name.StartsWith('.') && !name.EndsWith(".manifest", StringComparison.OrdinalIgnoreCase) && !name.EndsWith(".meta", StringComparison.OrdinalIgnoreCase);
+
+// A bundle unpacked (Bundle.Unpack) into a scratch folder, once for each time it's saved, and its prefabs.
+(DateTime stamp, string folder, List<(string name, string file, long root)> prefabs, string error) Unpacked(string file)
+{
+    string full = Path.Combine(bundles, file);
+    var stamp = File.GetLastWriteTimeUtc(full);
+    lock (unpacked)
+    {
+        if (unpacked.TryGetValue(file, out var had) && had.stamp == stamp) return had;
+        string folder = Path.Combine(Path.GetTempPath(), "bridge-designer-bundles", file + "-" + stamp.Ticks);
+        try { if (had.folder != null && Directory.Exists(had.folder)) Directory.Delete(had.folder, true); } catch { }
+        (DateTime, string, List<(string, string, long)>, string) result;
+        try
+        {
+            if (Directory.Exists(folder)) Directory.Delete(folder, true);
+            var files = Bundle.Unpack(full, folder);
+            var prefabs = BundleContents.Prefabs(folder, files);
+            result = (stamp, folder, prefabs, prefabs.Count == 0 ? "no prefabs in it" : null);
+        }
+        catch (Exception e) { result = (stamp, folder, new List<(string, string, long)>(), e.Message); }
+        if (result.Item4 != null) Console.WriteLine($"Bundle {file}: {result.Item4}");
+        return unpacked[file] = result;
+    }
 }
