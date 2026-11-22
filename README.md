@@ -65,7 +65,7 @@ any station** in REVIVAL SETTINGS (experimental).
   ones (a Klingon captain's head).
 - **Bridge designer** (optional): move, turn and hide the pieces of a bridge, add parts from other bridges,
   your own models (`.obj` in `BepInEx/bridges/models`) and prefabs from Unity asset bundles (`BepInEx/bridges/bundles`:
-  built with Unity 5.4, the game's own version, for Windows, with chunk-based compression), and move, switch off,
+  built with Unity 5.4, the game's own version: [tools/unity-bundles](tools/unity-bundles) has a script that builds them), and move, switch off,
   recolour or add lights, in your browser. Run `bridge-designer` in
   the game's `BepInEx/bridges` folder (`Bridge Designer.exe` on Windows); the mod puts your layout on, and in a
   crew everyone sees the host's. The Nova and the Sovereign each have their own copy of the Aegis bridge, with a
