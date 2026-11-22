@@ -117,7 +117,8 @@ namespace StbcRevival
                     var state = type.GetMethods(BindingFlags.DeclaredOnly | BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
                         .FirstOrDefault(m => m.Name == "OnUpdateMenuState");
                     if (state == null || state.IsAbstract) continue;
-                    harmony.Patch(state, postfix: new HarmonyMethod(typeof(CrewOrders), nameof(MenuState_Postfix)));
+                    harmony.Patch(state, postfix: new HarmonyMethod(typeof(CrewOrders), nameof(MenuState_Postfix)),
+                                  finalizer: new HarmonyMethod(typeof(CrewOrders), nameof(MenuState_Finalizer)));
                     states++;
                 }
             var playbook = AccessTools.Method(manager, "UpdatePlaybookOrders");
@@ -149,6 +150,20 @@ namespace StbcRevival
                 outermost[type] = declaring = AccessTools.Method(type, "OnUpdateMenuState")?.DeclaringType;
             if (declaring != __originalMethod.DeclaringType) return;
             if (menuVisible.GetValue(__instance) is bool shown && shown) menuEnabled.SetValue(__instance, true);
+        }
+
+        // In PvP, a crew member's crew menu sets itself up (GazeTargetCrewBotUI.Start) before their own ship has
+        // reached their game: an item reading the captain's console's ship (Scan Target: its target) found none and
+        // threw, which cut that setup short. Such an item is left off for now; the menu works it out again on use.
+        private static readonly HashSet<Type> toldMenu = new HashSet<Type>();
+
+        private static Exception MenuState_Finalizer(object __instance, Exception __exception)
+        {
+            if (!(__exception is NullReferenceException) || !PvpPrototype.Active || __instance == null) return __exception;
+            try { menuEnabled?.SetValue(__instance, false); } catch { }
+            if (toldMenu.Add(__instance.GetType()))
+                Plugin.Log.LogInfo($"Crew orders: {__instance.GetType().Name}'s menu state isn't readable yet (your ship's not here yet?); off for now");
+            return null;
         }
 
         private static void PlaybookState_Postfix()
