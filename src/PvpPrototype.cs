@@ -236,6 +236,7 @@ namespace StbcRevival
 
         private static void Bind(PlayerSpacecraft ship)
         {
+            if (Bound != null && Bound != ship && Letter(Bound) != Letter(ship) && Letter(ship) == PvpShips.Mine) PvpRebind.Rebound(Bound, ship);
             if (Bound != null && Bound != ship) Detach(Bound);
             Bound = ship;
             others.Remove(ship);
@@ -265,6 +266,7 @@ namespace StbcRevival
             others.Clear();
             exploded.Clear();
             PvpScope.Forget();
+            PvpRebind.Forget();
             PvpRouting.Forget();
             PvpDistributed.Forget();
             PvpConsoles.Forget();
@@ -291,6 +293,7 @@ namespace StbcRevival
             PvpLoadDiag.Update();
             PvpSeatDiag.Update();
             PvpRouteDiag.Update();
+            PvpRebind.Update();
             ForgetBridgeOnLeaving();
             if (!Active)
             {
