@@ -578,7 +578,7 @@ namespace StbcRevival
         private static void Start()
         {
             if (listening || !(IsCaptain() || CrewOrders.AnyStation) || !EnsureRecogniser()) return;
-            micDevice = Microphone.devices.Length > 0 ? Microphone.devices[0] : null;
+            micDevice = MicChoice.Wanted() ?? (Microphone.devices.Length > 0 ? Microphone.devices[0] : null);
             if (micDevice == null)
             {
                 Plugin.Log.LogWarning("Voice commands: no microphone");

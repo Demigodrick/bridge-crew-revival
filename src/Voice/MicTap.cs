@@ -52,6 +52,16 @@ namespace StbcRevival
             return true;
         }
 
+        // Sets the microphone voice chat will record from (the same field ChatDevice reads); false if the class isn't one this knows.
+        internal static bool SetChatDevice(DaikonForge.VoIP.AudioInputDeviceBase input, string device)
+        {
+            if (!ChatDevice(input, out _)) return false;
+            var field = deviceFields[input.GetType()];
+            if (field == null) return false;
+            field.SetValue(input, device);
+            return true;
+        }
+
         // The voice chat's own recording of your microphone (a looping clip on its AudioSource, EALMEBPADKI), if
         // it's recording; false (device and clip null) when it isn't (muted, mic off, not in a session).
         internal static bool TryFind(out string device, out AudioClip clip)

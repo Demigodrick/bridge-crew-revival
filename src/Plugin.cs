@@ -102,6 +102,7 @@ namespace StbcRevival
         internal static ConfigEntry<string> VoiceDebugNetSim;
         internal static ConfigEntry<bool> VoiceDebugLoopback;
         internal static ConfigEntry<bool> PvpSeparateSpace;
+        internal static ConfigEntry<string> VoiceMicrophone;
         internal static ConfigEntry<string> BlockedPlayers;
         internal static ConfigEntry<string> VoiceVolumes;
         internal static ConfigEntry<bool> ExcelsiorTest;
@@ -247,6 +248,10 @@ namespace StbcRevival
             VoiceLanguage = Config.Bind("Voice", "VoiceLanguage", VoiceLanguageChoice.English,
                 "English or German: the language of the spoken orders. German needs the German Vosk model (vosk-model-small-de-0.15) "
                 + "unpacked to BepInEx/vosk/model-de. Takes effect after a restart.");
+            VoiceMicrophone = Config.Bind("Voice", "Microphone", MicChoice.Auto,
+                "The microphone voice chat (and voice commands) records from. Auto: the one chosen in Windows as the default "
+                + "communications device (else the default device). Game: the game's own choice (the Rift's microphone under "
+                + "the Oculus runtime, else the first one Windows lists). Or a microphone's name, as REVIVAL SETTINGS shows them.");
             VoiceAnyStation = Config.Bind("Voice", "AnyStation", false,
                 "Experimental: voice orders from helm, tactical and engineering too, not just the captain. They go to the other "
                 + "stations' AI crew (not your own station's, and not the captain's playbook, red alert, hails or warp map). "
@@ -457,6 +462,7 @@ namespace StbcRevival
             Safely("crew logs", CrewLogs.Update);
             Safely("vr render cap", VrRenderCap.Update);
             Safely("performance log", PerfLog.Update);
+            Safely("microphone choice", MicChoice.Update);
             Safely("romulan face", StbcRevival.RomulanFace.Update);
             Safely("klingon head", StbcRevival.KlingonHead.Update);
             Safely("hairstyles", StbcRevival.HairStyles.Tick);
