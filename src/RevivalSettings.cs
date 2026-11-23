@@ -57,6 +57,17 @@ namespace StbcRevival
             Switch("Skip mic check", () => Plugin.SkipMicCheck, restart: true),
             Switch("Skip VR setup", () => Plugin.SkipVrSetup, restart: true),
             Switch("Voice orders from any station", () => Plugin.VoiceAnyStation),
+            // Which microphone voice chat records from: Windows' default, the game's own choice, or one by name.
+            new Entry
+            {
+                Text = MicChoice.Describe,
+                Press = () =>
+                {
+                    Plugin.VoiceMicrophone.Value = MicChoice.Next();
+                    MicChoice.Changed();
+                    Plugin.Log.LogInfo($"Revival settings: microphone {Plugin.VoiceMicrophone.Value}");
+                },
+            },
             // Which Klingon captain's head the creator's KLINGON wears (wearing one or not is the creator's).
             new Entry
             {
