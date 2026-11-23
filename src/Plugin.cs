@@ -455,6 +455,7 @@ namespace StbcRevival
             Safely("ship name box", StbcRevival.ShipNameBox.Update);
             Safely("bug report", BugReport.Update);
             Safely("crew logs", CrewLogs.Update);
+            Safely("vr render cap", VrRenderCap.Update);
             Safely("performance log", PerfLog.Update);
             Safely("romulan face", StbcRevival.RomulanFace.Update);
             Safely("klingon head", StbcRevival.KlingonHead.Update);
