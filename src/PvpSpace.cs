@@ -89,6 +89,7 @@ namespace StbcRevival
                 new Hook(AccessTools.Method(typeof(SyncPointManager), "ClearSyncPoint"), nameof(ClearSync_Prefix), null),
                 new Hook(AccessTools.Method(typeof(SyncPointManager), "PlayerReachedSyncPointRPC"), nameof(Reached_Prefix), nameof(Reached_Postfix)),
                 new Hook(AccessTools.Method(typeof(SyncPointManager), "COHPFJGKNCF"), nameof(AllSynced_Prefix), null), // AllPlayersSynced
+                new Hook(AccessTools.Method(typeof(SyncPointManager), "BatchUpdate"), nameof(Kick_Prefix), null),
             };
             if (hooks.Any(h => h.Method == null) || new object[] { shiftCounter, pendingShiftId, spaceInstance, playerShip, playerShipTransform, masterStates, masterImpulsePosition,
                     floatingOrigin, impulseOverride, setCooldownSynced, getCooldownSynced, checkShift, recordState, hash, syncPoints }.Any(x => x == null))
@@ -407,11 +408,43 @@ namespace StbcRevival
         // ship's for a ship's named one.
         private static bool AllSynced_Prefix(object __0, ref bool __result)
         {
-            if (!Enabled || !pointShip.TryGetValue(reachedHash, out var ship)) return true;
+            if (!Enabled) return true;
+            // Asked outside a player's report too (a player disconnecting: SyncPointManager.OnPlayerDisconnected),
+            // with no hash at hand: the point's own, from the list.
+            uint hash = reachedHash != 0 ? reachedHash : HashOf(__0);
+            if (!pointShip.TryGetValue(hash, out var ship)) return true;
             ship = ship == "" ? HostShip : ship;
             var synced = Traverse.Create(__0).Field("PlayersSynced").GetValue<IList>();
             __result = PvpShips.AllPlayers.Where(p => PvpShips.Of(p) == ship).All(p => synced != null && synced.Contains(p));
             return false;
+        }
+
+        private static uint HashOf(object point)
+        {
+            var manager = SyncPointManager.IEFBKOMBFGO;
+            if (point == null || manager == null || !(syncPoints.GetValue(manager) is IDictionary points)) return 0;
+            foreach (DictionaryEntry entry in points)
+                if (ReferenceEquals(entry.Value, point)) return (uint)entry.Key;
+            return 0;
+        }
+
+        // A sync point not reached by everyone within the time-out (120 s) has the host kick every player in the room
+        // who isn't on its list (SyncPointManager.BatchUpdate). A ship's own impulse point is only ever reached by
+        // that ship's crew, so one slow or dropped player had the whole other crew kicked. The other ship's players
+        // are noted as dealt with on each ship's point, so only the crew it waits for can be kicked.
+        private static void Kick_Prefix(SyncPointManager __instance)
+        {
+            if (!Enabled || !IsMaster || !(syncPoints.GetValue(__instance) is IDictionary points)) return;
+            foreach (var pair in pointShip)
+            {
+                if (!points.Contains(pair.Key)) continue;
+                var point = points[pair.Key];
+                var kicked = point == null ? null : Traverse.Create(point).Field("PlayersKicked").GetValue<IList>();
+                if (kicked == null) continue;
+                string ship = pair.Value == "" ? HostShip : pair.Value;
+                foreach (var player in PvpShips.AllPlayers)
+                    if (PvpShips.Of(player) != ship && !kicked.Contains(player)) kicked.Add(player);
+            }
         }
 
         // The host ends the other ship's impulse when its crew is through (as it waits for its own crew for its own).
