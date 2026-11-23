@@ -6,7 +6,8 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for taking the time to report this. The quickest way to get a bug fixed is a **bug report file**:
+        Thanks for taking the time to report this. Every bug report needs a **bug report file**: without its logs we
+        usually can't tell what went wrong.
         - **In game:** press **F10** right after the problem happens. It saves `BridgeCrewRevival-report-<date>.zip` in the game folder.
         - **If the game crashed:** start the game again, then attach the newest zip from `BepInEx/crash-reports` in the game folder.
 
@@ -39,7 +40,7 @@ body:
       label: Bug report file
       description: Drag the F10 zip (or the crash-reports zip) in here. Screenshots or a short video help too.
     validations:
-      required: false
+      required: true
 
   - type: input
     id: version
@@ -102,6 +103,8 @@ body:
     attributes:
       label: Before you send it
       options:
+        - label: I attached the bug report file (the F10 zip, or the newest zip from `BepInEx/crash-reports`), which has the logs.
+          required: true
         - label: I looked through the [open issues](https://github.com/Demigodrick/bridge-crew-revival/issues) and this isn't one of them.
           required: true
         - label: Everyone in my crew was on the same mod version (or I was playing solo).
