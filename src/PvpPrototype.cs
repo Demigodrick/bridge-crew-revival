@@ -140,6 +140,7 @@ namespace StbcRevival
                 new KeyValuePair<string, Action<Harmony>>("crew menus", PvpCrewMenu.Patch),
                 new KeyValuePair<string, Action<Harmony>>("warp map", PvpWarpMap.Patch),
                 new KeyValuePair<string, Action<Harmony>>("network IDs", PvpViewIds.Patch),
+                new KeyValuePair<string, Action<Harmony>>("one-ship rules", PvpOneShip.Patch),
                 new KeyValuePair<string, Action<Harmony>>("ship B's crew bots", PvpCrewBots.Patch),
             })
             {
