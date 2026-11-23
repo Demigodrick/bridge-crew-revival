@@ -644,8 +644,45 @@ namespace StbcRevival
             }
             if (showMessage == null) showMessage = AccessTools.Method(typeof(Bridge), "NewConsoleMessageRPC");
             if (showMessage == null) return true;
-            showMessage.Invoke(__instance, new object[] { Convert.ToInt32(__0), __1, __2, __3, __4, __5 });
+            var args = new object[] { Convert.ToInt32(__0), __1, __2, __3, __4, __5 };
+            showMessage.Invoke(__instance, args);
+            ToShipmates(__instance, args);
             return false;
+        }
+
+        // The game sent a console message to everyone; shown only on the game that raised it, your own shipmates
+        // missed it (the host's "Subsystem damaged", "Collision Warning" and its AI crew's contacts never reached a
+        // crewmate on the host's ship, nor a human engineer's "Ready To Warp" their captain). Sent to your own ship's
+        // other players, who are on the same bridge (the same Bridge view).
+        private static MethodInfo sendTo;
+        private static bool sendToLooked;
+
+        private static void ToShipmates(Bridge bridge, object[] args)
+        {
+            try
+            {
+                if (!sendToLooked)
+                {
+                    sendToLooked = true;
+                    sendTo = AccessTools.Method(AccessTools.TypeByName("MCGGBALEIDD"), "SSRPC",   // Extensions.SSRPC(view, target, method, player, args)
+                        new[] { AccessTools.TypeByName("PhotonView"), typeof(object), typeof(string), AccessTools.TypeByName("CBBCCGMALMP"), typeof(object[]) });
+                    if (sendTo == null) Plugin.Log.LogWarning("PvP: the targeted RPC wasn't found; console messages stay on the game that raised them");
+                }
+                var view = bridge == null ? null : bridge.GetComponent("PhotonView");
+                if (sendTo == null || view == null) return;
+                string mine = PvpShips.Mine ?? "A";
+                int me = PvpShips.Actor(PvpShips.Me);
+                foreach (var player in PvpShips.AllPlayers)
+                    if (PvpShips.Actor(player) != me && PvpShips.Of(player) == mine)
+                    {
+                        sendTo.Invoke(null, new object[] { view, bridge, "NewConsoleMessageRPC", player, args });
+                        PvpRouteDiag.Count("console message to your shipmates");
+                    }
+            }
+            catch (Exception e)
+            {
+                if (warnedMismatch.Add("shipmates")) Plugin.Log.LogWarning("PvP: sending a console message to your shipmates: " + (e.InnerException ?? e).Message);
+            }
         }
 
         // ---- Your set only ----------------------------------------------------------------------
