@@ -57,7 +57,7 @@ namespace StbcRevival
                 Plugin.Log.LogInfo("PvP: [seat] 2 s later at " + Describe(me, station));
             }
             var view = Camera.main;
-            if (view == null || toldAway) return;
+            if (view == null || toldAway || StbcRevival.Walking.Walker.Standing) return; // walking: you face where you walk
             float off = Mathf.Abs(Mathf.DeltaAngle(Yaw(station.transform), Yaw(view.transform)));
             if (off <= 100f) { awaySince = -1f; return; }
             if (awaySince < 0f) { awaySince = Time.unscaledTime; return; }
@@ -83,19 +83,18 @@ namespace StbcRevival
             catch (System.Exception e) { Plugin.Log.LogWarning("PvP: [seat] putting the view straight: " + (e.InnerException ?? e).Message); }
         }
 
-        // The camera's rig (Character Camera Root, the FPSCamera's parent) is only ever placed by the game (its
-        // position each frame), never turned. After a move from one table to the other it was seen facing away from
-        // the body: "chair 315°, body 315°, view 135°, local turn 0°", and putting the camera straight inside it
-        // left you facing the wall. Turned back to the chair's facing when it's more than 90° off.
+        // The camera's rig (Character Camera Root, the FPSCamera's parent) belongs to your body and should face its
+        // way. After a move from one table to the other it was seen turned against the body: "chair 315°, body 315°,
+        // view 135°, local turn 0°", and putting the camera straight inside it left you facing the wall. Turned back
+        // to the body's facing when it's more than 90° off it. (Compared with the chair at first, which twisted it
+        // while Bridge Walk had you standing and facing elsewhere: then sat down facing the wall.)
         private static void StraightenRig(NovaPlayerInfo me, Transform rig)
         {
-            var station = me?.Station as NovaStation;
-            if (rig == null || station == null) return;
-            float off = Mathf.DeltaAngle(Yaw(rig), Yaw(station.transform));
+            if (rig == null || rig.parent == null || StbcRevival.Walking.Walker.Standing) return;
+            float off = Mathf.DeltaAngle(Yaw(rig), Yaw(rig.parent));
             if (Mathf.Abs(off) <= 90f) return;
-            string parent = rig.parent == null ? "nothing" : $"'{rig.parent.name}' {Yaw(rig.parent):0}°";
-            rig.Rotate(station.transform.up, off, Space.World);
-            Plugin.Log.LogWarning($"PvP: [seat] the camera rig '{rig.name}' faced {off:0}° away from your chair (under {parent}); turned back to it");
+            rig.Rotate(rig.parent.up, off, Space.World);
+            Plugin.Log.LogWarning($"PvP: [seat] the camera rig '{rig.name}' faced {off:0}° away from your body ('{rig.parent.name}' {Yaw(rig.parent):0}°); turned back to it");
         }
 
         private static string Describe(NovaPlayerInfo me, NovaStation station)
