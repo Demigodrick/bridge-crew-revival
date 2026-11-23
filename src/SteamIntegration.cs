@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Reflection;
 using UnityEngine;
+using CSteamID = Steamworks.IMHJDCPKKHM;
 using SteamFriends = Steamworks.GJMOCKOJNPH;                       // Steamworks.NET SteamFriends (obfuscated)
 using JoinRequested = Steamworks.LKDAFEDNOEI;                     // GameRichPresenceJoinRequested_t (k_iCallback 337)
 using JoinCallback = Steamworks.KAFDLCLDHJI<Steamworks.LKDAFEDNOEI>; // Callback<GameRichPresenceJoinRequested_t>
@@ -66,6 +67,16 @@ namespace StbcRevival
             {
                 Plugin.Log.LogInfo($"Steam: launched with join request: {connect}");
                 HandleConnect(connect);
+            }
+
+            // Launched by Steam from an invite to a lobby (the F7 window's "Invite Steam friends" in Steam mode):
+            // "+connect_lobby <lobby id>". Without this the game started and joined nothing.
+            int at = Array.IndexOf(args, "+connect_lobby");
+            if (at >= 0 && at + 1 < args.Length && ulong.TryParse(args[at + 1], out var lobby) && lobby != 0)
+            {
+                Plugin.Log.LogInfo($"Steam: launched with a lobby invite: {lobby}");
+                if (SteamMode.Enabled) SteamMode.JoinLobby(new CSteamID(lobby), 30f);
+                else RoomBrowser.Show("That invite is for a Steam-mode crew; set Mode to Steam in stbc.revival.cfg and restart, or join with their room code.");
             }
         }
 

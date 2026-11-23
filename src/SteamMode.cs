@@ -514,16 +514,23 @@ namespace StbcRevival
         internal static void RegisterLobbyJoin(Action<string, ulong> join)
         {
             lobbyJoin = join;
-            lobbyJoinCallback = Steamworks.KAFDLCLDHJI<LobbyJoinRequested>.Create(r =>
+            lobbyJoinCallback = Steamworks.KAFDLCLDHJI<LobbyJoinRequested>.Create(r => JoinLobby(r.m_steamIDLobby, 10f));
+        }
+
+        /// <summary>
+        /// Joins the crew of a Steam lobby: from a lobby join request (game running), or from "+connect_lobby &lt;id&gt;"
+        /// on the command line, which Steam adds when an invite to a lobby starts the game (it waits longer then:
+        /// Steam is only just up).
+        /// </summary>
+        internal static void JoinLobby(CSteamID lobby, float waitSeconds)
+        {
+            pendingLobby = lobby;
+            pendingLobbyUntil = Time.realtimeSinceStartup + waitSeconds;
+            if (!TryLobbyJoin())
             {
-                pendingLobby = r.m_steamIDLobby;
-                pendingLobbyUntil = Time.realtimeSinceStartup + 10f;
-                if (!TryLobbyJoin())
-                {
-                    SteamMatchmaking.RequestLobbyData(r.m_steamIDLobby);
-                    Plugin.Log.LogInfo($"Steam mode: lobby join request for {r.m_steamIDLobby.m_SteamID}; fetching its details");
-                }
-            });
+                SteamMatchmaking.RequestLobbyData(lobby);
+                Plugin.Log.LogInfo($"Steam mode: lobby join request for {lobby.m_SteamID}; fetching its details");
+            }
         }
 
         // A crew lobby's host. Steam's own record of the owner wins whenever Steam gives it (only to the lobby's
