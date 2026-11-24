@@ -32,6 +32,7 @@ namespace StbcRevival
 
             IntroSkip.Patch(harmony);
             VrDevice.Patch(harmony);
+            VrRenderCap.Patch(harmony); // before the game reads its graphics config (on the first scene that wants it)
             LocalSave.Patch(harmony);
             UbisoftSaveImport.Patch(harmony);
 
