@@ -139,6 +139,12 @@ Check("SkipVrSetup: InputManager IHNHENLGKBO/FAKBNJECKGI/OMHIFCDEJLK (bool: keyb
     new[] { "IHNHENLGKBO", "FAKBNJECKGI", "OMHIFCDEJLK" }.All(f => vrSetupInput?.GetField(f, Inst)?.FieldType.FullName == "System.Boolean") ? vrSetupInput : null);
 Check("TrackingEvents.PlatformSpecs.PIKCINNNNPA() (the telemetry coroutine) returns IEnumerator",
     game.GetType("SVR.Network.KNJHLNDOOGP+LPIKHEPODPN")?.GetMethod("PIKCINNNNPA", AnyS) is { } specs && specs.ReturnType.FullName == "System.Collections.IEnumerator" ? specs : null);
+foreach (var (typeName, label) in new[] { ("GraphicsConfig", "GraphicsConfig"), ("RenderScaleControl", "RenderScaleControl") })
+{
+    var t = game.GetTypes().FirstOrDefault(x => x.Name == typeName);
+    Check($"VrRenderCap: {label}.DLECOECACJE (SetRenderScale) taking a float",
+        t?.GetMethods(AnyS | BindingFlags.Instance).FirstOrDefault(m => m.Name == "DLECOECACJE" && m.GetParameters() is { Length: 1 } ps && ps[0].ParameterType.FullName == "System.Single"));
+}
 var centerView = game.GetType("CenterViewIntroElement");
 Check("SkipVrSetup: CenterViewIntroElement.LateUpdate + ANDHFMCAMMM(VRRecenteredEvent) + NDDFIMFHMKI (Transform)",
     centerView?.GetMethod("LateUpdate", Inst) is not null
