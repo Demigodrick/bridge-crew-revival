@@ -28,3 +28,13 @@ d 1.00
 map_Kd Miranda_Impulse_DIFF.png
 map_Ke Miranda_Impulse_GLOW.png
 
+newmtl LIGHT_red
+Kd 1.0 0.1 0.1
+Ke 1.0 0.1 0.05
+d 1.00
+
+newmtl LIGHT_green
+Kd 0.1 1.0 0.2
+Ke 0.1 1.0 0.25
+d 1.00
+
