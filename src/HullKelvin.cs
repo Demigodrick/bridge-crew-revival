@@ -325,14 +325,6 @@ namespace StbcRevival
         private static float[] Grown(float[] cover, int w, int h, float radius)
         {
             int r = Math.Max(1, Mathf.CeilToInt(radius));
-            var rows = new float[cover.Length];
-            for (int y = 0; y < h; y++)
-                for (int x = 0; x < w; x++)
-                {
-                    float m = 0f;
-                    for (int dx = -r; dx <= r; dx++) { int xx = x + dx; if (xx >= 0 && xx < w) m = Math.Max(m, cover[y * w + xx]); }
-                    rows[y * w + x] = m;
-                }
             var grown = new float[cover.Length];
             for (int y = 0; y < h; y++)
                 for (int x = 0; x < w; x++)
