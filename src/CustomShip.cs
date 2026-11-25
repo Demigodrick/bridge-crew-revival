@@ -197,7 +197,7 @@ namespace StbcRevival
             {
                 // Its saucer's and nacelles' name and registry, painted into these (HullKelvin: the Miranda's lines).
                 lettered = new[] { "Miranda_1_DIFF.png", "Miranda_2_DIFF.png", "Miranda_3_DIFF.png" },
-                // Its navigation lights: lamps set where its texture has them painted (red and green), blinking together.
+                // Its navigation lights: one red lamp to port and one green to starboard, on the saucer's rim, blinking together.
                 takeLight = (part, mesh, port) => part.Name == (port ? "LIGHT_red" : "LIGHT_green") ? ShipGlow.TakeAll(mesh) : null,
             };
         }
