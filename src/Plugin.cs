@@ -248,10 +248,13 @@ namespace StbcRevival
             VoiceLanguage = Config.Bind("Voice", "VoiceLanguage", VoiceLanguageChoice.English,
                 "English or German: the language of the spoken orders. German needs the German Vosk model (vosk-model-small-de-0.15) "
                 + "unpacked to BepInEx/vosk/model-de. Takes effect after a restart.");
-            VoiceMicrophone = Config.Bind("Voice", "Microphone", MicChoice.Auto,
-                "The microphone voice chat (and voice commands) records from. Auto: the one chosen in Windows as the default "
-                + "communications device (else the default device). Game: the game's own choice (the Rift's microphone under "
-                + "the Oculus runtime, else the first one Windows lists). Or a microphone's name, as REVIVAL SETTINGS shows them.");
+            // "MicrophoneChoice", not 0.8.2's "Microphone": that one was saved as Auto in everyone's file, which some
+            // players lost their voice to; this starts everyone on the game's own choice.
+            VoiceMicrophone = Config.Bind("Voice", "MicrophoneChoice", MicChoice.Game,
+                "The microphone voice chat (and voice commands) records from. Game: the game's own choice, as without the mod "
+                + "(the Rift's microphone under the Oculus runtime, else the first one Windows lists). Or a microphone's name, "
+                + "as REVIVAL SETTINGS shows them. Auto: the one chosen in Windows as the default communications device (else "
+                + "the default device).");
             VoiceAnyStation = Config.Bind("Voice", "AnyStation", false,
                 "Experimental: voice orders from helm, tactical and engineering too, not just the captain. They go to the other "
                 + "stations' AI crew (not your own station's, and not the captain's playbook, red alert, hails or warp map). "
