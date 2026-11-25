@@ -1,0 +1,40 @@
+newmtl Miranda1
+Kd 1 1 1
+d 1.00
+map_Kd Miranda_1_DIFF.png
+map_Ke Miranda_1_GLOW.png
+map_Bump Miranda_1_NRM.png
+map_Ns Miranda_1_MG.png
+
+newmtl Miranda2
+Kd 1 1 1
+d 1.00
+map_Kd Miranda_2_DIFF.png
+map_Ke Miranda_2_GLOW.png
+map_Bump Miranda_2_NRM.png
+map_Ns Miranda_2_MG.png
+
+newmtl Miranda3
+Kd 1 1 1
+d 1.00
+map_Kd Miranda_3_DIFF.png
+map_Ke Miranda_3_GLOW.png
+map_Bump Miranda_3_NRM.png
+map_Ns Miranda_3_MG.png
+
+newmtl MirandaEng
+Kd 1 1 1
+d 1.00
+map_Kd Miranda_Impulse_DIFF.png
+map_Ke Miranda_Impulse_GLOW.png
+
+newmtl LIGHT_red
+Kd 1.0 0.1 0.1
+Ke 1.0 0.1 0.05
+d 1.00
+
+newmtl LIGHT_green
+Kd 0.1 1.0 0.2
+Ke 0.1 1.0 0.25
+d 1.00
+

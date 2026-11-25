@@ -39,6 +39,7 @@ namespace StbcRevival
             public float ReferenceLength, MaxLength; // ...and squeezed when longer than MaxLength
             public float Tracking;            // extra space between letters, in capital heights
             public Style Style;
+            public string Before = "", After = ""; // fixed text round what it says ("STARSHIP " + "U.S.S. COSMO")
         }
 
         /// <summary>A ship's name decal: which material and texture, its lines, and what else is on it.</summary>

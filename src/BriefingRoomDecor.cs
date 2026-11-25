@@ -31,9 +31,17 @@ namespace StbcRevival
         private static GameObject hologram;   // our ship
         private static readonly List<Renderer> hidden = new List<Renderer>(); // the game's hologram, switched off
         private static readonly List<Light> dimmed = new List<Light>();
+        private static readonly HashSet<Renderer> wereOn = new HashSet<Renderer>(); // of those, the ones that were showing
+        private static readonly List<Behaviour> stilled = new List<Behaviour>();    // its animations (its lights' blinking), stopped
 
         internal static void Update()
         {
+            // The game's hologram kept dark every frame: its navigation lights blink by switching themselves on and off.
+            if (hologram != null)
+            {
+                foreach (var r in hidden) if (r != null && r.enabled) r.enabled = false;
+                foreach (var l in dimmed) if (l != null && l.enabled) l.enabled = false;
+            }
             if (Time.unscaledTime < nextCheck) return;
             nextCheck = Time.unscaledTime + 1f;
             var root = GameObject.Find(HologramRoot);
@@ -43,6 +51,8 @@ namespace StbcRevival
                 hologram = null;
                 placed = false;
                 hidden.Clear();
+                wereOn.Clear();
+                stilled.Clear();
                 dimmed.Clear();
                 return;
             }
@@ -169,10 +179,18 @@ namespace StbcRevival
                 foreach (Transform child in root.transform)
                 {
                     if (child.gameObject == hologram) continue;
-                    foreach (var r in child.GetComponentsInChildren<Renderer>(true).Where(r => r.enabled))
+                    // All of its renderers, those off just now too (its blinking lights between flashes), and its
+                    // animations stopped, so nothing of it comes back on.
+                    foreach (var r in child.GetComponentsInChildren<Renderer>(true))
                     {
+                        if (r.enabled) wereOn.Add(r);
                         r.enabled = false;
                         hidden.Add(r);
+                    }
+                    foreach (var a in child.GetComponentsInChildren<Behaviour>(true).Where(b => (b is Animator || b is Animation) && b.enabled))
+                    {
+                        a.enabled = false;
+                        stilled.Add(a);
                     }
                     foreach (var l in child.GetComponentsInChildren<Light>(true).Where(l => l.enabled))
                     {
@@ -180,7 +198,8 @@ namespace StbcRevival
                         dimmed.Add(l);
                     }
                 }
-                Plugin.Log.LogInfo($"Briefing room: hologram shows the {flown.Name}");
+                Plugin.Log.LogInfo($"Briefing room: hologram shows the {flown.Name}; the game's hidden: {hidden.Count} renderers ({hidden.Count - wereOn.Count} off just then: "
+                    + string.Join(", ", hidden.Where(r => !wereOn.Contains(r)).Select(r => r.name).Distinct().Take(12).ToArray()) + $"), {stilled.Count} animations, {dimmed.Count} lights");
             }
             catch (Exception e)
             {
@@ -193,9 +212,12 @@ namespace StbcRevival
         {
             if (hologram != null) UnityEngine.Object.Destroy(hologram);
             hologram = null;
-            foreach (var r in hidden) if (r != null) r.enabled = true;
+            foreach (var r in hidden) if (r != null) r.enabled = wereOn.Contains(r);
+            foreach (var a in stilled) if (a != null) a.enabled = true;
             foreach (var l in dimmed) if (l != null) l.enabled = true;
             hidden.Clear();
+            wereOn.Clear();
+            stilled.Clear();
             dimmed.Clear();
         }
 

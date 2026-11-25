@@ -36,7 +36,7 @@ namespace StbcRevival
     {
         // ---- the classes ----
 
-        private static readonly CustomShip[] ships = { Nova(), Sovereign(), AbramsEnterprise(), Defiant(), Voyager() };
+        private static readonly CustomShip[] ships = { Nova(), Sovereign(), AbramsEnterprise(), Defiant(), Voyager(), Miranda() };
 
         /// <summary>Every ship class there is (whether its model is on this PC or not), in the ship box's order.</summary>
         internal static IList<CustomShip> All => ships;
@@ -172,6 +172,33 @@ namespace StbcRevival
                 // Its nacelles swing up on their pylons at warp: the pieces named _NL / _NR (each side's nacelle,
                 // pylon, Bussard and lights), about each pylon's root on the hull (model file).
                 nacelles = new[] { new KeyValuePair<string, Vector3>("_NL", new Vector3(-0.01019f, -0.00407f, -0.04166f)), new KeyValuePair<string, Vector3>("_NR", new Vector3(0.01019f, -0.00407f, -0.04166f)) },
+            };
+        }
+
+        private static CustomShip Miranda()
+        {
+            var weapons = new Dictionary<string, Vector3>
+            {
+                // The torpedo launchers in the roll bar's pod over the hull, firing forward.
+                ["Tube 1"] = new Vector3(-0.03f, 0.85f, 0.02f),
+                ["Tube 2"] = new Vector3(0f, 0.86f, 0.03f),
+                ["Tube 3"] = new Vector3(0.03f, 0.85f, 0.02f),
+                ["Tube 4"] = new Vector3(-0.03f, 0.85f, -0.06f),
+                ["Tube 5"] = new Vector3(0.03f, 0.85f, -0.06f),
+                // The saucer's phaser emitters, top and bottom.
+                ["Top Front Turret"] = new Vector3(0f, 0.45f, 0.80f),
+                ["Top Left Turret"] = new Vector3(-0.62f, 0.40f, 0.40f),
+                ["Top Right Turret"] = new Vector3(0.62f, 0.40f, 0.40f),
+                ["Bottom Front Turret"] = new Vector3(0f, 0.05f, 0.80f),
+                ["Bottom Left Turret"] = new Vector3(-0.62f, 0.05f, 0.40f),
+                ["Bottom Right Turret"] = new Vector3(0.62f, 0.05f, 0.40f),
+            };
+            return new CustomShip("Miranda", "MIRANDA", 38f, "USS Majestic", "NCC-31060", weapons)
+            {
+                // Its saucer's and nacelles' name and registry, painted into these (HullKelvin: the Miranda's lines).
+                lettered = new[] { "Miranda_1_DIFF.png", "Miranda_2_DIFF.png", "Miranda_3_DIFF.png" },
+                // Its navigation lights: one red lamp to port and one green to starboard, on the saucer's rim, blinking together.
+                takeLight = (part, mesh, port) => part.Name == (port ? "LIGHT_red" : "LIGHT_green") ? ShipGlow.TakeAll(mesh) : null,
             };
         }
 
@@ -488,11 +515,25 @@ namespace StbcRevival
             {
                 if (!built || building || meshes.Count == 0) return null;
                 if (!LightHologram)
-                    return fullHologram ?? (fullHologram = meshes.Values.Where(p => p.Material != null && p.Hull != null)
-                        .Select(p => new KeyValuePair<Mesh, UnityEngine.Material>(p.Hull, p.Material)).ToList()); // the ship itself, at full detail
+                    return fullHologram ?? (fullHologram = FullHologramPieces()); // the ship itself, at full detail
                 if (hologram == null && !hologramStarted) StartHologram();
                 return hologram;
             }
+        }
+
+        /// <summary>The ship's own pieces for the table: its hull, and its Bussard plasma and navigation lights in their living materials (so they swirl and blink there too).</summary>
+        private List<KeyValuePair<Mesh, UnityEngine.Material>> FullHologramPieces()
+        {
+            var list = new List<KeyValuePair<Mesh, UnityEngine.Material>>();
+            foreach (var p in meshes.Values)
+            {
+                if (p.Material == null) continue;
+                if (p.Hull != null && p.Hull.triangles.Length > 0) list.Add(new KeyValuePair<Mesh, UnityEngine.Material>(p.Hull, p.Material));
+                if (p.Plasma != null) list.Add(new KeyValuePair<Mesh, UnityEngine.Material>(p.Plasma, ShipGlow.Material(p.Material)));
+                if (p.Port != null) list.Add(new KeyValuePair<Mesh, UnityEngine.Material>(p.Port, ShipGlow.LightMaterial(p.Material, true)));
+                if (p.Starboard != null) list.Add(new KeyValuePair<Mesh, UnityEngine.Material>(p.Starboard, ShipGlow.LightMaterial(p.Material, false)));
+            }
+            return list;
         }
 
         private void StartHologram()
