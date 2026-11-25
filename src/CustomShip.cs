@@ -266,12 +266,86 @@ namespace StbcRevival
             Name = name; Label = label; this.length = length; DefaultName = defaultName; DefaultRegistry = defaultRegistry; this.weapons = weapons;
         }
 
+        // ---- the class's settings (BepInEx/ships/<Name>/ship.json) ----
+
+        /// <summary>Which of the game's player ships a class flies on: its systems, its console screens and its crew.</summary>
+        internal enum ShipBase { Aegis, Tng }
+
+        private sealed class Settings
+        {
+            public ShipBase Base = ShipBase.Aegis;
+            public string BridgeBundle, BridgeScene; // a bridge of its own: a scene in a Unity 5.4 asset bundle beside the model
+        }
+
+        private Settings settings;
+        private DateTime settingsStamp = DateTime.MinValue;
+        private float settingsAt = -1f;
+
+        /// <summary>
+        /// The class's settings, read from ship.json in its folder (looked at again once a minute):
+        /// { "systems": "Aegis" | "TNG", "bridge": { "bundle": "file in the folder", "scene": "scene name in it" } }.
+        /// No file, or anything it doesn't say: the Aegis's systems and its own copy of the Aegis's bridge.
+        /// </summary>
+        private Settings Current
+        {
+            get
+            {
+                if (settings != null && Time.unscaledTime < settingsAt) return settings;
+                settingsAt = Time.unscaledTime + 60f;
+                string file = Path.Combine(Folder, "ship.json");
+                DateTime stamp;
+                try { stamp = File.Exists(file) ? File.GetLastWriteTimeUtc(file) : DateTime.MinValue; } catch { stamp = DateTime.MinValue; }
+                if (settings != null && stamp == settingsStamp) return settings;
+                settingsStamp = stamp;
+                var s = new Settings();
+                if (stamp != DateTime.MinValue)
+                {
+                    try
+                    {
+                        var root = MiniJson.Parse(File.ReadAllText(file)) as Dictionary<string, object>;
+                        if (root == null) throw new FormatException("not a JSON object");
+                        if (root.TryGetValue("systems", out var sys) && sys is string sysName)
+                        {
+                            if (string.Equals(sysName, "TNG", StringComparison.OrdinalIgnoreCase)) s.Base = ShipBase.Tng;
+                            else if (!string.Equals(sysName, "Aegis", StringComparison.OrdinalIgnoreCase)) throw new FormatException($"systems \"{sysName}\": Aegis or TNG");
+                        }
+                        if (root.TryGetValue("bridge", out var b) && b is Dictionary<string, object> bridge)
+                        {
+                            string bundle = bridge.TryGetValue("bundle", out var f) ? f as string : null;
+                            string scene = bridge.TryGetValue("scene", out var sc) ? sc as string : null;
+                            if (string.IsNullOrEmpty(bundle) || string.IsNullOrEmpty(scene)) throw new FormatException("bridge needs both a bundle and a scene");
+                            if (bundle != Path.GetFileName(bundle)) throw new FormatException("bridge bundle has to be a file in the ship's folder");
+                            s.BridgeBundle = bundle; s.BridgeScene = scene;
+                        }
+                    }
+                    catch (Exception e) { Plugin.Log.LogWarning($"{Name}: {file}: {e.Message}"); }
+                }
+                if (settings == null || settings.Base != s.Base || settings.BridgeScene != s.BridgeScene || settings.BridgeBundle != s.BridgeBundle)
+                    Plugin.Log.LogInfo($"{Name}: flies on the {(s.Base == ShipBase.Tng ? "Next Generation's" : "Aegis's")} ship"
+                                       + (s.BridgeScene != null ? $", its bridge {s.BridgeScene} from {s.BridgeBundle}" : ""));
+                return settings = s;
+            }
+        }
+
+        /// <summary>Which game ship the class flies on (its systems, consoles and crew).</summary>
+        internal ShipBase Base => Current.Base;
+
+        /// <summary>Its own bridge's scene name, or null (then: its copy of its game ship's bridge).</summary>
+        internal string BridgeScene => Current.BridgeScene;
+
+        /// <summary>The asset bundle holding its own bridge, in its folder; or null.</summary>
+        internal string BridgeBundlePath => Current.BridgeBundle == null ? null : Path.Combine(Folder, Current.BridgeBundle);
+
+        private string BasePrefabPath => Base == ShipBase.Tng ? "Sector/Ships/Ship - Enterprise 1701D" : "Sector/Ships/Ship - Aegis";
+        private string BaseLabel => Base == ShipBase.Tng ? "Enterprise-D" : "Aegis";
+
         private const BindingFlags Static = BindingFlags.Public | BindingFlags.Static;
         private const BindingFlags Instance = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
 
         private static readonly FieldInfo BodyField = AccessTools.Field(typeof(BaseSpacecraft), "_body");
         private static GameObject holder;          // inactive: the templates under it never wake
-        private SpacecraftBody aegisTemplate; // the class's body on the Aegis's ship
+        private SpacecraftBody aegisTemplate; // the class's body on its game ship (the Aegis's, or the Next Generation's: templateBase)
+        private ShipBase templateBase;
 
         /// <summary>The class's bodies built so far (on the Aegis's ship).</summary>
         /// <summary>The class's body has been built (cheap: asked by hooks that run for every ship).</summary>
@@ -635,8 +709,10 @@ namespace StbcRevival
                 }
             }
             SpacecraftBody body = null;
-            yield return Guard(Build(data, "Sector/Ships/Ship - Aegis", "Aegis", b => body = b), "building its body (Aegis)");
+            var basis = Base;
+            yield return Guard(Build(data, BasePrefabPath, BaseLabel, b => body = b), $"building its body ({BaseLabel})");
             aegisTemplate = body;
+            templateBase = basis;
             int fromCache = data.Cached.Count;
             data.ImageFiles.Clear(); data.Cached.Clear(); data.Pieces = null;
             building = false;
@@ -670,9 +746,10 @@ namespace StbcRevival
                 var ship = Flown;
                 if (ship == null) return;
                 if (Campaign) { Plugin.Log.LogInfo($"{ship.Name}: a campaign mission; the ship keeps its own body"); return; }
-                // Ours fly on the Aegis's ship and bridge only (the ship box sets the Aegis under them).
-                if (Loader.IOMGCNMDDCK) { Plugin.Log.LogInfo($"{ship.Name}: the Next Generation's ship is chosen; it keeps its own body"); return; }
-                var template = ship.aegisTemplate;
+                // Ours fly on their own game ship only (the ship box sets it under them): the Aegis's, or the Next Generation's.
+                bool tng = Loader.IOMGCNMDDCK;
+                if (tng != (ship.Base == ShipBase.Tng)) { Plugin.Log.LogInfo($"{ship.Name}: the {(tng ? "Next Generation's" : "Aegis's")} ship is chosen, not its own; it keeps its own body"); return; }
+                var template = ship.aegisTemplate != null && ship.templateBase == ship.Base ? ship.aegisTemplate : null;
                 // Never waited for here (that would hold up the mission's loading, a frozen headset in VR): a class that
                 // isn't ready yet means the game's own ship this time.
                 if (template == null)

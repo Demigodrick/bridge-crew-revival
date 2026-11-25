@@ -31,9 +31,12 @@ internal static class GlbExport
     /// (colour times alpha times 5, in gamma space) stored as colour times alpha, so a viewer multiplies by 5 in gamma
     /// space (about 34.5 in linear). Rows as stored, like the .glb's textures (v turned over in the UVs).
     /// </summary>
-    public static byte[] Lightmap(string dataDir, int level, int index)
+    public static byte[] Lightmap(string dataDir, int level, int index) => LightmapIn(Path.Combine(dataDir, $"sharedassets{level}.assets"), dataDir, index);
+
+    /// <summary>The same, from the file a scene's lightmaps are in (a bundle's scene: its .sharedAssets, unpacked into
+    /// <paramref name="dataDir"/>, where its texture data is too).</summary>
+    public static byte[] LightmapIn(string file, string dataDir, int index)
     {
-        string file = Path.Combine(dataDir, $"sharedassets{level}.assets");
         if (!File.Exists(file)) return null;
         using var f = new AssetFile(file);
         foreach (var e in f.Objects)
@@ -207,7 +210,12 @@ internal static class GlbExport
                 while (unit.Father != 0 && trs.TryGetValue(unit.Father, out var up) && up.Father != 0 && stationCount[up.Id] == 1) unit = up;
                 var seat = Vector3.Transform(Vector3.Zero, Flip(World(st)));
                 unitPaths.Add(PathOf(unit));
-                stations.Add((JsonNode)new JsonObject { ["unit"] = PathOf(unit), ["station"] = PathOf(st), ["seat"] = new JsonArray(seat.X, seat.Y, seat.Z) });
+                // Which way its player faces: the station's forward, level (Unity's forward, z flipped).
+                var ahead = Vector3.TransformNormal(new Vector3(0, 0, -1), Flip(World(st)));
+                ahead.Y = 0;
+                ahead = ahead.LengthSquared() > 1e-6f ? Vector3.Normalize(ahead) : new Vector3(0, 0, 1);
+                stations.Add((JsonNode)new JsonObject { ["unit"] = PathOf(unit), ["station"] = PathOf(st), ["seat"] = new JsonArray(seat.X, seat.Y, seat.Z),
+                                                        ["facing"] = new JsonArray(ahead.X, ahead.Z) });
             }
             string UnitOf(string path) => unitPaths.FirstOrDefault(u => path == u || path.StartsWith(u + "/"));
 
@@ -401,26 +409,27 @@ internal static class GlbExport
             }
             if (m.Has(3))
             {
-                // The material's tiling and offset baked in, and v turned over (Unity's textures start at the bottom).
+                // The material's tiling and offset baked in. v as Unity has it: the textures go into the .glb with their rows
+                // as Unity keeps them (bottom row first), so glTF's v (from the top of the image) is Unity's v as it is.
                 var uv = new float[order.Count * 2];
                 for (int i = 0; i < order.Count; i++)
                 {
                     var q = m.Get(3, order[i]);
                     uv[i * 2] = q[0] * uvScale[0] + uvOffset[0];
-                    uv[i * 2 + 1] = 1f - (q[1] * uvScale[1] + uvOffset[1]);
+                    uv[i * 2 + 1] = q[1] * uvScale[1] + uvOffset[1];
                 }
                 attrs["TEXCOORD_0"] = Accessor(uv, 2);
             }
             if (lightmapST != null && (m.Has(4) || m.Has(3)))
             {
-                // Into the lightmap: the second UVs (or the first, without them), scaled and offset; v turned over.
+                // Into the lightmap: the second UVs (or the first, without them), scaled and offset; v as it is (as above).
                 int ch = m.Has(4) ? 4 : 3;
                 var uv2 = new float[order.Count * 2];
                 for (int i = 0; i < order.Count; i++)
                 {
                     var q = m.Get(ch, order[i]);
                     uv2[i * 2] = q[0] * lightmapST[0] + lightmapST[2];
-                    uv2[i * 2 + 1] = 1f - (q[1] * lightmapST[1] + lightmapST[3]);
+                    uv2[i * 2 + 1] = q[1] * lightmapST[1] + lightmapST[3];
                 }
                 attrs["TEXCOORD_1"] = Accessor(uv2, 2);
             }
@@ -618,7 +627,8 @@ internal static class GlbExport
             return (o, nw, nh);
         }
 
-        // A plain RGBA PNG. Rows go in as stored (bottom-up); the UVs' v is turned over to match.
+        // A plain RGBA PNG. Rows go in as stored (bottom-up: the image looks upside down), which glTF's v (from the top)
+        // then meets as Unity's v (from the bottom) unchanged.
         private static byte[] Png(byte[] rgba, int w, int h)
         {
             using var ms = new MemoryStream();

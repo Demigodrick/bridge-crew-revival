@@ -475,7 +475,7 @@ namespace StbcRevival.Walking
         private static bool Covered(Vector3 pos)
         {
             Vector3 up = Up;
-            foreach (var hit in Physics.RaycastAll(pos + up * 0.3f, up, 1.0f)) if (!Ignore(hit.collider)) return true;
+            foreach (var hit in Physics.RaycastAll(pos + up * 0.3f, up, 1.0f, Physics.AllLayers)) if (!Ignore(hit.collider)) return true;
             if (!WalkMesh.ReadyFor(Basis)) return false;
             overhead.Clear();
             Vector3 lp = ToLocal(pos);
@@ -515,7 +515,7 @@ namespace StbcRevival.Walking
                 {
                     Vector3 s = pos + up * h, e = s + dir * distance;
                     if (WalkMesh.ReadyFor(Basis) && WalkMesh.Hits(ToLocal(s), ToLocal(e))) { hit = true; break; }
-                    foreach (var rh in Physics.RaycastAll(s, dir, distance)) if (!Ignore(rh.collider)) { hit = true; break; }
+                    foreach (var rh in Physics.RaycastAll(s, dir, distance, Physics.AllLayers)) if (!Ignore(rh.collider)) { hit = true; break; }
                     if (hit) break;
                 }
                 if (hit) blocked++;
@@ -613,7 +613,7 @@ namespace StbcRevival.Walking
             Vector3 p1 = pos + up * (0.45f + r), p2 = pos + up * (1.75f - r);
             // In the test corridor's doorway or the corridor: only its own walls (the bridge's have the door baked in).
             bool corridor = TestCorridor.InZone(pos) && TestCorridor.InZone(pos + delta);
-            foreach (var hit in Physics.CapsuleCastAll(p1, p2, r, delta / dist, dist + 0.05f))
+            foreach (var hit in Physics.CapsuleCastAll(p1, p2, r, delta / dist, dist + 0.05f, Physics.AllLayers))
             {
                 if (Ignore(hit.collider)) continue;
                 if (corridor && !TestCorridor.IsMine(hit.collider)) continue;
@@ -649,7 +649,7 @@ namespace StbcRevival.Walking
             bool found = false;
             const float above = 0.9f;
             bool corridor = TestCorridor.InZone(at); // the test corridor's doorway or corridor: its own floor only
-            foreach (var hit in Physics.RaycastAll(at + up * above, -up, 2.4f))
+            foreach (var hit in Physics.RaycastAll(at + up * above, -up, 2.4f, Physics.AllLayers))
             {
                 if (Ignore(hit.collider)) continue;
                 if (corridor && !TestCorridor.IsMine(hit.collider)) continue;
@@ -687,8 +687,10 @@ namespace StbcRevival.Walking
             int id = c.GetInstanceID();
             if (ignoreCache.TryGetValue(id, out var v)) return v;
             string path = Bridge.Path(c.transform);
-            v = false;
-            foreach (var p in ignoreParts) if (path.IndexOf(p, StringComparison.OrdinalIgnoreCase) >= 0) { v = true; break; }
+            // The casts take every layer (Physics.AllLayers): on Ignore Raycast (2) only a class bridge's own art counts,
+            // kept off the game's pointer rays there so it never blocks a console or menu (ClassBridge.IsOwnArt).
+            v = c.gameObject.layer == 2 && !ClassBridge.IsOwnArt(c);
+            if (!v) foreach (var p in ignoreParts) if (path.IndexOf(p, StringComparison.OrdinalIgnoreCase) >= 0) { v = true; break; }
             if (!v && c.attachedRigidbody != null && !c.attachedRigidbody.isKinematic) v = true; // moving parts
             // Backdrops around the whole room (the briefing room's StarsCollider): everything is inside them, they're no wall.
             if (!v && c.bounds.size.magnitude > 60f) v = true;

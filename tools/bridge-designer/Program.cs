@@ -62,7 +62,9 @@ while (gameDir == null || !GameFinder.IsGame(gameDir))
 string dataDir = Path.Combine(gameDir, "stbc_Data");
 var bridges = Bridges(dataDir);
 string shipsDir = Path.Combine(gameDir, "BepInEx", "ships");
-bridges.AddRange(ShipBridges(bridges, shipsDir));
+// A ship class's own bridge (a scene in a bundle, ship.json): a made-up level number past the game's, for the page.
+var bundleBridges = new Dictionary<int, (string Bundle, string Scene)>();
+bridges.AddRange(ShipBridges(bridges, shipsDir, bundleBridges));
 Console.WriteLine($"Game: {gameDir}");
 Console.WriteLine($"Bridges: {string.Join(", ", bridges.Select(b => $"{b.Name} (level{b.Level})"))}");
 
@@ -81,6 +83,7 @@ string bundles = bundlesArg ?? Path.Combine(gameDir, "BepInEx", "bridges", "bund
 Console.WriteLine($"Bundles: {bundles}{(Directory.Exists(bundles) ? "" : " (not there yet: put Unity 5.4 asset bundles in it to add their prefabs to bridges)")}");
 var unpacked = new Dictionary<string, (DateTime stamp, string folder, List<(string name, string file, long root)> prefabs, string error)>();
 var cache = new Dictionary<int, byte[]>();
+var sceneBundles = new Dictionary<string, (DateTime stamp, string folder)>(); // a class bridge's bundle, unpacked
 var lightmaps = new Dictionary<(int, int), byte[]>();
 HttpListener listener = null;
 string url = null;
@@ -173,7 +176,8 @@ void Serve(HttpListenerContext ctx)
         }
         if (path == "/api/bridges")
         {
-            Send(res, "application/json", Encoding.UTF8.GetBytes(new JsonArray(bridges.Select(b => (JsonNode)new JsonObject { ["level"] = b.Level, ["scene"] = b.Scene, ["name"] = b.Name }).ToArray()).ToJsonString()));
+            // "bundle": a ship class's own bridge (its pieces can't be copied onto other bridges: the mod copies from the game's files)
+            Send(res, "application/json", Encoding.UTF8.GetBytes(new JsonArray(bridges.Select(b => (JsonNode)new JsonObject { ["level"] = b.Level, ["scene"] = b.Scene, ["name"] = b.Name, ["bundle"] = bundleBridges.ContainsKey(b.Level) }).ToArray()).ToJsonString()));
             return;
         }
         if (path.StartsWith("/api/bridge/") && path.EndsWith(".glb") && int.TryParse(path["/api/bridge/level".Length..^4], out int level))
@@ -185,7 +189,9 @@ void Serve(HttpListenerContext ctx)
                 if (!cache.TryGetValue(level, out glb))
                 {
                     var sw = Stopwatch.StartNew();
-                    (glb, string summary) = GlbExport.Build(dataDir, "level" + level);
+                    (glb, string summary) = bundleBridges.TryGetValue(level, out var own)
+                        ? GlbExport.Build(SceneBundle(own.Bundle), "BuildPlayer-" + own.Scene, dataDir, 0)
+                        : GlbExport.Build(dataDir, "level" + level);
                     cache[level] = glb;
                     Console.WriteLine($"level{level}: {glb.Length / 1048576.0:0.0} MB in {sw.ElapsedMilliseconds} ms");
                     Console.Write(summary);
@@ -201,7 +207,11 @@ void Serve(HttpListenerContext ctx)
             if (parts.Length == 2 && int.TryParse(parts[0], out int lv) && parts[1].EndsWith(".png") && int.TryParse(parts[1][..^4], out int li) && bridges.Any(b => b.Level == lv))
             {
                 byte[] png;
-                lock (lightmaps) if (!lightmaps.TryGetValue((lv, li), out png)) lightmaps[(lv, li)] = png = GlbExport.Lightmap(dataDir, lv, li);
+                lock (lightmaps)
+                    if (!lightmaps.TryGetValue((lv, li), out png))
+                        lightmaps[(lv, li)] = png = bundleBridges.TryGetValue(lv, out var own)
+                            ? GlbExport.LightmapIn(Path.Combine(SceneBundle(own.Bundle), "BuildPlayer-" + own.Scene + ".sharedAssets"), SceneBundle(own.Bundle), li)
+                            : GlbExport.Lightmap(dataDir, lv, li);
                 if (png != null) { Send(res, "image/png", png); return; }
             }
             res.StatusCode = 404; res.Close(); return;
@@ -444,24 +454,45 @@ static List<(int Level, string Scene, string Name)> Bridges(string dataDir)
     return found;
 }
 
-// Each ship class of the mod's (a folder in BepInEx/ships with its <Class>.obj) gets a copy of the bridge it flies on:
-// the same scene, under a name of its own (<scene>-<Class>), so its layout is its own.
-static List<(int Level, string Scene, string Name)> ShipBridges(List<(int Level, string Scene, string Name)> bridges, string shipsDir)
+// Each ship class of the mod's (a folder in BepInEx/ships with its <Class>.obj) gets the bridge it flies on, as the mod
+// gives it (ship.json): a bridge of its own (a scene in a bundle in its folder), or a copy of its game ship's (the
+// Aegis's, or the Next Generation's Enterprise-D's) under a name of its own (<scene>-<Class>), so its layout is its own.
+static List<(int Level, string Scene, string Name)> ShipBridges(List<(int Level, string Scene, string Name)> bridges, string shipsDir,
+    Dictionary<int, (string Bundle, string Scene)> bundleBridges)
 {
     var copies = new List<(int, string, string)>();
     if (!Directory.Exists(shipsDir)) return copies;
-    // The game's bridge it flies on: the Aegis's.
-    string[] shipBases = { "Bridge_scene_02" };
+    int next = 1000;
     foreach (string dir in Directory.GetDirectories(shipsDir).OrderBy(d => d, StringComparer.OrdinalIgnoreCase))
     {
         string cls = Path.GetFileName(dir);
         if (!File.Exists(Path.Combine(dir, cls + ".obj")) || cls.Any(c => !char.IsLetterOrDigit(c))) continue;
-        foreach (string baseScene in shipBases)
+        bool tng = false;
+        string bundle = null, scene = null;
+        string settings = Path.Combine(dir, "ship.json");
+        if (File.Exists(settings))
+            try
+            {
+                using var doc = JsonDocument.Parse(File.ReadAllText(settings));
+                var r = doc.RootElement;
+                tng = r.TryGetProperty("systems", out var sys) && string.Equals(sys.GetString(), "TNG", StringComparison.OrdinalIgnoreCase);
+                if (r.TryGetProperty("bridge", out var br))
+                {
+                    bundle = br.TryGetProperty("bundle", out var bu) ? bu.GetString() : null;
+                    scene = br.TryGetProperty("scene", out var sc) ? sc.GetString() : null;
+                }
+            }
+            catch (Exception e) { Console.WriteLine($"{settings}: {e.Message}"); }
+        if (bundle != null && scene != null && bundle == Path.GetFileName(bundle) && File.Exists(Path.Combine(dir, bundle)))
         {
-            var b = bridges.FirstOrDefault(x => x.Scene == baseScene);
-            if (b.Scene == null) continue;
-            copies.Add((b.Level, baseScene + "-" + cls, $"{cls} (a copy of the Aegis)"));
+            bundleBridges[next] = (Path.Combine(dir, bundle), scene);
+            copies.Add((next++, scene, $"{cls} (its own bridge)"));
+            continue;
         }
+        string baseScene = tng ? "Bridge_scene_1701D" : "Bridge_scene_02";
+        var b = bridges.FirstOrDefault(x => x.Scene == baseScene);
+        if (b.Scene == null) continue;
+        copies.Add((b.Level, baseScene + "-" + cls, $"{cls} (a copy of the {(tng ? "Enterprise-D" : "Aegis")})"));
     }
     return copies;
 }
@@ -533,5 +564,26 @@ static bool BundleFile(string name) => !name.StartsWith('.') && !name.EndsWith("
         catch (Exception e) { result = (stamp, folder, new List<(string, string, long)>(), e.Message); }
         if (result.Item4 != null) Console.WriteLine($"Bundle {file}: {result.Item4}");
         return unpacked[file] = result;
+    }
+}
+
+// A ship class's bridge bundle unpacked (Bundle.Unpack) into a scratch folder, once for each time it's saved: its scene
+// file (BuildPlayer-<scene>) and the rest beside it, for the exporter.
+string SceneBundle(string full)
+{
+    var stamp = File.GetLastWriteTimeUtc(full);
+    lock (sceneBundles)
+    {
+        if (sceneBundles.TryGetValue(full, out var had) && had.stamp == stamp) return had.folder;
+        string folder = Path.Combine(Path.GetTempPath(), "bridge-designer-bridges", Path.GetFileName(full) + "-" + stamp.Ticks);
+        try { if (had.folder != null && Directory.Exists(had.folder)) Directory.Delete(had.folder, true); } catch { }
+        if (Directory.Exists(folder)) Directory.Delete(folder, true);
+        Bundle.Unpack(full, folder);
+        // Unpacked anew: what was made from the old one goes.
+        lock (cache) foreach (var k in bundleBridges.Where(x => x.Value.Bundle == full).Select(x => x.Key)) cache.Remove(k);
+        lock (lightmaps) foreach (var k in lightmaps.Keys.Where(k => bundleBridges.TryGetValue(k.Item1, out var o) && o.Bundle == full).ToList()) lightmaps.Remove(k);
+        sceneBundles[full] = (stamp, folder);
+        Console.WriteLine($"{Path.GetFileName(full)} unpacked");
+        return folder;
     }
 }

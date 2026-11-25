@@ -161,7 +161,7 @@ namespace StbcRevival
         {
             if (__1 || boxes.Count == 0 || !(__0 is Toggle t) || !t.isOn || CustomShip.FlownNow == null) return;
             foreach (var box in boxes)
-                if (t == box.Aegis)
+                if (t == Under(box, CustomShip.FlownNow))
                 {
                     if (box.Console != null && CanChoose(box)) __1 = true;
                     return;
@@ -187,6 +187,12 @@ namespace StbcRevival
                 }
         }
 
+        /// <summary>The game's own row a class of ours flies on: the Aegis's, or the Next Generation's.</summary>
+        private static Toggle Under(Box box, CustomShip ship) => ship != null && ship.Base == CustomShip.ShipBase.Tng ? box.Tng : box.Aegis;
+
+        /// <summary>The game offers the Next Generation's ship here (it shows that row only with the DLC).</summary>
+        private static bool TngOffered(Box box) => box.Tng != null && (!gameWants.TryGetValue(box.Tng.gameObject, out var wanted) || wanted);
+
         private static Toggle[] Rows(Box box) => new[] { box.Aegis, box.Tos, box.Tng }.Concat(box.Ours).ToArray();
 
         // When one of ours was last pressed (presses and toggles changing just after it are its own doing).
@@ -202,8 +208,8 @@ namespace StbcRevival
             try
             {
                 CustomShip.Choose(ship);
-                // The game's own choice under it: the Aegis's.
-                var under = box.Aegis;
+                // The game's own choice under it: the ship it flies on (the Aegis's, or the Next Generation's).
+                var under = Under(box, ship);
                 if (!under.isOn) under.isOn = true;
             }
             finally { box.Applying = false; }
@@ -408,8 +414,8 @@ namespace StbcRevival
                 try
                 {
                     box.Applying = true;
-                    bool under = box.Aegis.isOn; // ours fly on the Aegis's ship
-                    bool on = flown != null && under;
+                    var underRow = Under(box, flown);
+                    bool on = flown != null && underRow.isOn; // ours fly on their game ship (the Aegis's or the Next Generation's)
                     int chosen = box.Tng.isOn ? 2 : box.Tos.isOn ? 1 : 0;
                     // Choosable whenever the game's own choice is (the host's or captain's), greyed like the others when not,
                     // and not for the campaign (its missions are the Aegis's own).
@@ -431,13 +437,17 @@ namespace StbcRevival
                         }
                         for (int k = 0; k < labels.Key.Length; k++)
                             if (labels.Key[k] != null) labels.Key[k].color = canChoose ? labels.Value[k] : grey;
-                        if (row.interactable != canChoose) row.interactable = canChoose;
+                        // One on the Next Generation's ship only where the game offers that ship (its DLC).
+                        bool rowCan = canChoose && (box.OursShips[r].Base != CustomShip.ShipBase.Tng || TngOffered(box));
+                        for (int k = 0; k < labels.Key.Length; k++)
+                            if (labels.Key[k] != null && !rowCan) labels.Key[k].color = grey;
+                        if (row.interactable != rowCan) row.interactable = rowCan;
                     }
                     if (campaign && flown != null && Missions.RevivalBriefing.IsChooser(box.Console) && !JustPressed) { CustomShip.Choose(null); flown = null; on = false; }
                     // Ours are ships of their own as far as the box shows (the Aegis they borrow for now is to be
                     // replaced): that row looks unchosen while ours is, as when another ship is chosen.
                     foreach (var row in new[] { box.Tng, box.Aegis })
-                        if (row.graphic != null) row.graphic.canvasRenderer.SetAlpha(on && row == box.Aegis && row.isOn ? 0f : (row.isOn ? 1f : 0f));
+                        if (row.graphic != null) row.graphic.canvasRenderer.SetAlpha(on && row == underRow && row.isOn ? 0f : (row.isOn ? 1f : 0f));
                     box.Applying = false;
                     // Scrolled so the ship chosen is in sight, when the choice changes (scrolling away is free after that).
                     if (chosen != box.LastChosen)

@@ -144,9 +144,45 @@ function countTriangles(o) {
 // ------------------------------------------------------------------------------------------- stations
 // The chair at a station's seat that isn't part of the station (the captain's stands apart from its station, which
 // holds the captain's consoles and where the captain sits): a piece named as a chair, within 30 cm of the seat.
+// An arrow on a station's ring, the way its player faces (+z of the ring turned by `yaw`).
+const arrowGeometry = new THREE.ShapeGeometry(new THREE.Shape([
+  new THREE.Vector2(0, 0.62), new THREE.Vector2(-0.12, 0.40), new THREE.Vector2(-0.04, 0.40), new THREE.Vector2(-0.04, 0.36),
+  new THREE.Vector2(0.04, 0.36), new THREE.Vector2(0.04, 0.40), new THREE.Vector2(0.12, 0.40)])).rotateX(Math.PI / 2);
+function facingArrow(s) {
+  if (!s.facing) return null;
+  const arrow = new THREE.Mesh(arrowGeometry, new THREE.MeshBasicMaterial({ color: 0x4fc3f7, transparent: true, opacity: 0.9, depthTest: false, side: THREE.DoubleSide }));
+  arrow.renderOrder = 10;
+  arrow.rotation.y = Math.atan2(s.facing[0], s.facing[1]);
+  return arrow;
+}
+
 function findStations(list) {
   for (const s of list) {
     const seat = new THREE.Vector3(...s.seat);
+    // A station with nothing of its own drawn (a ship's own bridge: its chairs and consoles are pieces apart): a
+    // handle at its seat to pick it by, a column where its player is. It moves the station only (its chair, if any,
+    // is a piece of its own).
+    if (!pieces.some(p => under(p.path, s.unit) && hasMesh(p.obj))) {
+      const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 1.3, 24, 1, true).translate(0, 0.65, 0),
+        new THREE.MeshBasicMaterial({ color: 0x4fc3f7, transparent: true, opacity: 0.25, side: THREE.DoubleSide, depthWrite: false }));
+      const ring = new THREE.Mesh(new THREE.RingGeometry(0.28, 0.34, 40).rotateX(-Math.PI / 2),
+        new THREE.MeshBasicMaterial({ color: 0x4fc3f7, transparent: true, opacity: 0.8, depthTest: false }));
+      ring.renderOrder = 10;
+      handle.add(ring);
+      const arrow = facingArrow(s); // turns with the handle
+      if (arrow) handle.add(arrow);
+      handle.position.copy(seat);
+      handle.updateMatrix();
+      handle.matrixAutoUpdate = false;
+      handle.userData = { path: s.unit, station: s.unit };
+      root.add(handle);
+      handle.updateMatrixWorld(true);
+      const name = s.unit.split('/').pop().replace(/_?root$/i, '');
+      pieces.push({ obj: handle, path: s.unit, name: `${name} station (where its player is)`, backdrop: false,
+        box: new THREE.Box3().setFromObject(handle), base: handle.matrix.clone(), station: s.unit, handle: true });
+      stations.push({ unit: s.unit, seat, chair: null });
+      continue;
+    }
     let chair = null, best = 0.3;
     for (const p of pieces) {
       if (p.station || !/chair/i.test(p.path) || p.box.min.y > seat.y + 0.5 || p.box.max.y < seat.y - 1.2) continue;
@@ -154,17 +190,21 @@ function findStations(list) {
       const d = Math.hypot(dx, dz);
       if (d < best || (d === best && chair && p.path.length < chair.length)) { best = d; chair = p.path; }
     }
-    const st = { unit: s.unit, seat, chair };
+    const st = { unit: s.unit, seat, chair, facing: s.facing };
     if (chair) {
       // A ring on the floor where the station's player sits (and its consoles are): it goes where the chair goes.
       st.marker = new THREE.Mesh(new THREE.RingGeometry(0.28, 0.34, 40).rotateX(-Math.PI / 2),
         new THREE.MeshBasicMaterial({ color: 0x4fc3f7, transparent: true, opacity: 0.8, depthTest: false }));
       st.marker.renderOrder = 10;
+      const arrow = facingArrow(s);
+      if (arrow) { st.arrow = arrow; seats.add(arrow); }
       seats.add(st.marker);
     }
     stations.push(st);
   }
 }
+const facingOf = st => { const f = st.facing; return f ? [f[0], f[1]] : [0, 1]; };
+const hasMesh = o => { let found = false; o.traverse(m => { if (m.isMesh) found = true; }); return found; };
 const stationOf = path => stations.find(s => s.unit === path);
 const chairStation = path => stations.find(s => s.chair && under(s.chair, path));
 
@@ -176,6 +216,7 @@ function placeSeats() {
     const at = s.seat.clone();
     if (o) at.sub(o.e.pivot).applyAxisAngle(new THREE.Vector3(0, 1, 0), o.e.turn).add(o.e.pivot).add(o.e.move);
     s.marker.position.set(at.x, s.seat.y - 0.45, at.z);
+    if (s.arrow) { s.arrow.position.copy(s.marker.position); s.arrow.rotation.y = Math.atan2(...facingOf(s)) + (o ? o.e.turn : 0); }
   }
 }
 
@@ -1202,8 +1243,11 @@ function lightmapTexture(level, index) {
   return lightmapTextures.get(k);
 }
 function setBaked(on) {
-  hemi.intensity = on ? 0.45 : 1.5;
-  key.intensity = on ? 0 : 1.1;
+  // A bridge with no lightmaps at all (one of our own, lit in the game by its light probes: the Intrepid's art carries
+  // its own shading) keeps the full light: the dim fill alone drew it near black.
+  const lightmapped = on && pieces.some(p => !p.added && !p.light && p.obj.userData.lightmap != null);
+  hemi.intensity = lightmapped ? 0.45 : 1.5;
+  key.intensity = lightmapped ? 0 : 1.1;
   for (const p of pieces) {
     if (p.added || p.light) continue;
     const index = p.obj.userData.lightmap;
@@ -1330,7 +1374,7 @@ $('bridge').addEventListener('change', () => {
   load(bridges.find(b => b.scene === $('bridge').value));
 });
 // Parts come from the game's bridges (a ship's copy has the same ones).
-for (const b of bridges.filter(x => !x.scene.includes('-'))) $('source').add(new Option(b.name, b.level));
+for (const b of bridges.filter(x => !x.scene.includes('-') && !x.bundle)) $('source').add(new Option(b.name, b.level)); // a ship's own bridge (a bundle) can't be copied from: the mod copies from the game's files
 $('source').add(new Option('Models (BepInEx/bridges/models)', 'models'));
 $('source').add(new Option('Bundles (BepInEx/bridges/bundles)', 'bundles'));
 const first = bridges.find(b => b.scene === 'Bridge_scene_02') ?? bridges[0];

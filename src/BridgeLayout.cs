@@ -36,8 +36,8 @@ namespace StbcRevival
     /// animation, so it's only known once it's spawned: then, if its chair is where a moved piece was, its seat
     /// object gets the same move, and the NPC (and any that later takes its place) goes along (Followers).
     ///
-    /// Each ship class of ours (CustomShip: the Nova, the Sovereign) has a bridge of its own: a copy of the Aegis's
-    /// bridge, which it flies on, with a layout of its own, &lt;scene&gt;-&lt;Class&gt;.json (Bridge_scene_02-Nova.json),
+    /// Each ship class of ours (CustomShip: the Nova, the Sovereign) has a bridge of its own: a copy of the game bridge it
+    /// flies on (the Aegis's, or the Enterprise-D's for a class on the Next Generation's ship), with a layout of its own, &lt;scene&gt;-&lt;Class&gt;.json (Bridge_scene_02-Nova.json),
     /// never the Aegis's. With no such file in the
     /// layouts folder, the one that comes with the ship (BepInEx/ships/&lt;Class&gt;/&lt;scene&gt;.json), if there is one.
     ///
@@ -167,8 +167,9 @@ namespace StbcRevival
         // The layout's added parts (the science console's are a set of their own: SciencePlacement).
         private static BridgeParts Parts => BridgeParts.For(BridgeParts.LayoutSet);
 
-        // The game's bridge a class of ours flies on (CustomShip): the Aegis's.
-        private static readonly string[] ShipBridges = { "Bridge_scene_02" };
+        // The game's bridges a class of ours can fly on (CustomShip.Base): the Aegis's, the Next Generation's. (A class with
+        // a bridge of its own, ClassBridge, flies that scene instead: its layout goes by that scene's name.)
+        private static readonly string[] ShipBridges = { "Bridge_scene_02", "Bridge_scene_1701D" };
 
         /// <summary>
         /// The name a loaded scene's layout goes by: on a bridge flown as a class of ours, that class's own copy of it

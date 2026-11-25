@@ -1,0 +1,4 @@
+{
+  "systems": "TNG",
+  "bridge": { "bundle": "intrepid.bridge", "scene": "Bridge_scene_Intrepid" }
+}

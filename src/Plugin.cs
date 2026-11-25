@@ -416,6 +416,7 @@ namespace StbcRevival
             Safely("enemy AI tuning", () => StbcRevival.EnemyAiTuning.Patch(harmony));
             Safely("enemy AI extras", () => StbcRevival.EnemyAiExtras.Patch(harmony));
             Safely("crew AI", () => StbcRevival.CrewAi.Patch(harmony));
+            Safely("class bridges", () => ClassBridge.Patch(harmony));
             SteamMode.Install(harmony);
             ShuttleControls.Install();
 
@@ -482,6 +483,7 @@ namespace StbcRevival
             Safely("science screen", StbcRevival.Science.ScienceScreen.Update);
             Safely("excelsior", Excelsior.Update);
             Safely("ships", CustomShip.Update);
+            Safely("class bridges", ClassBridge.Update);
             Safely("defiant", Defiant.Update);
             Safely("quantum", Quantum.Update);
             Safely("ship choice", ShipChoice.Update);
