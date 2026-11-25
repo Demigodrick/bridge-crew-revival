@@ -19,7 +19,9 @@ namespace StbcRevival
 
         private sealed class KelvinPaint
         {
+            public string Ship = KelvinShip;  // the class whose texture it is (the Kelvin's, the Miranda's)
             public string File;
+            public bool[] MirrorLines;     // lines laid mirrored on their own (a texture mapped onto both sides)
             public int DesignW, DesignH;   // the texture's size as the places below were measured (it may come smaller)
             public bool Mirror;            // the port nacelle's texture is the starboard one mirrored: its letters too
             public int[][] Erase;          // the old lettering: x0, y0, x1, y1 (pixels, y up, inclusive)
@@ -52,7 +54,47 @@ namespace StbcRevival
             },
             new KelvinPaint { File = "tex_29_NacelleOutside_jpg.png", DesignW = 2000, DesignH = 284, Erase = new[] { new[] { 940, 153, 1305, 213 } }, Lines = new[] { KelvinNacelleLine() } },
             new KelvinPaint { File = "tex_30_NacelleOutsideLeft_jp.png", DesignW = 2000, DesignH = 284, Mirror = true, Erase = new[] { new[] { 940, 153, 1305, 213 } }, Lines = new[] { KelvinNacelleLine() } },
+
+            // The Miranda: its saucer's registry (black, rimmed red) and name in arcs over and under it, and the
+            // registry on its nacelles (two of them mapped mirrored). Measured on its textures as they come (4096).
+            new KelvinPaint
+            {
+                Ship = "Miranda", File = "Miranda_1_DIFF.png", DesignW = 4096, DesignH = 4096,
+                Erase = new[] { new[] { 1150, 620, 2950, 1210 }, new[] { 1590, 1005, 2505, 1270 } },
+                Lines = new[]
+                {
+                    new Line { Shape = Shape.Smile, Cx = 2047, Cy = 1695, Radius = 931, Mid = -90, Cap = 228, Says = Says.Registry,
+                        Reference = "NCC-31060", ReferenceLength = 1800, MaxLength = 2100, Tracking = .10f, Style = EnterpriseRimmed },
+                    new Line { Shape = Shape.Smile, Cx = 2047, Cy = 1695, Radius = 641, Mid = -90, Cap = 62, Says = Says.Name,
+                        Reference = "U.S.S. MAJESTIC", ReferenceLength = 1000, MaxLength = 1150, Tracking = .16f, Style = EnterpriseSmallRimmed },
+                },
+            },
+            new KelvinPaint
+            {
+                Ship = "Miranda", File = "Miranda_2_DIFF.png", DesignW = 4096, DesignH = 4096,
+                Erase = new[] { new[] { 1130, 2925, 2175, 3165 }, new[] { 1470, 1800, 1840, 1878 } },
+                Lines = new[]
+                {
+                    new Line { Shape = Shape.Frown, Cx = 1652, Cy = 2273, Radius = 795, Mid = 90, Cap = 228, Says = Says.Registry,
+                        Reference = "NCC-31060", ReferenceLength = 1046, MaxLength = 1250, Tracking = .10f, Style = EnterpriseRimmed },
+                    new Line { Shape = Shape.Smile, Cx = 1652, Cy = 2273, Radius = 450, Mid = -90, Cap = 30, Says = Says.BareName,
+                        Reference = "MAJESTIC", ReferenceLength = 358, MaxLength = 420, Tracking = .15f, Style = EnterprisePlain },
+                },
+            },
+            new KelvinPaint
+            {
+                Ship = "Miranda", File = "Miranda_3_DIFF.png", DesignW = 4096, DesignH = 4096,
+                Erase = new[] { new[] { 1290, 2946, 1606, 2982 }, new[] { 2217, 2911, 2533, 2946 }, new[] { 3022, 2907, 3338, 2943 }, new[] { 3304, 3245, 3620, 3281 } },
+                MirrorLines = new[] { false, true, true, false },
+                Lines = new[]
+                {
+                    MirandaNacelleLine(1448, 2964), MirandaNacelleLine(2375, 2929), MirandaNacelleLine(3180, 2925), MirandaNacelleLine(3462, 3263),
+                },
+            },
         };
+
+        private static Line MirandaNacelleLine(float cx, float cy) => new Line { Shape = Shape.Straight, Cx = cx, Cy = cy, Cap = 30, Says = Says.Registry,
+            Reference = "NCC-31060", ReferenceLength = 302, MaxLength = 360, Tracking = .08f, Style = EnterprisePlain };
 
         // ---- the font ----
 
@@ -97,13 +139,13 @@ namespace StbcRevival
             {
                 try
                 {
-                    var mine = mats.Where(m => m != null && m.name.StartsWith(KelvinShip + " ", StringComparison.Ordinal) && m.HasProperty("_MainTex")
+                    var mine = mats.Where(m => m != null && m.name.StartsWith(paint.Ship + " ", StringComparison.Ordinal) && m.HasProperty("_MainTex")
                         && m.GetTexture("_MainTex") is Texture t && (t.name == paint.File || t == paint.Done)).ToArray();
                     if (mine.Length == 0) continue;
                     string want = name + "|" + registry;
                     // Painted only while the Kelvin is the ship flown (its model stays loaded once built; another class's name
                     // isn't wanted on it), or for the preview.
-                    bool flown = CustomShip.InUse != null && CustomShip.InUse.Name == KelvinShip;
+                    bool flown = CustomShip.InUse != null && CustomShip.InUse.Name == paint.Ship;
                     if (paint.DrawnFor != want && !paint.Pending && (flown || Plugin.HullPreview.Value))
                     {
                         paint.DrawnFor = want; // tried once per name, whether it works or not (failures are logged)
@@ -132,7 +174,7 @@ namespace StbcRevival
         private static void DrawKelvin(KelvinPaint paint, string name, string registry, Texture original)
         {
             var face = KelvinFace();
-            var raw = CustomShip.Find(KelvinShip)?.BlocksOf(paint.File);
+            var raw = CustomShip.Find(paint.Ship)?.BlocksOf(paint.File);
             if (face == null) return;
             if (raw == null) { Plugin.Log.LogInfo($"Hull name: the Kelvin's {paint.File} has no blocks kept; its lettering stays as it is"); return; }
             var texts = paint.Lines.Select(l => l.Says == Says.Name ? HullText(name) : (registry.Length > 0 ? registry : l.Reference).ToUpperInvariant()).ToArray();
@@ -158,7 +200,9 @@ namespace StbcRevival
                     var b = Bounds(laid[n], 4f, Math.Max(w, h));
                     if (b == null) continue;
                     float x0 = b.X, x1 = b.X + b.W - 1;
-                    if (paint.Mirror) { float m0 = 2f * lines[n].Cx - x1, m1 = 2f * lines[n].Cx - x0; x0 = m0; x1 = m1; }
+                    float rimPad = lines[n].Style.RimWidth > 0f ? (lines[n].Style.Gap + lines[n].Style.RimWidth) * lines[n].Cap + 2f : 0f;
+                    x0 -= rimPad; x1 += rimPad; minY = Mathf.Min(minY, b.Y - rimPad); maxY = Mathf.Max(maxY, b.Y + b.H - 1 + rimPad);
+                    if (paint.Mirror || (paint.MirrorLines != null && paint.MirrorLines[n])) { float m0 = 2f * lines[n].Cx - x1, m1 = 2f * lines[n].Cx - x0; x0 = m0; x1 = m1; }
                     minX = Mathf.Min(minX, x0); maxX = Mathf.Max(maxX, x1); minY = Mathf.Min(minY, b.Y); maxY = Mathf.Max(maxY, b.Y + b.H - 1);
                 }
                 const int align = 4 << (PaintMips - 1);
@@ -181,24 +225,35 @@ namespace StbcRevival
 
                 for (int n = 0; n < laid.Length; n++)
                 {
-                    var area = Bounds(laid[n], 2f, Math.Max(w, h));
+                    var st = lines[n].Style;
+                    float pad = st.RimWidth > 0f ? (st.Gap + st.RimWidth) * lines[n].Cap + 2f : 2f;
+                    var area = Bounds(laid[n], pad, Math.Max(w, h));
                     if (area == null) continue;
                     var cover = new float[area.W * area.H];
                     Raster(face, laid[n], area, cover);
-                    var fill = lines[n].Style.Fill;
+                    bool mirrored = paint.Mirror || (paint.MirrorLines != null && paint.MirrorLines[n]);
                     int mirrorAt = Mathf.RoundToInt(2f * lines[n].Cx);
-                    for (int y = 0; y < area.H; y++)
-                        for (int x = 0; x < area.W; x++)
-                        {
-                            float c = cover[y * area.W + x];
-                            if (c <= 0f) continue;
-                            int gx = area.X + x, gy = area.Y + y;
-                            if (paint.Mirror) gx = mirrorAt - gx;
-                            gx -= ax; gy -= ay;
-                            if (gx < 0 || gy < 0 || gx >= aw || gy >= ah) continue;
-                            int i = gy * aw + gx;
-                            px[i] = Color32.Lerp(px[i], fill, c);
-                        }
+                    // A rimmed style: the rim (and the gap inside it, hull white) round the letters first, grown from them.
+                    var layers = new List<KeyValuePair<float[], Color32>>();
+                    if (st.RimWidth > 0f)
+                    {
+                        layers.Add(new KeyValuePair<float[], Color32>(Grown(cover, area.W, area.H, (st.Gap + st.RimWidth) * lines[n].Cap), st.Rim));
+                        if (st.Gap > 0f) layers.Add(new KeyValuePair<float[], Color32>(Grown(cover, area.W, area.H, st.Gap * lines[n].Cap), new Color32(0xF2, 0xF2, 0xF2, 255)));
+                    }
+                    layers.Add(new KeyValuePair<float[], Color32>(cover, st.Fill));
+                    foreach (var layer in layers)
+                        for (int y = 0; y < area.H; y++)
+                            for (int x = 0; x < area.W; x++)
+                            {
+                                float c = layer.Key[y * area.W + x];
+                                if (c <= 0f) continue;
+                                int gx = area.X + x, gy = area.Y + y;
+                                if (mirrored) gx = mirrorAt - gx;
+                                gx -= ax; gy -= ay;
+                                if (gx < 0 || gy < 0 || gx >= aw || gy >= ah) continue;
+                                int i = gy * aw + gx;
+                                px[i] = Color32.Lerp(px[i], layer.Value, c);
+                            }
                 }
 
                 // Back into the blocks, each mip that still shows it from the painted piece.
@@ -219,6 +274,37 @@ namespace StbcRevival
                     Plugin.Log.LogInfo($"Hull name: the Kelvin's {paint.File}: {string.Join(" / ", texts)} painted in {ms} ms (off the main thread)");
                 };
             }, () => paint.Pending = false);
+        }
+
+        /// <summary>A coverage grown outward by a radius (pixels): a round brush's reach, for a rim round letters.</summary>
+        private static float[] Grown(float[] cover, int w, int h, float radius)
+        {
+            int r = Math.Max(1, Mathf.CeilToInt(radius));
+            var rows = new float[cover.Length];
+            for (int y = 0; y < h; y++)
+                for (int x = 0; x < w; x++)
+                {
+                    float m = 0f;
+                    for (int dx = -r; dx <= r; dx++) { int xx = x + dx; if (xx >= 0 && xx < w) m = Math.Max(m, cover[y * w + xx]); }
+                    rows[y * w + x] = m;
+                }
+            var grown = new float[cover.Length];
+            for (int y = 0; y < h; y++)
+                for (int x = 0; x < w; x++)
+                {
+                    float m = 0f;
+                    for (int dy = -r; dy <= r; dy++)
+                    {
+                        int yy = y + dy; if (yy < 0 || yy >= h) continue;
+                        // the brush round: each row's reach narrows with its distance
+                        int reach = Mathf.FloorToInt(Mathf.Sqrt(Math.Max(0f, radius * radius - dy * dy)));
+                        float v = 0f;
+                        for (int dx = -reach; dx <= reach; dx++) { int xx = x + dx; if (xx >= 0 && xx < w) v = Math.Max(v, cover[yy * w + xx]); }
+                        m = Math.Max(m, v);
+                    }
+                    grown[y * w + x] = m;
+                }
+            return grown;
         }
 
         /// <summary>

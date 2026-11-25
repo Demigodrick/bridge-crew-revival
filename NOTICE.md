@@ -35,6 +35,8 @@ These aren't under the GPL. Don't take them out of the mod to share or use elsew
 - **Voyager** (`assets/ships/Voyager`): "USS Voyager 4K Textures Star Trek Intrepid" by CGI Tutorials (Ben Shelley),
   under Creative Commons Attribution-NonCommercial-NoDerivs 4.0; converted for the mod by YannikB98 and included with
   the author's permission. See its `CREDITS.txt`.
+- **Miranda** (`assets/ships/Miranda`): "Miranda Class (Generic TNG/DS-9 Variant)" by Major Stress, under Creative
+  Commons Attribution 4.0; converted for the mod by YannikB98. See its `CREDITS.txt`.
 
 Star Trek and related marks are trademarks of CBS Studios / Paramount Global. Bridge Crew Revival is an unofficial
 fan project, not affiliated with or endorsed by Ubisoft, Red Storm Entertainment, CBS Studios or Paramount.
