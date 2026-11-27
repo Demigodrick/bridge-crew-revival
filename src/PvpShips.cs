@@ -8,10 +8,8 @@ namespace StbcRevival
     /// <summary>
     /// PvP test: which player ship each player crews. The crew is split in joining order: the host (master) on
     /// the first ship (A), then the others by Photon actor number, alternating B, A, B (2 players: one a ship;
-    /// 3: two on A, one on B; 4: two each). [Debug] PvpTestShip = A or B overrides it for your own game (Auto:
-    /// the rule).
-    /// Each game publishes its ship as the player property "PVP", so the host knows who is where even with
-    /// an override. A player whose game hasn't published one (a Revival from before PvP was for everyone) counts as on A,
+    /// 3: two on A, one on B; 4: two each); the role slot picked in the briefing room goes before it.
+    /// Each game publishes its ship as the player property "PVP", so the host knows who is where. A player whose game hasn't published one (a Revival from before PvP was for everyone) counts as on A,
     /// where their game puts them as the normal game does, and the host is told when the test starts.
     /// </summary>
     internal static class PvpShips
@@ -29,8 +27,10 @@ namespace StbcRevival
             get
             {
                 if (mineFrame == UnityEngine.Time.frameCount) return mine;
-                var setting = Plugin.PvpTestShip.Value?.Trim().ToUpperInvariant();
-                mine = setting == "A" || setting == "B" ? setting : PvpRoles.ShipOfSlot(Actor(Me)) ?? Auto(Me);
+                // The slot you picked, as every other game has it. (A [Debug] PvpTestShip = A or B used to override it
+                // for your own game only: a player with that left set from the first tests captained ship B on a game
+                // that took itself for ship A's.)
+                mine = PvpRoles.ShipOfSlot(Actor(Me)) ?? Auto(Me);
                 mineFrame = UnityEngine.Time.frameCount;
                 return mine;
             }
@@ -42,7 +42,7 @@ namespace StbcRevival
         internal static string Of(object player)
         {
             if (player == null) return "A";
-            if (Actor(player) == Actor(Me)) return Mine; // [Debug] PvpTestShip can override your own slot
+            if (Actor(player) == Actor(Me)) return Mine;
             if (PvpRoles.ShipOfSlot(Actor(player)) is string slotted) return slotted; // the briefing room slot they picked
             if (Props(player)?[Key] is string published && (published == "A" || published == "B")) return published;
             return Actor(player) == Actor(Me) ? Mine : "A";
