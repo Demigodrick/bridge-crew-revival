@@ -192,6 +192,15 @@ namespace StbcRevival
         }
 
         private static List<Destination> destinations = new List<Destination>(); // taken on the main thread
+
+        /// <summary>Leaving the bridge: the warp map's and the system map's entries are let go. They're the last
+        /// mission's map objects, destroyed with its bridge, and held here they kept its whole warp map alive (over
+        /// 10,000 objects, 7.5 MB, after one Patrol).</summary>
+        internal static void ForgetMaps()
+        {
+            destinations = new List<Destination>();
+            places = new List<Destination>();
+        }
         private static readonly string[] CourseWords = { "course", "plot", "set", "destination", "head", "warp", "go", "take", "fly" };
 
         // The destination named (or the nearest one), as "Course:<index>" plus warp prepared; with "engage" or
