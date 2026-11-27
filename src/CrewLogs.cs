@@ -187,7 +187,8 @@ namespace StbcRevival
         private static void SendLog(int to)
         {
             byte[] zip;
-            try { zip = BugReport.Build(); }
+            float started = UnityEngine.Time.realtimeSinceStartup;
+            try { zip = BugReport.Build(withGameDump: false); }
             catch (Exception e)
             {
                 Plugin.Log.LogWarning("Crew logs: couldn't put your log together: " + e.Message);
@@ -204,7 +205,7 @@ namespace StbcRevival
                 outgoing.Enqueue(new object[] { i, count, data });
             }
             sendTo = to;
-            Plugin.Log.LogInfo($"Crew logs: sending your log to {NameOf(to)} ({zip.Length / 1024} KB, {count} pieces)");
+            Plugin.Log.LogInfo($"Crew logs: sending your log to {NameOf(to)} ({zip.Length / 1024} KB, {count} pieces; put together in {(UnityEngine.Time.realtimeSinceStartup - started) * 1000f:0} ms)");
         }
 
         // ---- Photon -----------------------------------------------------------------------------------
