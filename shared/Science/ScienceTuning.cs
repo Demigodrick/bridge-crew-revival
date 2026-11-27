@@ -15,6 +15,8 @@ namespace StbcRevival.Science
         public const float CrewCap = 0.50f;
         // What each completed assignment adds to the enemy, to one area in turn (damage, shields, speed).
         public const float EnemyStep = 0.03f;
+        // The share of destroyed enemy ships that leave debris to scan (the host rolls once per kill).
+        public const float DebrisChance = 1f / 3f;
         // How far the console's targets can be scanned from, metres.
         public const float RangeMetres = 20000f;
     }
