@@ -58,7 +58,6 @@ namespace StbcRevival
         internal static ConfigEntry<bool> ScienceOn;
         internal static ConfigEntry<string> ScienceLedger;
         internal static ConfigEntry<string> ScienceTestPlacement;
-        internal static ConfigEntry<string> PvpTestShip;
         internal static ConfigEntry<bool> SkipMicCheck;
         internal static ConfigEntry<bool> SkipVrSetup;
         internal static ConfigEntry<string> LastControlsDesktop, LastControlsVr;
@@ -296,8 +295,6 @@ namespace StbcRevival
                 "Testing only: every Ongoing Voyage you host runs the Revival mission Last Stand instead.");
             PvpSeparateSpace = Config.Bind("Debug", "PvpSeparateSpace", true,
                 "Testing only: in the PvP test, the crew of the ship the host isn't on keeps its own space around its ship, and either ship can use impulse. Off: both crews share the host's space, as the game does.");
-            PvpTestShip = Config.Bind("Debug", "PvpTestShip", "Auto",
-                "Testing only, the PvP test mission: the player ship you crew. Auto: the crew is split, in joining order from the host: A, B, A, B (2 players: one each; 3: two on A; 4: two each). A or B: that ship.");
             CheckForUpdates = Config.Bind("Updates", "CheckForUpdates", true,
                 "Once per launch, on the shuttle, check the website for a newer version (and with AutoUpdate, install it). If the check fails, nothing is shown.");
             AutoUpdate = Config.Bind("Updates", "AutoUpdate", true,
