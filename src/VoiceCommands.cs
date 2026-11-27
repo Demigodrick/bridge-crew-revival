@@ -544,6 +544,7 @@ namespace StbcRevival
             var getAction = AccessTools.Method(AccessTools.TypeByName("SVR.InputManager"), "GetAction");
             voiceAction = Enum.Parse(AccessTools.TypeByName("SVR.LONCAPHEAPA"), "VoiceCommand");
             if (getAction != null) harmony.Patch(getAction, postfix: new HarmonyMethod(typeof(VoiceCommands), nameof(GetAction_Postfix)));
+            getActionMethod = getAction;
             Plugin.Log.LogInfo("Voice commands: push-to-talk hooked (prototype, offline recognition)");
         }
 
@@ -564,7 +565,11 @@ namespace StbcRevival
         {
             try
             {
-                if (__0) Start();
+                if (__0)
+                {
+                    passedOn = true;
+                    Start();
+                }
                 else Stop();
             }
             catch (Exception e)
@@ -577,7 +582,15 @@ namespace StbcRevival
 
         private static void Start()
         {
-            if (listening || !(IsCaptain() || CrewOrders.AnyStation) || !EnsureRecogniser()) return;
+            if (listening) return;
+            if (!(IsCaptain() || CrewOrders.AnyStation))
+            {
+                Plugin.Log.LogInfo(Plugin.VoiceAnyStation.Value
+                    ? "Voice commands: not listening: only the captain, or a player seated at a station, gives voice orders"
+                    : "Voice commands: not listening: only the captain gives voice orders (Voice orders from any station is off)");
+                return;
+            }
+            if (!EnsureRecogniser()) return;
             micDevice = MicChoice.Wanted() ?? (Microphone.devices.Length > 0 ? Microphone.devices[0] : null);
             if (micDevice == null)
             {
@@ -717,11 +730,87 @@ namespace StbcRevival
         internal static void Update()
         {
             keyHeld = Input.GetKey(Plugin.PushToTalkKey.Value);
+            WatchButton();
             CrewOrders.Update();
             SendAfterPlot();
             if (!pendingResult) return;
             pendingResult = false;
             Finish(pendingCommand);
+        }
+
+        // ---- Why a press didn't reach us ------------------------------------------------------------------
+        // The game passes the voice button on only from the console you sit at, and not while a warning, the
+        // exterior view or a fade is up (ConsoleBase.BatchUpdate). A press it didn't pass on used to leave no trace
+        // (issue 47): now it's logged once a press, with what stopped it.
+
+        private static MethodInfo getActionMethod;
+        private static bool passedOn, explained;
+        private static float heldSince = -1f;
+
+        private static void WatchButton()
+        {
+            bool held = keyHeld;
+            if (!held && getActionMethod != null && voiceAction != null)
+            {
+                try { held = (bool)getActionMethod.Invoke(null, new[] { voiceAction }); }
+                catch { getActionMethod = null; }
+            }
+            // Only on the bridge: in VR the same button confirms in menus.
+            if (!held || GamePhaseManager.IEFBKOMBFGO?.GetCurrentGamePhase()?.Name != "GamePhase_Bridge")
+            {
+                heldSince = -1f;
+                return;
+            }
+            float now = Time.realtimeSinceStartup;
+            if (heldSince < 0f)
+            {
+                heldSince = now;
+                passedOn = listening;
+                explained = false;
+                return;
+            }
+            if (passedOn || explained || now - heldSince < 0.5f) return;
+            explained = true;
+            Plugin.Log.LogInfo("Voice commands: the voice button is held, but the game didn't pass it on: " + WhyNotPassedOn());
+        }
+
+        private static string WhyNotPassedOn()
+        {
+            var why = new List<string>();
+            try
+            {
+                if (failed) why.Add("voice commands are off (see the \"Voice commands: off\" line)");
+                var me = AccessTools.Method(typeof(NovaPlayerManager), "get_LocalPlayer")?.Invoke(NovaPlayerManager.IEFBKOMBFGO, null) as NovaPlayerInfo;
+                if (me == null) why.Add("no local player");
+                else
+                {
+                    if (me.KNPEKLLJHEE) why.Add("spectating"); // IsSpectator
+                    var console = me.GHJLPNMIOAJ; // Console
+                    if (console == null) why.Add("not seated at a console");
+                    else
+                    {
+                        if (Flag(console, "IHCCEFLNOGO")) why.Add("a game warning is up (controllers or tracking)"); // _isWarningMessageShown
+                        if (Flag(console, "DJEOAJGGCOD")) why.Add("the spectator camera is on");                    // _isSpectatorCameraActive
+                        if (Flag(console, "OAHIOFMKEDH")) why.Add("the last press ran past the game's 10 s limit (the crew menu button clears it)"); // _voiceCommandTimedOut
+                        if (Flag(console, "MMJINDPFLEO")) why.Add("the crew menu button is held");                  // _crewbotModeHeld
+                    }
+                }
+                if (CameraFade.DDLBBIKKIFJ) why.Add("the view is fading"); // IsFadeActive
+                if (CameraManager.OFPGACAFBOA) why.Add("in the exterior view"); // IsInSpaceView
+            }
+            catch (Exception e) { why.Add("couldn't check (" + e.Message + ")"); }
+            return why.Count == 0 ? "nothing found in the way" : string.Join("; ", why.ToArray());
+        }
+
+        private static bool Flag(object o, string name)
+        {
+            var t = o.GetType();
+            for (; t != null; t = t.BaseType)
+            {
+                var f = t.GetField(name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly);
+                if (f != null && f.FieldType == typeof(bool)) return (bool)f.GetValue(o);
+            }
+            return false;
         }
 
         private static void Finish(string command)
