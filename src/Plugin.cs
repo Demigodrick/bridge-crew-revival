@@ -102,6 +102,7 @@ namespace StbcRevival
         internal static ConfigEntry<string> VoiceDebugNetSim;
         internal static ConfigEntry<bool> VoiceDebugLoopback;
         internal static ConfigEntry<bool> PvpSeparateSpace;
+        internal static ConfigEntry<bool> MemoryRootsLog;
         internal static ConfigEntry<string> VoiceMicrophone;
         internal static ConfigEntry<string> BlockedPlayers;
         internal static ConfigEntry<string> VoiceVolumes;
@@ -294,6 +295,8 @@ namespace StbcRevival
                 + "\"SCL1;1;0.5,0,0,0;;28\" is weapons +50% and enemy damage +30%). The console is on. Empty: off.");
             TestLastStand = Config.Bind("Debug", "TestLastStand", false,
                 "Testing only: every Ongoing Voyage you host runs the Revival mission Last Stand instead.");
+            MemoryRootsLog = Config.Bind("Debug", "MemoryRoots", false,
+                "Testing only, for finding memory leaks: each time you reach the briefing room or the shuttle, log which of the game's and the mod's static fields hold the most memory, and which still hold objects the game has destroyed ([roots] lines in LogOutput.log). The check runs a little each frame for some seconds and needs tens of MB while it does.");
             PvpSeparateSpace = Config.Bind("Debug", "PvpSeparateSpace", true,
                 "Testing only: in the PvP test, the crew of the ship the host isn't on keeps its own space around its ship, and either ship can use impulse. Off: both crews share the host's space, as the game does.");
             PvpTestShip = Config.Bind("Debug", "PvpTestShip", "Auto",

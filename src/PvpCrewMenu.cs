@@ -148,6 +148,15 @@ namespace StbcRevival
 
         private static readonly System.Collections.Generic.Dictionary<GazeTargetCrewBotUI, string> lastMenu = new System.Collections.Generic.Dictionary<GazeTargetCrewBotUI, string>();
 
+        /// <summary>Leaving the bridge: the crew menus noted for the log are let go (a destroyed menu still held here
+        /// kept everything it pointed at: its buttons, its bot, the bridge).</summary>
+        internal static void Forget()
+        {
+            lastMenu.Clear();
+            lastStations = lastButtons = null;
+            lastHovered = FLCHMJJDKDL.COUNT;
+        }
+
         private static void Hover_Postfix(GazeTargetCrewBotUI __instance)
         {
             if (!On || __instance == null) return;

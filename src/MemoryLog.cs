@@ -46,6 +46,7 @@ namespace StbcRevival
 
             float now = Time.realtimeSinceStartup;
             SettleCheck(now);
+            MemoryRoots.Step();
             if (nextReport == 0f) { nextReport = now + ReportSeconds; nextCensus = now + CensusSeconds; }
             if (now >= nextReport)
             {
@@ -83,6 +84,7 @@ namespace StbcRevival
             long after = GC.GetTotalMemory(true);
             lastHeap = after;
             Plugin.Log.LogInfo($"Memory: settled in {phase.Name}: full collection, heap {Mb(before)} to {Mb(after)} (the floor here) in {(Time.realtimeSinceStartup - started) * 1000f:0} ms");
+            MemoryRoots.Start(phase.Name, after); // what's holding it (walked over the next frames)
         }
 
         /// <summary>Around one of the mod's per-frame updates: the heap before it.</summary>

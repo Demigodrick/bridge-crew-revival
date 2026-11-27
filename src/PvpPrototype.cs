@@ -268,6 +268,7 @@ namespace StbcRevival
             exploded.Clear();
             PvpScope.Forget();
             PvpRebind.Forget();
+            PvpCrewMenu.Forget();
             PvpRouting.Forget();
             PvpDistributed.Forget();
             PvpConsoles.Forget();
