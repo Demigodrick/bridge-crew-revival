@@ -120,6 +120,8 @@ namespace StbcRevival
         }
 
         /// <summary>The ship a weapon part belongs to (its body and turrets can be moved under the simulation's or the skybox's roots).</summary>
+        private static readonly Dictionary<Type, MethodInfo> facadeGetters = new Dictionary<Type, MethodInfo>();
+
         private static BaseSpacecraft Owner(Component component)
         {
             if (component == null) return null;
@@ -134,9 +136,13 @@ namespace StbcRevival
             if (craft == null) craft = component.GetComponentInParent<BaseSpacecraft>();
             if (craft == null)
             {
-                var getter = AccessTools.Method(component.GetType(), "get_facade");
+                // Looked up once per type, quietly: a turret has no facade, and asking Harmony each time logged a
+                // warning for every one (31 a session).
+                var type = component.GetType();
+                if (!facadeGetters.TryGetValue(type, out var getter))
+                    facadeGetters[type] = getter = type.GetMethod("get_facade", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
                 object facade = getter == null ? null : getter.Invoke(component, null);
-                var getCraft = facade == null ? null : AccessTools.Method(facade.GetType(), "get_craft");
+                var getCraft = facade == null ? null : facade.GetType().GetMethod("get_craft", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
                 craft = getCraft == null ? null : getCraft.Invoke(facade, null) as BaseSpacecraft;
             }
             if (craft != null) owners[id] = craft;

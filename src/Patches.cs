@@ -209,7 +209,11 @@ namespace StbcRevival
             var code = t.GetField("OperationCode")?.GetValue(__0);
             var ret = t.GetField("ReturnCode")?.GetValue(__0);
             var msg = t.GetField("DebugMessage")?.GetValue(__0);
-            if (!Equals(ret, (short)0))
+            // 225 with 32760: a quick-match search that found no room yet, every few seconds while it looks. Not a
+            // fault (a host's log had 433 of these as warnings).
+            if (Equals(code, (byte)225) && Equals(ret, (short)32760))
+                Plugin.Log.LogDebug($"Photon op {code}: {msg}");
+            else if (!Equals(ret, (short)0))
                 Plugin.Log.LogWarning($"Photon op {code} failed: {ret} {msg}");
             else
                 Plugin.Log.LogDebug($"Photon op {code} ok");

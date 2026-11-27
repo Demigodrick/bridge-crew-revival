@@ -42,14 +42,12 @@ namespace StbcRevival
 
         private static void Save(string zipPath) => File.WriteAllBytes(zipPath, Build());
 
-        /// <summary>The report as zip bytes (also what a crewmate sends when asked for their log, CrewLogs).</summary>
-        internal static byte[] Build()
+        /// <summary>The report as zip bytes (also what a crewmate sends when asked for their log, CrewLogs: without
+        /// the game dump, which searches every loaded object and is only of use for your own report).</summary>
+        internal static byte[] Build(bool withGameDump = true)
         {
-            var files = new List<KeyValuePair<string, byte[]>>
-            {
-                Entry("summary.txt", Encoding.UTF8.GetBytes(Summary())),
-                Entry("game-dump.txt", Encoding.UTF8.GetBytes(GameDump.Text())),
-            };
+            var files = new List<KeyValuePair<string, byte[]>> { Entry("summary.txt", Encoding.UTF8.GetBytes(Summary())) };
+            if (withGameDump) files.Add(Entry("game-dump.txt", Encoding.UTF8.GetBytes(GameDump.Text())));
             void Add(string name, string path)
             {
                 if (!File.Exists(path)) return;

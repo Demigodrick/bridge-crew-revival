@@ -454,7 +454,7 @@ namespace StbcRevival
             }
             values = Pick(Blit(tex, w, h, null), "copy");
             if (values != null) return values;
-            Plugin.Log.LogWarning($"Hull name: couldn't read the glyphs of {tex.name} ({tex.width}x{tex.height})");
+            Plugin.Log.LogInfo($"Hull name: the glyphs of {tex.name} ({tex.width}x{tex.height}) can't be read on this PC; another font is used");
             return null;
         }
 
