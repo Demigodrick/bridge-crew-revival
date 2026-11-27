@@ -260,6 +260,7 @@ namespace StbcRevival
             if (onBridge == wasOnBridge) return;
             wasOnBridge = onBridge;
             if (onBridge) return;
+            VoiceCommands.ForgetMaps(); // any mission, not only PvP
             if (hiddenAvatars.Count > 0) ShowAllAvatars();
             Bound = null;
             boundInfo = null;

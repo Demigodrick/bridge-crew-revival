@@ -137,6 +137,8 @@ namespace StbcRevival.Missions
                 revivalToggle.isOn = false;
                 foreach (var label in copy.GetComponentsInChildren<TMP_Text>(true)) label.SetLocalizedText("REVIVAL MISSIONS");
                 revivalToggle.onValueChanged.AddListener(on => OnToggled(console, on));
+                // Earlier briefing rooms' consoles are gone: let go of them (each kept its whole console alive).
+                foreach (var gone in System.Linq.Enumerable.ToList(System.Linq.Enumerable.Where(toggles.Keys, c => c == null))) toggles.Remove(gone);
                 toggles[console] = revivalToggle;
                 foreach (var ship in ShipFields)
                 {

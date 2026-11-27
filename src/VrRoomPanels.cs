@@ -185,6 +185,7 @@ namespace StbcRevival
                 NewsPageCount(page) = pages;
 
                 var slots = new[] { rows[index * 2], index * 2 + 1 < rows.Count ? rows[index * 2 + 1] : null };
+                foreach (var gone in newsSlots.Keys.Where(p => p == null).ToList()) newsSlots.Remove(gone); // earlier shuttles' pages
                 newsSlots[page] = slots;
                 var banner = Field<Sprite>(page, "DefaultBanner");
                 ShowSlot(Field<GameObject>(page, "TopNewsSlot"), Field<TextMeshProUGUI>(page, "TopSlotTitle"), Field<Image>(page, "TopSlotBanner"), banner, slots[0]);
@@ -262,6 +263,7 @@ namespace StbcRevival
                     var row = offset + i < rows.Count ? rows[offset + i] : null;
                     entryObjects[i].SetActive(row != null);
                     if (row == null || entries[i] == null) continue;
+                    if (i == 0) foreach (var gone in inviteRows.Keys.Where(e => e == null).ToList()) inviteRows.Remove(gone); // earlier lists' rows
                     inviteRows[entries[i]] = row;
                     SetText(Field<TextMeshProUGUI>(entries[i], "_nameText"), row.Title);
                     SetText(Field<TextMeshProUGUI>(entries[i], "_actionText"), row.Detail);
