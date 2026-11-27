@@ -65,11 +65,16 @@ namespace StbcRevival
 
         private static readonly List<UnityEngine.Object> gone = new List<UnityEngine.Object>();
         private static int checkedScene = -1;
+        private static float nextSceneLook;
         private static float checkAt = -1f;
 
         /// <summary>Every frame: a few seconds into each scene, each list is checked once against a search of the scene.</summary>
         internal static void Update()
         {
+            // Four times a second is plenty to notice a new scene: asking for a scene's root objects makes a new array
+            // each time, and every frame that was the mod's largest source of garbage (about 1 MB a second).
+            if (Time.unscaledTime < nextSceneLook) return;
+            nextSceneLook = Time.unscaledTime + 0.25f;
             var scene = UnityEngine.SceneManagement.SceneManager.GetActiveScene();
             int id = scene.IsValid() ? scene.GetHashCode() ^ (scene.GetRootGameObjects().Length > 0 ? scene.GetRootGameObjects()[0].GetInstanceID() : 0) : 0;
             if (id != checkedScene) { checkedScene = id; checkAt = Time.unscaledTime + 5f; return; }
