@@ -78,8 +78,8 @@ namespace StbcRevival
         // NovaPlayerInfo → its network player (PKIBEAIHJNE) → the "SID" player property.
         internal static ulong SteamIdOf(object info)
         {
-            var player = info == null ? null : AccessTools.Field(info.GetType(), "PKIBEAIHJNE")?.GetValue(info)
-                                                ?? AccessTools.Property(info.GetType(), "PKIBEAIHJNE")?.GetValue(info, null);
+            // A property (PlayerInfo.NetworkPlayer): asked for as a field first, each look logged a HarmonyX warning.
+            var player = info == null ? null : AccessTools.Property(info.GetType(), "PKIBEAIHJNE")?.GetValue(info, null);
             var props = player?.GetType().GetMethod("get_customProperties", All)?.Invoke(player, null) as IDictionary;
             return props != null && props.Contains(HostHandoff.SteamIdKey) && ulong.TryParse(props[HostHandoff.SteamIdKey] as string, out var id) ? id : 0;
         }
