@@ -173,6 +173,7 @@ namespace StbcRevival.Science
                 if (!dead.HAFBKMDMMIO) return; // IsDestroyed: a death, not a scripted despawn
                 int team = dead.GetTargetInfo() is TargetInfoComponent info ? (int)info.DGGJOECIFAF : 0;
                 if (!Ledger.IsHostileTeam(team) || dead.ALPAOOKFIEE == null) return;
+                if (UnityEngine.Random.value >= ScienceTuning.DebrisChance) return; // most kills leave nothing to scan
                 if (deaths.Count < ScanBoard.MaxTargets) deaths.Enqueue(new Death { Position = dead.ALPAOOKFIEE.Position, Team = team });
             }
             catch (Exception ex) { Plugin.Log.LogWarning("Science console: a ship's death: " + ex.Message); }
