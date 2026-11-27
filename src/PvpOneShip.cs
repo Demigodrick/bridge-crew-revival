@@ -25,13 +25,23 @@ namespace StbcRevival
         private static FieldInfo returnButton;
         private static PropertyInfo previousStation;
 
+        /// <summary>
+        /// The crew menu button's rule: ConsoleBase.BatchUpdate rewritten. Applied after every other patch
+        /// (Patches.ApplyDeferred's end): the rewrite is compiled at once, and Mono copies the one-line methods it
+        /// calls into it (InputManager.GetAction, VoiceRecognitionManager.UsingVoiceRecognition, the voice button
+        /// event's constructor) unless they're patched already, so patches made after it never ran from the console:
+        /// the voice button and push-to-talk key were dead from 0.8.2 (issue 47).
+        /// </summary>
+        internal static void PatchConsoleUpdate(Harmony harmony)
+        {
+            var consoleUpdate = AccessTools.Method(typeof(ConsoleBase), "BatchUpdate");
+            if (consoleUpdate != null) harmony.Patch(consoleUpdate, transpiler: new HarmonyMethod(typeof(PvpOneShip), nameof(CrewButton_Transpiler)));
+            else Plugin.Log.LogWarning("PvP: ConsoleBase.BatchUpdate not found; the crew menu button stays off with 4 or more players in the room");
+        }
+
         internal static void Patch(Harmony harmony)
         {
             var missing = new List<string>();
-
-            var consoleUpdate = AccessTools.Method(typeof(ConsoleBase), "BatchUpdate");
-            if (consoleUpdate != null) harmony.Patch(consoleUpdate, transpiler: new HarmonyMethod(typeof(PvpOneShip), nameof(CrewButton_Transpiler)));
-            else missing.Add("the crew menu button");
 
             var pause = AccessTools.TypeByName("UI.PauseMenuUI");
             var refresh = pause == null ? null : AccessTools.Method(pause, "PNOAELFOIPC");   // RefreshStationButtons

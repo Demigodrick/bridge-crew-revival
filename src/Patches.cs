@@ -267,6 +267,9 @@ namespace StbcRevival
             if (SteamMode.Enabled) CrewPassword.Patch(harmony);
             if (Plugin.Diagnostics.Value)
                 StbcRevival.Diagnostics.Apply(harmony, photonNetwork);
+            // Last: it rewrites ConsoleBase.BatchUpdate, and what that calls must be patched before (PvpOneShip says why).
+            try { PvpOneShip.PatchConsoleUpdate(harmony); }
+            catch (Exception e) { Plugin.Log.LogError("PvP: the crew menu button's rule couldn't be set up: " + e); }
         }
 
         internal static Type PhotonNetworkType => photonNetwork;

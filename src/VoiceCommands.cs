@@ -531,15 +531,18 @@ namespace StbcRevival
             var vrm = typeof(VoiceRecognitionManager);
             var using_ = AccessTools.Method(vrm, "get_UsingVoiceRecognition"); // its property is renamed; the getter kept its name
             var update = AccessTools.Method(vrm, "Update");
-            var button = AccessTools.Constructor(AccessTools.TypeByName("NKEPKEMCLNH"), new[] { typeof(bool) });
-            if (using_ == null || update == null || button == null)
+            if (using_ == null || update == null)
             {
                 Plugin.Log.LogWarning("Voice commands: the game's voice hooks weren't found; voice commands off");
                 return;
             }
             harmony.Patch(using_, postfix: new HarmonyMethod(typeof(VoiceCommands), nameof(Using_Postfix)));
             harmony.Patch(update, prefix: new HarmonyMethod(typeof(VoiceCommands), nameof(SkipWatson)));
-            harmony.Patch(button, postfix: new HarmonyMethod(typeof(VoiceCommands), nameof(Button_Postfix)));
+            // The voice button, from the game's event bus as the game's own voice manager hears it. Not a postfix on
+            // the event's constructor: that one-line constructor is copied into a caller compiled before it was
+            // patched (ConsoleBase.BatchUpdate, which PvpOneShip's transpiler compiles first), and so never ran from
+            // there: no voice orders since 0.8.2 (issue 47).
+            CIFDOFLFGEA.AddListener<NKEPKEMCLNH>(OnVoiceButton); // Events, VoiceCommandButtonEvent
             // Our own push-to-talk key too: the game's voice button depends on the controller mapping.
             var getAction = AccessTools.Method(AccessTools.TypeByName("SVR.InputManager"), "GetAction");
             voiceAction = Enum.Parse(AccessTools.TypeByName("SVR.LONCAPHEAPA"), "VoiceCommand");
@@ -561,11 +564,11 @@ namespace StbcRevival
         private static bool SkipWatson() => false; // Watson's speech-to-text and token handling: never set up
 
         // The console raised the voice button event: down starts recording, up recognises.
-        private static void Button_Postfix(bool __0)
+        private static void OnVoiceButton(NKEPKEMCLNH button)
         {
             try
             {
-                if (__0)
+                if (button.IsActive)
                 {
                     passedOn = true;
                     Start();
