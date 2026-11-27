@@ -84,6 +84,12 @@ namespace StbcRevival
             long after = GC.GetTotalMemory(true);
             lastHeap = after;
             Plugin.Log.LogInfo($"Memory: settled in {phase.Name}: full collection, heap {Mb(before)} to {Mb(after)} (the floor here) in {(Time.realtimeSinceStartup - started) * 1000f:0} ms");
+            try
+            {
+                var server = SteamMode.Server;
+                if (server != null) Plugin.Log.LogInfo($"Memory: the in-game server has {server.RoomCount} room(s) and keeps {server.CachedEventCount} buffered event(s) for late joiners");
+            }
+            catch (Exception e) { Plugin.Log.LogDebug("Memory: the in-game server's counts: " + e.Message); }
             MemoryRoots.Start(phase.Name, after); // what's holding it (walked over the next frames)
         }
 

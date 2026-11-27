@@ -146,6 +146,9 @@ public sealed class LoadBalancingServer : IPeerHandler
     // ---- Introspection (tests, logging, web page) ---------------------------------------------
 
     public int RoomCount { get { lock (sync) return rooms.Count; } }
+
+    /// <summary>Events kept for late joiners (buffered RPCs, instantiations), over every room: for the memory log.</summary>
+    public int CachedEventCount { get { lock (sync) return rooms.Values.Sum(r => r.EventCache.Count); } }
     public int PeerCount { get { lock (sync) return connections.Count; } }
 
     public List<RoomSnapshot> SnapshotRooms()
